@@ -46,8 +46,12 @@ class SoakReportTests(unittest.TestCase):
                         ts REAL NOT NULL, voltage REAL NOT NULL,
                         frequency REAL NOT NULL
                     );
-                    CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-                    INSERT INTO meta(key,value) VALUES('schema_version','1');
+                    CREATE TABLE meta(
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
+                    INSERT INTO meta(key,value)
+                    VALUES('schema_version','1');
                     INSERT INTO measurements(ts,voltage,frequency)
                     VALUES(1900,220.0,50.0),(1910,221.0,50.0);
                     """
@@ -71,12 +75,16 @@ class SoakReportTests(unittest.TestCase):
                         ts REAL NOT NULL, voltage REAL NOT NULL,
                         frequency REAL NOT NULL
                     );
-                    CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                    CREATE TABLE meta(
+                        key TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    );
                     CREATE TABLE outages(
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         started_at REAL NOT NULL, ended_at REAL
                     );
-                    INSERT INTO meta(key,value) VALUES('schema_version','2');
+                    INSERT INTO meta(key,value)
+                    VALUES('schema_version','2');
                     INSERT INTO measurements(ts,voltage,frequency)
                     VALUES(16500,220.0,50.0),(16510,221.0,50.0),
                           (17000,222.0,50.0);
@@ -89,7 +97,9 @@ class SoakReportTests(unittest.TestCase):
             self.assertEqual(report["confirmed_open_outages"], 1)
             self.assertEqual(report["confirmed_outage_seconds"], 1600.0)
             self.assertEqual(report["sample_gaps_over_threshold"], 1)
-            self.assertIn("diagnostic only", report["sample_gap_interpretation"])
+            self.assertIn(
+                "diagnostic only", report["sample_gap_interpretation"]
+            )
             self.assertIn("hysteresis", report["confirmed_outage_semantics"])
             self.assertIn("not exact", report["confirmed_outage_semantics"])
 

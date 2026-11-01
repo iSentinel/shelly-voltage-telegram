@@ -1,3 +1,5 @@
+"""Tests for GitHub Actions security and release metadata rules."""
+
 import re
 import unittest
 from pathlib import Path
@@ -24,18 +26,34 @@ class WorkflowSecurityTests(unittest.TestCase):
 
     def test_image_dispatch_supports_exact_ref_and_tag(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
-        self.assertIn('description: "Existing branch, tag or commit to build"', text)
-        self.assertIn("ref: ${{ github.event_name == 'workflow_dispatch'", text)
+        self.assertIn(
+            'description: "Existing branch, tag or commit to build"', text
+        )
+        self.assertIn(
+            "ref: ${{ github.event_name == 'workflow_dispatch'", text
+        )
         self.assertIn("type=raw,value=${{ inputs.image_tag }}", text)
         self.assertIn("explicit image tag must start with v", text)
 
     def test_image_dispatch_uses_checked_out_source_metadata(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
+        revision_label = (
+            "org.opencontainers.image.revision="
+            "${{ steps.source.outputs.sha }}"
+        )
+        version_label = (
+            "org.opencontainers.image.version="
+            "${{ steps.source.outputs.version }}"
+        )
         self.assertIn('sha="$(git rev-parse HEAD)"', text)
-        self.assertIn("org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text)
-        self.assertIn("org.opencontainers.image.version=${{ steps.source.outputs.version }}", text)
-        self.assertIn("annotations: ${{ steps.meta.outputs.annotations }}", text)
-        self.assertIn("enable=${{ github.event_name != 'workflow_dispatch' }}", text)
+        self.assertIn(revision_label, text)
+        self.assertIn(version_label, text)
+        self.assertIn(
+            "annotations: ${{ steps.meta.outputs.annotations }}", text
+        )
+        self.assertIn(
+            "enable=${{ github.event_name != 'workflow_dispatch' }}", text
+        )
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
 
     def test_release_uses_exact_tag_and_checksum(self):
