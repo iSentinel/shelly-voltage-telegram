@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
+
 class WorkflowSecurityTests(unittest.TestCase):
     def test_permissions_are_explicit(self):
         for path in WORKFLOWS.glob("*.yml"):
@@ -20,6 +21,13 @@ class WorkflowSecurityTests(unittest.TestCase):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
         self.assertIn("sbom: true", text)
         self.assertIn("provenance: mode=max", text)
+
+    def test_image_dispatch_supports_exact_ref_and_tag(self):
+        text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
+        self.assertIn('description: "Existing branch, tag or commit to build"', text)
+        self.assertIn("ref: ${{ github.event_name == 'workflow_dispatch'", text)
+        self.assertIn("type=raw,value=${{ inputs.image_tag }}", text)
+        self.assertIn("explicit image tag must start with v", text)
 
     def test_release_uses_exact_tag_and_checksum(self):
         text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
@@ -57,6 +65,7 @@ class WorkflowSecurityTests(unittest.TestCase):
             line = line.strip()
             if line and not line.startswith("#"):
                 self.assertIn(",<", line, line)
+
 
 if __name__ == "__main__":
     unittest.main()
