@@ -1,0 +1,10 @@
+[Unit]
+Description=Backup Shelly Voltage SQLite database
+After=shelly-voltage-compose.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/shelly-voltage/scripts/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

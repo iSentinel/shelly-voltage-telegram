@@ -1,0 +1,425 @@
+# Roadmap
+
+Status date: 2026-11-01
+Live checkpoint: `0.4.11-hw` (deployed and accepted on CT110)
+Previous rollback checkpoint: `0.4.7-hw`
+
+## Completed
+
+### 1. Shelly hardware/API discovery — DONE
+
+- Physical Shelly Pro EM-50 identified and queried locally.
+- `EM1.GetStatus` validated on both channels.
+- Voltage/frequency fields confirmed on hardware.
+- Stable firmware 2.1.1 retained; beta firmware intentionally skipped.
+- Device timezone corrected to Europe/Kyiv.
+
+### 2. Core monitoring service — DONE
+
+- Polling every 10 s by default.
+- SQLite WAL history.
+- Daily min/max/avg.
+- Retention pruning.
+- No fake `0 V` samples when Shelly is unavailable.
+- Last valid data preserved.
+- Digest authentication support.
+- Monitor-only safety is regression-tested: production code permits the measurement
+  `GET /rpc/EM1.GetStatus` path and contains no Shelly control/configuration RPCs.
+
+### 3. Telegram implementation — SOFTWARE DONE / LIVE CREDENTIAL TEST PENDING
+
+Implemented:
+
+- optional Telegram integration;
+- one stable status message;
+- `message_id` persisted in SQLite;
+- `editMessageText` updates;
+- automatic recreation after deleted/uneditable status message;
+- `/voltage`, `/status`, `/today`, `/minmax`, `/history`, `/health`;
+- optional threshold alerts, disabled by default;
+- secret-file token/chat configuration.
+
+Candidate `0.4.2-hw` additionally validates `/start`, `/help`, `/outages`,
+persisted `getUpdates` offset, optional user-ID ACL, edit throttling, bounded 429
+retry, and `message is not modified` handling.
+
+Pending only external credentials and live Telegram acceptance.
+
+### 4. Container/runtime hardening — DONE
+
+- Debian 13 LXC 110 deployment.
+- Docker/Compose runtime validated.
+- non-root container.
+- read-only root filesystem.
+- capabilities dropped.
+- no-new-privileges.
+- PID and memory limits.
+- Docker log rotation.
+- persistent bind-mounted SQLite data.
+
+### 5. Recovery/autostart — DONE
+
+- LXC autostart.
+- Docker autostart.
+- Compose systemd unit.
+- container restart persistence test.
+- full LXC reboot recovery test.
+
+### 6. Health/observability — DONE
+
+- `/health`
+- `/ready`
+- `/status.json`
+- `/metrics`
+- runtime RPC latency
+- SQLite integrity check
+- `doctor`
+- soak report CLI
+
+### 7. Backup/supportability — DONE
+
+- online SQLite backup;
+- backup SHA256;
+- daily persistent systemd timer;
+- 14-copy default retention;
+- redacted support bundle;
+- bundle SHA256;
+- secret redaction validation.
+
+### 8. Installation UX — DONE FOR LOCAL / GITHUB URL PENDING
+
+- `install.sh --dry-run`;
+- idempotent local install/update;
+- secure interactive configuration;
+- hidden Telegram token input;
+- non-interactive mode;
+- future `curl | bash` bootstrap;
+- public `.env.example` separated from deployment `.env`.
+
+## `0.4.2-hw` hardening and live acceptance
+
+### `0.4.2-hw` — DEPLOYED / HARDWARE ACCEPTED
+
+- Docker healthcheck now uses `/health`; `/ready` remains Shelly-data readiness.
+- 3 consecutive poll failures -> `offline`; 2 successes -> recovery.
+- last-good voltage/frequency restored from SQLite after process restart.
+- no synthetic `0 V` samples during outage.
+- repetitive outage warnings are rate-limited.
+- persistent SQLite outage journal, schema version 2.
+- schema v1 -> v2 migration preserves existing measurements.
+- open outage survives service restart without creating a duplicate event.
+- recovery closes the same event and records duration.
+- optional one-shot Telegram outage/recovery alerts.
+- outage count/duration metrics and `/outages` command.
+- 45 unit tests pass; compile/style/Compose/ResourceWarning and supply-chain gates pass.
+- isolated runtime simulation passed: offline -> restart while offline ->
+  recovering -> online using a fake Shelly at 230.5 V / 50.0 Hz.
+- installer acceptance uses `/health`, so a valid update does not fail merely because
+  Shelly is offline; `/ready` remains a diagnostic data-readiness endpoint.
+- pre-upgrade snapshots preserve source + online SQLite backup with SHA256.
+- `scripts/rollback.sh` restores source/database, preserves `.env`/secrets, and
+  creates a rescue backup of the state being rolled back.
+- rollback fixture is part of CI and passed end-to-end.
+- online backup against the live 2382-sample database passed SHA256 + quick_check.
+- CI-equivalent release-candidate gate passed end-to-end on 2026-10-31.
+- reproducible source-release fixture produces byte-identical tarballs for a fixed epoch,
+  verifies internal/external SHA256 manifests, and excludes `.env`, secrets, SQLite,
+  logs and pycache.
+- release-hygiene regression now also excludes operational `validation/`, `dist-publish/`
+  and `ROADMAP.md.pre-*` files; the final source-archive checksum is kept in the
+  external `SHA256SUMS` release asset and validation evidence, avoiding a self-referential hash.
+- schema-aware soak report remains compatible with schema v1 and separately reports
+  diagnostic sample gaps, last-sample age and confirmed schema-v2 outage events.
+- support bundle schema-v2 fixture validates outage diagnostics and secret redaction.
+- `doctor` remains usable while Shelly is offline, so hardware unavailability does not
+  suppress service/database/Telegram diagnostics.
+- Telegram transport failures are sanitized so exception text cannot expose the bot
+  token embedded in the Bot API URL.
+
+Live acceptance on 2026-10-31 is complete for the monitor-only path: isolated real-Shelly smoke PASS; a live schema-v1 database copy migrated to schema v2 with all 3848 original measurement rows byte-stable by row hash; the production switch preserved all 3962 pre-switch rows; SQLite `quick_check=ok`, zero-voltage rows remain 0, and container restart persistence PASS. Telegram remained disabled because its secret files are empty.
+
+## Active validation
+
+### 9. Long-running hardware soak — DONE
+
+24 h soak acceptance is complete. The database spans 26.947 h of real samples
+(28.678 h wall time at acceptance), with 4538 measurements. While Shelly was
+reachable, median cadence was 10.040 s and p95 cadence was 10.069 s. SQLite
+`quick_check=ok`; zero-voltage samples remain 0. The report separately records
+three >30 s diagnostic gaps and does not reinterpret them as outages.
+
+A real mains blackout beginning at 2026-10-31 23:55:03+02:00 was observed during
+acceptance. `0.4.2-hw` kept `/health` live, moved `/ready` to 503, retained the
+last-good 227.7 V / 50.0 Hz sample, and opened exactly one schema-v2 outage event.
+An online SQLite backup taken during the outage passed SHA256 and `quick_check`
+with all 4538 measurement rows. Restarting the production container during the
+same open outage preserved that single outage event (no duplicate), restored the
+last-good sample, kept zero synthetic 0 V rows, and returned to `offline` state.
+
+Soak statistics at acceptance:
+
+- sample span: 26.947 h;
+- wall elapsed: 28.678 h;
+- samples: 4538;
+- cadence median / p95 while sampling: 10.040 / 10.069 s;
+- voltage min/max over retained history: 106.5 / 234.7 V;
+- frequency min/max: 48.5 / 50.0 Hz;
+- diagnostic gaps >30 s: 3; maximum 26610.197 s;
+- confirmed outage journal: 1 open real blackout event;
+- SQLite `quick_check`: `ok`;
+- synthetic 0 V rows: 0.
+
+The monitor remains intentionally online as a service while the physical Shelly is
+off; data collection will resume automatically after power returns and two
+successful polls confirm recovery.
+
+## Offline-safe supply-chain audit — DONE
+
+- GitHub workflows use explicit least-privilege permissions.
+- CI uses `pull_request`, not privileged `pull_request_target`.
+- release checkout is pinned to the exact release tag and verifies `VERSION`.
+- source assets are checksum-verified and private/generated files are rejected.
+- GHCR build emits SBOM and max provenance for amd64/arm64.
+- runtime Python dependencies have upper bounds.
+- bootstrap refuses the placeholder repository; pinned release installer verifies SHA256.
+- workflow security regression tests are included in the normal unit-test suite.
+- publication metadata/version consistency and operational-file exclusion are
+  regression-tested; the frozen `0.4.2-hw` publication gate passed 45 tests plus
+  installer, rollback, release reproducibility and support-bundle fixtures.
+- final publication gate rebuilds the pinned container image to the exact
+  hardware-accepted image ID and verifies source/image `app.py` identity; the only
+  GitHub-publication input still missing is the destination `owner/repo`.
+- All external GitHub Actions are pinned to full immutable commit SHAs; this is
+  protected by the normal regression suite.
+
+## `0.4.3-hw` hardening and live acceptance
+
+- `version` CLI command no longer requires Shelly/runtime configuration.
+- `db-check` no longer requires Shelly config and uses SQLite read-only mode;
+  a missing database fails with exit 2 instead of being silently created/migrated.
+- candidate work was isolated from the then-live `0.4.2-hw` until hardware promotion.
+- full candidate software suite passes 49/49 tests plus compile/shell, Compose,
+  reproducible release, installer, rollback and support-bundle fixtures.
+- `0.4.3-hw-rc2` passes isolated blackout validation with no measurements or
+  synthetic 0 V rows, one outage event and SQLite `quick_check=ok`.
+- cold-start blackout readiness now reports the confirmed `shelly offline`
+  state even before the first successful measurement exists.
+- operational `db-check` against the live WAL database leaves the main SQLite
+  file SHA256 and mtime unchanged; a read-only bind mount is not a supported
+  WAL diagnostic mode because SQLite may require shared-memory access.
+- after mains recovery, real-device smoke passed on the physical Shelly;
+  `0.4.3-hw` was promoted to live CT110 with the existing `.env` preserved.
+- pre-promotion snapshot `20261101-035941-0.4.2-hw` passed source/database
+  SHA256 verification and rollback dry-run validation.
+- post-promotion SQLite continuity passed: no synthetic 0 V rows, no duplicate
+  outage, `quick_check=ok`, and sampling resumed normally after container restart.
+
+## `0.4.4-hw` hardening and live acceptance
+
+- Outage duration semantics are now explicit: confirmed connectivity interval
+  after configured offline/recovery hysteresis, not exact mains-loss boundaries.
+- Telegram `/outages`, Prometheus HELP and soak-report JSON use the same semantics.
+- Software candidate version is separated from the hardware-accepted live version.
+- Recovery regression asserts two valid recovery samples are persisted and the
+  outage closes only on the second successful poll.
+- Runtime version now has one source of truth (`VERSION`); the Docker image and
+  `app.py version` can no longer silently retain a previous release string.
+- Isolated real-Shelly smoke PASS before promotion.
+- Safe promotion PASS with preserved `.env`, SQLite continuity, verified snapshot,
+  rollback dry-run and post-promotion restart continuity.
+- Live `0.4.4-hw` is now the hardware-accepted checkpoint.
+
+## `0.4.5-hw` hardening and live acceptance
+
+- Real restart evidence showed `last_outage_duration` became null although SQLite
+  retained the latest closed outage.
+- Candidate restores that historical duration from SQLite during startup without
+  changing outage detection, hysteresis or schema.
+- Regression coverage includes a newest closed outage followed by an open outage,
+  preserving both the historical duration and current offline state.
+- Isolated real-production-DB restart validation: PASS.
+- Safe promotion, snapshot verification, rollback dry-run and production restart: PASS.
+- Live `0.4.5-hw` is now the hardware-accepted checkpoint.
+
+## `0.4.6-hw` hardening and live acceptance
+
+- Clean Debian 13 release gate exposed a first-install dry-run failure caused by
+  bare `return` inheriting status 1 from a failed no-op condition under `set -e`.
+- Candidate makes expected snapshot/rollback no-op paths return 0 explicitly.
+- CI now covers both a fresh target and in-place installer dry-run.
+- Clean Debian 13 first-install acceptance: PASS.
+- Isolated real-Shelly smoke: PASS.
+- Safe promotion, snapshot verification, rollback dry-run and production restart: PASS.
+- Live `0.4.6-hw` is now the hardware-accepted checkpoint.
+
+## `0.4.7-hw` supportability hardening and live acceptance
+
+- `soak-report.py` now opens the requested SQLite database read-only.
+- A missing or mistyped `--db` path fails closed with exit 2 and a concise diagnostic instead of creating an empty SQLite file or emitting a traceback.
+- 52/52 Python regression tests pass; release, installer, rollback and support-bundle fixtures pass.
+- Live SQLite read-only validation preserves SHA256 and mtime; missing DB paths fail closed without creating files.
+- Isolated real-Shelly probe PASS before promotion.
+- Safe promotion from `0.4.6-hw` created and checksum-verified the rollback snapshot.
+- Post-promotion continuity and container restart PASS: no synthetic 0 V rows, two outage rows preserved, `quick_check=ok`.
+- Live `0.4.7-hw` is now the hardware-accepted checkpoint.
+
+## `0.4.8-hw` Telegram hardening and live acceptance
+
+- Preserve the live long-poll fix: `getUpdates` uses a 20 s Bot API long poll with 25 s HTTP timeout headroom.
+- Add `telegram-discover`, which validates the configured bot token and lists pending chats without printing secret material.
+- Discovery works before a chat ID is configured and reports `waiting_for_update` cleanly when no pending update exists.
+- Software gate passes 55/55 tests plus syntax, Compose, installer, reproducible release, rollback and support-bundle fixtures.
+- Isolated real-Shelly probe PASS before promotion.
+- Safe promotion from `0.4.7-hw` created a rollback snapshot and preserved SQLite continuity.
+- Telegram `doctor` validates both bot identity and destination chat.
+- Stable status message edit-in-place PASS with the persisted message ID unchanged.
+- Deleted status message recreation PASS: one replacement message was created and its new ID persisted.
+- Live `/voltage` command handler response PASS in the configured chat; all expected bot commands are registered.
+- Sustained live command-loop check reports zero `ReadTimeout`, transport or polling failures.
+- Post-promotion service remains healthy and ready; zero synthetic 0 V rows, two outage rows preserved, `quick_check=ok`.
+- Live `0.4.8-hw` is now the hardware-accepted checkpoint.
+
+## `0.4.9-hw` Telegram notification-policy acceptance
+
+Requested notification behavior:
+
+- ordinary Telegram messages: silent;
+- automatic low-voltage alert below 180 V: normal notification outside quiet hours;
+- 23:00-07:00 Europe/Kyiv: all Telegram messages forced silent;
+- low-voltage recovery threshold: 185 V, recovery message silent;
+- one alert per low-voltage episode, not every poll.
+
+Implementation is configurable through `.env`; boundary/regression tests pass and the candidate was promoted to live CT110 with Telegram/Shelly doctor checks passing.
+
+Acceptance evidence:
+
+- 60/60 Python tests PASS;
+- installer dry-run, reproducible release, rollback and support-bundle redaction PASS;
+- live `.env` explicitly sets silent-by-default, 23:00-07:00 quiet hours, 180 V alert and 185 V recovery;
+- Telegram and Shelly doctor checks PASS after promotion;
+- persisted Telegram status `message_id` and update offset retained;
+- no Telegram warnings after restart;
+- pre-upgrade snapshot: `20261101-182218-0.4.8-hw`.
+
+## `0.4.10-hw` admin Telegram settings acceptance
+
+- `/settings` displays the live Telegram notification policy.
+- Inline edit controls are shown only to IDs in `TELEGRAM_ADMIN_USER_IDS`.
+- Callback writes are rejected for non-admin users.
+- Settings are persisted in SQLite `meta` and loaded immediately, so no container restart is required.
+- Controls cover silent default, quiet-hours enable/start/end, low-voltage alert enable/threshold/recovery and reset to `.env`.
+- Promoted to live CT110 after all software gates passed. Admin configuration, health, Shelly/Telegram doctor, command registration source and existing Telegram state were verified. Interactive callback acceptance is available through `/settings`.
+
+## `0.4.11-hw` separate Telegram status-channel acceptance
+
+- Keep private control chat for commands and admin `/settings`.
+- Publish/edit the stable voltage status in a dedicated Telegram channel.
+- Persist channel status message independently as `telegram_status_message_id`.
+- Doctor validates both destinations.
+- Live target channel verified by Bot API before candidate promotion.
+- Promoted to live CT110. Bot API validated the channel destination; a channel status message was created as `telegram_status_message_id=675` and remained `675` across subsequent update cycles, confirming in-place editing. Private control chat and admin `/settings` remain separate.
+
+## `0.5.0-hw` three-phase + full feature candidate — SOFTWARE ACCEPTED / HARDWARE WAIT
+
+Implementation completed in isolated candidate while production remains `0.4.11-hw` during the real mains outage.
+
+Implemented:
+
+- schema v3 with lossless v1/v2 → L1 migration;
+- L1/L2/L3 runtime model; L2/L3 optional until hardware arrives;
+- independent phase history/outage/polling/alerts;
+- three-phase status channel, dashboard, health JSON and Prometheus metrics;
+- warning/critical and <180 V alarm dwell/recovery hysteresis;
+- recovery/outage notifications;
+- daily summary and voltage-quality analytics;
+- PNG `/chart`, CSV `/export`, outage history;
+- admin maintenance mode and audit journal;
+- backup freshness, watchdog counters and SQLite maintenance/rollups;
+- read-only device firmware/uptime/time-skew health;
+- optional channel status pinning.
+
+Migration proof on a copy of the live database: 7543 measurements + 3 outages before and after migration, all assigned to L1, `PRAGMA quick_check=ok`.
+
+Software/package gates are complete. Do not promote during the blackout.
+
+Software acceptance checkpoint (final):
+
+- 85/85 Python tests PASS;
+- every function in `app.py` and `advanced_features.py` is <=40 lines;
+- fresh/in-place installer dry-run PASS;
+- reproducible release PASS; rollback PASS; support-bundle redaction PASS; Compose config PASS;
+- final candidate image runs as UID 10001 with read-only root;
+- isolated HTTP smoke PASS for `/health`, `/metrics`, `/dashboard`;
+- schema-v3 migration on production DB copy PASS, row counts preserved, zero synthetic 0V rows, `quick_check=ok`;
+- Telegram doctor PASS for private control chat + status channel; bot is channel administrator with post/edit rights;
+- production `0.4.11-hw` remains unchanged and healthy during the real mains outage.
+
+Promotion gate: wait for L1 mains to return, run real Shelly hardware acceptance, then promote `0.5.0-hw`. L2/L3 software slots are ready; their hardware acceptance naturally waits for the two future sensors.
+
+## `0.5.1-hw` Pro 3EM preparation — SOFTWARE CANDIDATE
+
+- Native Pro 3EM-3CT63 triphase polling through `EM.GetStatus?id=0`.
+- A/B/C mapped to L1/L2/L3 with one polling timestamp.
+- Missing/null phase values never become fake 0 V samples.
+- Legacy Pro EM-50 and optional separate L2/L3 sensor mode retained.
+- Confirmed power recovery rotates the stable channel status: delete old outage-era message → create/persist fresh online message.
+- Production recovery behavior is already backported to live `0.4.12-hw` so the next mains restoration is covered before Pro 3EM hardware arrives.
+
+Hardware validation for Pro 3EM naturally waits for the device purchase/installation.
+
+## `0.5.3-hw` Telegram module selector — SOFTWARE CANDIDATE
+
+- Admin `/settings` shows the active Shelly module.
+- Admin may select `Pro EM-50` or `Pro 3EM / Pro 3EM-3CT63`.
+- Selection is persisted in SQLite and applied immediately by rebuilding read-only clients/state.
+- IP addresses and credentials remain in protected configuration, never editable through Telegram.
+- Persisted runtime settings are now loaded automatically after every service restart.
+
+
+## Next external-input stages
+
+### 10. Telegram live acceptance — DONE
+
+Live acceptance completed on CT110 with the configured private destination:
+
+1. `doctor` validates `getMe` and `getChat` — PASS.
+2. Stable status message exists and its `message_id` is persisted — PASS.
+3. Subsequent status update edits the same message in place — PASS.
+4. Telegram update offset persistence remains present — PASS.
+5. Live command response and registered command set — PASS.
+6. Deleting the status message causes exactly one replacement status message to be created and remembered — PASS.
+7. Long-poll command loop runs without `ReadTimeout` or transport warnings after the timeout-headroom fix — PASS.
+
+No bot token or private chat identifier is stored in public release artifacts or documentation.
+
+### 11. GitHub publication — LOCAL PREP DONE / WAITING FOR REPOSITORY DESTINATION
+
+Prepared and revalidated locally for `0.4.8-hw`:
+
+- README, license, Dockerfile/Compose and public examples;
+- install/configure/bootstrap and rollback scripts;
+- systemd units/timer and support/backup/soak utilities;
+- GitHub CI/image/release workflows with pinned external actions;
+- 39 public files staged with zero unstaged/untracked files;
+- `git diff --cached --check` passes;
+- no `.env`, secrets, SQLite, validation or generated dist paths are staged;
+- final reproducible source archive and `SHA256SUMS` are generated outside the repository;
+- archive checksum verification passes and forbidden private/generated content is absent;
+- no Git remote is configured and no author identity is fabricated on CT110.
+
+After the repository owner/name is selected:
+
+- replace bootstrap placeholder URL with the selected repository;
+- configure the Git remote and create the first commit/tag using the chosen GitHub identity;
+- push and verify the already-prepared CI/image/release workflows in the destination repository;
+- publish the tagged image to GHCR;
+- publish the source release and checksums;
+- test the public one-line installer on a clean Debian 13 instance.
+
+## Optional hardening after acceptance
+
+- Shelly Digest-auth software path is regression-tested; enable authentication on
+  the physical Shelly and run the live-device auth check when mains/device access is available.
+- Add a second Shelly device only if required later.
+- Add Grafana/Prometheus integration only if useful; current metrics endpoint is already compatible with scraping.
+- Consider signed container releases after GitHub publication.

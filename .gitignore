@@ -1,0 +1,17 @@
+.env
+secrets/
+data/
+backups/
+__pycache__/
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.tar.gz
+*.sha256
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+dist-publish/
+validation/
+ROADMAP.md.pre-*

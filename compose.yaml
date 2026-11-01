@@ -1,0 +1,50 @@
+services:
+  shelly-voltage:
+    build:
+      context: .
+    container_name: shelly-voltage-bot
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /data/voltage.sqlite3
+      HEALTH_HOST: 0.0.0.0
+    volumes:
+      - /var/lib/shelly-voltage:/data
+      - /var/backups/shelly-voltage:/var/backups/shelly-voltage:ro
+      - ./secrets/shelly_password:/run/secrets/shelly_password:ro
+      - ./secrets/shelly_l2_password:/run/secrets/shelly_l2_password:ro
+      - ./secrets/shelly_l3_password:/run/secrets/shelly_l3_password:ro
+      - ./secrets/telegram_chat_id:/run/secrets/telegram_chat_id:ro
+      - ./secrets/telegram_token:/run/secrets/telegram_token:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    memswap_limit: 512m
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
