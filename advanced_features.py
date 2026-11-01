@@ -366,11 +366,7 @@ def _dashboard_card(row: dict[str, object]) -> str:
     phase = html.escape(str(row["phase"]))
     state = html.escape(str(row["state"]))
     voltage_value = row.get("voltage")
-    voltage = (
-        "—"
-        if voltage_value is None
-        else f"{float(voltage_value):.1f} V"
-    )
+    voltage = "—" if voltage_value is None else f"{float(voltage_value):.1f} V"
     return (
         f"<section><h2>{phase}</h2><strong>{voltage}</strong>"
         f"<p>{state}</p></section>"
