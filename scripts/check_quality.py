@@ -111,9 +111,12 @@ def inspect_tree(
                 signatures.append(
                     (duplicate_function_key(node), node_name(path, node))
                 )
-        if isinstance(node, ast.ClassDef):
-            if not is_test_path(path) and not has_docstring(node):
-                problems.append(f"{node_name(path, node)} lacks a docstring")
+        if (
+            isinstance(node, ast.ClassDef)
+            and not is_test_path(path)
+            and not has_docstring(node)
+        ):
+            problems.append(f"{node_name(path, node)} lacks a docstring")
         problems.extend(_check_import(path, node))
     return problems, signatures
 
