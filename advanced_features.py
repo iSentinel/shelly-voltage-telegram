@@ -112,10 +112,7 @@ def outage_history(
     )
     with closing(connect_ro(path)) as db:
         rows = db.execute(query, (phase, limit)).fetchall()
-    return [
-        (float(start), None if end is None else float(end))
-        for start, end in rows
-    ]
+    return [(float(start), None if end is None else float(end)) for start, end in rows]
 
 
 def series(
@@ -162,13 +159,9 @@ def _write_csv(
 
     with target.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(
-            ["timestamp", "phase", "voltage_v", "frequency_hz"]
-        )
+        writer.writerow(["timestamp", "phase", "voltage_v", "frequency_hz"])
         for ts, voltage, frequency in rows:
-            writer.writerow(
-                [f"{float(ts):.3f}", phase, voltage, frequency]
-            )
+            writer.writerow([f"{float(ts):.3f}", phase, voltage, frequency])
 
 
 def png_chunk(kind: bytes, data: bytes) -> bytes:
@@ -190,8 +183,7 @@ def write_png(
 
     stride = width * 3
     rows = (
-        b"\x00" + bytes(pixels[y * stride : (y + 1) * stride])
-        for y in range(height)
+        b"\x00" + bytes(pixels[y * stride : (y + 1) * stride]) for y in range(height)
     )
     raw = b"".join(rows)
     header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
@@ -278,9 +270,7 @@ def chart_png(
 
     since = datetime.now().timestamp() - hours * 3600
     points = series(path, phase, since)
-    pixels = bytearray(
-        WHITE_PIXEL * CHART_WIDTH * CHART_HEIGHT * 3
-    )
+    pixels = bytearray(WHITE_PIXEL * CHART_WIDTH * CHART_HEIGHT * 3)
     if len(points) >= 2:
         coordinates = _chart_coordinates(points)
         for start, end in zip(
@@ -377,6 +367,5 @@ def _dashboard_card(row: dict[str, object]) -> str:
     else:
         voltage = f"{float(voltage_value):.1f} V"
     return (
-        f"<section><h2>{phase}</h2>"
-        f"<strong>{voltage}</strong><p>{state}</p></section>"
+        f"<section><h2>{phase}</h2><strong>{voltage}</strong><p>{state}</p></section>"
     )
