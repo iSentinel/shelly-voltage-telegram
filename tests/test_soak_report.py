@@ -89,7 +89,9 @@ class SoakReportTests(unittest.TestCase):
             self.assertEqual(report["confirmed_open_outages"], 1)
             self.assertEqual(report["confirmed_outage_seconds"], 1600.0)
             self.assertEqual(report["sample_gaps_over_threshold"], 1)
-            self.assertIn("diagnostic only", report["sample_gap_interpretation"])
+            self.assertIn(
+                "diagnostic only", report["sample_gap_interpretation"]
+            )
             self.assertIn("hysteresis", report["confirmed_outage_semantics"])
             self.assertIn("not exact", report["confirmed_outage_semantics"])
 

@@ -112,7 +112,10 @@ def outage_history(
     )
     with closing(connect_ro(path)) as db:
         rows = db.execute(query, (phase, limit)).fetchall()
-    return [(float(start), None if end is None else float(end)) for start, end in rows]
+    return [
+        (float(start), None if end is None else float(end))
+        for start, end in rows
+    ]
 
 
 def series(
@@ -183,7 +186,8 @@ def write_png(
 
     stride = width * 3
     rows = (
-        b"\x00" + bytes(pixels[y * stride : (y + 1) * stride]) for y in range(height)
+        b"\x00" + bytes(pixels[y * stride : (y + 1) * stride])
+        for y in range(height)
     )
     raw = b"".join(rows)
     header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
@@ -366,6 +370,4 @@ def _dashboard_card(row: dict[str, object]) -> str:
         voltage = "—"
     else:
         voltage = f"{float(voltage_value):.1f} V"
-    return (
-        f"<section><h2>{phase}</h2><strong>{voltage}</strong><p>{state}</p></section>"
-    )
+    return f"<section><h2>{phase}</h2><strong>{voltage}</strong><p>{state}</p></section>"

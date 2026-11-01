@@ -24,8 +24,12 @@ class WorkflowSecurityTests(unittest.TestCase):
 
     def test_image_dispatch_supports_exact_ref_and_tag(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
-        self.assertIn('description: "Existing branch, tag or commit to build"', text)
-        self.assertIn("ref: ${{ github.event_name == 'workflow_dispatch'", text)
+        self.assertIn(
+            'description: "Existing branch, tag or commit to build"', text
+        )
+        self.assertIn(
+            "ref: ${{ github.event_name == 'workflow_dispatch'", text
+        )
         self.assertIn("type=raw,value=${{ inputs.image_tag }}", text)
         self.assertIn("explicit image tag must start with v", text)
 
@@ -33,13 +37,19 @@ class WorkflowSecurityTests(unittest.TestCase):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
         self.assertIn('sha="$(git rev-parse HEAD)"', text)
         self.assertIn(
-            "org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text
+            "org.opencontainers.image.revision=${{ steps.source.outputs.sha }}",
+            text,
         )
         self.assertIn(
-            "org.opencontainers.image.version=${{ steps.source.outputs.version }}", text
+            "org.opencontainers.image.version=${{ steps.source.outputs.version }}",
+            text,
         )
-        self.assertIn("annotations: ${{ steps.meta.outputs.annotations }}", text)
-        self.assertIn("enable=${{ github.event_name != 'workflow_dispatch' }}", text)
+        self.assertIn(
+            "annotations: ${{ steps.meta.outputs.annotations }}", text
+        )
+        self.assertIn(
+            "enable=${{ github.event_name != 'workflow_dispatch' }}", text
+        )
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
 
     def test_release_uses_exact_tag_and_checksum(self):
@@ -60,7 +70,9 @@ class WorkflowSecurityTests(unittest.TestCase):
             for action, ref in pattern.findall(text):
                 if action.startswith("./"):
                     continue
-                self.assertRegex(ref, r"^[0-9a-f]{40}$", f"{path.name}: {action}@{ref}")
+                self.assertRegex(
+                    ref, r"^[0-9a-f]{40}$", f"{path.name}: {action}@{ref}"
+                )
 
     def test_docker_base_image_is_pinned_to_digest(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

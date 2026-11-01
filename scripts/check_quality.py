@@ -31,7 +31,9 @@ def python_files(root: Path) -> list[Path]:
 def function_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     """Return the source length of one function, including decorators."""
 
-    first_line = min([node.lineno, *(item.lineno for item in node.decorator_list)])
+    first_line = min(
+        [node.lineno, *(item.lineno for item in node.decorator_list)]
+    )
     return (node.end_lineno or node.lineno) - first_line + 1
 
 
@@ -49,7 +51,9 @@ def has_docstring(node: ast.AST) -> bool:
     return bool(ast.get_docstring(node, clean=False))
 
 
-def duplicate_function_key(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+def duplicate_function_key(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> str:
     """Create a structural key that ignores only the function name."""
 
     copy = ast.parse(ast.unparse(node)).body[0]
@@ -73,12 +77,18 @@ def inspect_tree(
                     f"{function_name(path, node)} exceeds {MAX_FUNCTION_LINES} lines"
                 )
             if not has_docstring(node):
-                problems.append(f"{function_name(path, node)} is missing a docstring")
-            signatures.append((duplicate_function_key(node), function_name(path, node)))
+                problems.append(
+                    f"{function_name(path, node)} is missing a docstring"
+                )
+            signatures.append(
+                (duplicate_function_key(node), function_name(path, node))
+            )
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             names = [alias.name for alias in node.names]
             if node.module == "logging" or "logging" in names:
-                problems.append(f"{path}:{node.lineno}: use loguru instead of logging")
+                problems.append(
+                    f"{path}:{node.lineno}: use loguru instead of logging"
+                )
     return problems, signatures
 
 

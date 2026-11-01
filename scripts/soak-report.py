@@ -40,7 +40,9 @@ def schema_version(db: sqlite3.Connection) -> int:
 
     if not table_exists(db, "meta"):
         return 0
-    row = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+    row = db.execute(
+        "SELECT value FROM meta WHERE key='schema_version'"
+    ).fetchone()
     return int(row[0]) if row else 0
 
 
@@ -131,7 +133,9 @@ def local_time(timestamp: float | None, zone: ZoneInfo) -> str | None:
 
     if timestamp is None:
         return None
-    return datetime.fromtimestamp(timestamp, zone).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(timestamp, zone).isoformat(
+        timespec="seconds"
+    )
 
 
 def outage_report(
@@ -175,7 +179,9 @@ def build_report(
 
     current = time.time() if now is None else now
     cutoff = current - args.hours * 3600
-    integrity, version, rows, outages = read_data(Path(args.db), cutoff, current)
+    integrity, version, rows, outages = read_data(
+        Path(args.db), cutoff, current
+    )
     zone = ZoneInfo(args.timezone)
     report: dict[str, object] = {
         "window_hours": args.hours,

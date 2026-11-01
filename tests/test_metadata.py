@@ -17,11 +17,18 @@ class MetadataConsistencyTests(unittest.TestCase):
         else:
             self.assertIn(f"Current software candidate: **{version}**", readme)
         self.assertIn(f"## {version} -", changelog)
-        self.assertIn(f"Hardware-accepted live checkpoint: **{live_version}**", readme)
+        self.assertIn(
+            f"Hardware-accepted live checkpoint: **{live_version}**", readme
+        )
         self.assertIn(f"Checkpoint: `{live_version}`", hardware)
 
     def test_public_docs_omit_private_device_identifiers(self):
-        docs = ("README.md", "ROADMAP.md", "HARDWARE_VALIDATION.md", "CHANGELOG.md")
+        docs = (
+            "README.md",
+            "ROADMAP.md",
+            "HARDWARE_VALIDATION.md",
+            "CHANGELOG.md",
+        )
         private_ipv4 = re.compile(r"\b192\.168\.\d{1,3}\.\d{1,3}\b")
         mac = re.compile(r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
         for name in docs:
@@ -49,13 +56,17 @@ class MetadataConsistencyTests(unittest.TestCase):
                 ):
                     deployment_values[key] = value
         for path in ROOT.rglob("*"):
-            if not path.is_file() or any(part in excluded for part in path.parts):
+            if not path.is_file() or any(
+                part in excluded for part in path.parts
+            ):
                 continue
             if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gz"}:
                 continue
             text = path.read_text(errors="ignore")
             for label, value in deployment_values.items():
-                self.assertNotIn(value, text, f"deployment value {label}: {path}")
+                self.assertNotIn(
+                    value, text, f"deployment value {label}: {path}"
+                )
 
 
 if __name__ == "__main__":
