@@ -86,10 +86,14 @@ def _check_function(path: Path, node: ast.AST) -> list[str]:
 def _check_import(path: Path, node: ast.AST) -> list[str]:
     """Reject the standard logging package in project Python code."""
 
-    if not isinstance(node, (ast.Import, ast.ImportFrom)):
+    if isinstance(node, ast.Import):
+        names = [alias.name for alias in node.names]
+        uses_logging = "logging" in names
+    elif isinstance(node, ast.ImportFrom):
+        uses_logging = node.module == "logging"
+    else:
         return []
-    names = [alias.name for alias in node.names]
-    if node.module == "logging" or "logging" in names:
+    if uses_logging:
         return [f"{path}:{node.lineno}: use loguru instead of logging"]
     return []
 
