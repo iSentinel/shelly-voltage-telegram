@@ -1,0 +1,93 @@
+name: Source Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing v* tag to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          [[ "$tag" == v* ]] || {
+            echo "ERROR: release tag must start with v" >&2
+            exit 2
+          }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Validate tag matches VERSION
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='${{ steps.tag.outputs.tag }}'
+          version="$(tr -d '\r\n' < VERSION)"
+          [[ "$tag" == "v$version" ]] || {
+            echo "ERROR: tag $tag does not match VERSION=$version" >&2
+            exit 3
+          }
+
+      - name: Build reproducible source assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          epoch="$(git log -1 --format=%ct)"
+          ./scripts/release.sh \
+            --output-dir dist \
+            --source-date-epoch "$epoch"
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: Verify public release contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-${version}.tar.gz"
+          tar -tzf "$archive" > /tmp/release-list.txt
+          forbidden="$(grep -E '(^|/)\.env$|(^|/)secrets/|(^|/)__pycache__/|(^|/)validation/|(^|/)dist-publish/|(^|/)ROADMAP\.md\.pre-|\.py[co]$|\.sqlite(3)?([.-]|$)|\.log$' /tmp/release-list.txt || true)"
+          [[ -z "$forbidden" ]] || {
+            printf 'ERROR: private/generated release entries:\n%s\n' "$forbidden" >&2
+            exit 4
+          }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "ERROR: GitHub Release $RELEASE_TAG already exists" >&2
+            exit 5
+          fi
+          gh release create "$RELEASE_TAG" \
+            dist/shelly-voltage-telegram-*.tar.gz \
+            dist/SHA256SUMS \
+            --verify-tag \
+            --title "$RELEASE_TAG" \
+            --generate-notes
