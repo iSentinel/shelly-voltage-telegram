@@ -37,10 +37,11 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
+- Current software candidate: **0.5.3-hw**
 - Current release: **0.5.3-hw**
 - Production deployment: **0.5.3-hw**, hardware-accepted on a physical Shelly Pro EM-50 after a real outage/recovery cycle.
 - Hardware-accepted live checkpoint: **0.4.11-hw**
-- The line above is the compatibility checkpoint stored in the current public release metadata. The operator deployment has since been promoted to `0.5.3-hw`; validation metadata is being consolidated in the next audited release.
+- The candidate/checkpoint wording above is kept for compatibility with the metadata stored in the current public release. The operator deployment has since been promoted to `0.5.3-hw`; validation metadata is being consolidated in the next audited release.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 
 ## Supported devices
