@@ -1,0 +1,59 @@
+name: Fix SQLite ResourceWarning
+
+on:
+  push:
+    paths:
+      - .github/workflows/fix-sqlite-resource-warning.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Close SQLite connections explicitly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('advanced_features.py')
+          text = path.read_text()
+          if 'from contextlib import closing' not in text:
+              text = text.replace('import csv\n', 'import csv\nfrom contextlib import closing\n', 1)
+          text = text.replace('with connect_ro(path) as db:', 'with closing(connect_ro(path)) as db:')
+          text = text.replace(
+              'with connect_ro(path) as db, target.open("w", newline="") as handle:',
+              'with closing(connect_ro(path)) as db, target.open("w", newline="") as handle:',
+          )
+          path.write_text(text)
+
+          path = Path('tests/test_app.py')
+          text = path.read_text().replace(
+              'with APP.sqlite3.connect(path) as db:',
+              'with closing(APP.sqlite3.connect(path)) as db, db:',
+          )
+          path.write_text(text)
+          PY
+      - name: Validate warnings as errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q -r requirements.txt
+          python3 -m py_compile advanced_features.py tests/test_app.py
+          python3 -W error::ResourceWarning -m unittest discover -s tests -v
+      - name: Commit source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add advanced_features.py tests/test_app.py
+          git commit -m 'Close SQLite connections explicitly'
+          git push origin HEAD:main
