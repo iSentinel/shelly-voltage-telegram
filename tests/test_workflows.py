@@ -34,6 +34,7 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn('sha="$(git rev-parse HEAD)"', text)
         self.assertIn("org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text)
         self.assertIn("org.opencontainers.image.version=${{ steps.source.outputs.version }}", text)
+        self.assertIn("annotations: ${{ steps.meta.outputs.annotations }}", text)
         self.assertIn("enable=${{ github.event_name != 'workflow_dispatch' }}", text)
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
 
