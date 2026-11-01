@@ -32,8 +32,12 @@ class WorkflowSecurityTests(unittest.TestCase):
     def test_image_dispatch_uses_checked_out_source_metadata(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
         self.assertIn('sha="$(git rev-parse HEAD)"', text)
-        self.assertIn("org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text)
-        self.assertIn("org.opencontainers.image.version=${{ steps.source.outputs.version }}", text)
+        self.assertIn(
+            "org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text
+        )
+        self.assertIn(
+            "org.opencontainers.image.version=${{ steps.source.outputs.version }}", text
+        )
         self.assertIn("annotations: ${{ steps.meta.outputs.annotations }}", text)
         self.assertIn("enable=${{ github.event_name != 'workflow_dispatch' }}", text)
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
@@ -56,9 +60,7 @@ class WorkflowSecurityTests(unittest.TestCase):
             for action, ref in pattern.findall(text):
                 if action.startswith("./"):
                     continue
-                self.assertRegex(
-                    ref, r"^[0-9a-f]{40}$", f"{path.name}: {action}@{ref}"
-                )
+                self.assertRegex(ref, r"^[0-9a-f]{40}$", f"{path.name}: {action}@{ref}")
 
     def test_docker_base_image_is_pinned_to_digest(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

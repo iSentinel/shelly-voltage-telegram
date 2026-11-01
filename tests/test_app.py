@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from contextlib import closing
 import os
+import sys
 import tempfile
 import unittest
-import sys
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -44,16 +44,18 @@ class ConfigTests(unittest.TestCase):
                 )
 
     def test_timeout_validation(self):
-        with patch.dict(
-            os.environ,
-            {
-                "SHELLY_HOST": "192.0.2.10",
-                "SHELLY_TIMEOUT_SEC": "0",
-            },
-            clear=False,
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SHELLY_HOST": "192.0.2.10",
+                    "SHELLY_TIMEOUT_SEC": "0",
+                },
+                clear=False,
+            ),
+            self.assertRaisesRegex(ValueError, "SHELLY_TIMEOUT_SEC"),
         ):
-            with self.assertRaisesRegex(ValueError, "SHELLY_TIMEOUT_SEC"):
-                APP.load_config()
+            APP.load_config()
 
 
 class ShellyClientTests(unittest.TestCase):
@@ -112,7 +114,9 @@ class ShellyClientTests(unittest.TestCase):
         }
         for meter_type, method in mapping.items():
             with self.subTest(meter_type=meter_type):
-                client = APP.RpcMeterClient(config(shelly_meter_type=meter_type), method)
+                client = APP.RpcMeterClient(
+                    config(shelly_meter_type=meter_type), method
+                )
                 client.rpc = Mock(return_value={"voltage": 229.5, "freq": 50.0})
                 voltage, frequency, _ = client.read()
                 self.assertEqual((voltage, frequency), (229.5, 50.0))
@@ -126,11 +130,16 @@ class ShellyClientTests(unittest.TestCase):
 
     def test_pro3em_reads_all_phases_from_one_em_status(self):
         client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
-        client.rpc = Mock(return_value={
-            "a_voltage": 231.1, "a_freq": 49.98,
-            "b_voltage": 229.8, "b_freq": 50.01,
-            "c_voltage": 232.4, "c_freq": 50.00,
-        })
+        client.rpc = Mock(
+            return_value={
+                "a_voltage": 231.1,
+                "a_freq": 49.98,
+                "b_voltage": 229.8,
+                "b_freq": 50.01,
+                "c_voltage": 232.4,
+                "c_freq": 50.00,
+            }
+        )
 
         result = client.read_phases()
 
@@ -141,11 +150,16 @@ class ShellyClientTests(unittest.TestCase):
 
     def test_pro3em_skips_missing_phase_instead_of_zero(self):
         client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
-        client.rpc = Mock(return_value={
-            "a_voltage": 230.0, "a_freq": 50.0,
-            "b_voltage": None, "b_freq": 50.0,
-            "c_voltage": 231.0, "c_freq": 50.0,
-        })
+        client.rpc = Mock(
+            return_value={
+                "a_voltage": 230.0,
+                "a_freq": 50.0,
+                "b_voltage": None,
+                "b_freq": 50.0,
+                "c_voltage": 231.0,
+                "c_freq": 50.0,
+            }
+        )
 
         result = client.read_phases()
 
@@ -233,9 +247,7 @@ class OutageStorageTests(unittest.TestCase):
 
     def test_overnight_outage_counts_today(self):
         with tempfile.TemporaryDirectory() as directory:
-            storage = APP.Storage(
-                Path(directory) / "data.sqlite3", "Europe/Kyiv"
-            )
+            storage = APP.Storage(Path(directory) / "data.sqlite3", "Europe/Kyiv")
             storage.initialize()
             zone = APP.ZoneInfo("Europe/Kyiv")
             now_dt = APP.datetime(2026, 10, 31, 10, 0, tzinfo=zone)
@@ -247,9 +259,7 @@ class OutageStorageTests(unittest.TestCase):
 
     def test_outage_journal_is_idempotent_and_closes(self):
         with tempfile.TemporaryDirectory() as directory:
-            storage = APP.Storage(
-                Path(directory) / "data.sqlite3", "Europe/Kyiv"
-            )
+            storage = APP.Storage(Path(directory) / "data.sqlite3", "Europe/Kyiv")
             storage.initialize()
             now = 1793441400.0
             self.assertTrue(storage.begin_outage(now - 30))
@@ -265,9 +275,7 @@ class OutageStorageTests(unittest.TestCase):
 
     def test_latest_closed_outage_duration_ignores_open_outage(self):
         with tempfile.TemporaryDirectory() as directory:
-            storage = APP.Storage(
-                Path(directory) / "data.sqlite3", "Europe/Kyiv"
-            )
+            storage = APP.Storage(Path(directory) / "data.sqlite3", "Europe/Kyiv")
             storage.initialize()
             self.assertIsNone(storage.latest_closed_outage_duration())
             self.assertTrue(storage.begin_outage(100.0))
@@ -277,7 +285,6 @@ class OutageStorageTests(unittest.TestCase):
             self.assertEqual(storage.latest_closed_outage_duration(), 30.0)
             self.assertEqual(storage.end_outage(250.0), 50.0)
             self.assertEqual(storage.latest_closed_outage_duration(), 50.0)
-
 
 
 class TelegramTransportTests(unittest.TestCase):
@@ -303,23 +310,25 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
     def test_quiet_hours_wrap_midnight(self):
         cfg = config()
         zone = APP.ZoneInfo(cfg.timezone)
-        self.assertFalse(APP.telegram_quiet_hours(
-            cfg, APP.datetime(2026, 11, 1, 22, 59, tzinfo=zone)))
-        self.assertTrue(APP.telegram_quiet_hours(
-            cfg, APP.datetime(2026, 11, 1, 23, 0, tzinfo=zone)))
-        self.assertTrue(APP.telegram_quiet_hours(
-            cfg, APP.datetime(2026, 11, 2, 6, 59, tzinfo=zone)))
-        self.assertFalse(APP.telegram_quiet_hours(
-            cfg, APP.datetime(2026, 11, 2, 7, 0, tzinfo=zone)))
+        self.assertFalse(
+            APP.telegram_quiet_hours(
+                cfg, APP.datetime(2026, 11, 1, 22, 59, tzinfo=zone)
+            )
+        )
+        self.assertTrue(
+            APP.telegram_quiet_hours(cfg, APP.datetime(2026, 11, 1, 23, 0, tzinfo=zone))
+        )
+        self.assertTrue(
+            APP.telegram_quiet_hours(cfg, APP.datetime(2026, 11, 2, 6, 59, tzinfo=zone))
+        )
+        self.assertFalse(
+            APP.telegram_quiet_hours(cfg, APP.datetime(2026, 11, 2, 7, 0, tzinfo=zone))
+        )
 
     def test_default_messages_are_silent(self):
-        telegram = APP.Telegram(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
+        telegram = APP.Telegram(config(telegram_token="token", telegram_chat_id="123"))
         response = Mock()
-        response.json.return_value = {
-            "ok": True, "result": {"message_id": 11}
-        }
+        response.json.return_value = {"ok": True, "result": {"message_id": 11}}
         telegram.api_session.post = Mock(return_value=response)
         with patch.object(telegram, "quiet_now", return_value=False):
             telegram.send("status")
@@ -327,13 +336,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         self.assertTrue(payload["disable_notification"])
 
     def test_low_voltage_can_notify_during_day(self):
-        telegram = APP.Telegram(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
+        telegram = APP.Telegram(config(telegram_token="token", telegram_chat_id="123"))
         response = Mock()
-        response.json.return_value = {
-            "ok": True, "result": {"message_id": 12}
-        }
+        response.json.return_value = {"ok": True, "result": {"message_id": 12}}
         telegram.api_session.post = Mock(return_value=response)
         with patch.object(telegram, "quiet_now", return_value=False):
             telegram.send("low", notify=True)
@@ -341,13 +346,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         self.assertFalse(payload["disable_notification"])
 
     def test_quiet_hours_override_low_voltage_notification(self):
-        telegram = APP.Telegram(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
+        telegram = APP.Telegram(config(telegram_token="token", telegram_chat_id="123"))
         response = Mock()
-        response.json.return_value = {
-            "ok": True, "result": {"message_id": 13}
-        }
+        response.json.return_value = {"ok": True, "result": {"message_id": 13}}
         telegram.api_session.post = Mock(return_value=response)
         with patch.object(telegram, "quiet_now", return_value=True):
             telegram.send("low", notify=True)
@@ -355,9 +356,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         self.assertTrue(payload["disable_notification"])
 
     def test_low_voltage_alert_is_one_shot_until_recovery(self):
-        monitor = APP.Monitor(config(
-            telegram_token="token", telegram_chat_id="123", alert_dwell_sec=0
-        ))
+        monitor = APP.Monitor(
+            config(telegram_token="token", telegram_chat_id="123", alert_dwell_sec=0)
+        )
         monitor.telegram.send = Mock(return_value=14)
         monitor.maybe_low_voltage_alert(179.9, 50.0)
         monitor.maybe_low_voltage_alert(175.0, 50.0)
@@ -377,19 +378,23 @@ class TelegramDestinationTests(unittest.TestCase):
         self.assertEqual(tg.status_chat_id, "123")
 
     def test_status_chat_can_be_separate_channel(self):
-        tg = APP.Telegram(config(
-            telegram_token="token",
-            telegram_chat_id="123",
-            telegram_status_chat_id="-100999",
-        ))
+        tg = APP.Telegram(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-100999",
+            )
+        )
         self.assertEqual(tg.status_chat_id, "-100999")
 
     def test_send_target_override_uses_channel(self):
-        tg = APP.Telegram(config(
-            telegram_token="token",
-            telegram_chat_id="123",
-            telegram_status_chat_id="-100999",
-        ))
+        tg = APP.Telegram(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-100999",
+            )
+        )
         response = Mock()
         response.json.return_value = {"ok": True, "result": {"message_id": 5}}
         tg.api_session.post = Mock(return_value=response)
@@ -399,15 +404,19 @@ class TelegramDestinationTests(unittest.TestCase):
         self.assertEqual(payload["chat_id"], "-100999")
 
     def test_update_status_uses_separate_meta_key_and_channel(self):
-        monitor = APP.Monitor(config(
-            telegram_token="token",
-            telegram_chat_id="123",
-            telegram_status_chat_id="-100999",
-        ))
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-100999",
+            )
+        )
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
         monitor.storage.get_meta = Mock(return_value=None)
         monitor.storage.set_meta = Mock()
-        monitor.storage.day_stats = Mock(return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0})
+        monitor.storage.day_stats = Mock(
+            return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0}
+        )
         monitor.telegram.send = Mock(return_value=77)
         monitor.update_status()
         monitor.telegram.send.assert_called_once()
@@ -419,15 +428,18 @@ class TelegramSettingsTests(unittest.TestCase):
     """Validate admin-only runtime Telegram settings."""
 
     def _monitor(self, admin_ids=("7",)):
-        monitor = APP.Monitor(config(
-            telegram_token="token",
-            telegram_chat_id="123",
-            telegram_admin_user_ids=admin_ids,
-        ))
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_admin_user_ids=admin_ids,
+            )
+        )
         defaults = monitor.setting_defaults()
         monitor.storage.get_meta = Mock(
             side_effect=lambda key: defaults.get(key.removeprefix("telegram_setting_"))
-            if key.startswith("telegram_setting_") else None
+            if key.startswith("telegram_setting_")
+            else None
         )
         monitor.storage.set_meta = Mock()
         return monitor
@@ -435,7 +447,9 @@ class TelegramSettingsTests(unittest.TestCase):
     def test_settings_command_admin_gets_keyboard(self):
         monitor = self._monitor()
         monitor.telegram.send = Mock(return_value=1)
-        update = {"message": {"chat": {"id": 123}, "from": {"id": 7}, "text": "/settings"}}
+        update = {
+            "message": {"chat": {"id": 123}, "from": {"id": 7}, "text": "/settings"}
+        }
         monitor.handle_update(update)
         kwargs = monitor.telegram.send.call_args.kwargs
         self.assertIn("reply_markup", kwargs)
@@ -444,29 +458,57 @@ class TelegramSettingsTests(unittest.TestCase):
     def test_settings_command_non_admin_is_read_only(self):
         monitor = self._monitor()
         monitor.telegram.send = Mock(return_value=1)
-        update = {"message": {"chat": {"id": 123}, "from": {"id": 8}, "text": "/settings"}}
+        update = {
+            "message": {"chat": {"id": 123}, "from": {"id": 8}, "text": "/settings"}
+        }
         monitor.handle_update(update)
-        self.assertIsNone(monitor.telegram.send.call_args.kwargs["reply_markup"] if "reply_markup" in monitor.telegram.send.call_args.kwargs else None)
+        self.assertIsNone(
+            monitor.telegram.send.call_args.kwargs["reply_markup"]
+            if "reply_markup" in monitor.telegram.send.call_args.kwargs
+            else None
+        )
 
     def test_non_admin_callback_cannot_change_settings(self):
         monitor = self._monitor()
         monitor.telegram.answer_callback = Mock()
-        update = {"callback_query": {"id": "cb1", "from": {"id": 8}, "data": "cfg:silent_toggle", "message": {"message_id": 9, "chat": {"id": 123}}}}
+        update = {
+            "callback_query": {
+                "id": "cb1",
+                "from": {"id": 8},
+                "data": "cfg:silent_toggle",
+                "message": {"message_id": 9, "chat": {"id": 123}},
+            }
+        }
         monitor.handle_callback(update)
         monitor.storage.set_meta.assert_not_called()
-        monitor.telegram.answer_callback.assert_called_once_with("cb1", "Только администратор")
+        monitor.telegram.answer_callback.assert_called_once_with(
+            "cb1", "Только администратор"
+        )
 
     def test_admin_callback_persists_and_applies_setting(self):
         monitor = self._monitor()
         values = monitor.setting_defaults().copy()
-        monitor.storage.get_meta.side_effect = lambda key: values.get(key.removeprefix("telegram_setting_")) if key.startswith("telegram_setting_") else None
+        monitor.storage.get_meta.side_effect = (
+            lambda key: values.get(key.removeprefix("telegram_setting_"))
+            if key.startswith("telegram_setting_")
+            else None
+        )
+
         def save(key, value):
             if key.startswith("telegram_setting_"):
                 values[key.removeprefix("telegram_setting_")] = value
+
         monitor.storage.set_meta.side_effect = save
         monitor.telegram.answer_callback = Mock()
         monitor.telegram.edit = Mock()
-        update = {"callback_query": {"id": "cb2", "from": {"id": 7}, "data": "cfg:silent_toggle", "message": {"message_id": 10, "chat": {"id": 123}}}}
+        update = {
+            "callback_query": {
+                "id": "cb2",
+                "from": {"id": 7},
+                "data": "cfg:silent_toggle",
+                "message": {"message_id": 10, "chat": {"id": 123}},
+            }
+        }
         monitor.handle_callback(update)
         self.assertFalse(monitor.telegram.silent_default)
         self.assertEqual(values["silent"], "0")
@@ -476,8 +518,14 @@ class TelegramSettingsTests(unittest.TestCase):
         monitor = self._monitor()
         values = monitor.setting_defaults().copy()
         values["low_v"] = "170"
-        monitor.storage.get_meta.side_effect = lambda key: values.get(key.removeprefix("telegram_setting_")) if key.startswith("telegram_setting_") else None
-        monitor.storage.set_meta.side_effect = lambda key, value: values.__setitem__(key.removeprefix("telegram_setting_"), value)
+        monitor.storage.get_meta.side_effect = (
+            lambda key: values.get(key.removeprefix("telegram_setting_"))
+            if key.startswith("telegram_setting_")
+            else None
+        )
+        monitor.storage.set_meta.side_effect = lambda key, value: values.__setitem__(
+            key.removeprefix("telegram_setting_"), value
+        )
         monitor.update_setting("reset")
         self.assertEqual(monitor.low_voltage_alert_v, 180.0)
         self.assertEqual(values["low_v"], "180.0")
@@ -532,9 +580,7 @@ class TelegramLogicTests(unittest.TestCase):
             config(telegram_token=token, telegram_chat_id="-100123")
         )
         url = f"https://api.telegram.org/bot{token}/getMe"
-        telegram.api_session.post = Mock(
-            side_effect=APP.requests.ConnectionError(url)
-        )
+        telegram.api_session.post = Mock(side_effect=APP.requests.ConnectionError(url))
         with self.assertRaises(RuntimeError) as raised:
             telegram.call("getMe", {})
         self.assertIn("ConnectionError", str(raised.exception))
@@ -673,11 +719,15 @@ class MonitorRegressionTests(unittest.TestCase):
     def test_recovery_rotates_channel_status_message(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "recovery.sqlite3"
-            monitor = APP.Monitor(config(
-                database_path=path, telegram_token="token",
-                telegram_chat_id="123", telegram_status_chat_id="-100123",
-                availability_alerts_enabled=True,
-            ))
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100123",
+                    availability_alerts_enabled=True,
+                )
+            )
             monitor.storage.initialize()
             started = APP.time.time() - 60
             monitor.storage.begin_outage(started)
@@ -722,16 +772,12 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor = self._telegram_monitor()
         monitor.storage.get_meta = Mock(return_value="42")
         monitor.storage.set_meta = Mock()
-        monitor.telegram.edit.side_effect = RuntimeError(
-            "message to edit not found"
-        )
+        monitor.telegram.edit.side_effect = RuntimeError("message to edit not found")
 
         monitor.update_status()
 
         monitor.telegram.send.assert_called_once()
-        monitor.storage.set_meta.assert_called_once_with(
-            "telegram_message_id", "99"
-        )
+        monitor.storage.set_meta.assert_called_once_with("telegram_message_id", "99")
 
 
 class RestartObservabilityTests(unittest.TestCase):
@@ -759,45 +805,53 @@ class CliTests(unittest.TestCase):
     """Validate config-independent CLI commands."""
 
     def test_version_does_not_load_runtime_config(self):
-        with patch.object(sys, "argv", ["app.py", "version"]), patch.object(
-            APP, "load_config", side_effect=AssertionError("config must not load")
-        ), patch("builtins.print") as printer:
+        with (
+            patch.object(sys, "argv", ["app.py", "version"]),
+            patch.object(
+                APP, "load_config", side_effect=AssertionError("config must not load")
+            ),
+            patch("builtins.print") as printer,
+        ):
             result = APP.main()
         self.assertEqual(result, 0)
-        expected = (
-            Path(__file__).resolve().parents[1] / "VERSION"
-        ).read_text().strip()
+        expected = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
         printer.assert_called_once_with(expected)
-
 
     def test_db_check_does_not_load_shelly_config(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "existing.sqlite3"
             storage = APP.Storage(path, "Europe/Kyiv")
             storage.initialize()
-            with patch.object(sys, "argv", ["app.py", "db-check"]), patch.dict(
-                os.environ, {"DATABASE_PATH": str(path)}, clear=False
-            ), patch.object(
-                APP, "load_config", side_effect=AssertionError("config must not load")
-            ), patch("builtins.print") as printer:
+            with (
+                patch.object(sys, "argv", ["app.py", "db-check"]),
+                patch.dict(os.environ, {"DATABASE_PATH": str(path)}, clear=False),
+                patch.object(
+                    APP,
+                    "load_config",
+                    side_effect=AssertionError("config must not load"),
+                ),
+                patch("builtins.print") as printer,
+            ):
                 result = APP.main()
             self.assertEqual(result, 0)
             printer.assert_called_once_with("ok")
 
     def test_telegram_discover_lists_chat_without_exposing_token(self):
         cfg = config(telegram_token="secret-token")
-        updates = [{
-            "update_id": 12,
-            "message": {
-                "chat": {"id": 12345, "type": "private", "first_name": "User"},
-                "text": "/start",
-            },
-        }]
-        with patch.object(
-            APP.Telegram, "get_me", return_value={"username": "bot"}
-        ), patch.object(
-            APP.Telegram, "call", return_value=updates
-        ), patch("builtins.print") as printer:
+        updates = [
+            {
+                "update_id": 12,
+                "message": {
+                    "chat": {"id": 12345, "type": "private", "first_name": "User"},
+                    "text": "/start",
+                },
+            }
+        ]
+        with (
+            patch.object(APP.Telegram, "get_me", return_value={"username": "bot"}),
+            patch.object(APP.Telegram, "call", return_value=updates),
+            patch("builtins.print") as printer,
+        ):
             result = APP.telegram_discover(cfg)
         payload = json.loads(printer.call_args.args[0])
         self.assertEqual(result, 0)
@@ -807,11 +861,11 @@ class CliTests(unittest.TestCase):
 
     def test_telegram_discover_waits_when_no_updates(self):
         cfg = config(telegram_token="secret-token")
-        with patch.object(
-            APP.Telegram, "get_me", return_value={"username": "bot"}
-        ), patch.object(
-            APP.Telegram, "call", return_value=[]
-        ), patch("builtins.print") as printer:
+        with (
+            patch.object(APP.Telegram, "get_me", return_value={"username": "bot"}),
+            patch.object(APP.Telegram, "call", return_value=[]),
+            patch("builtins.print") as printer,
+        ):
             result = APP.telegram_discover(cfg)
         payload = json.loads(printer.call_args.args[0])
         self.assertEqual(result, 2)
@@ -821,11 +875,16 @@ class CliTests(unittest.TestCase):
     def test_db_check_missing_database_is_fail_closed_and_read_only(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "missing.sqlite3"
-            with patch.object(sys, "argv", ["app.py", "db-check"]), patch.dict(
-                os.environ, {"DATABASE_PATH": str(path)}, clear=False
-            ), patch.object(
-                APP, "load_config", side_effect=AssertionError("config must not load")
-            ), patch("sys.stderr"):
+            with (
+                patch.object(sys, "argv", ["app.py", "db-check"]),
+                patch.dict(os.environ, {"DATABASE_PATH": str(path)}, clear=False),
+                patch.object(
+                    APP,
+                    "load_config",
+                    side_effect=AssertionError("config must not load"),
+                ),
+                patch("sys.stderr"),
+            ):
                 result = APP.main()
             self.assertEqual(result, 2)
             self.assertFalse(path.exists())
@@ -837,9 +896,12 @@ class DoctorTests(unittest.TestCase):
     def test_doctor_continues_when_shelly_is_offline(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg = config(database_path=Path(directory) / "doctor.sqlite3")
-            with patch.object(
-                APP.ShellyClient, "read", side_effect=RuntimeError("offline")
-            ), patch("builtins.print") as printer:
+            with (
+                patch.object(
+                    APP.ShellyClient, "read", side_effect=RuntimeError("offline")
+                ),
+                patch("builtins.print") as printer,
+            ):
                 result = APP.doctor(cfg)
             payload = json.loads(printer.call_args.args[0])
             self.assertEqual(result, 2)
@@ -917,9 +979,7 @@ class ConnectivityStateTests(unittest.TestCase):
         monitor = APP.Monitor(config())
         monitor.state.restore(1793435408.0, 214.0, 50.0)
         monitor.state.error("unreachable", offline_after=1)
-        monitor.storage.outage_stats = Mock(
-            return_value={"count": 1, "duration": 30.0}
-        )
+        monitor.storage.outage_stats = Mock(return_value={"count": 1, "duration": 30.0})
         metrics = APP.metrics_text(monitor)
         self.assertIn('shelly_connectivity{state="offline"} 1', metrics)
         self.assertIn("shelly_outages_total 1", metrics)
@@ -1010,17 +1070,20 @@ class AdvancedFeatureTests(unittest.TestCase):
             storage = APP.Storage(path, "Europe/Kyiv")
             storage.initialize()
             with closing(APP.sqlite3.connect(path)) as db, db:
-                self.assertEqual(db.execute(
-                    "SELECT phase FROM measurements").fetchone()[0], "L1")
-                self.assertEqual(db.execute(
-                    "SELECT phase FROM outages").fetchone()[0], "L1")
+                self.assertEqual(
+                    db.execute("SELECT phase FROM measurements").fetchone()[0], "L1"
+                )
+                self.assertEqual(
+                    db.execute("SELECT phase FROM outages").fetchone()[0], "L1"
+                )
                 self.assertEqual(storage.get_meta("schema_version"), "3")
 
     def test_unconfigured_phases_are_visible(self):
         monitor = APP.Monitor(config())
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
-        monitor.storage.day_stats = Mock(return_value={
-            "count": 1, "min": 220.0, "max": 220.0, "avg": 220.0})
+        monitor.storage.day_stats = Mock(
+            return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0}
+        )
         text = APP.multiphase_status_text(monitor)
         self.assertIn("L1: 220.0 V", text)
         self.assertIn("L2: не настроена", text)
@@ -1029,15 +1092,17 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_pro3em_poll_persists_three_phases_with_same_cycle(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "pro3em.sqlite3"
-            monitor = APP.Monitor(config(
-                database_path=path, shelly_meter_type="pro3em"
-            ))
+            monitor = APP.Monitor(
+                config(database_path=path, shelly_meter_type="pro3em")
+            )
             monitor.storage.initialize()
-            monitor.shelly.read_phases = Mock(return_value={
-                "L1": (230.0, 50.0, 4.0),
-                "L2": (231.0, 50.0, 4.0),
-                "L3": (232.0, 50.0, 4.0),
-            })
+            monitor.shelly.read_phases = Mock(
+                return_value={
+                    "L1": (230.0, 50.0, 4.0),
+                    "L2": (231.0, 50.0, 4.0),
+                    "L3": (232.0, 50.0, 4.0),
+                }
+            )
             monitor.next_prune = APP.time.monotonic() + 1000
 
             self.assertTrue(monitor.poll_pro3em_once())
@@ -1053,19 +1118,19 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_l2_poll_is_stored_separately(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "phase.sqlite3"
-            monitor = APP.Monitor(config(
-                database_path=path, phase_l2_host="192.0.2.20"))
+            monitor = APP.Monitor(
+                config(database_path=path, phase_l2_host="192.0.2.20")
+            )
             monitor.storage.initialize()
-            monitor.phase_clients["L2"].read = Mock(
-                return_value=(221.5, 50.0, 4.0))
+            monitor.phase_clients["L2"].read = Mock(return_value=(221.5, 50.0, 4.0))
             self.assertTrue(monitor.poll_secondary_phase("L2"))
             self.assertEqual(monitor.storage.latest("L2")[1], 221.5)
             self.assertIsNone(monitor.storage.latest("L1"))
 
     def test_low_voltage_requires_dwell(self):
-        monitor = APP.Monitor(config(
-            telegram_token="token", telegram_chat_id="123",
-            alert_dwell_sec=15.0))
+        monitor = APP.Monitor(
+            config(telegram_token="token", telegram_chat_id="123", alert_dwell_sec=15.0)
+        )
         monitor.telegram.send = Mock(return_value=1)
         with patch.object(APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]):
             monitor.maybe_low_voltage_alert(179.0, 50.0)
@@ -1082,11 +1147,11 @@ class AdvancedFeatureTests(unittest.TestCase):
             storage.initialize()
             now = APP.time.time()
             for index in range(12):
-                storage.add(now - (11-index)*60, 215.0 + index, 50.0, "L1")
+                storage.add(now - (11 - index) * 60, 215.0 + index, 50.0, "L1")
             png = root / "chart.png"
             csv_path = root / "export.csv"
             points = APP.chart_png(db_path, "L1", 1, png)
-            rows = APP.export_csv(db_path, "L1", now-3600, csv_path)
+            rows = APP.export_csv(db_path, "L1", now - 3600, csv_path)
             self.assertGreaterEqual(points, 2)
             self.assertTrue(png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
             self.assertEqual(rows, 12)
@@ -1100,7 +1165,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             now = APP.time.time()
             for value in (170.0, 200.0, 230.0, 260.0):
                 storage.add(now, value, 50.0, "L1")
-            q = APP.quality_stats(path, "L1", now-10, 207, 190, 253)
+            q = APP.quality_stats(path, "L1", now - 10, 207, 190, 253)
             self.assertEqual(q["samples"], 4)
             self.assertEqual(q["below_critical"], 1)
             monitor = APP.Monitor(config(database_path=path))
@@ -1113,10 +1178,15 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_daily_summary_is_sent_once_per_day(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "summary.sqlite3"
-            monitor = APP.Monitor(config(
-                database_path=path, telegram_token="token",
-                telegram_chat_id="123", daily_summary_hour=0,
-                daily_summary_minute=0))
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    daily_summary_hour=0,
+                    daily_summary_minute=0,
+                )
+            )
             monitor.storage.initialize()
             monitor.storage.add(APP.time.time(), 220.0, 50.0, "L1")
             monitor.telegram.send = Mock(return_value=1)
@@ -1127,16 +1197,22 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_maintenance_persists_and_suppresses_low_alert(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "maint.sqlite3"
-            monitor = APP.Monitor(config(
-                database_path=path, telegram_token="token",
-                telegram_chat_id="123", alert_dwell_sec=0))
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    alert_dwell_sec=0,
+                )
+            )
             monitor.storage.initialize()
             monitor.telegram.send = Mock(return_value=1)
             monitor.set_maintenance(60)
             monitor.maybe_low_voltage_alert(170.0, 50.0)
             monitor.telegram.send.assert_not_called()
-            self.assertGreater(float(monitor.storage.get_meta(
-                "maintenance_until")), APP.time.time())
+            self.assertGreater(
+                float(monitor.storage.get_meta("maintenance_until")), APP.time.time()
+            )
 
     def test_audit_roundtrip(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1148,9 +1224,13 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual(row[1:], ("7", "quiet_start", "23", "22"))
 
     def test_l2_uses_independent_credentials(self):
-        monitor = APP.Monitor(config(
-            phase_l2_host="192.0.2.20", phase_l2_user="phase2",
-            phase_l2_password="secret2"))
+        monitor = APP.Monitor(
+            config(
+                phase_l2_host="192.0.2.20",
+                phase_l2_user="phase2",
+                phase_l2_password="secret2",
+            )
+        )
         client = monitor.phase_clients["L2"]
         self.assertEqual(client.user, "phase2")
         self.assertEqual(client.password, "secret2")
@@ -1160,29 +1240,35 @@ class AdvancedFeatureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "x.csv"
             path.write_text("a,b\n1,2\n")
-            telegram = APP.Telegram(config(
-                telegram_token="token", telegram_chat_id="123"))
+            telegram = APP.Telegram(
+                config(telegram_token="token", telegram_chat_id="123")
+            )
             response = Mock()
-            response.json.return_value = {
-                "ok": True, "result": {"message_id": 3}}
+            response.json.return_value = {"ok": True, "result": {"message_id": 3}}
             telegram.api_session.post = Mock(return_value=response)
             telegram.send_document(path, "test")
             data = telegram.api_session.post.call_args.kwargs["data"]
             self.assertEqual(data["disable_notification"], "true")
 
     def test_pin_and_device_health_use_read_only_calls(self):
-        telegram = APP.Telegram(config(
-            telegram_token="token", telegram_chat_id="123",
-            telegram_status_chat_id="-1009"))
+        telegram = APP.Telegram(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-1009",
+            )
+        )
         telegram.call = Mock(return_value={})
         telegram.pin(77)
         payload = telegram.call.call_args.args[1]
         self.assertTrue(payload["disable_notification"])
         client = APP.ShellyClient(config())
-        client.rpc = Mock(side_effect=[
-            {"model": "SPEM", "ver": "2.1.1", "mac": "x"},
-            {"uptime": 123, "unixtime": APP.time.time()},
-        ])
+        client.rpc = Mock(
+            side_effect=[
+                {"model": "SPEM", "ver": "2.1.1", "mac": "x"},
+                {"uptime": 123, "unixtime": APP.time.time()},
+            ]
+        )
         result = client.device_health()
         self.assertEqual(result["firmware"], "2.1.1")
         self.assertEqual(client.rpc.call_args_list[0].args[0], "Shelly.GetDeviceInfo")
@@ -1192,11 +1278,16 @@ class AdvancedFeatureTests(unittest.TestCase):
         keyboard = monitor.settings_keyboard()["inline_keyboard"]
         callbacks = {button["callback_data"] for row in keyboard for button in row}
         expected = {
-            "cfg:meter_em50", "cfg:meter_em_gen3",
-            "cfg:meter_pm_mini_gen3", "cfg:meter_plus_pm_mini",
-            "cfg:meter_plus_1pm", "cfg:meter_1pm_gen3",
-            "cfg:meter_1pm_gen4", "cfg:meter_1pm_mini_gen3",
-            "cfg:meter_1pm_mini_gen4", "cfg:meter_pro3em",
+            "cfg:meter_em50",
+            "cfg:meter_em_gen3",
+            "cfg:meter_pm_mini_gen3",
+            "cfg:meter_plus_pm_mini",
+            "cfg:meter_plus_1pm",
+            "cfg:meter_1pm_gen3",
+            "cfg:meter_1pm_gen4",
+            "cfg:meter_1pm_mini_gen3",
+            "cfg:meter_1pm_mini_gen4",
+            "cfg:meter_pro3em",
         }
         self.assertTrue(expected.issubset(callbacks))
 
@@ -1282,9 +1373,13 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual(monitor.alert_dwell, 20.0)
 
     def test_channel_status_has_read_only_buttons(self):
-        monitor = APP.Monitor(config(
-            telegram_token="token", telegram_chat_id="123",
-            telegram_status_chat_id="-1009"))
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-1009",
+            )
+        )
         keyboard = monitor.status_keyboard()
         data = [button["callback_data"] for button in keyboard["inline_keyboard"][0]]
         self.assertEqual(data, ["view:refresh", "view:today", "view:outages"])
@@ -1299,8 +1394,13 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.next_prune = 0
             monitor.maybe_prune()
             with closing(APP.sqlite3.connect(path)) as db, db:
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0], 0)
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM hourly_aggregates").fetchone()[0], 1)
+                self.assertEqual(
+                    db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0], 0
+                )
+                self.assertEqual(
+                    db.execute("SELECT COUNT(*) FROM hourly_aggregates").fetchone()[0],
+                    1,
+                )
 
     def test_phase_metrics_and_watchdog(self):
         with tempfile.TemporaryDirectory() as directory:

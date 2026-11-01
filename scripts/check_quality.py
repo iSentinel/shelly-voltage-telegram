@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
 
 MAX_FUNCTION_LINES = 40
 SKIP_PARTS = {".git", ".venv", "venv", "__pycache__"}
@@ -31,9 +31,7 @@ def python_files(root: Path) -> list[Path]:
 def function_length(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     """Return the source length of one function, including decorators."""
 
-    first_line = min(
-        [node.lineno, *(item.lineno for item in node.decorator_list)]
-    )
+    first_line = min([node.lineno, *(item.lineno for item in node.decorator_list)])
     return (node.end_lineno or node.lineno) - first_line + 1
 
 
@@ -59,7 +57,9 @@ def duplicate_function_key(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return ast.dump(copy, include_attributes=False)
 
 
-def inspect_tree(path: Path, tree: ast.Module) -> tuple[list[str], list[tuple[str, str]]]:
+def inspect_tree(
+    path: Path, tree: ast.Module
+) -> tuple[list[str], list[tuple[str, str]]]:
     """Inspect one parsed file and return problems and function signatures."""
 
     problems: list[str] = []

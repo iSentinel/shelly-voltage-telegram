@@ -17,9 +17,7 @@ class MetadataConsistencyTests(unittest.TestCase):
         else:
             self.assertIn(f"Current software candidate: **{version}**", readme)
         self.assertIn(f"## {version} -", changelog)
-        self.assertIn(
-            f"Hardware-accepted live checkpoint: **{live_version}**", readme
-        )
+        self.assertIn(f"Hardware-accepted live checkpoint: **{live_version}**", readme)
         self.assertIn(f"Checkpoint: `{live_version}`", hardware)
 
     def test_public_docs_omit_private_device_identifiers(self):
@@ -40,7 +38,15 @@ class MetadataConsistencyTests(unittest.TestCase):
                 if "=" not in line:
                     continue
                 key, value = line.split("=", 1)
-                if key in {"SHELLY_HOST", "TELEGRAM_STATUS_CHAT_ID", "TELEGRAM_ADMIN_USER_IDS"} and value:
+                if (
+                    key
+                    in {
+                        "SHELLY_HOST",
+                        "TELEGRAM_STATUS_CHAT_ID",
+                        "TELEGRAM_ADMIN_USER_IDS",
+                    }
+                    and value
+                ):
                     deployment_values[key] = value
         for path in ROOT.rglob("*"):
             if not path.is_file() or any(part in excluded for part in path.parts):

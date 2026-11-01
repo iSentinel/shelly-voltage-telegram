@@ -40,9 +40,7 @@ def schema_version(db: sqlite3.Connection) -> int:
 
     if not table_exists(db, "meta"):
         return 0
-    row = db.execute(
-        "SELECT value FROM meta WHERE key='schema_version'"
-    ).fetchone()
+    row = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
     return int(row[0]) if row else 0
 
 
