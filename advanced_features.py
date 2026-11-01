@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from contextlib import closing
 from datetime import datetime, timedelta
 import html
 import io
@@ -23,7 +24,7 @@ def connect_ro(path: Path) -> sqlite3.Connection:
 def phase_stats(path: Path, phase: str, since: float) -> dict[str, float | int | None]:
     """Return summary statistics for one phase since a timestamp."""
 
-    with connect_ro(path) as db:
+    with closing(connect_ro(path)) as db:
         row = db.execute(
             "SELECT COUNT(*),MIN(voltage),MAX(voltage),AVG(voltage) "
             "FROM measurements WHERE phase=? AND ts>=?",
@@ -38,7 +39,7 @@ def quality_stats(
 ) -> dict[str, float | int]:
     """Estimate voltage-quality percentages from retained samples."""
 
-    with connect_ro(path) as db:
+    with closing(connect_ro(path)) as db:
         row = db.execute(
             "SELECT COUNT(*),SUM(voltage<?),SUM(voltage<?),SUM(voltage>?) "
             "FROM measurements WHERE phase=? AND ts>=?",
@@ -55,7 +56,7 @@ def quality_stats(
 def outage_history(path: Path, phase: str, limit: int = 10) -> list[tuple[float, float | None]]:
     """Return newest outage intervals for one phase."""
 
-    with connect_ro(path) as db:
+    with closing(connect_ro(path)) as db:
         rows = db.execute(
             "SELECT started_at,ended_at FROM outages WHERE phase=? "
             "ORDER BY started_at DESC LIMIT ?", (phase, limit)
@@ -66,7 +67,7 @@ def outage_history(path: Path, phase: str, limit: int = 10) -> list[tuple[float,
 def series(path: Path, phase: str, since: float, limit: int = 3000) -> list[tuple[float, float]]:
     """Return downsample-ready voltage points for one phase."""
 
-    with connect_ro(path) as db:
+    with closing(connect_ro(path)) as db:
         rows = db.execute(
             "SELECT ts,voltage FROM measurements WHERE phase=? AND ts>=? "
             "ORDER BY ts DESC LIMIT ?", (phase, since, limit)
@@ -77,7 +78,7 @@ def series(path: Path, phase: str, since: float, limit: int = 3000) -> list[tupl
 def export_csv(path: Path, phase: str, since: float, target: Path) -> int:
     """Export phase measurements to CSV and return the row count."""
 
-    with connect_ro(path) as db, target.open("w", newline="") as handle:
+    with closing(connect_ro(path)) as db, target.open("w", newline="") as handle:
         rows = db.execute(
             "SELECT ts,voltage,frequency FROM measurements WHERE phase=? AND ts>=? "
             "ORDER BY ts", (phase, since)

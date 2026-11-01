@@ -996,7 +996,7 @@ class AdvancedFeatureTests(unittest.TestCase):
     def test_schema_v2_migrates_all_rows_to_l1(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "v2.sqlite3"
-            with APP.sqlite3.connect(path) as db:
+            with closing(APP.sqlite3.connect(path)) as db, db:
                 db.executescript("""
                     CREATE TABLE measurements(id INTEGER PRIMARY KEY, ts REAL,
                         voltage REAL, frequency REAL);
@@ -1009,7 +1009,7 @@ class AdvancedFeatureTests(unittest.TestCase):
                 """)
             storage = APP.Storage(path, "Europe/Kyiv")
             storage.initialize()
-            with APP.sqlite3.connect(path) as db:
+            with closing(APP.sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute(
                     "SELECT phase FROM measurements").fetchone()[0], "L1")
                 self.assertEqual(db.execute(
@@ -1042,7 +1042,7 @@ class AdvancedFeatureTests(unittest.TestCase):
 
             self.assertTrue(monitor.poll_pro3em_once())
 
-            with APP.sqlite3.connect(path) as db:
+            with closing(APP.sqlite3.connect(path)) as db, db:
                 rows = db.execute(
                     "SELECT phase, voltage, ts FROM measurements ORDER BY phase"
                 ).fetchall()
@@ -1298,7 +1298,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.storage.add(old, 210.0, 50.0, "L1")
             monitor.next_prune = 0
             monitor.maybe_prune()
-            with APP.sqlite3.connect(path) as db:
+            with closing(APP.sqlite3.connect(path)) as db, db:
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0], 0)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM hourly_aggregates").fetchone()[0], 1)
 
