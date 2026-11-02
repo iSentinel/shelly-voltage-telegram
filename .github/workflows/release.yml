@@ -46,9 +46,14 @@ jobs:
           set -euo pipefail
           tag='${{ steps.tag.outputs.tag }}'
           version="$(tr -d '\r\n' < VERSION)"
+          release_version="$(tr -d '\r\n' < RELEASE_VERSION)"
           [[ "$tag" == "v$version" ]] || {
             echo "ERROR: tag $tag does not match VERSION=$version" >&2
             exit 3
+          }
+          [[ "$release_version" == "$version" ]] || {
+            echo "ERROR: RELEASE_VERSION=$release_version must match VERSION=$version" >&2
+            exit 4
           }
 
       - name: Build reproducible source assets
