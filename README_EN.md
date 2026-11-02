@@ -181,6 +181,10 @@ curl http://127.0.0.1:8080/status.json
 curl http://127.0.0.1:8080/metrics
 ```
 
+When a phase is `starting` or `offline`, current Prometheus voltage and
+frequency metrics are exported as `NaN` instead of repeating the last good
+sample. During `recovering` and `online`, the newest valid sample is exported.
+
 Dashboard:
 
 ```text

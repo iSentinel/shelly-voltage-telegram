@@ -1234,6 +1234,19 @@ class ConnectivityStateTests(unittest.TestCase):
         self.assertEqual(payload["reason"], "shelly offline")
         self.assertEqual(payload["connectivity"], "offline")
 
+    def test_metrics_keep_recovering_sample_live(self):
+        monitor = APP.Monitor(config(recovery_after_successes=2))
+        monitor.state.restore(1793435408.0, 214.0, 50.0)
+        monitor.state.error("unreachable", offline_after=1)
+        monitor.state.success(228.5, 50.0, 4.0, recovery_after=2)
+        monitor.storage.outage_stats = Mock(
+            return_value={"count": 1, "duration": 30.0}
+        )
+        metrics = APP.metrics_text(monitor)
+        self.assertIn("shelly_voltage_volts 228.5", metrics)
+        self.assertIn("shelly_frequency_hz 50.0", metrics)
+        self.assertIn('shelly_connectivity{state="recovering"} 1', metrics)
+
     def test_cold_start_blackout_reports_shelly_offline(self):
         monitor = APP.Monitor(config())
         monitor.state.error("unreachable", offline_after=1)
@@ -1252,6 +1265,9 @@ class ConnectivityStateTests(unittest.TestCase):
         )
         metrics = APP.metrics_text(monitor)
         self.assertIn('shelly_connectivity{state="offline"} 1', metrics)
+        self.assertIn("shelly_voltage_volts NaN", metrics)
+        self.assertIn("shelly_frequency_hz NaN", metrics)
+        self.assertIn('shelly_voltage_volts{phase="L1"} NaN', metrics)
         self.assertIn("shelly_outages_total 1", metrics)
         self.assertIn("shelly_outages_today 1", metrics)
         self.assertIn("shelly_outage_duration_today_seconds 30.000", metrics)
