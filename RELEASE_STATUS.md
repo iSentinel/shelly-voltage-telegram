@@ -11,7 +11,8 @@
   promoted to match `VERSION`.
 - `0.5.6-hw` may be promoted on the current Pro EM-50 after the active blackout recovery baseline verifies and live Telegram/read-only hardware checks pass.
 - Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software accepted; switching production to the `pro3em` backend remains pending physical device installation.
-- Local CI-equivalent acceptance: Ruff + quality PASS, 128/128 tests PASS,
+- Local CI-equivalent acceptance: Ruff + quality PASS, 129/129 tests PASS,
+  using the same pinned `scripts/quality.sh` gate as GitHub CI;
   ResourceWarning gate PASS, installer/rollback/support-bundle/release-installer
   fixtures PASS, reproducible release PASS, Compose config PASS and candidate
   container build PASS.

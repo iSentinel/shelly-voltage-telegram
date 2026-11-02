@@ -470,7 +470,8 @@ Current hardware gates:
 Software acceptance checkpoint:
 
 - Ruff 0.14.2 formatting/lint and project quality rules PASS.
-- 128/128 Python tests PASS with the ResourceWarning gate enabled.
+- Local and GitHub quality checks now use the same pinned `scripts/quality.sh` gate, preventing format/lint drift.
+- 129/129 Python tests PASS with the ResourceWarning gate enabled.
 - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
   redaction, pinned-release installer and Compose validation PASS.
 - Reproducible source release PASS and excludes Python tool caches.

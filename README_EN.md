@@ -273,3 +273,14 @@ See [`LICENSE`](LICENSE).
 <p align="center">
   <strong>Monitor power. Keep history. Get notified. Never control the load.</strong>
 </p>
+
+## Development quality gate
+
+Run the same pinned quality checks used by GitHub CI:
+
+```bash
+./scripts/quality.sh
+```
+
+The command requires Ruff 0.14.2 and fails closed if Ruff is missing or a different version is installed.
+
