@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 def replace_once(path_name, old, new):
+    """Replace one required marker in a UTF-8 text file."""
     path = Path(path_name)
     text = path.read_text(encoding="utf-8")
     if old not in text:
@@ -23,7 +24,6 @@ replace_once(
     "- `0.5.5-hw` adds keyless Sigstore signing for versioned GHCR images; "
     "production remains on `0.5.4-hw` until release gates pass.\n",
 )
-
 replace_once(
     "README_EN.md",
     "- **Current release: `0.5.4-hw`**\n",
@@ -37,7 +37,6 @@ replace_once(
     "and is published with SBOM/provenance metadata. Candidate `0.5.5-hw` "
     "also signs versioned GHCR images keylessly with Sigstore Cosign.\n",
 )
-
 replace_once(
     "README_RU.md",
     "- Текущий публичный релиз: **`0.5.4-hw`**.\n",
@@ -51,7 +50,6 @@ replace_once(
     "metadata. В candidate `0.5.5-hw` versioned GHCR-образы также "
     "подписываются keyless-подписью Sigstore Cosign.\n",
 )
-
 replace_once(
     "README_UA.md",
     "- Поточний публічний реліз: **`0.5.4-hw`**.\n",
@@ -131,44 +129,6 @@ text += """
 - Final acceptance requires a real GitHub Actions build/sign run and independent `cosign verify` of the published digest.
 """
 path.write_text(text, encoding="utf-8")
-
-path = Path(".github/workflows/image.yml")
-text = path.read_text(encoding="utf-8")
-replace = (
-    "      - name: Build and push\n"
-    "        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6\n"
-)
-insert = (
-    "      - name: Install Cosign for release signing\n"
-    "        if: startsWith(github.ref, 'refs/tags/v') || "
-    "(github.event_name == 'workflow_dispatch' && startsWith(inputs.image_tag, 'v'))\n"
-    "        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2\n"
-    "      - name: Build and push\n"
-    "        id: build\n"
-    "        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6\n"
-)
-if replace not in text:
-    raise SystemExit("image workflow build marker not found")
-text = text.replace(replace, insert, 1)
-anchor = "          cache-to: type=gha,mode=max\n"
-signing = """          cache-to: type=gha,mode=max
-      - name: Sign versioned image by digest
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && startsWith(inputs.image_tag, 'v'))
-        shell: bash
-        env:
-          IMAGE_NAME: ghcr.io/${{ github.repository }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          set -euo pipefail
-          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-            echo "ERROR: build did not return a valid image digest" >&2
-            exit 4
-          }
-          cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"
-"""
-if anchor not in text:
-    raise SystemExit("image workflow cache marker not found")
-path.write_text(text.replace(anchor, signing, 1), encoding="utf-8")
 
 path = Path("tests/test_workflows.py")
 text = path.read_text(encoding="utf-8")
