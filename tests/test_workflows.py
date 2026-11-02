@@ -74,8 +74,10 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn("id: build", text)
         self.assertIn("IMAGE_DIGEST: ${{ steps.build.outputs.digest }}", text)
+        self.assertIn("IMAGE_REPOSITORY: ${{ github.repository }}", text)
+        self.assertIn('image_name="ghcr.io/${IMAGE_REPOSITORY,,}"', text)
         self.assertIn(
-            'cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"', text
+            'cosign sign --yes "${image_name}@${IMAGE_DIGEST}"', text
         )
         self.assertIn("startsWith(inputs.image_tag, 'v')", text)
 
