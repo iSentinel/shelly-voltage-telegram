@@ -19,3 +19,23 @@ echo "FRESH_INSTALL_DRY_RUN=PASS"
 SVT_ROOT="$PROJECT" "$PROJECT/scripts/install.sh"     --dry-run --non-interactive > "$TMP/in-place.log" 2>&1
 grep -q "DRY-RUN PASS: no changes applied." "$TMP/in-place.log"
 echo "IN_PLACE_INSTALL_DRY_RUN=PASS"
+
+
+missing_meter="$TMP/missing-meter"
+mkdir -p "$missing_meter"
+cp "$PROJECT/.env.example" "$missing_meter/.env.example"
+grep -v '^SHELLY_METER_TYPE=' "$PROJECT/.env.example" > "$missing_meter/.env"
+SVT_ROOT="$missing_meter" "$PROJECT/scripts/configure.sh" \
+    --non-interactive > "$TMP/missing-meter.log" 2>&1
+grep -q '^SHELLY_METER_TYPE=pro_em50$' "$missing_meter/.env"
+echo "MISSING_METER_TYPE_FALLBACK=PASS"
+
+blank_meter="$TMP/blank-meter"
+mkdir -p "$blank_meter"
+cp "$PROJECT/.env.example" "$blank_meter/.env.example"
+sed 's/^SHELLY_METER_TYPE=.*/SHELLY_METER_TYPE=/' \
+    "$PROJECT/.env.example" > "$blank_meter/.env"
+SVT_ROOT="$blank_meter" "$PROJECT/scripts/configure.sh" \
+    --non-interactive > "$TMP/blank-meter.log" 2>&1
+grep -q '^SHELLY_METER_TYPE=pro_em50$' "$blank_meter/.env"
+echo "BLANK_METER_TYPE_FALLBACK=PASS"

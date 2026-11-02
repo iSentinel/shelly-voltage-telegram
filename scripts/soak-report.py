@@ -133,7 +133,9 @@ def local_time(timestamp: float | None, zone: ZoneInfo) -> str | None:
 
     if timestamp is None:
         return None
-    return datetime.fromtimestamp(timestamp, zone).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(timestamp, zone).isoformat(
+        timespec="seconds"
+    )
 
 
 def outage_report(
@@ -177,7 +179,9 @@ def build_report(
 
     current = time.time() if now is None else now
     cutoff = current - args.hours * 3600
-    integrity, version, rows, outages = read_data(Path(args.db), cutoff, current)
+    integrity, version, rows, outages = read_data(
+        Path(args.db), cutoff, current
+    )
     zone = ZoneInfo(args.timezone)
     report: dict[str, object] = {
         "window_hours": args.hours,
@@ -192,7 +196,8 @@ def build_report(
             "the outages table"
         ),
         "confirmed_outage_semantics": (
-            "starts when offline hysteresis is satisfied and ends when recovery "
+            "starts when offline hysteresis is satisfied "
+            "and ends when recovery "
             "hysteresis is satisfied; not exact mains-loss boundaries"
         ),
     }

@@ -12,6 +12,16 @@ class WorkflowSecurityTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertIn("permissions:", text, path.name)
 
+    def test_ci_enforces_maintainability_rules(self):
+        """CI must keep the project quality rules enabled."""
+
+        text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("ruff format --line-length 79 --check", text)
+        self.assertIn(
+            "ruff check --line-length 79 --select E,F,I,UP,SIM", text
+        )
+        self.assertIn("python scripts/check-quality.py", text)
+
     def test_no_pull_request_target(self):
         for path in WORKFLOWS.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
@@ -24,18 +34,33 @@ class WorkflowSecurityTests(unittest.TestCase):
 
     def test_image_dispatch_supports_exact_ref_and_tag(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
-        self.assertIn('description: "Existing branch, tag or commit to build"', text)
-        self.assertIn("ref: ${{ github.event_name == 'workflow_dispatch'", text)
+        self.assertIn(
+            'description: "Existing branch, tag or commit to build"', text
+        )
+        self.assertIn(
+            "ref: ${{ github.event_name == 'workflow_dispatch'", text
+        )
         self.assertIn("type=raw,value=${{ inputs.image_tag }}", text)
         self.assertIn("explicit image tag must start with v", text)
 
     def test_image_dispatch_uses_checked_out_source_metadata(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
         self.assertIn('sha="$(git rev-parse HEAD)"', text)
-        self.assertIn("org.opencontainers.image.revision=${{ steps.source.outputs.sha }}", text)
-        self.assertIn("org.opencontainers.image.version=${{ steps.source.outputs.version }}", text)
-        self.assertIn("annotations: ${{ steps.meta.outputs.annotations }}", text)
-        self.assertIn("enable=${{ github.event_name != 'workflow_dispatch' }}", text)
+        revision_label = (
+            "org.opencontainers.image.revision=${{ steps.source.outputs.sha }}"
+        )
+        version_label = (
+            "org.opencontainers.image.version="
+            "${{ steps.source.outputs.version }}"
+        )
+        self.assertIn(revision_label, text)
+        self.assertIn(version_label, text)
+        self.assertIn(
+            "annotations: ${{ steps.meta.outputs.annotations }}", text
+        )
+        self.assertIn(
+            "enable=${{ github.event_name != 'workflow_dispatch' }}", text
+        )
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
 
     def test_release_uses_exact_tag_and_checksum(self):
