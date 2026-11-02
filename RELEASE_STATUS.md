@@ -11,7 +11,7 @@
   promoted to match `VERSION`.
 - `0.5.6-hw` may be promoted on the current Pro EM-50 after the active blackout recovery baseline verifies and live Telegram/read-only hardware checks pass.
 - Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software accepted; switching production to the `pro3em` backend remains pending physical device installation.
-- Local CI-equivalent acceptance: Ruff + quality PASS, 125/125 tests PASS,
+- Local CI-equivalent acceptance: Ruff + quality PASS, 126/126 tests PASS,
   ResourceWarning gate PASS, installer/rollback/support-bundle/release-installer
   fixtures PASS, reproducible release PASS, Compose config PASS and candidate
   container build PASS.
@@ -19,7 +19,9 @@
   acceptance CLI passed three end-to-end HTTP cycles against a simulated
   `EM.GetStatus?id=0` triphase endpoint.
 - Read-only blackout/recovery acceptance tooling is implemented; a real baseline for the current outage was captured successfully and remains local under `validation/`.
+- Real blackout-soak acceptance PASS on the active outage: the outage ID and stable status message remained unchanged, measurement count stayed fixed, SQLite stayed healthy and no synthetic `0 V` rows appeared.
 - Read-only `promotion-check.py` combines recovery verification, live version validation and the `pro_em50` backend guard into one fail-closed pre-promotion result.
+- Prometheus current voltage/frequency metrics are stale-safe: offline/starting phases export `NaN` rather than replaying the last good value.
 
 ## 0.5.5-hw
 

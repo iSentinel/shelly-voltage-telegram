@@ -3011,14 +3011,23 @@ OUTAGE_DURATION_HELP = (
 )
 
 
+def live_metric_value(snap: dict[str, object], key: str) -> str:
+    """Return a live metric value or NaN when the sample is stale."""
+
+    if snap["connectivity"] not in {"online", "recovering"}:
+        return "NaN"
+    value = snap[key]
+    return "NaN" if value is None else str(value)
+
+
 def phase_metrics(monitor: Monitor, phase: str) -> list[str]:
     """Render Prometheus metrics for one configured phase."""
 
     if not monitor.phase_configured(phase):
         return [f'shelly_phase_configured{{phase="{phase}"}} 0']
     snap = monitor.phase_states[phase].snapshot()
-    voltage = "NaN" if snap["voltage"] is None else str(snap["voltage"])
-    frequency = "NaN" if snap["frequency"] is None else str(snap["frequency"])
+    voltage = live_metric_value(snap, "voltage")
+    frequency = live_metric_value(snap, "frequency")
     last = snap["last_success"]
     age = -1 if last is None else max(0.0, time.time() - float(last))
     connectivity = snap["connectivity"]
@@ -3039,8 +3048,8 @@ def metrics_text(monitor: Monitor) -> str:
     now = time.time()
     last = snap["last_success"]
     age = -1 if last is None else max(0.0, now - float(last))
-    voltage = "NaN" if snap["voltage"] is None else str(snap["voltage"])
-    frequency = "NaN" if snap["frequency"] is None else str(snap["frequency"])
+    voltage = live_metric_value(snap, "voltage")
+    frequency = live_metric_value(snap, "frequency")
     outage_stats = monitor.storage.outage_stats(now, "L1")
     maintenance = int(monitor.maintenance_active())
     loop_age = time.monotonic() - monitor.last_loop_tick
