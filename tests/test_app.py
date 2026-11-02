@@ -1492,6 +1492,18 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual(rows, 12)
             self.assertIn("voltage_v", csv_path.read_text().splitlines()[0])
 
+    def test_dashboard_hides_stale_voltage_while_offline(self):
+        monitor = APP.Monitor(config(recovery_after_successes=2))
+        monitor.state.restore(APP.time.time(), 230.0, 50.0)
+        monitor.state.error("unreachable", offline_after=1)
+        rows = APP.dashboard_rows(monitor)
+        self.assertEqual(rows[0]["state"], "offline")
+        self.assertIsNone(rows[0]["voltage"])
+        monitor.state.success(228.5, 50.0, 4.0, recovery_after=2)
+        rows = APP.dashboard_rows(monitor)
+        self.assertEqual(rows[0]["state"], "recovering")
+        self.assertEqual(rows[0]["voltage"], 228.5)
+
     def test_quality_and_dashboard_are_phase_aware(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "q.sqlite3"

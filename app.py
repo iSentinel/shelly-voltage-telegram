@@ -3113,7 +3113,11 @@ def dashboard_rows(monitor: Monitor) -> list[dict[str, object]]:
             {
                 "phase": phase,
                 "state": snap["connectivity"],
-                "voltage": snap["voltage"],
+                "voltage": (
+                    snap["voltage"]
+                    if snap["connectivity"] in {"online", "recovering"}
+                    else None
+                ),
             }
         )
     return rows
