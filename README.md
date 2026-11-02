@@ -38,7 +38,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.7-hw**
-- Current release: **0.5.6-hw**
+- Current release: **0.5.7-hw** (prepared; publication pending)
 - Production deployment: **0.5.7-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.

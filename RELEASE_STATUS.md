@@ -1,8 +1,12 @@
 # Release status
 
-## 0.5.7-hw — Telegram edit-window candidate
+## 0.5.7-hw — software release prepared / runtime verified
 
-- Candidate source: `0.5.7-hw`; public release and full hardware acceptance remain `0.5.6-hw`.
+- Prepared release target: `0.5.7-hw`; the published release and full hardware checkpoint remain `0.5.6-hw` until publication completes.
+- `RELEASE_VERSION=0.5.7-hw` prepares the publication guard; no tag or GitHub Release has been created by this preparation.
+- PR #22 merged with explicit user approval; source commit and deployed runtime match.
+- Physical Pro EM-50, SQLite and Telegram doctor checks PASS; verified online backup saved.
+- Recent normal-operation observation has no open outage or diagnostic polling gaps.
 - Configurable 3/5/10 minute edit window defaults to 10 minutes.
 - Recovery and repeated transitions preserve the first post's deadline.
 - Runtime settings, current message ID and window start persist in SQLite metadata.
