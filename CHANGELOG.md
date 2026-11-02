@@ -22,7 +22,7 @@
 - Keep ordinary `main` images unsigned so release signatures remain easy to interpret.
 - Pin the official `sigstore/cosign-installer` action to a full commit SHA.
 - Add regression coverage for signing permissions, digest use and release-only conditions.
-- Production remains on hardware-accepted `0.5.4-hw` until the signing workflow is proven in GitHub Actions.
+- Keyless signing is accepted with GitHub Actions RC2 run `41373145505` plus independent Gateway `cosign verify`; production remains on hardware-accepted `0.5.4-hw` because `0.5.5-hw` changes only the release supply chain.
 
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 
