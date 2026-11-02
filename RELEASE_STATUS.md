@@ -1,12 +1,18 @@
 # Release status
 
-## 0.5.8-hw — software release approved / runtime verified
+## 0.5.8-hw — software released / runtime verified
 
-- Published software target and current runtime: `0.5.8-hw`; full electrical-transition hardware checkpoint remains `0.5.6-hw`.
-- Last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
-- Adds event summaries, RU/UA/EN Telegram UI, notification diagnostics and unstable-grid indication.
-- Software/release gates and live Pro EM-50 smoke PASS: 168/168 tests, reproducible archive, image import, SQLite continuity, restart continuity and Telegram continuity.
-- Release metadata is promoted to `0.5.8-hw`; tag/source/GHCR publication follows from the exact approved commit. The electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
+- Published software release and current production runtime: `0.5.8-hw`; the full electrical-transition hardware checkpoint remains `0.5.6-hw`.
+- Tag `v0.5.8-hw` points to release commit `14f85134167b09c697a41c47f17077d9ef0a77b9`.
+- Source Release run `41538097793`, Container Image run `41538097941` and tag CI run `41538097905` all passed.
+- Published source archive SHA256: `f61d6221191983c84442decd595a08dbd10379ee1807f593bb96131eb7339494`; an independent rebuild from the exact tag matched byte-for-byte.
+- Signed multi-architecture GHCR image digest: `sha256:36d061f76becac915f235f9af350bfe2f9ab9c9fee496f92db7f7c3fde231d27`.
+- Independent Cosign verification passed for the exact tag workflow identity and GitHub OIDC issuer using checksum-verified Cosign v3.0.6.
+- GHCR contains `linux/amd64` and `linux/arm64` images. Both architectures have SPDX 2.3 SBOMs and SLSA provenance v1 tied to release commit `14f85134167b09c697a41c47f17077d9ef0a77b9`.
+- Public release installation through `scripts/install-release.sh` passed on the physical Pro EM-50 deployment; release checksum verification, restart continuity and source parity all passed.
+- After the release install, the service is healthy/ready, Shelly is online, SQLite `quick_check` is OK, no outage is open, no synthetic `0 V` rows exist, and Telegram status message continuity is preserved.
+- Adds event summaries, RU/UA/EN Telegram UI, notification diagnostics and restart-persistent unstable-grid indication.
+- Software validation remains 168/168 tests PASS. The electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
 
 ## 0.5.7-hw — software released / runtime verified
 
