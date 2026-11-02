@@ -1,7 +1,7 @@
 # Roadmap
 
 Status date: 2026-11-03
-Runtime release: `0.5.8-hw` (published and operationally verified)
+Runtime candidate: `0.5.9-hw` (stable-recovery rotation under validation)
 Latest full hardware checkpoint: `0.5.6-hw`
 Public release: `0.5.8-hw` (source and signed multi-architecture image independently verified)
 
@@ -17,6 +17,7 @@ Public release: `0.5.8-hw` (source and signed multi-architecture image independe
 - DONE: publish `v0.5.8-hw` from exact release commit `14f85134167b09c697a41c47f17077d9ef0a77b9`.
 - DONE: independently verify the published source archive, multi-architecture GHCR digest, Cosign signature, SPDX SBOMs and SLSA provenance.
 - DONE: install the exact public release through `scripts/install-release.sh` on the live Pro EM-50 deployment; checksum, restart, SQLite and Telegram continuity checks passed.
+- IN PROGRESS: `0.5.9-hw` — after 15 unchanged minutes following voltage recovery, silently replace the recovery post with a fresh current-status post; persist the timer across restart and cancel it on new abnormal/offline transitions.
 - DONE: verify all 57 source files, archive checksums, amd64/arm64 images, SBOM, provenance and Cosign signature.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.

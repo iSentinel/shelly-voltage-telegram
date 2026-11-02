@@ -1,3 +1,13 @@
+## 0.5.9-hw - stable recovery status rotation
+
+- Start a restart-persistent 15-minute stability timer on a confirmed voltage recovery.
+- If no voltage status transition occurs during that period, publish a fresh current-status message silently.
+- Publish the new status before unpinning and deleting the old recovery message, preserving the old post if publication fails.
+- Clear the transient recovery banner and episode context only after the replacement succeeds.
+- Cancel the stability timer on any new abnormal transition or confirmed offline state.
+- Require every configured phase to remain online and inside the normal voltage range before rotation.
+- Keep audible notification cooldown state unchanged by the silent replacement.
+
 ## 0.5.8-hw - event summaries, localization and notification diagnostics
 
 - Add finalized voltage-event summaries using real SQLite samples for min/max/average.

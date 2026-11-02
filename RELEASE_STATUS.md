@@ -1,5 +1,14 @@
 # Release status
 
+## 0.5.9-hw — stable recovery status candidate
+
+- Current software candidate: `0.5.9-hw`; current public release and production runtime remain `0.5.8-hw` until candidate validation and promotion complete.
+- After a confirmed voltage recovery, persist a 15-minute stability timer in SQLite.
+- If no voltage-state transition occurs for the full period and all configured phases are online and normal, publish a fresh current-status post with `notify=False`, then unpin and delete the recovery post.
+- Any new abnormal/offline transition cancels the timer; restart resumes it from persisted metadata.
+- Telegram publication failure is fail-safe: the old recovery post and timer are retained.
+- The silent replacement does not modify the audible voltage-notification cooldown timestamp.
+
 ## 0.5.8-hw — software released / runtime verified
 
 - Published software release and current production runtime: `0.5.8-hw`; the full electrical-transition hardware checkpoint remains `0.5.6-hw`.

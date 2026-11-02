@@ -324,6 +324,26 @@ class TelegramTransportTests(unittest.TestCase):
 class TelegramNotificationPolicyTests(unittest.TestCase):
     """Validate silent mode, quiet hours and low-voltage alerts."""
 
+    def _stable_recovery_monitor(self, path: Path):
+        """Create one monitor ready for stable recovery rotation tests."""
+
+        monitor = APP.Monitor(
+            config(
+                database_path=path,
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-100999",
+            )
+        )
+        monitor.storage.initialize()
+        monitor.state.success(230.0, 50.0, 1.0)
+        monitor.storage.add(900.0, 230.0, 50.0, "L1")
+        monitor.telegram.quiet_now = Mock(return_value=False)
+        monitor.telegram.edit = Mock()
+        monitor.telegram.unpin = Mock()
+        monitor.telegram.delete = Mock()
+        return monitor
+
     def test_quiet_hours_wrap_midnight(self):
         cfg = config()
         zone = APP.ZoneInfo(cfg.timezone)
@@ -695,6 +715,130 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.record_voltage_event("recovered", 230.0, 50.0)
             kwargs = monitor.telegram.send.call_args.kwargs
             self.assertFalse(kwargs["notify"])
+
+    def test_stable_recovery_waits_full_fifteen_minutes(self):
+        """Keep the recovery post before the stable period expires."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-wait.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.telegram.send = Mock(return_value=301)
+            with patch.object(APP.time, "time", return_value=1000.0):
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            with patch.object(APP.time, "time", return_value=1899.0):
+                monitor.maybe_rotate_stable_recovery_status()
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+            monitor.telegram.delete.assert_not_called()
+
+    def test_stable_recovery_rotates_to_silent_current_status(self):
+        """Replace a 15-minute recovery post with a silent plain status."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-stable.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            calls = []
+            monitor.telegram.send = Mock(
+                side_effect=lambda *a, **k: calls.append("send")
+                or (301 if len(calls) == 1 else 302)
+            )
+            monitor.telegram.unpin.side_effect = lambda *a, **k: calls.append(
+                "unpin"
+            )
+            monitor.telegram.delete.side_effect = lambda *a, **k: calls.append(
+                "delete"
+            )
+            monitor.storage.set_meta("last_voltage_notification_at", "777")
+            with patch.object(APP.time, "time", return_value=1000.0):
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            with patch.object(APP.time, "time", return_value=1900.0):
+                monitor.maybe_rotate_stable_recovery_status()
+            latest = monitor.telegram.send.call_args_list[-1]
+            self.assertFalse(latest.kwargs["notify"])
+            self.assertNotIn("восстанов", latest.args[0].lower())
+            self.assertEqual(calls, ["send", "send", "unpin", "delete"])
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "302"
+            )
+            self.assertIsNone(monitor.last_voltage_event)
+            self.assertIsNone(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY)
+            )
+            self.assertEqual(
+                monitor.storage.get_meta("last_voltage_notification_at"), "777"
+            )
+
+    def test_new_abnormal_transition_cancels_stable_recovery(self):
+        """Cancel the 15-minute timer when voltage changes again."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-reset.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.telegram.send = Mock(return_value=301)
+            with patch.object(APP.time, "time", side_effect=[1000.0, 1100.0]):
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            with patch.object(APP.time, "time", return_value=2100.0):
+                monitor.maybe_rotate_stable_recovery_status()
+            self.assertIsNone(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY)
+            )
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+
+    def test_stable_recovery_timer_survives_restart(self):
+        """Resume the persisted recovery timer after a process restart."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-restart.sqlite3"
+            first = self._stable_recovery_monitor(path)
+            first.telegram.send = Mock(return_value=301)
+            with patch.object(APP.time, "time", return_value=1000.0):
+                first.record_voltage_event("recovered", 230.0, 50.0)
+            second = self._stable_recovery_monitor(path)
+            second.telegram.send = Mock(return_value=302)
+            second.restore_voltage_event()
+            with patch.object(APP.time, "time", return_value=1900.0):
+                second.maybe_rotate_stable_recovery_status()
+            self.assertEqual(second.telegram.send.call_count, 1)
+            self.assertEqual(
+                second.storage.get_meta("telegram_status_message_id"), "302"
+            )
+
+    def test_stable_recovery_requires_current_normal_voltage(self):
+        """Do not clear recovery text while current voltage is abnormal."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-abnormal.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.telegram.send = Mock(return_value=301)
+            with patch.object(APP.time, "time", return_value=1000.0):
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            monitor.state.restore(1200.0, 260.0, 50.0)
+            with patch.object(APP.time, "time", return_value=2000.0):
+                monitor.maybe_rotate_stable_recovery_status()
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+            self.assertIsNotNone(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY)
+            )
+
+    def test_failed_stable_recovery_publish_keeps_old_status(self):
+        """Keep recovery state when silent replacement cannot be sent."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-failure.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.telegram.send = Mock(return_value=301)
+            with patch.object(APP.time, "time", return_value=1000.0):
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            monitor.telegram.send.side_effect = RuntimeError("failed")
+            with patch.object(APP.time, "time", return_value=1900.0):
+                monitor.maybe_rotate_stable_recovery_status()
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "301"
+            )
+            self.assertIsNotNone(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY)
+            )
+            monitor.telegram.delete.assert_not_called()
 
     def test_high_level_alert_routes_to_shared_status(self):
         """Route high-voltage transitions through shared status."""
