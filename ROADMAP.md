@@ -1,8 +1,26 @@
 # Roadmap
 
 Status date: 2026-11-02
-Live checkpoint: `0.5.4-hw` (hardware accepted on CT110)
-Previous hardware checkpoint: `0.5.3-hw`
+Runtime candidate: `0.5.7-hw` (software and operational checks passed)
+Latest full hardware checkpoint: `0.5.6-hw`
+Public release: `0.5.6-hw`; `0.5.7-hw` publication prepared
+
+
+## Current next steps
+
+- DONE: merge the persistent edit-window implementation (PR #22) after explicit user approval.
+- DONE: confirm physical Pro EM-50 readings, Telegram diagnostics and SQLite integrity.
+- DONE: confirm no open outages or synthetic zero-voltage rows; save a verified online backup.
+- DONE: software validation with 158 unit tests and Python 3.11/3.12/3.13 CI.
+- READY: publish the prepared 0.5.7-hw software release after release approval.
+- NEXT: verify source checksums and signed amd64/arm64 images after publication.
+- CONTINUE: observe normal operation without inducing power cuts or voltage changes.
+- WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
+- Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
+
+These current steps take precedence over older historical version notes below.
+`RELEASE_VERSION` in this preparation tree is the intended publication target;
+it does not imply that a GitHub Release already exists.
 
 ## Completed
 
@@ -565,3 +583,15 @@ Software acceptance checkpoint:
 - PASS: recovery keeps the original deadline; repeated transitions reuse the post.
 - PASS: quality gate and 158/158 tests passed before deployment.
 - PASS: corrected source deployed; container healthy, readiness true, status ID preserved, SQLite healthy and new measurements collected.
+
+### 2026-11-02 operational continuation after PR #22
+
+- Physical Pro EM-50 diagnostics, SQLite diagnostics and Telegram diagnostics PASS.
+- Runtime container healthy and ready; monitor-only measurement polling continues.
+- At the recorded checkpoint: 11,103 measurements, four closed outages,
+  no open outages and no synthetic zero-voltage samples.
+- Recent nine-minute observation: 53 samples, no diagnostic gaps above 30 seconds,
+  maximum sample interval 10.259 seconds, voltage 212.6–219.1 V.
+- Fresh online backup SHA256 and SQLite quick_check PASS.
+- Runtime source matches the implementation merged in PR #22.
+- Full hardware checkpoint remains 0.5.6-hw; no electrical transition was induced.

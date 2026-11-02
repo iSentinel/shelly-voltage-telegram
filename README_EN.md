@@ -42,7 +42,7 @@ The service is designed as a **monitor only**. It does not switch relays, change
 ## Project status
 
 - **Current software candidate: `0.5.7-hw`**
-- **Current release: `0.5.6-hw`**
+- **Current release: `0.5.7-hw` (prepared; publication pending)**
 - **Production deployment: `0.5.7-hw` candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is software-tested; physical three-phase validation follows after device installation.
