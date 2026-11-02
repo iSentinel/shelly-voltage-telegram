@@ -22,5 +22,6 @@ This is a software release with runtime verification. The latest full
 physical electrical-transition acceptance checkpoint remains 0.5.6-hw.
 Physical Pro 3EM / 3CT63 acceptance still requires that hardware.
 
-Publication status: prepared; no release tag or public release is created
-by this preparation.
+Published as [v0.5.7-hw](https://github.com/iSentinel/shelly-voltage-telegram/releases/tag/v0.5.7-hw).
+Source checksums, all 57 internal files, both image architectures, SPDX SBOM,
+SLSA provenance and the exact tag's Cosign signature were independently verified.

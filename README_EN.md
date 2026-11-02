@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/dashboard.jpg" alt="Shelly Voltage Telegram live dashboard" width="900">
+  <img src="docs/assets/telegram-status.png" alt="Telegram voltage status message" width="430">
 </p>
-<p align="center"><em>Real live dashboard captured from the hardware-accepted deployment: L1 online, L2/L3 ready for future sensors.</em></p>
+<p align="center"><em>Telegram voltage status message, cropped to the message boundaries.</em></p>
 
 ---
 
@@ -42,7 +42,7 @@ The service is designed as a **monitor only**. It does not switch relays, change
 ## Project status
 
 - **Current software candidate: `0.5.7-hw`**
-- **Current release: `0.5.7-hw` (prepared; publication pending)**
+- **Current release: `0.5.7-hw`**
 - **Production deployment: `0.5.7-hw` candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is software-tested; physical three-phase validation follows after device installation.

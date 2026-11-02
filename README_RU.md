@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/dashboard.jpg" alt="Живой dashboard Shelly Voltage Telegram" width="900">
+  <img src="docs/assets/telegram-status.png" alt="Сообщение бота о напряжении в Telegram" width="430">
 </p>
-<p align="center"><em>Реальный dashboard с рабочего стенда: L1 онлайн, L2/L3 готовы к будущим датчикам.</em></p>
+<p align="center"><em>Сообщение бота о напряжении в Telegram. Оставлено только само сообщение.</em></p>
 
 ---
 
@@ -42,7 +42,7 @@
 ## Статус проекта
 
 - Текущий software candidate: **`0.5.7-hw`**.
-- Подготовлен релиз **`0.5.7-hw`**; опубликованным остаётся **`0.5.6-hw`** до завершения публикации.
+- Текущий публичный релиз: **`0.5.7-hw`**.
 - Production использует candidate **`0.5.7-hw`** на физическом Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
 - Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
 - Поддержка Shelly Pro 3EM / Pro 3EM-3CT63 реализована и проверена программно; физическая трёхфазная проверка будет выполнена после установки устройства.
