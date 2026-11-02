@@ -1,0 +1,832 @@
+diff --git a/HARDWARE_VALIDATION.md b/HARDWARE_VALIDATION.md
+index b867aa1..74f1027 100644
+--- a/HARDWARE_VALIDATION.md
++++ b/HARDWARE_VALIDATION.md
+@@ -435,3 +435,30 @@ Production acceptance after promotion:
+ - persisted Telegram status message retained across promotion;
+ - recent runtime logs contained no application error or warning entries;
+ - deployed `app.py` SHA256 matches the audited `0.5.4-hw` candidate.
++
++## 2026-11-02 `0.5.6-hw` live hardware acceptance
++
++Production recovery and promotion were validated on the physical Shelly Pro EM-50.
++
++- outage #4 closed and the captured recovery baseline verified PASS;
++- promotion gate PASS with the active backend restricted to `pro_em50`;
++- rollback snapshot `20261102-212042-0.5.4-hw` source/database checksums PASS;
++- production runtime version: `0.5.6-hw`;
++- Shelly, SQLite and Telegram doctor checks: PASS;
++- `/ready`: HTTP 200 / online;
++- SQLite `PRAGMA quick_check`: `ok`;
++- four outage rows preserved, zero open outages after recovery;
++- synthetic `0 V` rows: 0;
++- Telegram shared-status message ID remained stable across promotion and restart;
++- measurement history continued increasing after promotion and after restart;
++- runtime voltage-alert sound cooldown defaults to 5 minutes and supports
++  Off/3/5/10 through administrator `/settings`;
++- low/high voltage transitions use the shared Telegram status replacement path,
++  publishing the replacement before deleting the previous status;
++- production container remains non-root, read-only, capability-free and
++  protected with `no-new-privileges`;
++- `LIVE_VERSION` is now `0.5.6-hw`; public `RELEASE_VERSION` remains `0.5.5-hw`
++  until the release is published.
++
++Physical Pro 3EM / 3CT63 production enablement remains blocked until the actual
++three-phase hardware is installed and passes L1/L2/L3 physical acceptance.
+diff --git a/README.md b/README.md
+index 1a2252a..1872e43 100644
+--- a/README.md
++++ b/README.md
+@@ -62,6 +62,22 @@ flowchart LR
+     B --> R["Backups + support bundle"]
+ ```
+ 
++## Voltage alert status notifications
++
++Low- and high-voltage transitions replace the shared Telegram status message
++instead of creating separate alert messages. The new status is published first;
++the previous status is deleted only after the replacement succeeds.
++
++The first abnormal status may notify normally. Further abnormal replacements
++inside the notification cooldown are silent. Recovery is always silent, and
++quiet hours still force every message to be silent. The cooldown is counted
++from the last loud voltage status and is not extended by silent replacements.
++
++Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
++`10` minutes from `/settings`. The value is persisted in SQLite and applies
++without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
++deployment default.
++
+ ## Install in one command
+ 
+ ```bash
+@@ -111,4 +127,4 @@ Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
+ 
+ ---
+ 
+-<p align="center"><strong>Monitor power. Keep history. Get notified. Never control the load.</strong></p>
+\ No newline at end of file
++<p align="center"><strong>Monitor power. Keep history. Get notified. Never control the load.</strong></p>
+diff --git a/README_EN.md b/README_EN.md
+index 2f014e5..a306422 100644
+--- a/README_EN.md
++++ b/README_EN.md
+@@ -82,6 +82,22 @@ flowchart LR
+ 
+ For a Pro 3EM in `triphase` mode, one polling cycle maps phase **A → L1**, **B → L2**, **C → L3** with the same local timestamp.
+ 
++## Voltage alert status notifications
++
++Low- and high-voltage transitions replace the shared Telegram status message
++instead of creating separate alert messages. The new status is published first;
++the previous status is deleted only after the replacement succeeds.
++
++The first abnormal status may notify normally. Further abnormal replacements
++inside the notification cooldown are silent. Recovery is always silent, and
++quiet hours still force every message to be silent. The cooldown is counted
++from the last loud voltage status and is not extended by silent replacements.
++
++Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
++`10` minutes from `/settings`. The value is persisted in SQLite and applies
++without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
++deployment default.
++
+ ## Quick install
+ 
+ ### One-line install
+@@ -227,6 +243,7 @@ sudo ./scripts/rollback.sh --dry-run
+ ```
+ 
+ Recovery verification and promotion JSON keep deployment-specific connection errors and raw Telegram status message IDs out of operator reports.
++New recovery baselines store a SHA-256 fingerprint of the Telegram status message ID instead of the raw ID. Existing legacy baselines remain supported.
+ 
+ All user-facing scripts provide `-h` / `--help`.
+ 
+diff --git a/README_RU.md b/README_RU.md
+index 75f55aa..0502cd0 100644
+--- a/README_RU.md
++++ b/README_RU.md
+@@ -82,6 +82,23 @@ flowchart LR
+ 
+ Для Pro 3EM в режиме `triphase` один цикл опроса раскладывает **A → L1**, **B → L2**, **C → L3** с общей временной меткой.
+ 
++## Уведомления о напряжении в общем статусе
++
++Пониженное и повышенное напряжение публикуются как новая версия общего
++Telegram status-сообщения, а не отдельными alert-сообщениями. Сначала бот
++публикует новый status и только после успешной публикации удаляет предыдущий.
++
++Первый ненормальный status может прийти с обычным звуковым уведомлением.
++Следующие ненормальные status-сообщения внутри cooldown публикуются тихо.
++Восстановление всегда тихое, а ночной режим по-прежнему принудительно
++отключает звук у всех сообщений. Cooldown считается от последнего громкого
++voltage status и не продлевается тихими обновлениями.
++
++По умолчанию cooldown равен 5 минутам. Администратор может выбрать `Off`, `3`,
++`5` или `10` минут через `/settings`. Значение хранится в SQLite и применяется
++без перезапуска. Deployment default задаётся через
++`VOLTAGE_NOTIFICATION_COOLDOWN_MIN`.
++
+ ## Быстрая установка
+ 
+ ### Установка одной командой
+@@ -225,6 +242,7 @@ sudo ./scripts/rollback.sh --dry-run
+ ```
+ 
+ JSON-отчёты recovery verification и promotion не выводят deployment-specific текст сетевых ошибок и сырой Telegram `message_id`.
++Новые recovery baseline сохраняют SHA-256 fingerprint Telegram status message ID вместо сырого ID. Старые baseline-файлы остаются совместимыми.
+ 
+ Все пользовательские скрипты поддерживают `-h` / `--help`.
+ 
+diff --git a/README_UA.md b/README_UA.md
+index 2793321..a2faeb5 100644
+--- a/README_UA.md
++++ b/README_UA.md
+@@ -82,6 +82,23 @@ flowchart LR
+ 
+ Для Pro 3EM у режимі `triphase` один цикл опитування розкладає **A → L1**, **B → L2**, **C → L3** з однією локальною часовою міткою.
+ 
++## Сповіщення про напругу в загальному статусі
++
++Знижена та підвищена напруга публікуються як нова версія загального Telegram
++status-повідомлення, а не окремими alert-повідомленнями. Спочатку бот публікує
++новий status і лише після успішної публікації видаляє попередній.
++
++Перший ненормальний status може надійти зі звичайним звуковим сповіщенням.
++Наступні ненормальні status-повідомлення всередині cooldown публікуються тихо.
++Відновлення завжди тихе, а нічний режим і далі примусово вимикає звук для всіх
++повідомлень. Cooldown рахується від останнього гучного voltage status і не
++продовжується тихими оновленнями.
++
++За замовчуванням cooldown дорівнює 5 хвилинам. Адміністратор може вибрати
++`Off`, `3`, `5` або `10` хвилин через `/settings`. Значення зберігається в
++SQLite і застосовується без перезапуску. Deployment default задається через
++`VOLTAGE_NOTIFICATION_COOLDOWN_MIN`.
++
+ ## Швидке встановлення
+ 
+ ### Встановлення однією командою
+@@ -225,6 +242,7 @@ sudo ./scripts/rollback.sh --dry-run
+ ```
+ 
+ JSON-звіти recovery verification і promotion не виводять deployment-specific текст мережевих помилок і сирий Telegram `message_id`.
++Нові recovery baseline зберігають SHA-256 fingerprint Telegram status message ID замість сирого ID. Старі baseline-файли залишаються сумісними.
+ 
+ Усі користувацькі скрипти підтримують `-h` / `--help`.
+ 
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 110ec39..aa93137 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -317,7 +317,7 @@ Acceptance evidence:
+ - Persist channel status message independently as `telegram_status_message_id`.
+ - Doctor validates both destinations.
+ - Live target channel verified by Bot API before candidate promotion.
+-- Promoted to live CT110. Bot API validated the channel destination; a channel status message was created as `telegram_status_message_id=675` and remained `675` across subsequent update cycles, confirming in-place editing. Private control chat and admin `/settings` remain separate.
++- Promoted to live CT110. Bot API validated the channel destination and the persisted channel status remained stable across subsequent update cycles, confirming in-place editing. Private control chat and admin `/settings` remain separate.
+ 
+ ## `0.5.0-hw` three-phase + full feature candidate — SOFTWARE ACCEPTED / HARDWARE WAIT
+ 
+@@ -448,14 +448,14 @@ No bot token or private chat identifier is stored in public release artifacts or
+ - Final `v0.5.5-hw` publication completed: Source Release run `41373981210` and signed Container Image run `41373982691` succeeded from exact tag source `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; final image digest is `sha256:c2115def9975dcfbb4a722d08713450403f53beaa01e6c54fec75962d82ce47a`, independently verified through Gateway.
+ 
+ 
+-## `0.5.6-hw` Pro 3EM acceptance tooling — SOFTWARE CANDIDATE
++## `0.5.6-hw` Pro EM-50 live acceptance + Pro 3EM tooling — HARDWARE ACCEPTED
+ 
+ Current hardware gates:
+ 
+-- **Current Pro EM-50 deployment:** wait for the active outage to recover, run `recovery-acceptance.py verify`, confirm read-only Shelly probe and Telegram status behavior, then `0.5.6-hw` may be promoted.
++- **Current Pro EM-50 deployment:** recovery acceptance, read-only hardware probe, Telegram continuity and post-promotion soak all PASS; `0.5.6-hw` is live and hardware accepted.
+ - **Future Pro 3EM / 3CT63 backend:** keep disabled in production until the physical three-phase meter is installed and the dedicated acceptance CLI plus L1/L2/L3 UI/data checks pass.
+ 
+-- Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.4-hw`.
++- Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.6-hw`.
+ - Final release publication is fail-closed until `RELEASE_VERSION` is explicitly promoted to match `VERSION`.
+ - Add standalone read-only `scripts/pro3em-acceptance.py` for physical Pro 3EM / Pro 3EM-3CT63 acceptance.
+ - Reuse the existing Digest-auth `Pro3EMClient`; the acceptance path issues only `EM.GetStatus?id=0` measurement RPCs.
+@@ -464,6 +464,7 @@ Current hardware gates:
+ - Route low-voltage/recovery transitions for L1/L2/L3 into the stable Telegram status header, including phase (for L2/L3), event time, measured voltage and frequency; do not send duplicate private messages.
+ - Add read-only `scripts/recovery-acceptance.py` with `baseline` and `verify` modes for real blackout/recovery acceptance. It checks the same outage closes, the stable Telegram status rotates, `/ready` becomes healthy, valid samples increase and synthetic `0 V` remains absent.
+ - Recovery verification matches the exact captured outage by ID, phase and start time, and verification/promotion JSON redacts raw connection error text and Telegram status message IDs.
++- New recovery baselines persist only a status-message fingerprint instead of the raw Telegram `message_id`; legacy baseline files remain compatible.
+ - Add read-only `scripts/promotion-check.py` as the single pre-promotion gate. It reuses recovery verification, requires the live service version to match `LIVE_VERSION`, and fails closed unless the active backend remains `pro_em50`.
+ - Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed; this blocks only switching production to the `pro3em` backend, not promotion of the 0.5.6 software on the current Pro EM-50.
+ 
+@@ -472,7 +473,7 @@ Software acceptance checkpoint:
+ 
+ - Ruff 0.14.2 formatting/lint and project quality rules PASS.
+ - Local and GitHub quality checks now use the same pinned `scripts/quality.sh` gate, preventing format/lint drift.
+-- 131/131 Python tests PASS with the ResourceWarning gate enabled.
++- 138/138 Python tests PASS with the ResourceWarning gate enabled.
+ - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
+   redaction, pinned-release installer and Compose validation PASS.
+ - Reproducible source release PASS and excludes Python tool caches.
+@@ -485,5 +486,72 @@ Software acceptance checkpoint:
+ - Real blackout-soak acceptance PASS: the active outage remains a single record, no measurements are inserted while offline, stable Telegram status is not rotated and synthetic `0 V` remains absent.
+ - Pro 3EM acceptance CLI end-to-end HTTP smoke PASS for three atomic
+   L1/L2/L3 cycles.
+-- Promotion on the current Pro EM-50 is blocked only until the active blackout recovers and the captured recovery baseline verifies successfully; then run a read-only Pro EM-50 probe and Telegram status acceptance before promotion.
++- Promotion on the current Pro EM-50 PASS: the captured outage closed, recovery baseline verified, read-only hardware probe passed, and Telegram/status continuity passed before and after promotion.
+ - Switching production to the `pro3em` backend remains blocked until the real Pro 3EM / 3CT63 is installed and L1/L2/L3 mapping, outage behavior, Telegram presentation, charts, exports and metrics pass on physical three-phase data.
++
++### 2026-11-02 blackout operational checkpoint (historical pre-recovery)
++
++- Shared quality gate PASS and 138/138 Python tests PASS.
++- Installer, rollback, support-bundle and reproducible-release fixtures PASS.
++- Live promotion gate fails closed while outage 4 remains open.
++- Active recovery baseline now stores only a Telegram status-message fingerprint;
++  no raw Telegram message ID is stored in the refreshed baseline.
++- Compose service and backup timer are enabled and active; runtime container is
++  healthy with zero restarts.
++- Latest backup checksum and SQLite quick_check PASS; live SQLite quick_check PASS.
++- Backup and live history contain zero synthetic 0 V measurements.
++- Promotion remains blocked only by real Shelly recovery; the Pro 3EM backend
++  remains separately blocked until physical three-phase hardware is installed.
++
++## `0.5.6-hw` shared voltage-status notification cooldown
++
++- Low/high warning and critical transitions no longer create separate Telegram
++  alert messages; they replace the shared status message.
++- Replacement is publish-first/delete-old so a publish failure keeps the
++  previous status visible.
++- First abnormal status may notify normally; subsequent abnormal replacements
++  are silent for the configured cooldown. Recovery is always silent.
++- Cooldown is measured from the last loud voltage status and silent updates do
++  not extend it.
++- Runtime choices: Off / 3 / 5 / 10 minutes; default 5 minutes.
++- `/settings` persists the selection in SQLite and applies it immediately.
++- Quiet hours remain authoritative and force silence.
++- Software validation: quality gate PASS, 138/138 Python tests PASS.
++- Hardware promotion PASS after outage #4 closed and recovery verification passed.
++
++### 2026-11-02 `0.5.6-hw` live hardware acceptance
++
++- Outage #4 closed on the physical Pro EM-50 and the captured recovery baseline
++  verified PASS.
++- `promotion-check.py --json` PASS with `pro_em50` and read-only guard active.
++- Production promoted from `0.5.4-hw` to `0.5.6-hw`; rollback snapshot
++  `20261102-212042-0.5.4-hw` source and SQLite checksums PASS.
++- Post-promotion `doctor` PASS for Shelly, SQLite and Telegram.
++- Container healthy/ready with physical voltage sampling resumed.
++- SQLite continuity PASS: four closed outages, zero open outages, quick_check=ok,
++  zero synthetic 0 V rows, measurement history increasing.
++- Telegram shared status continuity PASS across promotion and restart; the persisted identifier remained stable without being exposed in release documentation.
++- Runtime cooldown default is 5 minutes; `/settings` exposes Off/3/5/10.
++- Restart continuity PASS with the same status ID and no duplicate outage.
++- `LIVE_VERSION` promoted to `0.5.6-hw`; `RELEASE_VERSION` remains `0.5.5-hw`
++  until public release publication completes.
++- Pro 3EM production backend remains blocked until physical three-phase hardware
++  acceptance is performed.
++
++
++### 2026-11-02 post-promotion live checkpoint
++
++- Outage 4 recovery verification PASS with the same captured outage identity.
++- Read-only physical Pro EM-50 probe PASS before promotion.
++- Safe installer promotion from `0.5.4-hw` to `0.5.6-hw` PASS with a verified
++  pre-upgrade source + SQLite rollback snapshot.
++- `VERSION=0.5.6-hw` and `LIVE_VERSION=0.5.6-hw`; public
++  `RELEASE_VERSION=0.5.5-hw` remains intentionally separate.
++- Level alerts are enabled on the live deployment and voltage notification
++  cooldown defaults to 5 minutes.
++- Post-promotion container health PASS with zero restarts, `/ready` PASS,
++  Telegram failures zero and no warning/error logs in the acceptance window.
++- SQLite `quick_check` PASS; outage count remains four with no open duplicate;
++  synthetic `0 V` rows remain zero.
++- Public `0.5.6-hw` release is the next release stage. Physical Pro 3EM /
++  3CT63 acceptance remains blocked until that hardware is installed.
+diff --git a/app.py b/app.py
+index 7d732ea..3882933 100644
+--- a/app.py
++++ b/app.py
+@@ -108,6 +108,7 @@ class Config:
+     telegram_silent_default: bool
+     telegram_quiet_start_hour: int
+     telegram_quiet_end_hour: int
++    voltage_notification_cooldown_min: int
+     low_voltage_alert_enabled: bool
+     low_voltage_alert_v: float
+     low_voltage_recovery_v: float
+@@ -185,6 +186,9 @@ def telegram_policy_settings() -> dict[str, object]:
+         "telegram_quiet_end_hour": int(
+             os.getenv("TELEGRAM_QUIET_END_HOUR", "7")
+         ),
++        "voltage_notification_cooldown_min": int(
++            os.getenv("VOLTAGE_NOTIFICATION_COOLDOWN_MIN", "5")
++        ),
+         "low_voltage_alert_enabled": env_bool(
+             "LOW_VOLTAGE_ALERT_ENABLED", True
+         ),
+@@ -354,6 +358,10 @@ def validate_telegram_config(cfg: Config) -> None:
+     hours = (cfg.telegram_quiet_start_hour, cfg.telegram_quiet_end_hour)
+     if any(hour < 0 or hour > 23 for hour in hours):
+         raise ValueError("Telegram quiet hours must be between 0 and 23")
++    if not 0 <= cfg.voltage_notification_cooldown_min <= 60:
++        raise ValueError(
++            "VOLTAGE_NOTIFICATION_COOLDOWN_MIN must be between 0 and 60"
++        )
+     if cfg.low_voltage_recovery_v <= cfg.low_voltage_alert_v:
+         raise ValueError(
+             "LOW_VOLTAGE_RECOVERY_V must exceed LOW_VOLTAGE_ALERT_V"
+@@ -1399,18 +1407,25 @@ def phase_line(monitor: Monitor, phase: str) -> str:
+ 
+ 
+ def voltage_event_lines(monitor: Monitor) -> list[str]:
+-    """Render the latest low-voltage transition above the stable status."""
++    """Render the latest voltage transition above the stable status."""
+ 
+     event = monitor.last_voltage_event
+     if event is None:
+         return []
+     kind, voltage, frequency, happened_at, phase = event
+     phase_prefix = "" if phase == "L1" else f"{phase}: "
+-    title = (
+-        f"🚨 {phase_prefix}Низкое напряжение сети"
+-        if kind == "low"
+-        else f"✅ {phase_prefix}Напряжение восстановилось"
+-    )
++    titles = {
++        "low": "🚨 Низкое напряжение сети",
++        "warning_low": "⚠️ Пониженное напряжение",
++        "critical_low": "🚨 Критически пониженное напряжение",
++        "warning_high": "⚠️ Повышенное напряжение",
++        "critical_high": "🚨 Критически повышенное напряжение",
++        "recovered": "✅ Напряжение восстановилось",
++    }
++    title = titles.get(kind, titles["recovered"])
++    if phase_prefix:
++        icon, _, rest = title.partition(" ")
++        title = f"{icon} {phase_prefix}{rest}"
+     zone = ZoneInfo(monitor.cfg.timezone)
+     when = datetime.fromtimestamp(happened_at, zone).strftime("%H:%M")
+     return [
+@@ -1497,6 +1512,7 @@ class Monitor:
+ 
+         cfg = self.cfg
+         self.low_voltage_alert_enabled = cfg.low_voltage_alert_enabled
++        self.notification_cooldown_min = cfg.voltage_notification_cooldown_min
+         self.low_voltage_alert_v = cfg.low_voltage_alert_v
+         self.low_voltage_recovery_v = cfg.low_voltage_recovery_v
+         self.alerts_enabled = cfg.alerts_enabled
+@@ -1737,9 +1753,11 @@ class Monitor:
+             return
+         self.phase_alert_levels[phase] = level
+         self.phase_alert_candidates.pop(phase, None)
+-        self.telegram.send(
+-            f"⚠️ {phase}: {level} · {voltage:.1f} V / {frequency:.2f} Hz"
+-        )
++        kind = "recovered"
++        if level != "normal":
++            side = "high" if voltage >= self.warning_high else "low"
++            kind = f"{level}_{side}"
++        self.record_voltage_event(kind, voltage, frequency, phase)
+ 
+     def initialize(self) -> None:
+         """Initialize storage and start health service."""
+@@ -2105,6 +2123,65 @@ class Monitor:
+         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+             logger.warning("Ignoring invalid stored voltage event metadata")
+ 
++    def voltage_event_notify_allowed(self, kind: str, now: float) -> bool:
++        """Return whether an abnormal status replacement may make sound."""
++
++        if kind == "recovered" or self.telegram.quiet_now():
++            return False
++        if self.notification_cooldown_min <= 0:
++            return True
++        raw = self.storage.get_meta("last_voltage_notification_at")
++        if not raw:
++            return True
++        try:
++            previous = float(raw)
++        except ValueError:
++            return True
++        return now - previous >= self.notification_cooldown_min * 60
++
++    def replace_voltage_status(self, notify: bool, happened_at: float) -> bool:
++        """Publish a new status, then remove the previous status message."""
++
++        key = self.status_message_key()
++        old_id = self.storage.get_meta(key)
++        try:
++            new_id = self.telegram.send(
++                multiphase_status_text(self),
++                notify=notify,
++                reply_markup=self.status_keyboard(),
++                chat_id=self.telegram.status_chat_id,
++            )
++        except Exception as exc:
++            logger.warning("Telegram voltage status publish failed: {}", exc)
++            return False
++        self.storage.set_meta(key, str(new_id))
++        if notify:
++            self.storage.set_meta(
++                "last_voltage_notification_at", str(happened_at)
++            )
++        self.delete_previous_voltage_status(old_id, new_id)
++        self.storage.delete_meta("telegram_status_pinned_id")
++        self.ensure_status_pinned(new_id)
++        snap = self.state.snapshot()
++        self.last_sent_voltage = snap["voltage"]
++        self.last_sent_connectivity = str(snap["connectivity"])
++        self.last_telegram = time.monotonic()
++        return True
++
++    def delete_previous_voltage_status(
++        self, old_id: str | None, new_id: int
++    ) -> None:
++        """Delete the previous shared status after the replacement exists."""
++
++        if not old_id or str(new_id) == old_id:
++            return
++        try:
++            self.telegram.delete(int(old_id), self.telegram.status_chat_id)
++        except Exception as exc:
++            logger.warning(
++                "Telegram old voltage status delete failed: {}", exc
++            )
++
+     def record_voltage_event(
+         self,
+         kind: str,
+@@ -2112,7 +2189,7 @@ class Monitor:
+         frequency: float,
+         phase: str = "L1",
+     ) -> None:
+-        """Store a voltage transition and refresh the stable status header."""
++        """Store a voltage event and replace the shared Telegram status."""
+ 
+         happened_at = time.time()
+         self.last_voltage_event = (
+@@ -2130,8 +2207,10 @@ class Monitor:
+             "phase": phase,
+         }
+         self.storage.set_meta("last_voltage_event", json.dumps(payload))
+-        self.last_telegram = 0.0
+-        self.update_status()
++        if not self.telegram.enabled:
++            return
++        notify = self.voltage_event_notify_allowed(kind, happened_at)
++        self.replace_voltage_status(notify, happened_at)
+ 
+     def maybe_low_voltage_alert(
+         self, voltage: float, frequency: float
+@@ -2189,12 +2268,11 @@ class Monitor:
+             return
+         self.alert_level = level
+         self.alert_candidate = None
+-        label = {
+-            "normal": "✅ Напряжение вернулось в норму",
+-            "warning": "⚠️ Предупреждение по напряжению",
+-            "critical": "🚨 Критическое напряжение",
+-        }[level]
+-        self.telegram.send(f"{label}\n\n{voltage:.1f} V\n{frequency:.2f} Hz")
++        kind = "recovered"
++        if level != "normal":
++            side = "high" if voltage >= self.warning_high else "low"
++            kind = f"{level}_{side}"
++        self.record_voltage_event(kind, voltage, frequency)
+ 
+     def maintenance_active(self) -> bool:
+         """Return whether alert delivery is temporarily suppressed."""
+@@ -2341,6 +2419,7 @@ class Monitor:
+             "meter_type": self.cfg.shelly_meter_type,
+             "silent": "1" if self.cfg.telegram_silent_default else "0",
+             "quiet_enabled": "1",
++            "notify_cooldown": str(self.cfg.voltage_notification_cooldown_min),
+             "quiet_start": str(self.cfg.telegram_quiet_start_hour),
+             "quiet_end": str(self.cfg.telegram_quiet_end_hour),
+             "low_enabled": "1" if self.cfg.low_voltage_alert_enabled else "0",
+@@ -2380,6 +2459,9 @@ class Monitor:
+         )
+         self.telegram.quiet_start_hour = int(self.setting_value("quiet_start"))
+         self.telegram.quiet_end_hour = int(self.setting_value("quiet_end"))
++        self.notification_cooldown_min = int(
++            self.setting_value("notify_cooldown")
++        )
+         self.low_voltage_alert_enabled = (
+             self.setting_value("low_enabled") == "1"
+         )
+@@ -2405,17 +2487,35 @@ class Monitor:
+ 
+         return user_id in self.cfg.telegram_admin_user_ids
+ 
++    def settings_state_labels(self) -> dict[str, str]:
++        """Return short labels used by the Telegram settings view."""
++
++        cooldown = (
++            f"{self.notification_cooldown_min} мин"
++            if self.notification_cooldown_min
++            else "OFF"
++        )
++        return {
++            "silent": (
++                "тихие" if self.telegram.silent_default else "со звуком"
++            ),
++            "quiet": "ON" if self.telegram.quiet_enabled else "OFF",
++            "low": "ON" if self.low_voltage_alert_enabled else "OFF",
++            "levels": "ON" if self.alerts_enabled else "OFF",
++            "maintenance": "ON" if self.maintenance_active() else "OFF",
++            "availability": (
++                "ON" if self.availability_alerts_enabled else "OFF"
++            ),
++            "summary": "ON" if self.daily_summary_enabled else "OFF",
++            "pin": "ON" if self.pin_status else "OFF",
++            "cooldown": cooldown,
++        }
++
+     def settings_text(self) -> str:
+         """Render the current Telegram notification policy."""
++
++        labels = self.settings_state_labels()
+         meter_name = METER_MODELS.get(self.meter_type, self.meter_type)
+-        silent = "тихие" if self.telegram.silent_default else "со звуком"
+-        quiet = "ON" if self.telegram.quiet_enabled else "OFF"
+-        low = "ON" if self.low_voltage_alert_enabled else "OFF"
+-        levels = "ON" if self.alerts_enabled else "OFF"
+-        maintenance = "ON" if self.maintenance_active() else "OFF"
+-        availability = "ON" if self.availability_alerts_enabled else "OFF"
+-        summary = "ON" if self.daily_summary_enabled else "OFF"
+-        pin = "ON" if self.pin_status else "OFF"
+         l2 = "ON" if self.phase_configured("L2") else "—"
+         l3 = "ON" if self.phase_configured("L3") else "—"
+         quiet_hours = (
+@@ -2430,17 +2530,20 @@ class Monitor:
+             "⚙️ Настройки бота",
+             "",
+             f"📟 Модуль: {meter_name}",
+-            f"🔕 Обычные сообщения: {silent}",
+-            f"🌙 Ночной режим: {quiet} {quiet_hours}",
+-            f"🚨 Низкое напряжение: {low} < {self.low_voltage_alert_v:g} V",
++            f"🔕 Обычные сообщения: {labels['silent']}",
++            f"🌙 Ночной режим: {labels['quiet']} {quiet_hours}",
++            f"🔔 Cooldown voltage alerts: {labels['cooldown']}",
++            f"🚨 Низкое напряжение: {labels['low']} "
++            f"< {self.low_voltage_alert_v:g} V",
+             f"✅ Сброс тревоги: ≥ {self.low_voltage_recovery_v:g} V",
+-            f"⚠️ Уровни: {levels} {voltage_range}",
+-            f"🛠 Maintenance: {maintenance}",
++            f"⚠️ Уровни: {labels['levels']} {voltage_range}",
++            f"🛠 Maintenance: {labels['maintenance']}",
+             f"🔌 Фазы: L1 ON · L2 {l2} · L3 {l3}",
+-            f"🔌 Outage alerts: {availability}",
+-            f"📅 Сводка: {summary} "
+-            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}",
+-            f"📌 Pin status: {pin}",
++            f"🔌 Outage alerts: {labels['availability']}",
++            f"📅 Сводка: {labels['summary']} "
++            f"{self.daily_summary_hour:02d}:"
++            f"{self.daily_summary_minute:02d}",
++            f"📌 Pin status: {labels['pin']}",
+             f"⏳ Dwell: {self.alert_dwell:g}s / "
+             f"recovery {self.recovery_dwell:g}s",
+         ]
+@@ -2479,6 +2582,14 @@ class Monitor:
+         return [
+             [button("🔕 Тихие ON/OFF", "silent_toggle")],
+             [button("🌙 Ночь ON/OFF", "quiet_toggle")],
++            [
++                button("🔔 Cooldown OFF", "cooldown_0"),
++                button("3 мин", "cooldown_3"),
++            ],
++            [
++                button("5 мин", "cooldown_5"),
++                button("10 мин", "cooldown_10"),
++            ],
+             [
+                 button("◀ Начало -1ч", "start_dec"),
+                 button("Начало +1ч ▶", "start_inc"),
+@@ -2595,6 +2706,12 @@ class Monitor:
+             key = toggles[action]
+             values[key] = "0" if values[key] == "1" else "1"
+             return True
++        if action.startswith("cooldown_"):
++            minutes = action.removeprefix("cooldown_")
++            if minutes not in {"0", "3", "5", "10"}:
++                raise ValueError("unsupported notification cooldown")
++            values["notify_cooldown"] = minutes
++            return True
+         if action not in {"start_dec", "start_inc", "end_dec", "end_inc"}:
+             return False
+         key = "quiet_start" if action.startswith("start") else "quiet_end"
+diff --git a/tests/test_app.py b/tests/test_app.py
+index 1c51d6a..ae0db63 100644
+--- a/tests/test_app.py
++++ b/tests/test_app.py
+@@ -396,16 +396,15 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
+                 )
+             )
+             monitor.storage.initialize()
+-            monitor.telegram.send = Mock(return_value=14)
+-            monitor.update_status = Mock()
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.replace_voltage_status = Mock(return_value=True)
+             monitor.maybe_low_voltage_alert(179.9, 50.0)
+             monitor.maybe_low_voltage_alert(175.0, 50.0)
+-            self.assertEqual(monitor.update_status.call_count, 1)
++            self.assertEqual(monitor.replace_voltage_status.call_count, 1)
+             self.assertEqual(monitor.last_voltage_event[0], "low")
+             monitor.maybe_low_voltage_alert(185.0, 50.0)
+-            self.assertEqual(monitor.update_status.call_count, 2)
++            self.assertEqual(monitor.replace_voltage_status.call_count, 2)
+             self.assertEqual(monitor.last_voltage_event[0], "recovered")
+-            monitor.telegram.send.assert_not_called()
+             self.assertFalse(monitor.low_voltage_active)
+ 
+     def test_voltage_event_updates_status_channel_not_private_chat(self):
+@@ -494,14 +493,13 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
+                 )
+             )
+             monitor.storage.initialize()
+-            monitor.telegram.send = Mock()
+-            monitor.update_status = Mock()
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.replace_voltage_status = Mock(return_value=True)
+             monitor.maybe_secondary_low("L2", 179.0, 50.0, 100.0)
+             self.assertEqual(monitor.last_voltage_event[0], "low")
+             self.assertEqual(monitor.last_voltage_event[4], "L2")
+             monitor.maybe_secondary_low("L2", 186.0, 50.0, 101.0)
+-            self.assertEqual(monitor.update_status.call_count, 2)
+-            monitor.telegram.send.assert_not_called()
++            self.assertEqual(monitor.replace_voltage_status.call_count, 2)
+             lines = APP.voltage_event_lines(monitor)
+             self.assertTrue(
+                 lines[0].startswith("✅ L2: Напряжение восстановилось")
+@@ -528,6 +526,134 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
+         )
+         self.assertIn("186.1 V · 50.00 Hz", text.splitlines()[1])
+ 
++    def test_voltage_status_notification_cooldown(self):
++        """Only the first abnormal shared status is loud inside cooldown."""
++
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "cooldown.sqlite3"
++            monitor = APP.Monitor(
++                config(
++                    database_path=path,
++                    telegram_token="token",
++                    telegram_chat_id="123",
++                    telegram_status_chat_id="-100999",
++                    voltage_notification_cooldown_min=5,
++                )
++            )
++            monitor.storage.initialize()
++            monitor.state.restore(900.0, 260.0, 50.0)
++            monitor.storage.add(900.0, 260.0, 50.0, "L1")
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.telegram.send = Mock(side_effect=[101, 102, 103])
++            monitor.telegram.delete = Mock()
++            with patch.object(
++                APP.time, "time", side_effect=[1000.0, 1060.0, 1301.0]
++            ):
++                monitor.record_voltage_event("warning_high", 254.0, 50.0)
++                monitor.record_voltage_event("critical_high", 256.0, 50.0)
++                monitor.record_voltage_event("warning_high", 254.0, 50.0)
++            notifications = [
++                call.kwargs["notify"]
++                for call in monitor.telegram.send.call_args_list
++            ]
++            self.assertEqual(notifications, [True, False, True])
++            self.assertEqual(
++                monitor.storage.get_meta("telegram_status_message_id"), "103"
++            )
++            self.assertEqual(monitor.telegram.delete.call_count, 2)
++
++    def test_recovery_shared_status_is_always_silent(self):
++        """Recovery replaces the shared status without making a sound."""
++
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "recovery-silent.sqlite3"
++            monitor = APP.Monitor(
++                config(
++                    database_path=path,
++                    telegram_token="token",
++                    telegram_chat_id="123",
++                    telegram_status_chat_id="-100999",
++                )
++            )
++            monitor.storage.initialize()
++            monitor.state.restore(900.0, 230.0, 50.0)
++            monitor.storage.add(900.0, 230.0, 50.0, "L1")
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.telegram.send = Mock(return_value=201)
++            monitor.record_voltage_event("recovered", 230.0, 50.0)
++            kwargs = monitor.telegram.send.call_args.kwargs
++            self.assertFalse(kwargs["notify"])
++
++    def test_high_level_alert_routes_to_shared_status(self):
++        """Route high-voltage transitions through shared status."""
++
++        monitor = APP.Monitor(
++            config(
++                telegram_token="token",
++                telegram_chat_id="123",
++                alerts_enabled=True,
++                alert_dwell_sec=0,
++            )
++        )
++        monitor.record_voltage_event = Mock()
++        with patch.object(APP.time, "monotonic", side_effect=[100.0, 100.0]):
++            monitor.maybe_alert(254.0, 50.0)
++            monitor.maybe_alert(254.0, 50.0)
++        monitor.record_voltage_event.assert_called_once_with(
++            "warning_high", 254.0, 50.0
++        )
++
++    def test_failed_status_publish_keeps_previous_message(self):
++        """Keep the old shared status if replacement publishing fails."""
++
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "publish-failure.sqlite3"
++            monitor = APP.Monitor(
++                config(
++                    database_path=path,
++                    telegram_token="token",
++                    telegram_chat_id="123",
++                    telegram_status_chat_id="-100999",
++                )
++            )
++            monitor.storage.initialize()
++            monitor.storage.set_meta("telegram_status_message_id", "44")
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.telegram.send = Mock(side_effect=RuntimeError("failed"))
++            monitor.telegram.delete = Mock()
++            monitor.record_voltage_event("warning_high", 254.0, 50.0)
++            current = monitor.storage.get_meta("telegram_status_message_id")
++            self.assertEqual(current, "44")
++            monitor.telegram.delete.assert_not_called()
++
++    def test_status_replacement_publishes_before_delete(self):
++        """Publish the replacement before deleting the previous status."""
++
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "publish-order.sqlite3"
++            monitor = APP.Monitor(
++                config(
++                    database_path=path,
++                    telegram_token="token",
++                    telegram_chat_id="123",
++                    telegram_status_chat_id="-100999",
++                )
++            )
++            monitor.storage.initialize()
++            monitor.storage.set_meta("telegram_status_message_id", "44")
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            calls = []
++            monitor.telegram.send = Mock(
++                side_effect=lambda *args, **kwargs: calls.append("send") or 55
++            )
++            monitor.telegram.delete = Mock(
++                side_effect=lambda *args, **kwargs: calls.append("delete")
++            )
++            monitor.record_voltage_event("warning_high", 254.0, 50.0)
++            self.assertEqual(calls, ["send", "delete"])
++            current = monitor.storage.get_meta("telegram_status_message_id")
++            self.assertEqual(current, "55")
++
+ 
+ class TelegramDestinationTests(unittest.TestCase):
+     """Validate separate control-chat and status-channel destinations."""
+@@ -1328,6 +1454,7 @@ def telegram_config_values() -> dict[str, object]:
+         "telegram_silent_default": True,
+         "telegram_quiet_start_hour": 23,
+         "telegram_quiet_end_hour": 7,
++        "voltage_notification_cooldown_min": 5,
+     }
+ 
+ 
+@@ -1477,16 +1604,15 @@ class AdvancedFeatureTests(unittest.TestCase):
+                 )
+             )
+             monitor.storage.initialize()
+-            monitor.telegram.send = Mock(return_value=1)
+-            monitor.update_status = Mock()
++            monitor.telegram.quiet_now = Mock(return_value=False)
++            monitor.replace_voltage_status = Mock(return_value=True)
+             with patch.object(
+                 APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]
+             ):
+                 monitor.maybe_low_voltage_alert(179.0, 50.0)
+                 monitor.maybe_low_voltage_alert(178.0, 50.0)
+                 monitor.maybe_low_voltage_alert(177.0, 50.0)
+-            monitor.update_status.assert_called_once()
+-            monitor.telegram.send.assert_not_called()
++            monitor.replace_voltage_status.assert_called_once()
+             self.assertEqual(monitor.last_voltage_event[0], "low")
+ 
+     def test_chart_and_csv_exports(self):
+@@ -1741,11 +1867,13 @@ class AdvancedFeatureTests(unittest.TestCase):
+             monitor.update_setting("availability_toggle", "7")
+             monitor.update_setting("pin_toggle", "7")
+             monitor.update_setting("dwell_inc", "7")
++            monitor.update_setting("cooldown_10", "7")
+             self.assertFalse(monitor.daily_summary_enabled)
+             self.assertEqual(monitor.daily_summary_hour, 23)
+             self.assertTrue(monitor.availability_alerts_enabled)
+             self.assertTrue(monitor.pin_status)
+             self.assertEqual(monitor.alert_dwell, 20.0)
++            self.assertEqual(monitor.notification_cooldown_min, 10)
+ 
+     def test_channel_status_has_read_only_buttons(self):
+         monitor = APP.Monitor(
