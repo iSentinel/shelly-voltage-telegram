@@ -82,6 +82,22 @@ flowchart LR
 
 For a Pro 3EM in `triphase` mode, one polling cycle maps phase **A → L1**, **B → L2**, **C → L3** with the same local timestamp.
 
+## Voltage alert status notifications
+
+Low- and high-voltage transitions replace the shared Telegram status message
+instead of creating separate alert messages. The new status is published first;
+the previous status is deleted only after the replacement succeeds.
+
+The first abnormal status may notify normally. Further abnormal replacements
+inside the notification cooldown are silent. Recovery is always silent, and
+quiet hours still force every message to be silent. The cooldown is counted
+from the last loud voltage status and is not extended by silent replacements.
+
+Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
+`10` minutes from `/settings`. The value is persisted in SQLite and applies
+without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
+deployment default.
+
 ## Quick install
 
 ### One-line install
@@ -227,6 +243,7 @@ sudo ./scripts/rollback.sh --dry-run
 ```
 
 Recovery verification and promotion JSON keep deployment-specific connection errors and raw Telegram status message IDs out of operator reports.
+New recovery baselines store a SHA-256 fingerprint of the Telegram status message ID instead of the raw ID. Existing legacy baselines remain supported.
 
 All user-facing scripts provide `-h` / `--help`.
 

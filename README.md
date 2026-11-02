@@ -62,6 +62,22 @@ flowchart LR
     B --> R["Backups + support bundle"]
 ```
 
+## Voltage alert status notifications
+
+Low- and high-voltage transitions replace the shared Telegram status message
+instead of creating separate alert messages. The new status is published first;
+the previous status is deleted only after the replacement succeeds.
+
+The first abnormal status may notify normally. Further abnormal replacements
+inside the notification cooldown are silent. Recovery is always silent, and
+quiet hours still force every message to be silent. The cooldown is counted
+from the last loud voltage status and is not extended by silent replacements.
+
+Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
+`10` minutes from `/settings`. The value is persisted in SQLite and applies
+without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
+deployment default.
+
 ## Install in one command
 
 ```bash

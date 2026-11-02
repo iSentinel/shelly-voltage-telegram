@@ -435,3 +435,30 @@ Production acceptance after promotion:
 - persisted Telegram status message retained across promotion;
 - recent runtime logs contained no application error or warning entries;
 - deployed `app.py` SHA256 matches the audited `0.5.4-hw` candidate.
+
+## 2026-11-02 `0.5.6-hw` live hardware acceptance
+
+Production recovery and promotion were validated on the physical Shelly Pro EM-50.
+
+- outage #4 closed and the captured recovery baseline verified PASS;
+- promotion gate PASS with the active backend restricted to `pro_em50`;
+- rollback snapshot `20261102-212042-0.5.4-hw` source/database checksums PASS;
+- production runtime version: `0.5.6-hw`;
+- Shelly, SQLite and Telegram doctor checks: PASS;
+- `/ready`: HTTP 200 / online;
+- SQLite `PRAGMA quick_check`: `ok`;
+- four outage rows preserved, zero open outages after recovery;
+- synthetic `0 V` rows: 0;
+- Telegram shared-status message ID remained stable across promotion and restart;
+- measurement history continued increasing after promotion and after restart;
+- runtime voltage-alert sound cooldown defaults to 5 minutes and supports
+  Off/3/5/10 through administrator `/settings`;
+- low/high voltage transitions use the shared Telegram status replacement path,
+  publishing the replacement before deleting the previous status;
+- production container remains non-root, read-only, capability-free and
+  protected with `no-new-privileges`;
+- `LIVE_VERSION` is now `0.5.6-hw`; public `RELEASE_VERSION` remains `0.5.5-hw`
+  until the release is published.
+
+Physical Pro 3EM / 3CT63 production enablement remains blocked until the actual
+three-phase hardware is installed and passes L1/L2/L3 physical acceptance.
