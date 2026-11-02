@@ -1,0 +1,38 @@
+name: Apply Telegram stale-safe hardening
+
+on:
+  push:
+    branches:
+      - hardening/telegram-stale-safe
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: hardening/telegram-stale-safe
+      - name: Apply verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .telegram-safe.patch.gz.b64 | gzip -dc > /tmp/telegram-safe.patch
+          echo '53b1baad19e417990c5cbfc4eae47d830a95bbbe7c0b34c76521ab10d30d885d  /tmp/telegram-safe.patch' | sha256sum -c -
+          git apply --check /tmp/telegram-safe.patch
+          git apply /tmp/telegram-safe.patch
+          rm -f .telegram-safe.patch.gz.b64
+      - name: Validate project quality
+        run: python3 scripts/check-quality.py
+      - name: Commit hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Hide stale electrical values from offline Telegram status'
+          git push origin HEAD:hardening/telegram-stale-safe
