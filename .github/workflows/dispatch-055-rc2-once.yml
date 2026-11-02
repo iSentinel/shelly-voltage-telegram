@@ -1,0 +1,31 @@
+name: Dispatch 0.5.5 RC2 signing verification
+
+on:
+  push:
+    paths:
+      - .github/workflows/dispatch-055-rc2-once.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch exact 0.5.5 RC2 build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${REPOSITORY}/actions/workflows/image.yml/dispatches"
+          body='{"ref":"main","inputs":{"ref":"5773d34d20dc6430169879778fbe6de062434387","image_tag":"v0.5.5-hw-rc2"}}'
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${api}" \
+            -d "${body}"
