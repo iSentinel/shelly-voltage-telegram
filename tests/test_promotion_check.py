@@ -106,6 +106,20 @@ class PromotionCheckTests(unittest.TestCase):
         )
         self.assertIn("captured outage is still open", errors)
 
+    def test_recovery_fail_without_errors_is_blocked(self):
+        recovery = good_recovery()
+        recovery["status"] = "fail"
+        errors = PROMOTION.promotion_errors(
+            {
+                "candidate": "0.5.6-hw",
+                "release": "0.5.5-hw",
+                "live": "0.5.4-hw",
+            },
+            "pro_em50",
+            recovery,
+        )
+        self.assertIn("recovery acceptance did not pass", errors)
+
     def test_missing_meter_setting_is_fail_closed(self):
         errors = PROMOTION.promotion_errors(
             {
