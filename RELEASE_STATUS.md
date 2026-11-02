@@ -11,13 +11,14 @@
   promoted to match `VERSION`.
 - Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software
   accepted; physical three-phase acceptance is pending device installation.
-- Local CI-equivalent acceptance: Ruff + quality PASS, 112/112 tests PASS,
+- Local CI-equivalent acceptance: Ruff + quality PASS, 116/116 tests PASS,
   ResourceWarning gate PASS, installer/rollback/support-bundle/release-installer
   fixtures PASS, reproducible release PASS, Compose config PASS and candidate
   container build PASS.
 - Candidate image passed a read-only physical Pro EM-50 probe and the Pro 3EM
   acceptance CLI passed three end-to-end HTTP cycles against a simulated
   `EM.GetStatus?id=0` triphase endpoint.
+- Read-only blackout/recovery acceptance tooling is implemented; a real baseline for the current outage was captured successfully and remains local under `validation/`.
 
 ## 0.5.5-hw
 

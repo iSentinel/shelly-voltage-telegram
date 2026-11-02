@@ -194,6 +194,16 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 # Отчёт за 24 часа
 ./scripts/soak-report.py --hours 24 --json
 
+# Сохранить baseline текущего отключения до возврата питания
+./scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  baseline --output recovery-baseline.json
+
+# Проверить то же отключение после возврата питания
+./scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  verify --baseline recovery-baseline.json
+
 # Online backup SQLite
 ./scripts/backup.sh
 
