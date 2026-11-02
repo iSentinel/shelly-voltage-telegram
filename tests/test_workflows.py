@@ -13,14 +13,23 @@ class WorkflowSecurityTests(unittest.TestCase):
             self.assertIn("permissions:", text, path.name)
 
     def test_ci_enforces_maintainability_rules(self):
-        """CI must keep the project quality rules enabled."""
+        """CI and local checks must share one pinned quality gate."""
+
+        workflow = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        quality = (ROOT / "scripts" / "quality.sh").read_text(encoding="utf-8")
+        self.assertIn("./scripts/quality.sh", workflow)
+        self.assertIn('REQUIRED_RUFF_VERSION="0.14.2"', quality)
+        self.assertIn("ruff format --line-length 79 --check", quality)
+        self.assertIn(
+            "ruff check --line-length 79 --select E,F,I,UP,SIM", quality
+        )
+        self.assertIn("scripts/check-quality.py", quality)
+
+    def test_ci_syntax_checks_shared_quality_gate(self):
+        """CI must syntax-check the shared shell quality gate."""
 
         text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("ruff format --line-length 79 --check", text)
-        self.assertIn(
-            "ruff check --line-length 79 --select E,F,I,UP,SIM", text
-        )
-        self.assertIn("python scripts/check-quality.py", text)
+        self.assertIn("bash -n scripts/quality.sh", text)
 
     def test_no_pull_request_target(self):
         for path in WORKFLOWS.glob("*.yml"):
