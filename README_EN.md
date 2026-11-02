@@ -191,6 +191,8 @@ Dashboard:
 http://127.0.0.1:8080/dashboard
 ```
 
+The local dashboard follows the same rule: offline/starting phase cards show no current voltage; recovering/online cards show the newest valid sample.
+
 ## Diagnostics and backups
 
 ```bash

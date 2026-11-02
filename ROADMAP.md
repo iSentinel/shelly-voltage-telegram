@@ -470,12 +470,13 @@ Current hardware gates:
 Software acceptance checkpoint:
 
 - Ruff 0.14.2 formatting/lint and project quality rules PASS.
-- 126/126 Python tests PASS with the ResourceWarning gate enabled.
+- 127/127 Python tests PASS with the ResourceWarning gate enabled.
 - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
   redaction, pinned-release installer and Compose validation PASS.
 - Reproducible source release PASS and excludes Python tool caches.
 - Candidate container build/version smoke PASS.
 - Prometheus current voltage/frequency fail stale-safe: `starting`/`offline` export `NaN`; `recovering`/`online` export only the newest valid sample.
+- Local dashboard is stale-safe too: `starting`/`offline` phase cards hide voltage, while `recovering`/`online` show only the newest valid sample.
 - Low-voltage/recovery status-header persistence and destination tests PASS; no duplicate private message is sent for the primary phase.
 - Read-only physical Pro EM-50 probe PASS on the current installation.
 - Real blackout-soak acceptance PASS: the active outage remains a single record, no measurements are inserted while offline, stable Telegram status is not rotated and synthetic `0 V` remains absent.
