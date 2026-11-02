@@ -1215,15 +1215,30 @@ class ConnectivityStateTests(unittest.TestCase):
             storage.add(20.0, 221.0, 49.9)
             self.assertEqual(storage.latest(), (20.0, 221.0, 49.9))
 
-    def test_offline_status_keeps_last_valid_sample(self):
+    def test_offline_status_hides_last_valid_sample(self):
         state = APP.RuntimeState()
         state.restore(1793435408.0, 214.0, 50.0)
         state.error("unreachable", offline_after=1)
         storage = Mock()
         text = APP.status_text(state, storage, config())
         self.assertIn("Shelly: недоступен", text)
-        self.assertIn("214.0 V / 50.00 Hz", text)
-        self.assertNotIn("0.0 V", text)
+        self.assertNotIn("214.0 V", text)
+        self.assertNotIn("50.00 Hz", text)
+        self.assertIn("Последние данные", text)
+
+    def test_multiphase_status_hides_offline_voltage_then_recovers(self):
+        monitor = APP.Monitor(config(recovery_after_successes=2))
+        monitor.state.restore(1793435408.0, 214.0, 50.0)
+        monitor.state.error("unreachable", offline_after=1)
+        monitor.storage.day_stats = Mock(
+            return_value={"count": 1, "min": 214.0, "max": 214.0, "avg": 214.0}
+        )
+        text = APP.multiphase_status_text(monitor)
+        self.assertIn("🔴 L1: недоступна", text)
+        self.assertNotIn("L1: 214.0 V", text)
+        monitor.state.success(228.5, 50.0, 4.0, recovery_after=2)
+        text = APP.multiphase_status_text(monitor)
+        self.assertIn("🟡 L1: 228.5 V (восстанавливается)", text)
 
     def test_readiness_distinguishes_offline_from_liveness(self):
         monitor = APP.Monitor(config())
