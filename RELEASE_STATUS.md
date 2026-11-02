@@ -1,5 +1,24 @@
 # Release status
 
+## 0.5.6-hw — software accepted / hardware pending
+
+- Current software candidate: `0.5.6-hw`.
+- Current public release: `0.5.5-hw`.
+- Current production live checkpoint: hardware-accepted `0.5.4-hw`.
+- Candidate/source, public release and live checkpoint versions are separated by
+  `VERSION`, `RELEASE_VERSION` and `LIVE_VERSION`.
+- Final source publication fails closed until `RELEASE_VERSION` is explicitly
+  promoted to match `VERSION`.
+- Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software
+  accepted; physical three-phase acceptance is pending device installation.
+- Local CI-equivalent acceptance: Ruff + quality PASS, 112/112 tests PASS,
+  ResourceWarning gate PASS, installer/rollback/support-bundle/release-installer
+  fixtures PASS, reproducible release PASS, Compose config PASS and candidate
+  container build PASS.
+- Candidate image passed a read-only physical Pro EM-50 probe and the Pro 3EM
+  acceptance CLI passed three end-to-end HTTP cycles against a simulated
+  `EM.GetStatus?id=0` triphase endpoint.
+
 ## 0.5.5-hw
 
 - Current public release: `0.5.5-hw`.

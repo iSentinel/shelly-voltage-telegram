@@ -1,3 +1,27 @@
+## 0.5.6-hw - Pro 3EM physical acceptance tooling candidate
+
+- Add a standalone read-only Pro 3EM / 3CT63 acceptance CLI.
+- Reuse the existing Digest-auth `Pro3EMClient`; do not initialize Telegram or SQLite.
+- Validate complete L1/L2/L3 data from one atomic `EM.GetStatus?id=0` cycle.
+- Reject missing phases, synthetic/invalid zero voltage, implausible voltage/frequency and RPC failures with stable PASS/FAIL exit codes.
+- Support multiple samples, configurable bounds, text/JSON output and password-file authentication.
+- Physical three-phase acceptance remains pending until the meter is installed.
+- Add independent `RELEASE_VERSION` metadata and fail-closed final publication until it matches `VERSION`.
+- Exclude `.ruff_cache`, `.pytest_cache` and `.mypy_cache` from public source archives.
+- Software acceptance completed with 112/112 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
+- End-to-end Pro 3EM HTTP acceptance smoke passed for three atomic L1/L2/L3 cycles; real three-phase hardware acceptance remains pending.
+- Low-voltage and recovery transitions now appear at the top of the stable status message with event time, voltage and frequency instead of being sent as separate private messages.
+
+## 0.5.5-hw - supply-chain signing candidate
+
+- Add keyless Sigstore Cosign signing for versioned GHCR images.
+- Sign the immutable multi-architecture image digest after a successful push.
+- Keep ordinary `main` images unsigned so release signatures remain easy to interpret.
+- Pin the official `sigstore/cosign-installer` action to a full commit SHA.
+- Add regression coverage for signing permissions, digest use and release-only conditions.
+- Keyless signing is accepted with GitHub Actions RC2 run `41373145505` plus independent Gateway `cosign verify`; production remains on hardware-accepted `0.5.4-hw` because `0.5.5-hw` changes only the release supply chain.
+- Final `v0.5.5-hw` release published from exact source SHA `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; source assets and the signed amd64/arm64 GHCR image passed final release verification.
+
 ## 0.5.4-hw - 2026-11-02 — maintainability and upgrade audit
 
 - Refactored large configuration, Telegram routing, settings keyboard and HTTP
@@ -14,16 +38,8 @@
   screenshot captured from the live monitor.
 - Revalidated release reproducibility, installer/rollback/support-bundle gates,
   SQLite schema v3 and an isolated real-hardware Pro EM-50 smoke test.
-
-## 0.5.5-hw - supply-chain signing candidate
-
-- Add keyless Sigstore Cosign signing for versioned GHCR images.
-- Sign the immutable multi-architecture image digest after a successful push.
-- Keep ordinary `main` images unsigned so release signatures remain easy to interpret.
-- Pin the official `sigstore/cosign-installer` action to a full commit SHA.
-- Add regression coverage for signing permissions, digest use and release-only conditions.
-- Keyless signing is accepted with GitHub Actions RC2 run `41373145505` plus independent Gateway `cosign verify`; production remains on hardware-accepted `0.5.4-hw` because `0.5.5-hw` changes only the release supply chain.
-- Final `v0.5.5-hw` release published from exact source SHA `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; source assets and the signed amd64/arm64 GHCR image passed final release verification.
+- Promoted `0.5.4-hw` to production after live Pro EM-50 acceptance;
+  sampling, Telegram continuity, database integrity and container hardening passed.
 
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 

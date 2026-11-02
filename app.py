@@ -1396,10 +1396,32 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     return f"{icon} {phase}: {float(snap['voltage']):.1f} V{suffix}"
 
 
+def voltage_event_lines(monitor: Monitor) -> list[str]:
+    """Render the latest low-voltage transition above the stable status."""
+
+    event = monitor.last_voltage_event
+    if event is None:
+        return []
+    kind, voltage, frequency, happened_at = event
+    title = (
+        "🚨 Низкое напряжение сети"
+        if kind == "low"
+        else "✅ Напряжение восстановилось"
+    )
+    zone = ZoneInfo(monitor.cfg.timezone)
+    when = datetime.fromtimestamp(happened_at, zone).strftime("%H:%M")
+    return [
+        f"{title} · {when}",
+        f"{voltage:.1f} V · {frequency:.2f} Hz",
+        "",
+    ]
+
+
 def multiphase_status_text(monitor: Monitor) -> str:
     """Render three-phase-aware status while retaining detailed L1 stats."""
 
-    lines = ["⚡ Напряжение сети · 3 фазы", ""]
+    lines = voltage_event_lines(monitor)
+    lines.extend(["⚡ Напряжение сети · 3 фазы", ""])
     lines.extend(phase_line(monitor, p) for p in ("L1", "L2", "L3"))
     l1 = monitor.state.snapshot()
     if l1["voltage"] is None:
@@ -1498,6 +1520,7 @@ class Monitor:
         self.alert_level = "normal"
         self.low_voltage_active = False
         self.low_voltage_candidate_since: float | None = None
+        self.last_voltage_event: tuple[str, float, float, float] | None = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
         self.last_recovery_duration: float | None = None
@@ -1722,6 +1745,7 @@ class Monitor:
         self.storage.initialize()
         self.load_runtime_settings()
         self.last_summary_day = self.storage.get_meta("daily_summary_day")
+        self.restore_voltage_event()
         for phase in self.phase_states:
             self.restore_phase(phase)
         latest = self.storage.latest("L1")
@@ -1741,6 +1765,12 @@ class Monitor:
                 self.telegram.set_commands()
             except Exception as exc:
                 logger.warning("Telegram command registration failed: {}", exc)
+
+    def clear_voltage_event(self) -> None:
+        """Remove a stale voltage transition after a confirmed outage."""
+
+        self.last_voltage_event = None
+        self.storage.delete_meta("last_voltage_event")
 
     def record_poll_failure(self, exc: Exception) -> None:
         """Record one failed poll and persist an offline transition."""
@@ -1764,6 +1794,7 @@ class Monitor:
         else:
             logger.debug("Shelly read still unavailable: {}", exc)
         if changed and snap["connectivity"] == "offline":
+            self.clear_voltage_event()
             started = float(snap["offline_since"] or time.time())
             if self.storage.begin_outage(started):
                 self.maybe_availability_alert("offline")
@@ -2051,10 +2082,44 @@ class Monitor:
         except Exception as exc:
             logger.warning("Telegram availability alert failed: {}", exc)
 
+    def restore_voltage_event(self) -> None:
+        """Restore the latest voltage transition from SQLite metadata."""
+
+        raw = self.storage.get_meta("last_voltage_event")
+        if not raw:
+            return
+        try:
+            payload = json.loads(raw)
+            self.last_voltage_event = (
+                str(payload["kind"]),
+                float(payload["voltage"]),
+                float(payload["frequency"]),
+                float(payload["timestamp"]),
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            logger.warning("Ignoring invalid stored voltage event metadata")
+
+    def record_voltage_event(
+        self, kind: str, voltage: float, frequency: float
+    ) -> None:
+        """Store a voltage transition and refresh the stable status header."""
+
+        happened_at = time.time()
+        self.last_voltage_event = (kind, voltage, frequency, happened_at)
+        payload = {
+            "kind": kind,
+            "voltage": voltage,
+            "frequency": frequency,
+            "timestamp": happened_at,
+        }
+        self.storage.set_meta("last_voltage_event", json.dumps(payload))
+        self.last_telegram = 0.0
+        self.update_status()
+
     def maybe_low_voltage_alert(
         self, voltage: float, frequency: float
     ) -> None:
-        """Send one loud low-voltage alert after the configured dwell."""
+        """Show low-voltage and recovery transitions in the status header."""
 
         if not self.low_voltage_alert_enabled or not self.telegram.enabled:
             return
@@ -2068,20 +2133,13 @@ class Monitor:
             if now - self.low_voltage_candidate_since < self.alert_dwell:
                 return
             self.low_voltage_active = True
-            self.telegram.send(
-                f"🚨 Низкое напряжение сети\n\n{voltage:.1f} V\n"
-                f"{frequency:.2f} Hz",
-                notify=True,
-            )
+            self.record_voltage_event("low", voltage, frequency)
             return
         if voltage >= self.low_voltage_recovery_v:
             self.low_voltage_candidate_since = None
             if self.low_voltage_active:
                 self.low_voltage_active = False
-                self.telegram.send(
-                    f"✅ Напряжение восстановилось\n\n{voltage:.1f} V\n"
-                    f"{frequency:.2f} Hz"
-                )
+                self.record_voltage_event("recovered", voltage, frequency)
 
     def runtime_voltage_level(self, voltage: float) -> str:
         """Classify voltage using live-adjustable alert thresholds."""
