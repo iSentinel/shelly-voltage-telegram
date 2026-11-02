@@ -1,7 +1,7 @@
 # Hardware Validation — Shelly Pro EM-50
 
 Date: 2026-11-02
-Checkpoint: `0.5.4-hw`
+Checkpoint: `0.5.6-hw`
 Timezone: `Europe/Kyiv`
 
 ## Device identity
