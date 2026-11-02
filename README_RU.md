@@ -229,17 +229,6 @@ docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw
 
 Образ выпускается для `linux/amd64` и `linux/arm64` с SBOM и provenance metadata.
 
-## Правила разработки
-
-Проект намеренно держится простым и поддерживаемым:
-
-- PEP 8 и автоматические static checks;
-- максимум **40 строк на функцию**;
-- понятные docstrings и простые комментарии;
-- `loguru` для логирования;
-- воспроизводимая сборка релиза;
-- regression-тесты миграций, outage/recovery, Telegram и installer;
-- никаких deployment-specific токенов, ID и приватных IP в публичном дереве.
 
 ## Roadmap
 

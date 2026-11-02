@@ -233,17 +233,6 @@ docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw
 
 The release image is multi-architecture (`linux/amd64`, `linux/arm64`) and is published with SBOM/provenance metadata.
 
-## Development quality rules
-
-The project intentionally keeps the implementation simple and maintainable:
-
-- PEP 8 formatting and static checks;
-- functions limited to **40 lines**;
-- clear docstrings and simple comments;
-- `loguru` for application logging;
-- reproducible release checks;
-- regression tests for database migrations, outages, Telegram behavior and installer paths;
-- no deployment-specific tokens, IDs or private device addresses in the public tree.
 
 ## Roadmap
 
