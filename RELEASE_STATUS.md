@@ -1,5 +1,18 @@
 # Release status
 
+## 0.5.7-hw — Telegram edit-window candidate
+
+- Candidate source: `0.5.7-hw`; public release and full hardware acceptance remain `0.5.6-hw`.
+- Configurable 3/5/10 minute edit window defaults to 10 minutes.
+- Recovery and repeated transitions preserve the first post's deadline.
+- Runtime settings, current message ID and window start persist in SQLite metadata.
+- Legacy databases retain history and can resume a recent stored voltage event.
+- Sound cooldown and quiet hours remain independent of message lifetime.
+- Software validation: quality gate PASS and 158/158 unit tests PASS.
+- Runtime verification PASS: healthy container, ready endpoint, online readings, zero Telegram failures and unchanged status message after deployment restart.
+- SQLite quick_check PASS; measurement history retained and collection resumed.
+- Simulated voltage transitions do not constitute physical voltage acceptance.
+
 ## 0.5.6-hw — hardware accepted / release candidate
 
 - Current software candidate: `0.5.6-hw`.

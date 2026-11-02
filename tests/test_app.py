@@ -538,6 +538,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                     telegram_chat_id="123",
                     telegram_status_chat_id="-100999",
                     voltage_notification_cooldown_min=5,
+                    voltage_status_edit_window_min=3,
                 )
             )
             monitor.storage.initialize()
@@ -545,9 +546,10 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.storage.add(900.0, 260.0, 50.0, "L1")
             monitor.telegram.quiet_now = Mock(return_value=False)
             monitor.telegram.send = Mock(side_effect=[101, 102, 103])
+            monitor.telegram.unpin = Mock()
             monitor.telegram.delete = Mock()
             with patch.object(
-                APP.time, "time", side_effect=[1000.0, 1060.0, 1301.0]
+                APP.time, "time", side_effect=[1000.0, 1240.0, 1421.0]
             ):
                 monitor.record_voltage_event("warning_high", 254.0, 50.0)
                 monitor.record_voltage_event("critical_high", 256.0, 50.0)
@@ -561,6 +563,116 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 monitor.storage.get_meta("telegram_status_message_id"), "103"
             )
             self.assertEqual(monitor.telegram.delete.call_count, 2)
+
+    def test_voltage_status_edits_same_message_inside_window(self):
+        """Edit one alert post through recovery inside the edit window."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "edit-window.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                    voltage_status_edit_window_min=10,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(900.0, 230.0, 50.0)
+            monitor.storage.add(900.0, 230.0, 50.0, "L1")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(return_value=301)
+            monitor.telegram.edit = Mock()
+            monitor.telegram.unpin = Mock()
+            monitor.telegram.delete = Mock()
+            with patch.object(APP.time, "time", side_effect=[1000.0, 1599.0]):
+                monitor.record_voltage_event("critical_high", 256.0, 50.0)
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+            monitor.telegram.edit.assert_called_once()
+            self.assertEqual(monitor.telegram.edit.call_args.args[0], 301)
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "301"
+            )
+            self.assertEqual(
+                monitor.storage.get_meta(
+                    "voltage_status_edit_window_started_at"
+                ),
+                "1000.0",
+            )
+            monitor.telegram.delete.assert_not_called()
+
+    def test_voltage_status_replaces_message_after_window_expires(self):
+        """Create a new recovery post after the edit window has expired."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "edit-window-expired.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                    voltage_status_edit_window_min=10,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(900.0, 230.0, 50.0)
+            monitor.storage.add(900.0, 230.0, 50.0, "L1")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(side_effect=[401, 402])
+            monitor.telegram.edit = Mock()
+            monitor.telegram.unpin = Mock()
+            monitor.telegram.delete = Mock()
+            with patch.object(APP.time, "time", side_effect=[1000.0, 1601.0]):
+                monitor.record_voltage_event("critical_high", 256.0, 50.0)
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            self.assertEqual(monitor.telegram.send.call_count, 2)
+            monitor.telegram.edit.assert_not_called()
+            monitor.telegram.unpin.assert_called_once_with(
+                401, monitor.telegram.status_chat_id
+            )
+            monitor.telegram.delete.assert_called_once_with(
+                401, monitor.telegram.status_chat_id
+            )
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "402"
+            )
+
+    def test_recovery_preserves_voltage_status_edit_window(self):
+        """Keep repeated alert and recovery transitions in the same post."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "edit-window-reset.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                    voltage_status_edit_window_min=10,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(900.0, 230.0, 50.0)
+            monitor.storage.add(900.0, 230.0, 50.0, "L1")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(side_effect=[501, 502])
+            monitor.telegram.edit = Mock()
+            monitor.telegram.unpin = Mock()
+            monitor.telegram.delete = Mock()
+            with patch.object(
+                APP.time, "time", side_effect=[1000.0, 1060.0, 1070.0]
+            ):
+                monitor.record_voltage_event("critical_high", 256.0, 50.0)
+                monitor.record_voltage_event("recovered", 230.0, 50.0)
+                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+            self.assertEqual(monitor.telegram.edit.call_count, 2)
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "501"
+            )
 
     def test_recovery_shared_status_is_always_silent(self):
         """Recovery replaces the shared status without making a sound."""
@@ -646,11 +758,14 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.telegram.send = Mock(
                 side_effect=lambda *args, **kwargs: calls.append("send") or 55
             )
+            monitor.telegram.unpin = Mock(
+                side_effect=lambda *args, **kwargs: calls.append("unpin")
+            )
             monitor.telegram.delete = Mock(
                 side_effect=lambda *args, **kwargs: calls.append("delete")
             )
             monitor.record_voltage_event("warning_high", 254.0, 50.0)
-            self.assertEqual(calls, ["send", "delete"])
+            self.assertEqual(calls, ["send", "unpin", "delete"])
             current = monitor.storage.get_meta("telegram_status_message_id")
             self.assertEqual(current, "55")
 
@@ -1042,6 +1157,7 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.state.restore_outage(started, 1)
         monitor.storage.set_meta("telegram_status_message_id", "675")
         monitor.shelly.read = Mock(return_value=(230.0, 50.0, 5.0))
+        monitor.telegram.unpin = Mock()
         monitor.telegram.delete = Mock()
         monitor.telegram.send = Mock(return_value=900)
         monitor.telegram.edit = Mock()
@@ -1062,6 +1178,9 @@ class MonitorRegressionTests(unittest.TestCase):
             monitor.poll_once()
             self.assertEqual(
                 monitor.state.snapshot()["connectivity"], "online"
+            )
+            monitor.telegram.unpin.assert_called_once_with(
+                675, monitor.telegram.status_chat_id
             )
             monitor.telegram.delete.assert_called_once_with(
                 675, monitor.telegram.status_chat_id
@@ -1455,6 +1574,7 @@ def telegram_config_values() -> dict[str, object]:
         "telegram_quiet_start_hour": 23,
         "telegram_quiet_end_hour": 7,
         "voltage_notification_cooldown_min": 5,
+        "voltage_status_edit_window_min": 10,
     }
 
 
@@ -1754,6 +1874,14 @@ class AdvancedFeatureTests(unittest.TestCase):
         telegram.pin(77)
         payload = telegram.call.call_args.args[1]
         self.assertTrue(payload["disable_notification"])
+        telegram.unpin(77)
+        method, payload = telegram.call.call_args.args
+        self.assertEqual(method, "unpinChatMessage")
+        self.assertEqual(payload["message_id"], 77)
+        telegram.clear_reply_markup(77)
+        method, payload = telegram.call.call_args.args
+        self.assertEqual(method, "editMessageReplyMarkup")
+        self.assertEqual(payload["reply_markup"], {"inline_keyboard": []})
         client = APP.ShellyClient(config())
         client.rpc = Mock(
             side_effect=[
@@ -1847,6 +1975,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             storage.initialize()
             storage.set_meta("telegram_setting_meter_type", "pro3em")
             storage.set_meta("telegram_setting_silent", "0")
+            storage.set_meta("telegram_setting_status_edit_window", "5")
 
             monitor = APP.Monitor(config(database_path=path))
             with patch.object(APP, "start_health_server"):
@@ -1855,6 +1984,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual(monitor.meter_type, "pro3em")
             self.assertIsInstance(monitor.shelly, APP.Pro3EMClient)
             self.assertFalse(monitor.telegram.silent_default)
+            self.assertEqual(monitor.status_edit_window_min, 5)
             self.assertEqual(set(monitor.phase_states), {"L1", "L2", "L3"})
 
     def test_new_notification_settings_apply_at_runtime(self):
@@ -1868,14 +1998,42 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.update_setting("pin_toggle", "7")
             monitor.update_setting("dwell_inc", "7")
             monitor.update_setting("cooldown_10", "7")
+            monitor.update_setting("editwindow_3", "7")
             self.assertFalse(monitor.daily_summary_enabled)
             self.assertEqual(monitor.daily_summary_hour, 23)
             self.assertTrue(monitor.availability_alerts_enabled)
             self.assertTrue(monitor.pin_status)
             self.assertEqual(monitor.alert_dwell, 20.0)
             self.assertEqual(monitor.notification_cooldown_min, 10)
+            self.assertEqual(monitor.status_edit_window_min, 3)
 
-    def test_channel_status_has_read_only_buttons(self):
+    def test_pin_toggle_applies_to_existing_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pin-setting.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-1009",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.set_meta("telegram_status_message_id", "77")
+            monitor.telegram.pin = Mock()
+            monitor.telegram.unpin = Mock()
+            monitor.update_setting("pin_toggle", "7")
+            self.assertTrue(monitor.pin_status)
+            monitor.telegram.pin.assert_called_once_with(
+                77, monitor.telegram.status_chat_id
+            )
+            monitor.update_setting("pin_toggle", "7")
+            self.assertFalse(monitor.pin_status)
+            monitor.telegram.unpin.assert_called_once_with(
+                77, monitor.telegram.status_chat_id
+            )
+
+    def test_unpin_failure_prevents_old_status_delete(self):
         monitor = APP.Monitor(
             config(
                 telegram_token="token",
@@ -1883,12 +2041,20 @@ class AdvancedFeatureTests(unittest.TestCase):
                 telegram_status_chat_id="-1009",
             )
         )
-        keyboard = monitor.status_keyboard()
-        data = [
-            button["callback_data"]
-            for button in keyboard["inline_keyboard"][0]
-        ]
-        self.assertEqual(data, ["view:refresh", "view:today", "view:outages"])
+        monitor.telegram.unpin = Mock(side_effect=RuntimeError("forbidden"))
+        monitor.telegram.delete = Mock()
+        monitor.delete_previous_status("42")
+        monitor.telegram.delete.assert_not_called()
+
+    def test_channel_status_has_no_inline_buttons(self):
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                telegram_status_chat_id="-1009",
+            )
+        )
+        self.assertIsNone(monitor.status_keyboard())
 
     def test_prune_rolls_up_old_raw_samples_first(self):
         with tempfile.TemporaryDirectory() as directory:
