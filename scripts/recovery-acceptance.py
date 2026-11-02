@@ -118,6 +118,61 @@ def load_baseline(path: Path) -> dict[str, object]:
     return payload
 
 
+SAFE_HEALTH_KEYS = (
+    "version",
+    "connectivity",
+    "consecutive_failures",
+    "consecutive_successes",
+    "last_success",
+    "last_transition",
+    "offline_since",
+    "outage_count",
+    "rpc_ms",
+    "started_at",
+    "maintenance",
+)
+
+
+def safe_health_payload(health: dict[str, object]) -> dict[str, object]:
+    """Return health diagnostics without deployment-specific error text."""
+
+    safe = {key: health[key] for key in SAFE_HEALTH_KEYS if key in health}
+    phases = health.get("phases")
+    if isinstance(phases, dict):
+        safe["phases"] = {
+            str(name): safe_health_payload(value)
+            for name, value in phases.items()
+            if isinstance(value, dict)
+        }
+    return safe
+
+
+def outage_matches(
+    old_outage: dict[str, object], outage: dict[str, object] | None
+) -> bool:
+    """Return whether current state is the exact captured outage."""
+
+    if outage is None:
+        return False
+    keys = ("id", "started_at", "phase")
+    return all(outage.get(key) == old_outage.get(key) for key in keys)
+
+
+def safe_verification_state(
+    state: dict[str, object], baseline: dict[str, object]
+) -> dict[str, object]:
+    """Return verification state without the Telegram message identifier."""
+
+    safe = dict(state)
+    current_id = safe.pop("status_message_id", None)
+    baseline_id = baseline["state"].get("status_message_id")
+    safe["status_message_present"] = bool(current_id)
+    safe["status_message_rotated"] = bool(
+        current_id and baseline_id and current_id != baseline_id
+    )
+    return safe
+
+
 def recovery_errors(
     baseline: dict[str, object],
     state: dict[str, object],
@@ -131,7 +186,7 @@ def recovery_errors(
     outage = state["outage"]
     if state["quick_check"] != "ok" or state["zero_voltage_rows"] != 0:
         errors.append("database integrity or zero-voltage check failed")
-    if not outage or outage["id"] != old_outage["id"]:
+    if not outage_matches(old_outage, outage):
         errors.append("latest outage does not match the captured outage")
     elif outage["ended_at"] is None:
         errors.append("captured outage is still open")
@@ -159,9 +214,9 @@ def verify_payload(args: argparse.Namespace) -> dict[str, object]:
     return {
         "kind": "recovery_verification",
         "checked_at": time.time(),
-        "health": health,
+        "health": safe_health_payload(health),
         "ready": ready,
-        "state": state,
+        "state": safe_verification_state(state, baseline),
         "status": "pass" if not errors else "fail",
         "errors": errors,
     }

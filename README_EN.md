@@ -226,6 +226,8 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 sudo ./scripts/rollback.sh --dry-run
 ```
 
+Recovery verification and promotion JSON keep deployment-specific connection errors and raw Telegram status message IDs out of operator reports.
+
 All user-facing scripts provide `-h` / `--help`.
 
 ## Security
