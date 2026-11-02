@@ -1,3 +1,20 @@
+## 0.5.4-hw - 2026-11-02 — maintainability and upgrade audit
+
+- Refactored large configuration, Telegram routing, settings keyboard and HTTP
+  handlers into small, documented helpers without changing monitor behavior.
+- Enforced PEP 8 formatting, a 79-character source-line limit and a maximum of
+  40 lines per function across production code and tests.
+- Added missing production docstrings and kept application logging on `loguru`.
+- Removed repeated settings/response construction and duplicate dashboard assets.
+- Fixed legacy upgrades where a missing or empty `SHELLY_METER_TYPE` could be
+  written back as an empty value; it now safely defaults to `pro_em50`.
+- Added regression coverage for both missing and empty legacy meter settings.
+- Hardened metadata scanning so local `.ruff_cache` data is ignored.
+- Added English, Russian and Ukrainian GitHub documentation plus a real dashboard
+  screenshot captured from the live monitor.
+- Revalidated release reproducibility, installer/rollback/support-bundle gates,
+  SQLite schema v3 and an isolated real-hardware Pro EM-50 smoke test.
+
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 
 - Added inexpensive single-phase Shelly models to the admin selector.

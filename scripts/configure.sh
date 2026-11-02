@@ -41,6 +41,7 @@ chmod 0600 "$ENV_FILE"
 
 current_host="$(sed -n 's/^SHELLY_HOST=//p' "$ENV_FILE" | head -n1)"
 current_meter="$(sed -n 's/^SHELLY_METER_TYPE=//p' "$ENV_FILE" | head -n1)"
+current_meter="${current_meter:-pro_em50}"
 current_status_chat="$(sed -n 's/^TELEGRAM_STATUS_CHAT_ID=//p' "$ENV_FILE" | head -n1)"
 current_admins="$(sed -n 's/^TELEGRAM_ADMIN_USER_IDS=//p' "$ENV_FILE" | head -n1)"
 host="${SVT_SHELLY_HOST:-}"

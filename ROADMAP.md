@@ -423,3 +423,19 @@ After the repository owner/name is selected:
 - Add a second Shelly device only if required later.
 - Add Grafana/Prometheus integration only if useful; current metrics endpoint is already compatible with scraping.
 - Consider signed container releases after GitHub publication.
+
+
+## `0.5.4-hw` maintainability audit — SOFTWARE/HARDWARE SMOKE PASS
+
+- Keep production on hardware-accepted `0.5.3-hw` until the audited release is
+  merged and promoted through the normal installer path.
+- PEP 8/Ruff checks pass with no source lines over 79 characters.
+- All Python functions, including tests, are limited to 40 lines.
+- Production modules/classes/functions have clear docstrings; application logging
+  remains on `loguru`; no standard-library `logging` imports remain.
+- Exact duplicate function bodies are rejected by the audit gate.
+- Legacy `SHELLY_METER_TYPE` migration is covered for missing and blank values.
+- Multilingual GitHub documentation and a real dashboard image are maintained as
+  part of the public release tree.
+- Isolated candidate runtime against a physical Pro EM-50 passed with schema v3,
+  valid live samples and no synthetic `0 V` measurements.

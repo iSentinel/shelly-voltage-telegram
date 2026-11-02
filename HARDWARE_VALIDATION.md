@@ -1,7 +1,7 @@
 # Hardware Validation — Shelly Pro EM-50
 
 Date: 2026-11-01
-Checkpoint: `0.4.11-hw`
+Checkpoint: `0.5.3-hw`
 Timezone: `Europe/Kyiv`
 
 ## Device identity
@@ -381,3 +381,21 @@ Telegram acceptance passed against the configured private destination:
 - the `getUpdates` HTTP timeout retains 5 s headroom over the 20 s Bot API long poll.
 
 No Telegram credential or private chat identifier is recorded in this public evidence.
+
+
+## 2026-11-02 `0.5.4-hw` audit smoke
+
+The maintainability candidate was validated in isolation while production stayed
+online on `0.5.3-hw`.
+
+- physical source: Shelly Pro EM-50;
+- candidate doctor: Shelly status `ok`;
+- observed voltage: approximately 216–217 V during the smoke;
+- observed frequency: 50.0 Hz;
+- SQLite `quick_check`: `ok`;
+- schema version: 3;
+- isolated `/ready`: HTTP 200 / online;
+- three additional valid L1 samples were written to a copied database;
+- synthetic `0 V` rows: 0;
+- Telegram was disabled for the isolated runtime;
+- production configuration and database were not modified by the smoke test.
