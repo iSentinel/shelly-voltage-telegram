@@ -17,18 +17,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply candidate changes
+      - name: Apply non-workflow candidate changes
         run: python3 .github/candidate-055.py
 
-      - name: Remove bootstrap files
-        run: rm .github/candidate-055.py .github/workflows/candidate-055-bootstrap.yml
+      - name: Remove transformation script
+        run: rm .github/candidate-055.py
 
       - name: Validate candidate metadata and workflows
         run: |
           python3 scripts/check-quality.py
           python3 -m unittest tests.test_metadata tests.test_workflows -q
 
-      - name: Commit final candidate tree
+      - name: Commit candidate files
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
