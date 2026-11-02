@@ -37,10 +37,12 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
+- Current software candidate: **0.5.5-hw**
 - Current software candidate: **0.5.4-hw**
 - Current release: **0.5.4-hw**
 - Production deployment: **0.5.4-hw**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
 - Hardware-accepted live checkpoint: **0.5.4-hw**
+- `0.5.5-hw` adds keyless Sigstore signing for versioned GHCR images; production remains on `0.5.4-hw` until release gates pass.
 - Release `0.5.4-hw` includes the maintainability audit, installer upgrade fixes and permanent quality gates.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 

@@ -15,6 +15,15 @@
 - Revalidated release reproducibility, installer/rollback/support-bundle gates,
   SQLite schema v3 and an isolated real-hardware Pro EM-50 smoke test.
 
+## 0.5.5-hw - supply-chain signing candidate
+
+- Add keyless Sigstore Cosign signing for versioned GHCR images.
+- Sign the immutable multi-architecture image digest after a successful push.
+- Keep ordinary `main` images unsigned so release signatures remain easy to interpret.
+- Pin the official `sigstore/cosign-installer` action to a full commit SHA.
+- Add regression coverage for signing permissions, digest use and release-only conditions.
+- Production remains on hardware-accepted `0.5.4-hw` until the signing workflow is proven in GitHub Actions.
+
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 
 - Added inexpensive single-phase Shelly models to the admin selector.

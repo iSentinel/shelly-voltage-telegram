@@ -63,6 +63,22 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn("manual-${{ steps.source.outputs.short_sha }}", text)
 
+    def test_release_images_are_keyless_signed_by_digest(self):
+        """Versioned GHCR images must be signed with Sigstore Cosign."""
+        text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
+        self.assertIn("id-token: write", text)
+        self.assertIn(
+            "sigstore/cosign-installer@"
+            "6f9f17788090df1f26f669e9d70d6ae9567deba6",
+            text,
+        )
+        self.assertIn("id: build", text)
+        self.assertIn("IMAGE_DIGEST: ${{ steps.build.outputs.digest }}", text)
+        self.assertIn(
+            'cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"', text
+        )
+        self.assertIn("startsWith(inputs.image_tag, 'v')", text)
+
     def test_release_uses_exact_tag_and_checksum(self):
         text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
         self.assertIn("ref: ${{ steps.tag.outputs.tag }}", text)
