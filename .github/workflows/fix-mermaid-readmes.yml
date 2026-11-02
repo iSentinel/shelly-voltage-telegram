@@ -1,0 +1,53 @@
+name: Fix Mermaid README diagrams
+
+on:
+  push:
+    branches:
+      - fix/mermaid-readmes
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Fix Mermaid diagrams
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "README_EN.md": (
+                  """```mermaid\nflowchart LR\n    S1[Shelly meter / L1] -->|read-only RPC| BOT[Shelly Voltage Telegram]\n    S2[Optional L2 meter] -->|read-only RPC| BOT\n    S3[Optional L3 meter] -->|read-only RPC| BOT\n    P3[Pro 3EM / 3CT63] -->|A/B/C in one EM.GetStatus| BOT\n    BOT --> DB[(SQLite WAL)]\n    BOT --> TG[Telegram Bot API]\n    BOT --> HTTP[/health · /ready · /metrics · /dashboard]\n    BOT --> BK[Backups + support bundle]\n```""",
+                  """```mermaid\nflowchart LR\n    S1[\"Shelly meter / L1\"] -->|read-only RPC| BOT[\"Shelly Voltage Telegram\"]\n    S2[\"Optional L2 meter\"] -->|read-only RPC| BOT\n    S3[\"Optional L3 meter\"] -->|read-only RPC| BOT\n    P3[\"Pro 3EM / 3CT63\"] -->|A/B/C in one EM.GetStatus| BOT\n    BOT --> DB[(\"SQLite WAL\")]\n    BOT --> TG[\"Telegram Bot API\"]\n    BOT --> HTTP[\"health / ready / metrics / dashboard\"]\n    BOT --> BK[\"Backups + support bundle\"]\n```""",
+              ),
+              "README_RU.md": (
+                  """```mermaid\nflowchart LR\n    S1[Shelly / L1] -->|read-only RPC| BOT[Shelly Voltage Telegram]\n    S2[Опциональный L2] -->|read-only RPC| BOT\n    S3[Опциональный L3] -->|read-only RPC| BOT\n    P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT\n    BOT --> DB[(SQLite WAL)]\n    BOT --> TG[Telegram Bot API]\n    BOT --> HTTP[/health · /ready · /metrics · /dashboard]\n    BOT --> BK[Backup + support bundle]\n```""",
+                  """```mermaid\nflowchart LR\n    S1[\"Shelly / L1\"] -->|read-only RPC| BOT[\"Shelly Voltage Telegram\"]\n    S2[\"Опциональный L2\"] -->|read-only RPC| BOT\n    S3[\"Опциональный L3\"] -->|read-only RPC| BOT\n    P3[\"Pro 3EM / 3CT63\"] -->|A/B/C одним EM.GetStatus| BOT\n    BOT --> DB[(\"SQLite WAL\")]\n    BOT --> TG[\"Telegram Bot API\"]\n    BOT --> HTTP[\"health / ready / metrics / dashboard\"]\n    BOT --> BK[\"Backup + support bundle\"]\n```""",
+              ),
+              "README_UA.md": (
+                  """```mermaid\nflowchart LR\n    S1[Shelly / L1] -->|read-only RPC| BOT[Shelly Voltage Telegram]\n    S2[Опційний L2] -->|read-only RPC| BOT\n    S3[Опційний L3] -->|read-only RPC| BOT\n    P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT\n    BOT --> DB[(SQLite WAL)]\n    BOT --> TG[Telegram Bot API]\n    BOT --> HTTP[/health · /ready · /metrics · /dashboard]\n    BOT --> BK[Backup + support bundle]\n```""",
+                  """```mermaid\nflowchart LR\n    S1[\"Shelly / L1\"] -->|read-only RPC| BOT[\"Shelly Voltage Telegram\"]\n    S2[\"Опційний L2\"] -->|read-only RPC| BOT\n    S3[\"Опційний L3\"] -->|read-only RPC| BOT\n    P3[\"Pro 3EM / 3CT63\"] -->|A/B/C одним EM.GetStatus| BOT\n    BOT --> DB[(\"SQLite WAL\")]\n    BOT --> TG[\"Telegram Bot API\"]\n    BOT --> HTTP[\"health / ready / metrics / dashboard\"]\n    BOT --> BK[\"Backup + support bundle\"]\n```""",
+              ),
+          }
+
+          for name, (old, new) in replacements.items():
+              path = Path(name)
+              text = path.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"Expected Mermaid block not found in {name}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
+      - name: Commit README fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README_EN.md README_RU.md README_UA.md
+          git diff --cached --check
+          git commit -m "Fix Mermaid diagrams in translated READMEs"
+          git push
