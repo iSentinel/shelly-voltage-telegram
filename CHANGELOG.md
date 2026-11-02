@@ -1,3 +1,15 @@
+## 0.5.7-hw - Telegram status lifecycle and edit window
+
+- Unpin the previous Telegram status before deleting it.
+- Disable status pinning by default while keeping `Pin status` configurable in `/settings`.
+- Remove inline buttons from the public voltage status and clean up legacy buttons at startup.
+- Add a configurable 3/5/10 minute voltage status edit window; default is 10 minutes.
+- Edit the active alert message in place through recovery while the edit window is active.
+- Keep the original edit deadline through recovery and repeated transitions.
+- Persist the edit window across restarts and reuse recent legacy events.
+- Keep temporary edit failures from creating duplicate posts.
+- Keep edit lifetime and audible notification cooldown independent.
+
 ## 0.5.6-hw - Pro EM-50 live acceptance and shared status alerts
 
 - Add a standalone read-only Pro 3EM / 3CT63 acceptance CLI.

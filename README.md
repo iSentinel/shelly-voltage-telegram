@@ -37,9 +37,9 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.6-hw**
+- Current software candidate: **0.5.7-hw**
 - Current release: **0.5.6-hw**
-- Production deployment: **0.5.6-hw**, hardware-accepted on a physical Shelly Pro EM-50 after blackout recovery and live upgrade validation.
+- Production deployment: **0.5.7-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
@@ -128,3 +128,9 @@ Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
 ---
 
 <p align="center"><strong>Monitor power. Keep history. Get notified. Never control the load.</strong></p>
+
+### Telegram status message
+
+The edit window is configured in administrator `/settings`: 3, 5 or 10 minutes, with 10 minutes as the default (`VOLTAGE_STATUS_EDIT_WINDOW_MIN`). Its deadline starts with the first published voltage event. Low voltage, high voltage, recovery and repeated transitions within that deadline edit the same message, including after recovery. Edits do not extend the deadline. After expiry, the next transition publishes a new post, then unpins and deletes the previous post.
+
+The audible notification cooldown is a separate setting. Editing a message is silent and does not change the last audible notification time. Quiet hours still apply to new posts. SQLite metadata preserves the setting, message ID and original deadline across restarts. Older databases use the configured default and reuse a recent stored voltage event when available; existing history is retained.
