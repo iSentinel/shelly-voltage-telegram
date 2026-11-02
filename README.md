@@ -38,10 +38,10 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.8-hw**
-- Current release: **0.5.7-hw**
-- Production deployment: **0.5.8-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- Current release: **0.5.8-hw**
+- Production deployment: **0.5.8-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
-- Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
+- Release `0.5.8-hw` adds event summaries, RU/UA/EN Telegram UI, notification diagnostics, and restart-persistent unstable-grid indication.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 
 ## Supported devices
@@ -122,7 +122,7 @@ sudo ./scripts/configure.sh
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.6-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.8-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.

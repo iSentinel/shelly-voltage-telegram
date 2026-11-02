@@ -1,12 +1,12 @@
 # Release status
 
-## 0.5.8-hw — usability candidate
+## 0.5.8-hw — software release approved / runtime verified
 
-- Current software candidate: `0.5.8-hw`; current public release remains `0.5.7-hw`.
+- Published software target and current runtime: `0.5.8-hw`; full electrical-transition hardware checkpoint remains `0.5.6-hw`.
 - Last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Adds event summaries, RU/UA/EN Telegram UI, notification diagnostics and unstable-grid indication.
 - Software/release gates and live Pro EM-50 smoke PASS: 168/168 tests, reproducible archive, image import, SQLite continuity, restart continuity and Telegram continuity.
-- Public release promotion remains separate; the electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
+- Release metadata is promoted to `0.5.8-hw`; tag/source/GHCR publication follows from the exact approved commit. The electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
 
 ## 0.5.7-hw — software released / runtime verified
 
