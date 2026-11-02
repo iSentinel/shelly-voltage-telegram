@@ -108,10 +108,6 @@ Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
 - 🧪 [Hardware validation](HARDWARE_VALIDATION.md)
 - 📝 [Changelog](CHANGELOG.md)
 
-## Development principles
-
-PEP 8 · functions ≤ 40 lines · clear docstrings · simple comments · `loguru` logging · reproducible releases · privacy guard · regression tests.
-
 ---
 
 <p align="center"><strong>Monitor power. Keep history. Get notified. Never control the load.</strong></p>
