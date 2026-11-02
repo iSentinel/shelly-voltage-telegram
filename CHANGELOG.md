@@ -14,6 +14,8 @@
   screenshot captured from the live monitor.
 - Revalidated release reproducibility, installer/rollback/support-bundle gates,
   SQLite schema v3 and an isolated real-hardware Pro EM-50 smoke test.
+- Promoted `0.5.4-hw` to production after live Pro EM-50 acceptance;
+  sampling, Telegram continuity, database integrity and container hardening passed.
 
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 
