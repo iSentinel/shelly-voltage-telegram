@@ -1,0 +1,54 @@
+name: Publish v0.5.4-hw once
+
+on:
+  push:
+    branches: [audit/0.5.4-hw]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    if: github.event.head_commit.message == 'Publish v0.5.4-hw from audited main'
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: f51bc7cc7cfe79176c0e0a69ff4bcac918c3dcf0
+      RELEASE_TAG: v0.5.4-hw
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact audited main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags
+          main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          [[ "$main_sha" == "$TARGET_SHA" ]] || {
+            echo "ERROR: main moved: $main_sha != $TARGET_SHA" >&2
+            exit 2
+          }
+          version="$(git show "$TARGET_SHA:VERSION" | tr -d '\r\n')"
+          [[ "$RELEASE_TAG" == "v$version" ]] || {
+            echo "ERROR: $RELEASE_TAG does not match VERSION=$version" >&2
+            exit 3
+          }
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "ERROR: tag $RELEASE_TAG already exists" >&2
+            exit 4
+          fi
+      - name: Create exact release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git tag "$RELEASE_TAG" "$TARGET_SHA"
+          git push origin "refs/tags/$RELEASE_TAG"
+      - name: Dispatch source release and versioned image
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run release.yml --ref main -f tag="$RELEASE_TAG"
+          gh workflow run image.yml --ref main -f ref="$RELEASE_TAG" -f image_tag="$RELEASE_TAG"
+          echo "PUBLISH_DISPATCH=PASS"
