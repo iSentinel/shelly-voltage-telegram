@@ -413,7 +413,8 @@ No bot token or private chat identifier is stored in public release artifacts or
 
 ## `0.5.4-hw` maintainability audit — RELEASED / HARDWARE ACCEPTED
 
-- Production and public release are both `0.5.4-hw`; live upgrade acceptance passed.
+- Production is running hardware-accepted `0.5.4-hw` after the audited
+  release was merged and promoted through the normal installer path.
 - PEP 8/Ruff checks pass with no source lines over 79 characters.
 - All Python functions, including tests, are limited to 40 lines.
 - Production modules/classes/functions have clear docstrings; application logging
@@ -426,6 +427,15 @@ No bot token or private chat identifier is stored in public release artifacts or
   valid live samples and no synthetic `0 V` measurements.
 
 
+### Next stage after `0.5.4-hw`
+
+- Keep the current Pro EM-50 deployment under normal observation.
+- Perform physical three-phase acceptance when the planned Pro 3EM / Pro 3EM-3CT63 is installed.
+- Validate L1/L2/L3 mapping, outage behavior, Telegram presentation, charts,
+  exports and metrics with real three-phase data before enabling that backend in
+  production.
+
+
 ## `0.5.5-hw` signed container release — RELEASED / SUPPLY-CHAIN ACCEPTED
 
 - Keep production on hardware-accepted `0.5.4-hw`; `0.5.5-hw` changes the public release supply chain, not runtime monitoring behavior.
@@ -436,3 +446,32 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Regression tests enforce OIDC permission, pinned action SHA, digest-based signing and release-only conditions.
 - Acceptance completed: GitHub Actions run `41373145505` built and keyless-signed RC2 digest `sha256:df534c7b9b30e2a8f3dfc617b07a0ff6837ecc15b285331dc13e211130dcca4d`; independent Gateway `cosign verify` passed with the expected GitHub Actions certificate identity and OIDC issuer.
 - Final `v0.5.5-hw` publication completed: Source Release run `41373981210` and signed Container Image run `41373982691` succeeded from exact tag source `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; final image digest is `sha256:c2115def9975dcfbb4a722d08713450403f53beaa01e6c54fec75962d82ce47a`, independently verified through Gateway.
+
+
+## `0.5.6-hw` Pro 3EM acceptance tooling — SOFTWARE CANDIDATE
+
+- Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.4-hw`.
+- Final release publication is fail-closed until `RELEASE_VERSION` is explicitly promoted to match `VERSION`.
+- Add standalone read-only `scripts/pro3em-acceptance.py` for physical Pro 3EM / Pro 3EM-3CT63 acceptance.
+- Reuse the existing Digest-auth `Pro3EMClient`; the acceptance path issues only `EM.GetStatus?id=0` measurement RPCs.
+- Require complete L1/L2/L3 data from one atomic RPC cycle and reject missing phases, zero/implausible values and RPC failures.
+- Provide repeated sampling, configurable bounds, text/JSON output and stable PASS/FAIL exit codes.
+- Route primary low-voltage/recovery transitions into the stable Telegram status header, including event time, measured voltage and frequency; do not send duplicate private messages.
+- Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed.
+
+
+Software acceptance checkpoint:
+
+- Ruff 0.14.2 formatting/lint and project quality rules PASS.
+- 112/112 Python tests PASS with the ResourceWarning gate enabled.
+- `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
+  redaction, pinned-release installer and Compose validation PASS.
+- Reproducible source release PASS and excludes Python tool caches.
+- Candidate container build/version smoke PASS.
+- Low-voltage/recovery status-header persistence and destination tests PASS; no duplicate private message is sent for the primary phase.
+- Read-only physical Pro EM-50 probe PASS on the current installation.
+- Pro 3EM acceptance CLI end-to-end HTTP smoke PASS for three atomic
+  L1/L2/L3 cycles.
+- Hardware promotion remains blocked until the real Pro 3EM / 3CT63 is
+  installed and L1/L2/L3 mapping/outage/Telegram/chart/export/metrics checks
+  pass on physical three-phase data.

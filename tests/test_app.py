@@ -385,22 +385,102 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         self.assertTrue(payload["disable_notification"])
 
     def test_low_voltage_alert_is_one_shot_until_recovery(self):
-        monitor = APP.Monitor(
-            config(
-                telegram_token="token",
-                telegram_chat_id="123",
-                alert_dwell_sec=0,
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "low-voltage.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    alert_dwell_sec=0,
+                )
             )
+            monitor.storage.initialize()
+            monitor.telegram.send = Mock(return_value=14)
+            monitor.update_status = Mock()
+            monitor.maybe_low_voltage_alert(179.9, 50.0)
+            monitor.maybe_low_voltage_alert(175.0, 50.0)
+            self.assertEqual(monitor.update_status.call_count, 1)
+            self.assertEqual(monitor.last_voltage_event[0], "low")
+            monitor.maybe_low_voltage_alert(185.0, 50.0)
+            self.assertEqual(monitor.update_status.call_count, 2)
+            self.assertEqual(monitor.last_voltage_event[0], "recovered")
+            monitor.telegram.send.assert_not_called()
+            self.assertFalse(monitor.low_voltage_active)
+
+    def test_voltage_event_updates_status_channel_not_private_chat(self):
+        """Send the low-voltage header to the stable status chat."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status-destination.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                    alert_dwell_sec=0,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(APP.time.time(), 179.3, 50.0)
+            monitor.storage.day_stats = Mock(
+                return_value={
+                    "count": 1,
+                    "min": 179.3,
+                    "max": 179.3,
+                    "avg": 179.3,
+                }
+            )
+            monitor.telegram.send = Mock(return_value=77)
+            monitor.telegram.edit = Mock()
+            monitor.maybe_low_voltage_alert(179.3, 50.0)
+            self.assertEqual(monitor.telegram.send.call_count, 1)
+            kwargs = monitor.telegram.send.call_args.kwargs
+            self.assertEqual(kwargs["chat_id"], "-100999")
+            self.assertTrue(
+                monitor.telegram.send.call_args.args[0].startswith(
+                    "🚨 Низкое напряжение сети"
+                )
+            )
+
+    def test_voltage_event_survives_restart(self):
+        """Restore the latest low-voltage event from SQLite metadata."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "event.sqlite3"
+            monitor = APP.Monitor(config(database_path=path))
+            monitor.storage.initialize()
+            monitor.update_status = Mock()
+            with patch.object(APP.time, "time", return_value=1234.5):
+                monitor.record_voltage_event("low", 179.3, 50.0)
+            restarted = APP.Monitor(config(database_path=path))
+            restarted.storage.initialize()
+            restarted.restore_voltage_event()
+            self.assertEqual(
+                restarted.last_voltage_event,
+                ("low", 179.3, 50.0, 1234.5),
+            )
+
+    def test_low_voltage_event_is_rendered_in_status_header(self):
+        monitor = APP.Monitor(config())
+        monitor.state.restore(APP.time.time(), 186.1, 50.0)
+        monitor.storage.day_stats = Mock(
+            return_value={"count": 1, "min": 179.3, "max": 220.0, "avg": 205.0}
         )
-        monitor.telegram.send = Mock(return_value=14)
-        monitor.maybe_low_voltage_alert(179.9, 50.0)
-        monitor.maybe_low_voltage_alert(175.0, 50.0)
-        self.assertEqual(monitor.telegram.send.call_count, 1)
-        self.assertTrue(monitor.telegram.send.call_args.kwargs["notify"])
-        monitor.maybe_low_voltage_alert(185.0, 50.0)
-        self.assertEqual(monitor.telegram.send.call_count, 2)
-        self.assertNotIn("notify", monitor.telegram.send.call_args.kwargs)
-        self.assertFalse(monitor.low_voltage_active)
+        monitor.last_voltage_event = (
+            "recovered",
+            186.1,
+            50.0,
+            APP.datetime(
+                2026, 11, 2, 7, 9, tzinfo=APP.ZoneInfo("Europe/Kyiv")
+            ).timestamp(),
+        )
+        text = APP.multiphase_status_text(monitor)
+        self.assertTrue(
+            text.startswith("✅ Напряжение восстановилось · 07:09")
+        )
+        self.assertIn("186.1 V · 50.00 Hz", text.splitlines()[1])
 
 
 class TelegramDestinationTests(unittest.TestCase):
@@ -760,6 +840,7 @@ class MonitorRegressionTests(unittest.TestCase):
                 availability_alerts_enabled=True,
             )
         )
+        monitor.storage.initialize()
         monitor.telegram.send = Mock(return_value=1)
         monitor.shelly.read = Mock(side_effect=RuntimeError("unreachable"))
         monitor.storage.begin_outage = Mock(return_value=True)
@@ -820,13 +901,34 @@ class MonitorRegressionTests(unittest.TestCase):
             sent_text = monitor.telegram.send.call_args.args[0]
             self.assertIn("Питание восстановлено", sent_text)
 
+    def test_confirmed_outage_clears_old_voltage_event(self):
+        """Do not keep an old recovery header during a new outage."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "outage-event.sqlite3"
+            monitor = APP.Monitor(config(database_path=path))
+            monitor.storage.initialize()
+            monitor.last_voltage_event = ("recovered", 186.1, 50.0, 100.0)
+            monitor.storage.set_meta(
+                "last_voltage_event",
+                '{"kind":"recovered","voltage":186.1,'
+                '"frequency":50.0,"timestamp":100.0}',
+            )
+            for _ in range(monitor.cfg.offline_after_failures):
+                monitor.record_poll_failure(RuntimeError("unreachable"))
+            self.assertIsNone(monitor.last_voltage_event)
+            self.assertIsNone(monitor.storage.get_meta("last_voltage_event"))
+
     def test_outages_command_uses_daily_journal(self):
         monitor = APP.Monitor(config())
         monitor.state.restore(100.0, 220.0, 50.0)
         monitor.storage.outage_stats = Mock(
             return_value={"count": 2, "duration": 3900.0}
         )
-        text = monitor.command_text("/outages")
+        with patch.object(
+            APP, "outage_history", side_effect=APP.sqlite3.Error("fixture")
+        ):
+            text = monitor.command_text("/outages")
         self.assertIn("2", text)
         self.assertIn("1ч 5м", text)
         self.assertIn("Подтверждённая недоступность", text)
@@ -1258,22 +1360,28 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertIsNone(monitor.storage.latest("L1"))
 
     def test_low_voltage_requires_dwell(self):
-        monitor = APP.Monitor(
-            config(
-                telegram_token="token",
-                telegram_chat_id="123",
-                alert_dwell_sec=15.0,
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "low-dwell.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    alert_dwell_sec=15.0,
+                )
             )
-        )
-        monitor.telegram.send = Mock(return_value=1)
-        with patch.object(
-            APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]
-        ):
-            monitor.maybe_low_voltage_alert(179.0, 50.0)
-            monitor.maybe_low_voltage_alert(178.0, 50.0)
-            monitor.maybe_low_voltage_alert(177.0, 50.0)
-        monitor.telegram.send.assert_called_once()
-        self.assertTrue(monitor.telegram.send.call_args.kwargs["notify"])
+            monitor.storage.initialize()
+            monitor.telegram.send = Mock(return_value=1)
+            monitor.update_status = Mock()
+            with patch.object(
+                APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]
+            ):
+                monitor.maybe_low_voltage_alert(179.0, 50.0)
+                monitor.maybe_low_voltage_alert(178.0, 50.0)
+                monitor.maybe_low_voltage_alert(177.0, 50.0)
+            monitor.update_status.assert_called_once()
+            monitor.telegram.send.assert_not_called()
+            self.assertEqual(monitor.last_voltage_event[0], "low")
 
     def test_chart_and_csv_exports(self):
         with tempfile.TemporaryDirectory() as directory:

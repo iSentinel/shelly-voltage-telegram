@@ -8,16 +8,27 @@ ROOT = Path(__file__).resolve().parents[1]
 class MetadataConsistencyTests(unittest.TestCase):
     def test_public_metadata_matches_version(self):
         version = (ROOT / "VERSION").read_text().strip()
+        release_version = (ROOT / "RELEASE_VERSION").read_text().strip()
         live_version = (ROOT / "LIVE_VERSION").read_text().strip()
         readme = (ROOT / "README.md").read_text()
         changelog = (ROOT / "CHANGELOG.md").read_text()
         hardware = (ROOT / "HARDWARE_VALIDATION.md").read_text()
-        self.assertIn(f"Current release: **{version}**", readme)
+        self.assertIn(f"Current release: **{release_version}**", readme)
+        if version != release_version:
+            self.assertIn(f"Current software candidate: **{version}**", readme)
         self.assertIn(f"## {version} -", changelog)
         self.assertIn(
             f"Hardware-accepted live checkpoint: **{live_version}**", readme
         )
         self.assertIn(f"Checkpoint: `{live_version}`", hardware)
+
+    def test_changelog_versions_are_unique_and_descending(self):
+        """Keep release history ordered and free of duplicate versions."""
+        text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        matches = re.findall(r"^## (\d+)\.(\d+)\.(\d+)-hw", text, re.M)
+        versions = [tuple(map(int, row)) for row in matches]
+        self.assertEqual(len(versions), len(set(versions)))
+        self.assertEqual(versions, sorted(versions, reverse=True))
 
     def test_public_docs_omit_private_device_identifiers(self):
         docs = (

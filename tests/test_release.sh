@@ -27,7 +27,7 @@ LIST="$TMP/list.txt"
 tar -tzf "$ARCHIVE_A" > "$LIST"
 FORBIDDEN="$(
     grep -E \
-        '(^|/)\.env$|(^|/)secrets/|(^|/)__pycache__/|(^|/)dist-publish/|(^|/)validation/|(^|/)ROADMAP\.md\.pre-|\.py[co]$|\.sqlite(3)?([.-]|$)|\.log$' \
+        '(^|/)\.env$|(^|/)\.github-main-sha$|(^|/)secrets/|(^|/)__pycache__/|(^|/)\.(ruff_cache|pytest_cache|mypy_cache)/|(^|/)dist-publish/|(^|/)validation/|(^|/)ROADMAP\.md\.pre-|\.py[co]$|\.sqlite(3)?([.-]|$)|\.log$' \
         "$LIST" || true
 )"
 [[ -z "$FORBIDDEN" ]] || {
@@ -39,6 +39,10 @@ grep -q '/.env.example$' "$LIST"
 ! grep -q '/ROADMAP.md.pre-' "$LIST"
 ! grep -q '/validation/' "$LIST"
 ! grep -q '/dist-publish/' "$LIST"
+! grep -q '/.ruff_cache/' "$LIST"
+! grep -q '/.pytest_cache/' "$LIST"
+! grep -q '/.mypy_cache/' "$LIST"
+! grep -q '/.github-main-sha$' "$LIST"
 
 mkdir -p "$EXTRACT"
 tar -xzf "$ARCHIVE_A" -C "$EXTRACT"
@@ -47,6 +51,7 @@ RELEASE="$EXTRACT/$NAME"
     cd "$RELEASE"
     sha256sum -c FILES.SHA256
     test "$(cat VERSION)" = "$(cat "$PROJECT/VERSION")"
+    test "$(cat RELEASE_VERSION)" = "$(cat "$PROJECT/RELEASE_VERSION")"
     test -f .env.example
     test ! -e .env
     test ! -e secrets

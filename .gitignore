@@ -16,3 +16,6 @@ dist/
 dist-publish/
 validation/
 ROADMAP.md.pre-*
+
+# Local GitHub synchronization checkpoint
+.github-main-sha

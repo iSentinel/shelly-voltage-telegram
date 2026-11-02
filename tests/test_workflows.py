@@ -81,6 +81,17 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn("startsWith(inputs.image_tag, 'v')", text)
 
+    def test_release_requires_public_version_promotion(self):
+        """Final publication must explicitly promote RELEASE_VERSION."""
+        text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+        self.assertIn("< RELEASE_VERSION", text)
+        self.assertIn('[[ "$release_version" == "$version" ]]', text)
+
+    def test_source_archive_requires_release_version(self):
+        """Source release validation must include RELEASE_VERSION."""
+        text = (ROOT / "scripts" / "release.sh").read_text(encoding="utf-8")
+        self.assertIn("VERSION RELEASE_VERSION LIVE_VERSION", text)
+
     def test_release_uses_exact_tag_and_checksum(self):
         text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
         self.assertIn("ref: ${{ steps.tag.outputs.tag }}", text)

@@ -37,6 +37,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
+- Current software candidate: **0.5.6-hw**
 - Current release: **0.5.5-hw**
 - Production deployment: **0.5.4-hw**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
 - Hardware-accepted live checkpoint: **0.5.4-hw**

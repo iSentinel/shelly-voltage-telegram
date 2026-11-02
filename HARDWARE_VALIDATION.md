@@ -400,13 +400,34 @@ to production after the full software, package and hardware gates passed.
 - Telegram was disabled for the isolated runtime;
 - production configuration and database were not modified by the smoke test.
 
+## 2026-11-02 `0.5.4-hw` live hardware acceptance
+
+Production was promoted from `0.5.3-hw` to the exact tested `0.5.4-hw`
+release after pull-request and post-merge CI completed successfully.
+
+Live acceptance on a physical Shelly Pro EM-50 confirmed:
+
+- monitor connectivity remained online at approximately 219 V / 50 Hz;
+- `/ready`, `/health`, `/metrics`, `/status.json` and `/dashboard` passed;
+- `doctor` reported Shelly, SQLite and Telegram status as healthy;
+- SQLite schema remained v3 and `quick_check` returned `ok`;
+- no synthetic `0 V` measurements were present;
+- measurement sampling continued after the container restart;
+- Telegram stable-status and pin continuity were preserved;
+- the hardened container remained non-root, read-only, capability-free and
+  protected with `no-new-privileges`;
+- a verified rollback snapshot was created before the upgrade;
+- the release tag, source archive/checksums and versioned multi-architecture
+  container image were produced from the exact merged release commit;
+- Shelly access remains read-only and no load-control RPC was introduced.
+
 
 Production acceptance after promotion:
 
 - production version and `LIVE_VERSION`: `0.5.4-hw`;
 - container health: healthy;
 - `/ready`: HTTP 200 / online;
-- physical Shelly Pro EM-50: online during the post-promotion check;
+- physical Shelly Pro EM-50: online at approximately 222 V / 50.0 Hz during the post-promotion check;
 - SQLite schema metadata: 3;
 - SQLite `PRAGMA quick_check`: `ok`;
 - open outage records: 0;

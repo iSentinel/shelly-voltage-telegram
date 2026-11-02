@@ -41,10 +41,11 @@ The service is designed as a **monitor only**. It does not switch relays, change
 
 ## Project status
 
+- **Current software candidate: `0.5.6-hw`**
 - **Current release: `0.5.5-hw`**
-- **Production deployment: `0.5.4-hw`**, accepted on a physical Shelly Pro EM-50 after a real mains outage/recovery cycle.
+- **Production deployment: `0.5.4-hw`**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
 - **Hardware-accepted live checkpoint: `0.5.4-hw`**.
-- Native Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested. Physical three-phase validation will follow when the device is installed.
+- Native Shelly Pro 3EM / Pro 3EM-3CT63 support is software-tested; physical three-phase validation follows after device installation.
 
 ## Supported Shelly models
 
@@ -166,7 +167,7 @@ Useful examples:
 - Default recovery confirmation: **2 successful polls**.
 - Invalid/unavailable readings are **not stored as fake `0 V` samples**.
 - Raw history retention is configurable; hourly aggregates are created before pruning.
-- Quiet hours and low-voltage alert thresholds are configurable.
+- Low-voltage thresholds are configurable; low/recovery events are shown in the stable status header instead of separate private messages.
 - Warning/critical thresholds are user settings, not claimed electrical-code limits.
 
 ## HTTP endpoints

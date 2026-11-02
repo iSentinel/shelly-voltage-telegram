@@ -61,7 +61,11 @@ validate_inputs() {
         echo "ERROR: SOURCE_DATE_EPOCH must be a non-negative integer." >&2
         exit 2
     }
-    for file in VERSION LIVE_VERSION app.py Dockerfile compose.yaml requirements.txt README.md; do
+    local required=(
+        VERSION RELEASE_VERSION LIVE_VERSION app.py Dockerfile
+        compose.yaml requirements.txt README.md
+    )
+    for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {
             echo "ERROR: required release file missing: $file" >&2
             exit 3
@@ -87,8 +91,12 @@ copy_public_tree() {
         --exclude='./validation' \
         --exclude='./ROADMAP.md.pre-*' \
         --exclude='./.git' \
+        --exclude='./.github-main-sha' \
         --exclude='./__pycache__' \
         --exclude='*/__pycache__' \
+        --exclude='./.ruff_cache' \
+        --exclude='./.pytest_cache' \
+        --exclude='./.mypy_cache' \
         --exclude='*.pyc' \
         --exclude='*.pyo' \
         --exclude='*.sqlite' \
@@ -116,6 +124,8 @@ assert_public_tree() {
         find . -type f \( \
             -name '.env' -o -path './secrets/*' -o \
             -path './dist-publish/*' -o -path './validation/*' -o \
+            -path './.ruff_cache/*' -o -path './.pytest_cache/*' -o \
+            -path './.mypy_cache/*' -o -name '.github-main-sha' -o \
             -name 'ROADMAP.md.pre-*' -o \
             -name '*.pyc' -o -name '*.pyo' -o \
             -name '*.sqlite' -o -name '*.sqlite3' -o \
