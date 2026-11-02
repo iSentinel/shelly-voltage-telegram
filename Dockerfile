@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py advanced_features.py VERSION ./
+COPY app.py advanced_features.py telegram_i18n.py notification_features.py VERSION ./
 
 RUN useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin app
 
