@@ -60,7 +60,39 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             payload = RECOVERY.baseline_payload(args(path))
             self.assertEqual(payload["status"], "pass")
             self.assertEqual(payload["state"]["outage"]["id"], 7)
-            self.assertEqual(payload["state"]["status_message_id"], "682")
+            self.assertNotIn("status_message_id", payload["state"])
+            self.assertEqual(
+                payload["state"]["status_message_fingerprint"],
+                RECOVERY.status_message_fingerprint("682"),
+            )
+
+    def test_legacy_baseline_message_id_remains_supported(self):
+        baseline = {
+            "state": {
+                "status_message_id": "682",
+                "outage": {
+                    "id": 7,
+                    "started_at": 1.0,
+                    "ended_at": None,
+                    "phase": "L1",
+                },
+                "measurement_count": 1,
+            }
+        }
+        self.assertFalse(RECOVERY.status_message_rotated(baseline, "682"))
+        self.assertFalse(RECOVERY.status_message_rotated(baseline, None))
+        self.assertFalse(RECOVERY.status_message_rotated(baseline, ""))
+        self.assertTrue(RECOVERY.status_message_rotated(baseline, "700"))
+
+    def test_new_baseline_never_serializes_raw_message_id(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "db.sqlite3"
+            create_database(path)
+            payload = RECOVERY.baseline_payload(args(path))
+            text = RECOVERY.json.dumps(payload)
+            self.assertNotIn("status_message_id", text)
+            self.assertNotIn('"682"', text)
+            self.assertIn("status_message_fingerprint", text)
 
     def test_verify_passes_after_recovery_and_rotation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -126,7 +158,9 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                     "phase": "L1",
                 },
                 "measurement_count": 1,
-                "status_message_id": "682",
+                "status_message_fingerprint": (
+                    RECOVERY.status_message_fingerprint("682")
+                ),
             }
         }
         state = {

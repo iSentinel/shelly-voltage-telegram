@@ -396,16 +396,15 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.telegram.send = Mock(return_value=14)
-            monitor.update_status = Mock()
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.replace_voltage_status = Mock(return_value=True)
             monitor.maybe_low_voltage_alert(179.9, 50.0)
             monitor.maybe_low_voltage_alert(175.0, 50.0)
-            self.assertEqual(monitor.update_status.call_count, 1)
+            self.assertEqual(monitor.replace_voltage_status.call_count, 1)
             self.assertEqual(monitor.last_voltage_event[0], "low")
             monitor.maybe_low_voltage_alert(185.0, 50.0)
-            self.assertEqual(monitor.update_status.call_count, 2)
+            self.assertEqual(monitor.replace_voltage_status.call_count, 2)
             self.assertEqual(monitor.last_voltage_event[0], "recovered")
-            monitor.telegram.send.assert_not_called()
             self.assertFalse(monitor.low_voltage_active)
 
     def test_voltage_event_updates_status_channel_not_private_chat(self):
@@ -494,14 +493,13 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.telegram.send = Mock()
-            monitor.update_status = Mock()
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.replace_voltage_status = Mock(return_value=True)
             monitor.maybe_secondary_low("L2", 179.0, 50.0, 100.0)
             self.assertEqual(monitor.last_voltage_event[0], "low")
             self.assertEqual(monitor.last_voltage_event[4], "L2")
             monitor.maybe_secondary_low("L2", 186.0, 50.0, 101.0)
-            self.assertEqual(monitor.update_status.call_count, 2)
-            monitor.telegram.send.assert_not_called()
+            self.assertEqual(monitor.replace_voltage_status.call_count, 2)
             lines = APP.voltage_event_lines(monitor)
             self.assertTrue(
                 lines[0].startswith("✅ L2: Напряжение восстановилось")
@@ -527,6 +525,134 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             text.startswith("✅ Напряжение восстановилось · 07:09")
         )
         self.assertIn("186.1 V · 50.00 Hz", text.splitlines()[1])
+
+    def test_voltage_status_notification_cooldown(self):
+        """Only the first abnormal shared status is loud inside cooldown."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "cooldown.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                    voltage_notification_cooldown_min=5,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(900.0, 260.0, 50.0)
+            monitor.storage.add(900.0, 260.0, 50.0, "L1")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(side_effect=[101, 102, 103])
+            monitor.telegram.delete = Mock()
+            with patch.object(
+                APP.time, "time", side_effect=[1000.0, 1060.0, 1301.0]
+            ):
+                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+                monitor.record_voltage_event("critical_high", 256.0, 50.0)
+                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            notifications = [
+                call.kwargs["notify"]
+                for call in monitor.telegram.send.call_args_list
+            ]
+            self.assertEqual(notifications, [True, False, True])
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "103"
+            )
+            self.assertEqual(monitor.telegram.delete.call_count, 2)
+
+    def test_recovery_shared_status_is_always_silent(self):
+        """Recovery replaces the shared status without making a sound."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-silent.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.state.restore(900.0, 230.0, 50.0)
+            monitor.storage.add(900.0, 230.0, 50.0, "L1")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(return_value=201)
+            monitor.record_voltage_event("recovered", 230.0, 50.0)
+            kwargs = monitor.telegram.send.call_args.kwargs
+            self.assertFalse(kwargs["notify"])
+
+    def test_high_level_alert_routes_to_shared_status(self):
+        """Route high-voltage transitions through shared status."""
+
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                alerts_enabled=True,
+                alert_dwell_sec=0,
+            )
+        )
+        monitor.record_voltage_event = Mock()
+        with patch.object(APP.time, "monotonic", side_effect=[100.0, 100.0]):
+            monitor.maybe_alert(254.0, 50.0)
+            monitor.maybe_alert(254.0, 50.0)
+        monitor.record_voltage_event.assert_called_once_with(
+            "warning_high", 254.0, 50.0
+        )
+
+    def test_failed_status_publish_keeps_previous_message(self):
+        """Keep the old shared status if replacement publishing fails."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "publish-failure.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.set_meta("telegram_status_message_id", "44")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.telegram.send = Mock(side_effect=RuntimeError("failed"))
+            monitor.telegram.delete = Mock()
+            monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            current = monitor.storage.get_meta("telegram_status_message_id")
+            self.assertEqual(current, "44")
+            monitor.telegram.delete.assert_not_called()
+
+    def test_status_replacement_publishes_before_delete(self):
+        """Publish the replacement before deleting the previous status."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "publish-order.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100999",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.set_meta("telegram_status_message_id", "44")
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            calls = []
+            monitor.telegram.send = Mock(
+                side_effect=lambda *args, **kwargs: calls.append("send") or 55
+            )
+            monitor.telegram.delete = Mock(
+                side_effect=lambda *args, **kwargs: calls.append("delete")
+            )
+            monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            self.assertEqual(calls, ["send", "delete"])
+            current = monitor.storage.get_meta("telegram_status_message_id")
+            self.assertEqual(current, "55")
 
 
 class TelegramDestinationTests(unittest.TestCase):
@@ -1328,6 +1454,7 @@ def telegram_config_values() -> dict[str, object]:
         "telegram_silent_default": True,
         "telegram_quiet_start_hour": 23,
         "telegram_quiet_end_hour": 7,
+        "voltage_notification_cooldown_min": 5,
     }
 
 
@@ -1477,16 +1604,15 @@ class AdvancedFeatureTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.telegram.send = Mock(return_value=1)
-            monitor.update_status = Mock()
+            monitor.telegram.quiet_now = Mock(return_value=False)
+            monitor.replace_voltage_status = Mock(return_value=True)
             with patch.object(
                 APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]
             ):
                 monitor.maybe_low_voltage_alert(179.0, 50.0)
                 monitor.maybe_low_voltage_alert(178.0, 50.0)
                 monitor.maybe_low_voltage_alert(177.0, 50.0)
-            monitor.update_status.assert_called_once()
-            monitor.telegram.send.assert_not_called()
+            monitor.replace_voltage_status.assert_called_once()
             self.assertEqual(monitor.last_voltage_event[0], "low")
 
     def test_chart_and_csv_exports(self):
@@ -1741,11 +1867,13 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.update_setting("availability_toggle", "7")
             monitor.update_setting("pin_toggle", "7")
             monitor.update_setting("dwell_inc", "7")
+            monitor.update_setting("cooldown_10", "7")
             self.assertFalse(monitor.daily_summary_enabled)
             self.assertEqual(monitor.daily_summary_hour, 23)
             self.assertTrue(monitor.availability_alerts_enabled)
             self.assertTrue(monitor.pin_status)
             self.assertEqual(monitor.alert_dwell, 20.0)
+            self.assertEqual(monitor.notification_cooldown_min, 10)
 
     def test_channel_status_has_read_only_buttons(self):
         monitor = APP.Monitor(

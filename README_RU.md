@@ -42,9 +42,9 @@
 ## Статус проекта
 
 - Текущий software candidate: **`0.5.6-hw`**.
-- Текущий публичный релиз: **`0.5.5-hw`**.
-- Production использует **`0.5.4-hw`** и прошёл аппаратную проверку на физическом Shelly Pro EM-50 после обновления.
-- Аппаратно подтверждённый live checkpoint: **`0.5.4-hw`**.
+- Текущий публичный релиз: **`0.5.6-hw`**.
+- Production использует **`0.5.6-hw`** и прошёл аппаратную проверку на физическом Shelly Pro EM-50 после восстановления питания и обновления.
+- Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
 - Поддержка Shelly Pro 3EM / Pro 3EM-3CT63 реализована и проверена программно; физическая трёхфазная проверка будет выполнена после установки устройства.
 
 ## Поддерживаемые Shelly
@@ -70,10 +70,10 @@
 
 ```mermaid
 flowchart LR
-    S1["Shelly / L1"] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
-    S2["Опциональный L2"] -->|read-only RPC| BOT
-    S3["Опциональный L3"] -->|read-only RPC| BOT
-    P3["Pro 3EM / 3CT63"] -->|A/B/C одним EM.GetStatus| BOT
+    S1[Shelly / L1] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
+    S2[Опциональный L2] -->|read-only RPC| BOT
+    S3[Опциональный L3] -->|read-only RPC| BOT
+    P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT
     BOT --> DB[("SQLite WAL")]
     BOT --> TG["Telegram Bot API"]
     BOT --> HTTP["health / ready / metrics / dashboard"]
@@ -81,6 +81,23 @@ flowchart LR
 ```
 
 Для Pro 3EM в режиме `triphase` один цикл опроса раскладывает **A → L1**, **B → L2**, **C → L3** с общей временной меткой.
+
+## Уведомления о напряжении в общем статусе
+
+Пониженное и повышенное напряжение публикуются как новая версия общего
+Telegram status-сообщения, а не отдельными alert-сообщениями. Сначала бот
+публикует новый status и только после успешной публикации удаляет предыдущий.
+
+Первый ненормальный status может прийти с обычным звуковым уведомлением.
+Следующие ненормальные status-сообщения внутри cooldown публикуются тихо.
+Восстановление всегда тихое, а ночной режим по-прежнему принудительно
+отключает звук у всех сообщений. Cooldown считается от последнего громкого
+voltage status и не продлевается тихими обновлениями.
+
+По умолчанию cooldown равен 5 минутам. Администратор может выбрать `Off`, `3`,
+`5` или `10` минут через `/settings`. Значение хранится в SQLite и применяется
+без перезапуска. Deployment default задаётся через
+`VOLTAGE_NOTIFICATION_COOLDOWN_MIN`.
 
 ## Быстрая установка
 
@@ -225,6 +242,7 @@ sudo ./scripts/rollback.sh --dry-run
 ```
 
 JSON-отчёты recovery verification и promotion не выводят deployment-specific текст сетевых ошибок и сырой Telegram `message_id`.
+Новые recovery baseline сохраняют SHA-256 fingerprint Telegram status message ID вместо сырого ID. Старые baseline-файлы остаются совместимыми.
 
 Все пользовательские скрипты поддерживают `-h` / `--help`.
 
@@ -247,10 +265,10 @@ JSON-отчёты recovery verification и promotion не выводят deploym
 ## Docker image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.5-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.6-hw
 ```
 
-Образ выпускается для `linux/amd64` и `linux/arm64` с SBOM и provenance metadata. В релизе `0.5.5-hw` versioned GHCR-образы также подписываются keyless-подписью Sigstore Cosign.
+Образ выпускается для `linux/amd64` и `linux/arm64` с SBOM и provenance metadata. Versioned GHCR-образы подписываются keyless-подписью Sigstore Cosign.
 
 
 ## Roadmap

@@ -317,7 +317,7 @@ Acceptance evidence:
 - Persist channel status message independently as `telegram_status_message_id`.
 - Doctor validates both destinations.
 - Live target channel verified by Bot API before candidate promotion.
-- Promoted to live CT110. Bot API validated the channel destination; a channel status message was created as `telegram_status_message_id=675` and remained `675` across subsequent update cycles, confirming in-place editing. Private control chat and admin `/settings` remain separate.
+- Promoted to live CT110. Bot API validated the channel destination and the persisted channel status remained stable across subsequent update cycles, confirming in-place editing. Private control chat and admin `/settings` remain separate.
 
 ## `0.5.0-hw` three-phase + full feature candidate — SOFTWARE ACCEPTED / HARDWARE WAIT
 
@@ -448,14 +448,14 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Final `v0.5.5-hw` publication completed: Source Release run `41373981210` and signed Container Image run `41373982691` succeeded from exact tag source `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; final image digest is `sha256:c2115def9975dcfbb4a722d08713450403f53beaa01e6c54fec75962d82ce47a`, independently verified through Gateway.
 
 
-## `0.5.6-hw` Pro 3EM acceptance tooling — SOFTWARE CANDIDATE
+## `0.5.6-hw` Pro EM-50 live acceptance + Pro 3EM tooling — HARDWARE ACCEPTED
 
 Current hardware gates:
 
-- **Current Pro EM-50 deployment:** wait for the active outage to recover, run `recovery-acceptance.py verify`, confirm read-only Shelly probe and Telegram status behavior, then `0.5.6-hw` may be promoted.
+- **Current Pro EM-50 deployment:** recovery acceptance, read-only hardware probe, Telegram continuity and post-promotion soak all PASS; `0.5.6-hw` is live and hardware accepted.
 - **Future Pro 3EM / 3CT63 backend:** keep disabled in production until the physical three-phase meter is installed and the dedicated acceptance CLI plus L1/L2/L3 UI/data checks pass.
 
-- Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.4-hw`.
+- Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.6-hw`.
 - Final release publication is fail-closed until `RELEASE_VERSION` is explicitly promoted to match `VERSION`.
 - Add standalone read-only `scripts/pro3em-acceptance.py` for physical Pro 3EM / Pro 3EM-3CT63 acceptance.
 - Reuse the existing Digest-auth `Pro3EMClient`; the acceptance path issues only `EM.GetStatus?id=0` measurement RPCs.
@@ -464,6 +464,7 @@ Current hardware gates:
 - Route low-voltage/recovery transitions for L1/L2/L3 into the stable Telegram status header, including phase (for L2/L3), event time, measured voltage and frequency; do not send duplicate private messages.
 - Add read-only `scripts/recovery-acceptance.py` with `baseline` and `verify` modes for real blackout/recovery acceptance. It checks the same outage closes, the stable Telegram status rotates, `/ready` becomes healthy, valid samples increase and synthetic `0 V` remains absent.
 - Recovery verification matches the exact captured outage by ID, phase and start time, and verification/promotion JSON redacts raw connection error text and Telegram status message IDs.
+- New recovery baselines persist only a status-message fingerprint instead of the raw Telegram `message_id`; legacy baseline files remain compatible.
 - Add read-only `scripts/promotion-check.py` as the single pre-promotion gate. It reuses recovery verification, requires the live service version to match `LIVE_VERSION`, and fails closed unless the active backend remains `pro_em50`.
 - Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed; this blocks only switching production to the `pro3em` backend, not promotion of the 0.5.6 software on the current Pro EM-50.
 
@@ -472,7 +473,7 @@ Software acceptance checkpoint:
 
 - Ruff 0.14.2 formatting/lint and project quality rules PASS.
 - Local and GitHub quality checks now use the same pinned `scripts/quality.sh` gate, preventing format/lint drift.
-- 131/131 Python tests PASS with the ResourceWarning gate enabled.
+- 138/138 Python tests PASS with the ResourceWarning gate enabled.
 - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
   redaction, pinned-release installer and Compose validation PASS.
 - Reproducible source release PASS and excludes Python tool caches.
@@ -485,5 +486,72 @@ Software acceptance checkpoint:
 - Real blackout-soak acceptance PASS: the active outage remains a single record, no measurements are inserted while offline, stable Telegram status is not rotated and synthetic `0 V` remains absent.
 - Pro 3EM acceptance CLI end-to-end HTTP smoke PASS for three atomic
   L1/L2/L3 cycles.
-- Promotion on the current Pro EM-50 is blocked only until the active blackout recovers and the captured recovery baseline verifies successfully; then run a read-only Pro EM-50 probe and Telegram status acceptance before promotion.
+- Promotion on the current Pro EM-50 PASS: the captured outage closed, recovery baseline verified, read-only hardware probe passed, and Telegram/status continuity passed before and after promotion.
 - Switching production to the `pro3em` backend remains blocked until the real Pro 3EM / 3CT63 is installed and L1/L2/L3 mapping, outage behavior, Telegram presentation, charts, exports and metrics pass on physical three-phase data.
+
+### 2026-11-02 blackout operational checkpoint (historical pre-recovery)
+
+- Shared quality gate PASS and 138/138 Python tests PASS.
+- Installer, rollback, support-bundle and reproducible-release fixtures PASS.
+- Live promotion gate fails closed while outage 4 remains open.
+- Active recovery baseline now stores only a Telegram status-message fingerprint;
+  no raw Telegram message ID is stored in the refreshed baseline.
+- Compose service and backup timer are enabled and active; runtime container is
+  healthy with zero restarts.
+- Latest backup checksum and SQLite quick_check PASS; live SQLite quick_check PASS.
+- Backup and live history contain zero synthetic 0 V measurements.
+- Promotion remains blocked only by real Shelly recovery; the Pro 3EM backend
+  remains separately blocked until physical three-phase hardware is installed.
+
+## `0.5.6-hw` shared voltage-status notification cooldown
+
+- Low/high warning and critical transitions no longer create separate Telegram
+  alert messages; they replace the shared status message.
+- Replacement is publish-first/delete-old so a publish failure keeps the
+  previous status visible.
+- First abnormal status may notify normally; subsequent abnormal replacements
+  are silent for the configured cooldown. Recovery is always silent.
+- Cooldown is measured from the last loud voltage status and silent updates do
+  not extend it.
+- Runtime choices: Off / 3 / 5 / 10 minutes; default 5 minutes.
+- `/settings` persists the selection in SQLite and applies it immediately.
+- Quiet hours remain authoritative and force silence.
+- Software validation: quality gate PASS, 138/138 Python tests PASS.
+- Hardware promotion PASS after outage #4 closed and recovery verification passed.
+
+### 2026-11-02 `0.5.6-hw` live hardware acceptance
+
+- Outage #4 closed on the physical Pro EM-50 and the captured recovery baseline
+  verified PASS.
+- `promotion-check.py --json` PASS with `pro_em50` and read-only guard active.
+- Production promoted from `0.5.4-hw` to `0.5.6-hw`; rollback snapshot
+  `20261102-212042-0.5.4-hw` source and SQLite checksums PASS.
+- Post-promotion `doctor` PASS for Shelly, SQLite and Telegram.
+- Container healthy/ready with physical voltage sampling resumed.
+- SQLite continuity PASS: four closed outages, zero open outages, quick_check=ok,
+  zero synthetic 0 V rows, measurement history increasing.
+- Telegram shared status continuity PASS across promotion and restart; the persisted identifier remained stable without being exposed in release documentation.
+- Runtime cooldown default is 5 minutes; `/settings` exposes Off/3/5/10.
+- Restart continuity PASS with the same status ID and no duplicate outage.
+- `LIVE_VERSION` promoted to `0.5.6-hw`; `RELEASE_VERSION` remains `0.5.5-hw`
+  until public release publication completes.
+- Pro 3EM production backend remains blocked until physical three-phase hardware
+  acceptance is performed.
+
+
+### 2026-11-02 post-promotion live checkpoint
+
+- Outage 4 recovery verification PASS with the same captured outage identity.
+- Read-only physical Pro EM-50 probe PASS before promotion.
+- Safe installer promotion from `0.5.4-hw` to `0.5.6-hw` PASS with a verified
+  pre-upgrade source + SQLite rollback snapshot.
+- `VERSION=0.5.6-hw` and `LIVE_VERSION=0.5.6-hw`; public
+  `RELEASE_VERSION=0.5.5-hw` remains intentionally separate.
+- Level alerts are enabled on the live deployment and voltage notification
+  cooldown defaults to 5 minutes.
+- Post-promotion container health PASS with zero restarts, `/ready` PASS,
+  Telegram failures zero and no warning/error logs in the acceptance window.
+- SQLite `quick_check` PASS; outage count remains four with no open duplicate;
+  synthetic `0 V` rows remain zero.
+- Public `0.5.6-hw` release is the next release stage. Physical Pro 3EM /
+  3CT63 acceptance remains blocked until that hardware is installed.

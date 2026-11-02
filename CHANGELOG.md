@@ -1,4 +1,4 @@
-## 0.5.6-hw - Pro 3EM physical acceptance tooling candidate
+## 0.5.6-hw - Pro EM-50 live acceptance and shared status alerts
 
 - Add a standalone read-only Pro 3EM / 3CT63 acceptance CLI.
 - Reuse the existing Digest-auth `Pro3EMClient`; do not initialize Telegram or SQLite.
@@ -8,7 +8,7 @@
 - Physical three-phase acceptance remains pending until the meter is installed.
 - Add independent `RELEASE_VERSION` metadata and fail-closed final publication until it matches `VERSION`.
 - Exclude `.ruff_cache`, `.pytest_cache` and `.mypy_cache` from public source archives.
-- Software acceptance completed with 131/131 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
+- Software and live acceptance completed with 138/138 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
 - End-to-end Pro 3EM HTTP acceptance smoke passed for three atomic L1/L2/L3 cycles; real three-phase hardware acceptance remains pending.
 - Low-voltage and recovery transitions now appear at the top of the stable status message with event time, voltage and frequency instead of being sent as separate private messages.
 - Apply the same stable-header low/recovery policy to L2/L3, persist the phase with backward-compatible L1 restore, and clear stale phase events when that phase goes offline.
@@ -20,6 +20,16 @@
 - Add one shared `scripts/quality.sh` gate for local development and CI, pinning Ruff 0.14.2 so formatting/lint rules cannot drift between environments.
 - Redact deployment-specific connection error text and raw Telegram status message IDs from recovery/promotion verification output while preserving internal comparisons.
 - Require recovery verification to match the exact captured outage by ID, phase and start timestamp before accepting closure.
+- New recovery baselines store only a SHA-256 fingerprint of the Telegram status message ID; legacy baselines with the raw ID remain supported for in-progress outages.
+- Warning/critical low and high voltage transitions now replace the shared
+  Telegram status instead of creating separate alert messages.
+- Publish the new voltage status before deleting the previous one, preserving
+  the previous status if Telegram publication fails.
+- Add a configurable sound cooldown with Off / 3 / 5 / 10 minute runtime
+  choices; default 5 minutes, recovery stays silent and quiet hours override.
+- Promote `0.5.6-hw` to the physical Pro EM-50 deployment after blackout
+  recovery, read-only probe, Telegram continuity, SQLite and restart checks
+  passed. Public `0.5.6-hw` publication remains a separate release step.
 
 ## 0.5.5-hw - supply-chain signing candidate
 

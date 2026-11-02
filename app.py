@@ -108,6 +108,7 @@ class Config:
     telegram_silent_default: bool
     telegram_quiet_start_hour: int
     telegram_quiet_end_hour: int
+    voltage_notification_cooldown_min: int
     low_voltage_alert_enabled: bool
     low_voltage_alert_v: float
     low_voltage_recovery_v: float
@@ -184,6 +185,9 @@ def telegram_policy_settings() -> dict[str, object]:
         ),
         "telegram_quiet_end_hour": int(
             os.getenv("TELEGRAM_QUIET_END_HOUR", "7")
+        ),
+        "voltage_notification_cooldown_min": int(
+            os.getenv("VOLTAGE_NOTIFICATION_COOLDOWN_MIN", "5")
         ),
         "low_voltage_alert_enabled": env_bool(
             "LOW_VOLTAGE_ALERT_ENABLED", True
@@ -354,6 +358,10 @@ def validate_telegram_config(cfg: Config) -> None:
     hours = (cfg.telegram_quiet_start_hour, cfg.telegram_quiet_end_hour)
     if any(hour < 0 or hour > 23 for hour in hours):
         raise ValueError("Telegram quiet hours must be between 0 and 23")
+    if not 0 <= cfg.voltage_notification_cooldown_min <= 60:
+        raise ValueError(
+            "VOLTAGE_NOTIFICATION_COOLDOWN_MIN must be between 0 and 60"
+        )
     if cfg.low_voltage_recovery_v <= cfg.low_voltage_alert_v:
         raise ValueError(
             "LOW_VOLTAGE_RECOVERY_V must exceed LOW_VOLTAGE_ALERT_V"
@@ -1399,18 +1407,25 @@ def phase_line(monitor: Monitor, phase: str) -> str:
 
 
 def voltage_event_lines(monitor: Monitor) -> list[str]:
-    """Render the latest low-voltage transition above the stable status."""
+    """Render the latest voltage transition above the stable status."""
 
     event = monitor.last_voltage_event
     if event is None:
         return []
     kind, voltage, frequency, happened_at, phase = event
     phase_prefix = "" if phase == "L1" else f"{phase}: "
-    title = (
-        f"🚨 {phase_prefix}Низкое напряжение сети"
-        if kind == "low"
-        else f"✅ {phase_prefix}Напряжение восстановилось"
-    )
+    titles = {
+        "low": "🚨 Низкое напряжение сети",
+        "warning_low": "⚠️ Пониженное напряжение",
+        "critical_low": "🚨 Критически пониженное напряжение",
+        "warning_high": "⚠️ Повышенное напряжение",
+        "critical_high": "🚨 Критически повышенное напряжение",
+        "recovered": "✅ Напряжение восстановилось",
+    }
+    title = titles.get(kind, titles["recovered"])
+    if phase_prefix:
+        icon, _, rest = title.partition(" ")
+        title = f"{icon} {phase_prefix}{rest}"
     zone = ZoneInfo(monitor.cfg.timezone)
     when = datetime.fromtimestamp(happened_at, zone).strftime("%H:%M")
     return [
@@ -1497,6 +1512,7 @@ class Monitor:
 
         cfg = self.cfg
         self.low_voltage_alert_enabled = cfg.low_voltage_alert_enabled
+        self.notification_cooldown_min = cfg.voltage_notification_cooldown_min
         self.low_voltage_alert_v = cfg.low_voltage_alert_v
         self.low_voltage_recovery_v = cfg.low_voltage_recovery_v
         self.alerts_enabled = cfg.alerts_enabled
@@ -1737,9 +1753,11 @@ class Monitor:
             return
         self.phase_alert_levels[phase] = level
         self.phase_alert_candidates.pop(phase, None)
-        self.telegram.send(
-            f"⚠️ {phase}: {level} · {voltage:.1f} V / {frequency:.2f} Hz"
-        )
+        kind = "recovered"
+        if level != "normal":
+            side = "high" if voltage >= self.warning_high else "low"
+            kind = f"{level}_{side}"
+        self.record_voltage_event(kind, voltage, frequency, phase)
 
     def initialize(self) -> None:
         """Initialize storage and start health service."""
@@ -2105,6 +2123,65 @@ class Monitor:
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             logger.warning("Ignoring invalid stored voltage event metadata")
 
+    def voltage_event_notify_allowed(self, kind: str, now: float) -> bool:
+        """Return whether an abnormal status replacement may make sound."""
+
+        if kind == "recovered" or self.telegram.quiet_now():
+            return False
+        if self.notification_cooldown_min <= 0:
+            return True
+        raw = self.storage.get_meta("last_voltage_notification_at")
+        if not raw:
+            return True
+        try:
+            previous = float(raw)
+        except ValueError:
+            return True
+        return now - previous >= self.notification_cooldown_min * 60
+
+    def replace_voltage_status(self, notify: bool, happened_at: float) -> bool:
+        """Publish a new status, then remove the previous status message."""
+
+        key = self.status_message_key()
+        old_id = self.storage.get_meta(key)
+        try:
+            new_id = self.telegram.send(
+                multiphase_status_text(self),
+                notify=notify,
+                reply_markup=self.status_keyboard(),
+                chat_id=self.telegram.status_chat_id,
+            )
+        except Exception as exc:
+            logger.warning("Telegram voltage status publish failed: {}", exc)
+            return False
+        self.storage.set_meta(key, str(new_id))
+        if notify:
+            self.storage.set_meta(
+                "last_voltage_notification_at", str(happened_at)
+            )
+        self.delete_previous_voltage_status(old_id, new_id)
+        self.storage.delete_meta("telegram_status_pinned_id")
+        self.ensure_status_pinned(new_id)
+        snap = self.state.snapshot()
+        self.last_sent_voltage = snap["voltage"]
+        self.last_sent_connectivity = str(snap["connectivity"])
+        self.last_telegram = time.monotonic()
+        return True
+
+    def delete_previous_voltage_status(
+        self, old_id: str | None, new_id: int
+    ) -> None:
+        """Delete the previous shared status after the replacement exists."""
+
+        if not old_id or str(new_id) == old_id:
+            return
+        try:
+            self.telegram.delete(int(old_id), self.telegram.status_chat_id)
+        except Exception as exc:
+            logger.warning(
+                "Telegram old voltage status delete failed: {}", exc
+            )
+
     def record_voltage_event(
         self,
         kind: str,
@@ -2112,7 +2189,7 @@ class Monitor:
         frequency: float,
         phase: str = "L1",
     ) -> None:
-        """Store a voltage transition and refresh the stable status header."""
+        """Store a voltage event and replace the shared Telegram status."""
 
         happened_at = time.time()
         self.last_voltage_event = (
@@ -2130,8 +2207,10 @@ class Monitor:
             "phase": phase,
         }
         self.storage.set_meta("last_voltage_event", json.dumps(payload))
-        self.last_telegram = 0.0
-        self.update_status()
+        if not self.telegram.enabled:
+            return
+        notify = self.voltage_event_notify_allowed(kind, happened_at)
+        self.replace_voltage_status(notify, happened_at)
 
     def maybe_low_voltage_alert(
         self, voltage: float, frequency: float
@@ -2189,12 +2268,11 @@ class Monitor:
             return
         self.alert_level = level
         self.alert_candidate = None
-        label = {
-            "normal": "✅ Напряжение вернулось в норму",
-            "warning": "⚠️ Предупреждение по напряжению",
-            "critical": "🚨 Критическое напряжение",
-        }[level]
-        self.telegram.send(f"{label}\n\n{voltage:.1f} V\n{frequency:.2f} Hz")
+        kind = "recovered"
+        if level != "normal":
+            side = "high" if voltage >= self.warning_high else "low"
+            kind = f"{level}_{side}"
+        self.record_voltage_event(kind, voltage, frequency)
 
     def maintenance_active(self) -> bool:
         """Return whether alert delivery is temporarily suppressed."""
@@ -2341,6 +2419,7 @@ class Monitor:
             "meter_type": self.cfg.shelly_meter_type,
             "silent": "1" if self.cfg.telegram_silent_default else "0",
             "quiet_enabled": "1",
+            "notify_cooldown": str(self.cfg.voltage_notification_cooldown_min),
             "quiet_start": str(self.cfg.telegram_quiet_start_hour),
             "quiet_end": str(self.cfg.telegram_quiet_end_hour),
             "low_enabled": "1" if self.cfg.low_voltage_alert_enabled else "0",
@@ -2380,6 +2459,9 @@ class Monitor:
         )
         self.telegram.quiet_start_hour = int(self.setting_value("quiet_start"))
         self.telegram.quiet_end_hour = int(self.setting_value("quiet_end"))
+        self.notification_cooldown_min = int(
+            self.setting_value("notify_cooldown")
+        )
         self.low_voltage_alert_enabled = (
             self.setting_value("low_enabled") == "1"
         )
@@ -2405,17 +2487,35 @@ class Monitor:
 
         return user_id in self.cfg.telegram_admin_user_ids
 
+    def settings_state_labels(self) -> dict[str, str]:
+        """Return short labels used by the Telegram settings view."""
+
+        cooldown = (
+            f"{self.notification_cooldown_min} мин"
+            if self.notification_cooldown_min
+            else "OFF"
+        )
+        return {
+            "silent": (
+                "тихие" if self.telegram.silent_default else "со звуком"
+            ),
+            "quiet": "ON" if self.telegram.quiet_enabled else "OFF",
+            "low": "ON" if self.low_voltage_alert_enabled else "OFF",
+            "levels": "ON" if self.alerts_enabled else "OFF",
+            "maintenance": "ON" if self.maintenance_active() else "OFF",
+            "availability": (
+                "ON" if self.availability_alerts_enabled else "OFF"
+            ),
+            "summary": "ON" if self.daily_summary_enabled else "OFF",
+            "pin": "ON" if self.pin_status else "OFF",
+            "cooldown": cooldown,
+        }
+
     def settings_text(self) -> str:
         """Render the current Telegram notification policy."""
+
+        labels = self.settings_state_labels()
         meter_name = METER_MODELS.get(self.meter_type, self.meter_type)
-        silent = "тихие" if self.telegram.silent_default else "со звуком"
-        quiet = "ON" if self.telegram.quiet_enabled else "OFF"
-        low = "ON" if self.low_voltage_alert_enabled else "OFF"
-        levels = "ON" if self.alerts_enabled else "OFF"
-        maintenance = "ON" if self.maintenance_active() else "OFF"
-        availability = "ON" if self.availability_alerts_enabled else "OFF"
-        summary = "ON" if self.daily_summary_enabled else "OFF"
-        pin = "ON" if self.pin_status else "OFF"
         l2 = "ON" if self.phase_configured("L2") else "—"
         l3 = "ON" if self.phase_configured("L3") else "—"
         quiet_hours = (
@@ -2430,17 +2530,20 @@ class Monitor:
             "⚙️ Настройки бота",
             "",
             f"📟 Модуль: {meter_name}",
-            f"🔕 Обычные сообщения: {silent}",
-            f"🌙 Ночной режим: {quiet} {quiet_hours}",
-            f"🚨 Низкое напряжение: {low} < {self.low_voltage_alert_v:g} V",
+            f"🔕 Обычные сообщения: {labels['silent']}",
+            f"🌙 Ночной режим: {labels['quiet']} {quiet_hours}",
+            f"🔔 Cooldown voltage alerts: {labels['cooldown']}",
+            f"🚨 Низкое напряжение: {labels['low']} "
+            f"< {self.low_voltage_alert_v:g} V",
             f"✅ Сброс тревоги: ≥ {self.low_voltage_recovery_v:g} V",
-            f"⚠️ Уровни: {levels} {voltage_range}",
-            f"🛠 Maintenance: {maintenance}",
+            f"⚠️ Уровни: {labels['levels']} {voltage_range}",
+            f"🛠 Maintenance: {labels['maintenance']}",
             f"🔌 Фазы: L1 ON · L2 {l2} · L3 {l3}",
-            f"🔌 Outage alerts: {availability}",
-            f"📅 Сводка: {summary} "
-            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}",
-            f"📌 Pin status: {pin}",
+            f"🔌 Outage alerts: {labels['availability']}",
+            f"📅 Сводка: {labels['summary']} "
+            f"{self.daily_summary_hour:02d}:"
+            f"{self.daily_summary_minute:02d}",
+            f"📌 Pin status: {labels['pin']}",
             f"⏳ Dwell: {self.alert_dwell:g}s / "
             f"recovery {self.recovery_dwell:g}s",
         ]
@@ -2479,6 +2582,14 @@ class Monitor:
         return [
             [button("🔕 Тихие ON/OFF", "silent_toggle")],
             [button("🌙 Ночь ON/OFF", "quiet_toggle")],
+            [
+                button("🔔 Cooldown OFF", "cooldown_0"),
+                button("3 мин", "cooldown_3"),
+            ],
+            [
+                button("5 мин", "cooldown_5"),
+                button("10 мин", "cooldown_10"),
+            ],
             [
                 button("◀ Начало -1ч", "start_dec"),
                 button("Начало +1ч ▶", "start_inc"),
@@ -2594,6 +2705,12 @@ class Monitor:
         if action in toggles:
             key = toggles[action]
             values[key] = "0" if values[key] == "1" else "1"
+            return True
+        if action.startswith("cooldown_"):
+            minutes = action.removeprefix("cooldown_")
+            if minutes not in {"0", "3", "5", "10"}:
+                raise ValueError("unsupported notification cooldown")
+            values["notify_cooldown"] = minutes
             return True
         if action not in {"start_dec", "start_inc", "end_dec", "end_inc"}:
             return False
