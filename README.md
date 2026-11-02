@@ -54,12 +54,12 @@ The Shelly model is selected from the administrator `/settings` menu. Network ad
 
 ```mermaid
 flowchart LR
-    S[Shelly meter] -->|read-only RPC| B[Shelly Voltage Telegram]
-    P[Pro 3EM A/B/C] -->|one EM.GetStatus| B
-    B --> D[(SQLite WAL)]
-    B --> T[Telegram]
-    B --> H[/health · /ready · /metrics · /dashboard]
-    B --> R[Backups + support bundle]
+    S["Shelly meter"] -->|read-only RPC| B["Shelly Voltage Telegram"]
+    P["Pro 3EM A/B/C"] -->|one EM.GetStatus| B
+    B --> D[("SQLite WAL")]
+    B --> T["Telegram"]
+    B --> H["health / ready / metrics / dashboard"]
+    B --> R["Backups + support bundle"]
 ```
 
 ## Install in one command
