@@ -80,6 +80,74 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                 payload = RECOVERY.verify_payload(verify_args)
             self.assertEqual(payload["status"], "pass")
 
+    def test_verify_redacts_deployment_specific_health_details(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "db.sqlite3"
+            create_database(path)
+            baseline = RECOVERY.baseline_payload(args(path))
+            verify_args = args(path)
+            baseline_path = Path(directory) / "baseline.json"
+            baseline_path.write_text(RECOVERY.json.dumps(baseline))
+            verify_args.baseline = baseline_path
+            marker = "private-host-marker"
+            responses = [
+                (
+                    200,
+                    {
+                        "version": "0.5.4-hw",
+                        "connectivity": "offline",
+                        "last_error": f"cannot connect to {marker}",
+                        "phases": {
+                            "L1": {
+                                "connectivity": "offline",
+                                "last_error": marker,
+                            }
+                        },
+                    },
+                ),
+                (503, {"ready": False, "reason": "shelly offline"}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                payload = RECOVERY.verify_payload(verify_args)
+            text = RECOVERY.json.dumps(payload)
+            self.assertNotIn(marker, text)
+            self.assertNotIn("last_error", text)
+            self.assertNotIn("status_message_id", text)
+            self.assertTrue(payload["state"]["status_message_present"])
+            self.assertFalse(payload["state"]["status_message_rotated"])
+
+    def test_outage_identity_includes_start_and_phase(self):
+        baseline = {
+            "state": {
+                "outage": {
+                    "id": 7,
+                    "started_at": 1.0,
+                    "ended_at": None,
+                    "phase": "L1",
+                },
+                "measurement_count": 1,
+                "status_message_id": "682",
+            }
+        }
+        state = {
+            "quick_check": "ok",
+            "zero_voltage_rows": 0,
+            "measurement_count": 2,
+            "status_message_id": "700",
+            "outage": {
+                "id": 7,
+                "started_at": 2.0,
+                "ended_at": 3.0,
+                "phase": "L2",
+            },
+        }
+        errors = RECOVERY.recovery_errors(
+            baseline, state, {"connectivity": "online"}
+        )
+        self.assertIn(
+            "latest outage does not match the captured outage", errors
+        )
+
     def test_verify_fails_while_outage_is_open(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "db.sqlite3"

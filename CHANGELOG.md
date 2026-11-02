@@ -8,7 +8,7 @@
 - Physical three-phase acceptance remains pending until the meter is installed.
 - Add independent `RELEASE_VERSION` metadata and fail-closed final publication until it matches `VERSION`.
 - Exclude `.ruff_cache`, `.pytest_cache` and `.mypy_cache` from public source archives.
-- Software acceptance completed with 129/129 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
+- Software acceptance completed with 131/131 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
 - End-to-end Pro 3EM HTTP acceptance smoke passed for three atomic L1/L2/L3 cycles; real three-phase hardware acceptance remains pending.
 - Low-voltage and recovery transitions now appear at the top of the stable status message with event time, voltage and frequency instead of being sent as separate private messages.
 - Apply the same stable-header low/recovery policy to L2/L3, persist the phase with backward-compatible L1 restore, and clear stale phase events when that phase goes offline.
@@ -18,6 +18,8 @@
 - Hide stale last-good voltage from the local dashboard while a phase is `starting` or `offline`; show the newest valid value only in `recovering`/`online`.
 - Hide stale voltage/frequency from Telegram stable status while a phase is offline; recovering state shows only the newly received valid sample.
 - Add one shared `scripts/quality.sh` gate for local development and CI, pinning Ruff 0.14.2 so formatting/lint rules cannot drift between environments.
+- Redact deployment-specific connection error text and raw Telegram status message IDs from recovery/promotion verification output while preserving internal comparisons.
+- Require recovery verification to match the exact captured outage by ID, phase and start timestamp before accepting closure.
 
 ## 0.5.5-hw - supply-chain signing candidate
 
