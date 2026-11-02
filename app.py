@@ -59,6 +59,8 @@ def read_version() -> str:
 
 VERSION = read_version()
 SCHEMA_VERSION = 3
+RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
+RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
 STOP = threading.Event()
 
 
@@ -1523,11 +1525,13 @@ def instability_lines(monitor: Monitor) -> list[str]:
     return ["", tr(monitor.language, "unstable", count=count)]
 
 
-def multiphase_status_text(monitor: Monitor) -> str:
+def multiphase_status_text(
+    monitor: Monitor, include_event_context: bool = True
+) -> str:
     """Render a localized three-phase shared status."""
 
     lang = monitor.language
-    lines = voltage_event_lines(monitor)
+    lines = voltage_event_lines(monitor) if include_event_context else []
     lines.extend([tr(lang, "network_title"), ""])
     lines.extend(phase_line(monitor, p) for p in ("L1", "L2", "L3"))
     l1 = monitor.state.snapshot()
@@ -1556,7 +1560,8 @@ def multiphase_status_text(monitor: Monitor) -> str:
             )
         )
     lines.extend(instability_lines(monitor))
-    lines.extend(voltage_episode_summary_lines(monitor))
+    if include_event_context:
+        lines.extend(voltage_episode_summary_lines(monitor))
     lines.append(tr(lang, "last_l1", stamp=format_time(ts, monitor.cfg)))
     return "\n".join(lines)
 
@@ -1906,6 +1911,7 @@ class Monitor:
         self.storage.delete_meta("last_voltage_event")
         self.storage.delete_meta("voltage_episode")
         self.storage.delete_meta("voltage_status_edit_window_started_at")
+        self.storage.delete_meta(RECOVERY_STATUS_STABLE_KEY)
 
     def record_poll_failure(self, exc: Exception) -> None:
         """Record one failed poll and persist an offline transition."""
@@ -2377,6 +2383,82 @@ class Monitor:
             if not message_not_modified(exc):
                 logger.warning("Telegram episode summary edit failed: {}", exc)
 
+    def track_recovery_stability(self, kind: str, happened_at: float) -> None:
+        """Start or cancel the stable-recovery replacement timer."""
+
+        if kind == "recovered":
+            self.storage.set_meta(RECOVERY_STATUS_STABLE_KEY, str(happened_at))
+            return
+        self.storage.delete_meta(RECOVERY_STATUS_STABLE_KEY)
+
+    def all_voltage_phases_normal(self) -> bool:
+        """Return true when every configured phase is online and normal."""
+
+        for state in self.phase_states.values():
+            snap = state.snapshot()
+            if str(snap["connectivity"]) != "online":
+                return False
+            if snap["voltage"] is None:
+                return False
+            voltage = float(snap["voltage"])
+            if voltage < self.low_voltage_recovery_v:
+                return False
+            if self.runtime_voltage_level(voltage) != "normal":
+                return False
+        return True
+
+    def stable_recovery_status_due(self, now: float) -> bool:
+        """Return true after 15 unchanged minutes in recovered state."""
+
+        raw = self.storage.get_meta(RECOVERY_STATUS_STABLE_KEY)
+        if not raw or not self.last_voltage_event:
+            return False
+        if self.last_voltage_event[0] != "recovered":
+            return False
+        try:
+            started_at = float(raw)
+        except ValueError:
+            self.storage.delete_meta(RECOVERY_STATUS_STABLE_KEY)
+            return False
+        if now - started_at < RECOVERY_STATUS_STABLE_SECONDS:
+            return False
+        return self.all_voltage_phases_normal()
+
+    def clear_stable_recovery_context(self) -> None:
+        """Clear transient recovery text after stable status replacement."""
+
+        self.last_voltage_event = None
+        self.storage.delete_meta("last_voltage_event")
+        self.storage.delete_meta("voltage_episode")
+        self.storage.delete_meta("voltage_status_edit_window_started_at")
+        self.storage.delete_meta(RECOVERY_STATUS_STABLE_KEY)
+
+    def maybe_rotate_stable_recovery_status(self) -> None:
+        """Replace an unchanged recovery post with a silent current status."""
+
+        if not self.telegram.enabled or not self.stable_recovery_status_due(
+            time.time()
+        ):
+            return
+        key = self.status_message_key()
+        old_id = self.storage.get_meta(key)
+        text = multiphase_status_text(self, include_event_context=False)
+        try:
+            new_id = self.telegram.send(
+                text, notify=False, chat_id=self.telegram.status_chat_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "Telegram stable recovery replacement failed: {}", exc
+            )
+            return
+        self.storage.set_meta(key, str(new_id))
+        self.clear_stable_recovery_context()
+        self.delete_previous_voltage_status(old_id, new_id)
+        self.storage.delete_meta("telegram_status_pinned_id")
+        self.ensure_status_pinned(new_id)
+        self.finish_voltage_status_update()
+
     def voltage_event_notify_allowed(self, kind: str, now: float) -> bool:
         """Return whether an abnormal status replacement may make sound."""
 
@@ -2532,6 +2614,7 @@ class Monitor:
             "phase": phase,
         }
         self.storage.set_meta("last_voltage_event", json.dumps(payload))
+        self.track_recovery_stability(kind, happened_at)
         self.update_voltage_episode(kind, voltage, happened_at, phase)
         if not self.telegram.enabled:
             return
@@ -3476,6 +3559,7 @@ class Monitor:
             self.last_loop_tick = time.monotonic()
             self.poll_cycle()
             self.maybe_finalize_voltage_episode()
+            self.maybe_rotate_stable_recovery_status()
             self.update_status()
             try:
                 self.maybe_daily_summary()
