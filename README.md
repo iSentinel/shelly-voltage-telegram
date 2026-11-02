@@ -38,10 +38,10 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.4-hw**
-- Current release: **0.5.3-hw**
-- Production deployment: **0.5.3-hw**, hardware-accepted on a physical Shelly Pro EM-50 after a real outage/recovery cycle.
-- Hardware-accepted live checkpoint: **0.5.3-hw**
-- Candidate `0.5.4-hw` contains the maintainability audit and installer upgrade fixes. Production remains on hardware-accepted `0.5.3-hw` until all candidate gates pass.
+- Current release: **0.5.4-hw**
+- Production deployment: **0.5.4-hw**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
+- Hardware-accepted live checkpoint: **0.5.4-hw**
+- Release `0.5.4-hw` includes the maintainability audit, installer upgrade fixes and permanent quality gates.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 
 ## Supported devices
@@ -94,7 +94,7 @@ sudo ./scripts/configure.sh
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.

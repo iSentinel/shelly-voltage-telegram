@@ -41,9 +41,9 @@
 
 ## Статус проєкту
 
-- Поточний публічний реліз: **`0.5.3-hw`**.
-- Робочий production уже використовує **`0.5.3-hw`** та пройшов апаратну перевірку на Shelly Pro EM-50 після реального відключення і відновлення живлення.
-- У validation metadata цього релізу ще збережено попередній публічний checkpoint `0.4.11-hw`; його буде синхронізовано з поточним production у наступному аудованому релізі.
+- Поточний публічний реліз: **`0.5.4-hw`**.
+- Робочий production уже використовує **`0.5.4-hw`** та пройшов апаратну перевірку на Shelly Pro EM-50 після реального відключення і відновлення живлення.
+- Апаратно підтверджений live checkpoint: **`0.5.4-hw`**.
 - Підтримка Shelly Pro 3EM / Pro 3EM-3CT63 уже реалізована та протестована програмно. Повна трифазна апаратна перевірка буде виконана після встановлення пристрою.
 
 ## Підтримувані Shelly
@@ -224,7 +224,7 @@ sudo ./scripts/rollback.sh --dry-run
 ## Docker image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw
 ```
 
 Образ випускається для `linux/amd64` і `linux/arm64` із SBOM та provenance metadata.

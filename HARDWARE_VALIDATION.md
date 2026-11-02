@@ -1,7 +1,7 @@
 # Hardware Validation — Shelly Pro EM-50
 
-Date: 2026-11-01
-Checkpoint: `0.5.3-hw`
+Date: 2026-11-02
+Checkpoint: `0.5.4-hw`
 Timezone: `Europe/Kyiv`
 
 ## Device identity
@@ -383,10 +383,10 @@ Telegram acceptance passed against the configured private destination:
 No Telegram credential or private chat identifier is recorded in this public evidence.
 
 
-## 2026-11-02 `0.5.4-hw` audit smoke
+## 2026-11-02 `0.5.4-hw` audit and promotion acceptance
 
-The maintainability candidate was validated in isolation while production stayed
-online on `0.5.3-hw`.
+The maintainability candidate was first validated in isolation and then promoted
+to production after the full software, package and hardware gates passed.
 
 - physical source: Shelly Pro EM-50;
 - candidate doctor: Shelly status `ok`;
@@ -399,3 +399,18 @@ online on `0.5.3-hw`.
 - synthetic `0 V` rows: 0;
 - Telegram was disabled for the isolated runtime;
 - production configuration and database were not modified by the smoke test.
+
+
+Production acceptance after promotion:
+
+- production version and `LIVE_VERSION`: `0.5.4-hw`;
+- container health: healthy;
+- `/ready`: HTTP 200 / online;
+- physical Shelly Pro EM-50: online during the post-promotion check;
+- SQLite schema metadata: 3;
+- SQLite `PRAGMA quick_check`: `ok`;
+- open outage records: 0;
+- synthetic `0 V` rows: 0;
+- persisted Telegram status message retained across promotion;
+- recent runtime logs contained no application error or warning entries;
+- deployed `app.py` SHA256 matches the audited `0.5.4-hw` candidate.
