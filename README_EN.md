@@ -192,6 +192,7 @@ http://127.0.0.1:8080/dashboard
 ```
 
 The local dashboard follows the same rule: offline/starting phase cards show no current voltage; recovering/online cards show the newest valid sample.
+Telegram stable status also hides last-good V/Hz while the phase is offline; the diagnostic `/health` endpoint still retains the last valid sample together with explicit connectivity state.
 
 ## Diagnostics and backups
 

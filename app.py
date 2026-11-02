@@ -1325,16 +1325,12 @@ def format_duration(seconds: float | None) -> str:
     return f"{secs}с"
 
 
-def stale_status_lines(
+def offline_status_lines(
     snap: dict[str, object], ts: float, cfg: Config
 ) -> list[str]:
-    """Render last-good data for offline or recovering state."""
+    """Render outage timing without presenting stale electrical values."""
 
-    lines = [
-        "",
-        "Последнее корректное измерение:",
-        f"{float(snap['voltage']):.1f} V / {float(snap['frequency']):.2f} Hz",
-    ]
+    lines = []
     offline_since = snap.get("offline_since")
     if offline_since is not None:
         lines.append(
@@ -1364,8 +1360,8 @@ def status_text(
     if snap["voltage"] is None or snap["frequency"] is None:
         return "\n".join(lines + ["", "Нет корректных измерений."])
     ts = float(snap["last_success"] or time.time())
-    if connectivity in {"offline", "recovering"}:
-        return "\n".join(lines + stale_status_lines(snap, ts, cfg))
+    if connectivity == "offline":
+        return "\n".join(lines + offline_status_lines(snap, ts, cfg))
     stats = storage.day_stats(ts)
     lines.extend(
         [
@@ -1389,11 +1385,17 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     if not monitor.phase_configured(phase):
         return f"⚪ {phase}: не настроена"
     snap = monitor.phase_states[phase].snapshot()
+    connectivity = str(snap["connectivity"])
+    if connectivity == "offline":
+        return f"🔴 {phase}: недоступна"
     if snap["voltage"] is None:
-        return f"🟡 {phase}: нет данных"
-    icon = "🟢" if snap["connectivity"] == "online" else "🔴"
-    suffix = "" if snap["connectivity"] == "online" else " (offline)"
-    return f"{icon} {phase}: {float(snap['voltage']):.1f} V{suffix}"
+        state = "запуск" if connectivity == "starting" else "нет данных"
+        return f"🟡 {phase}: {state}"
+    if connectivity == "recovering":
+        return (
+            f"🟡 {phase}: {float(snap['voltage']):.1f} V (восстанавливается)"
+        )
+    return f"🟢 {phase}: {float(snap['voltage']):.1f} V"
 
 
 def voltage_event_lines(monitor: Monitor) -> list[str]:
