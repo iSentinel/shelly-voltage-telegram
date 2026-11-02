@@ -1,0 +1,58 @@
+diff --git a/HARDWARE_VALIDATION.md b/HARDWARE_VALIDATION.md
+index 74f1027..80c1d19 100644
+--- a/HARDWARE_VALIDATION.md
++++ b/HARDWARE_VALIDATION.md
+@@ -1,7 +1,7 @@
+ # Hardware Validation — Shelly Pro EM-50
+ 
+ Date: 2026-11-02
+-Checkpoint: `0.5.4-hw`
++Checkpoint: `0.5.6-hw`
+ Timezone: `Europe/Kyiv`
+ 
+ ## Device identity
+diff --git a/README_EN.md b/README_EN.md
+index a306422..44f43fa 100644
+--- a/README_EN.md
++++ b/README_EN.md
+@@ -43,8 +43,8 @@ The service is designed as a **monitor only**. It does not switch relays, change
+ 
+ - **Current software candidate: `0.5.6-hw`**
+ - **Current release: `0.5.5-hw`**
+-- **Production deployment: `0.5.4-hw`**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
+-- **Hardware-accepted live checkpoint: `0.5.4-hw`**.
++- **Production deployment: `0.5.6-hw`**, hardware-accepted on a physical Shelly Pro EM-50 after recovery and live upgrade validation.
++- **Hardware-accepted live checkpoint: `0.5.6-hw`**.
+ - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is software-tested; physical three-phase validation follows after device installation.
+ 
+ ## Supported Shelly models
+diff --git a/README_RU.md b/README_RU.md
+index 0502cd0..f1ac623 100644
+--- a/README_RU.md
++++ b/README_RU.md
+@@ -43,8 +43,8 @@
+ 
+ - Текущий software candidate: **`0.5.6-hw`**.
+ - Текущий публичный релиз: **`0.5.5-hw`**.
+-- Production использует **`0.5.4-hw`** и прошёл аппаратную проверку на физическом Shelly Pro EM-50 после обновления.
+-- Аппаратно подтверждённый live checkpoint: **`0.5.4-hw`**.
++- Production использует **`0.5.6-hw`** и прошёл аппаратную проверку на физическом Shelly Pro EM-50 после восстановления питания и обновления.
++- Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
+ - Поддержка Shelly Pro 3EM / Pro 3EM-3CT63 реализована и проверена программно; физическая трёхфазная проверка будет выполнена после установки устройства.
+ 
+ ## Поддерживаемые Shelly
+diff --git a/README_UA.md b/README_UA.md
+index a2faeb5..2837dd2 100644
+--- a/README_UA.md
++++ b/README_UA.md
+@@ -43,8 +43,8 @@
+ 
+ - Поточний software candidate: **`0.5.6-hw`**.
+ - Поточний публічний реліз: **`0.5.5-hw`**.
+-- Production використовує **`0.5.4-hw`** і пройшов апаратну перевірку на фізичному Shelly Pro EM-50 після оновлення.
+-- Апаратно підтверджений live checkpoint: **`0.5.4-hw`**.
++- Production використовує **`0.5.6-hw`** і пройшов апаратну перевірку на фізичному Shelly Pro EM-50 після відновлення живлення та оновлення.
++- Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
+ - Підтримка Shelly Pro 3EM / Pro 3EM-3CT63 реалізована та перевірена програмно; фізична трифазна перевірка буде виконана після встановлення пристрою.
+ 
+ ## Підтримувані Shelly
