@@ -2,12 +2,14 @@
 
 ## 0.5.9-hw — stable recovery status candidate
 
-- Current software candidate: `0.5.9-hw`; current public release and production runtime remain `0.5.8-hw` until candidate validation and promotion complete.
+- Current software candidate and production runtime: `0.5.9-hw`; current public release remains `0.5.8-hw`.
 - After a confirmed voltage recovery, persist a 15-minute stability timer in SQLite.
 - If no voltage-state transition occurs for the full period and all configured phases are online and normal, publish a fresh current-status post with `notify=False`, then unpin and delete the recovery post.
 - Any new abnormal/offline transition cancels the timer; restart resumes it from persisted metadata.
 - Telegram publication failure is fail-safe: the old recovery post and timer are retained.
 - The silent replacement does not modify the audible voltage-notification cooldown timestamp.
+- Live promotion from `0.5.8-hw` passed through the standard installer with verified rollback snapshot, exact merged-source parity, healthy/ready service, SQLite continuity, unchanged Telegram status identity and unchanged audible cooldown state.
+- Post-promotion restart continuity passed with Shelly online, zero Telegram failures, no open outage and no synthetic `0 V` rows. Natural physical recovery observation remains pending; no electrical transition was induced for this software deployment.
 
 ## 0.5.8-hw — software released / runtime verified
 
