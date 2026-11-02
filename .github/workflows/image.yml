@@ -111,7 +111,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && startsWith(inputs.image_tag, 'v'))
         shell: bash
         env:
-          IMAGE_NAME: ghcr.io/${{ github.repository }}
+          IMAGE_REPOSITORY: ${{ github.repository }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
@@ -119,4 +119,5 @@ jobs:
             echo "ERROR: build did not return a valid image digest" >&2
             exit 4
           }
-          cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"
+          image_name="ghcr.io/${IMAGE_REPOSITORY,,}"
+          cosign sign --yes "${image_name}@${IMAGE_DIGEST}"
