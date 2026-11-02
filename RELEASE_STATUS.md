@@ -1,8 +1,8 @@
 # Release status
 
-## 0.5.9-hw — software release approved / runtime verified
+## 0.5.9-hw — software released / runtime verified
 
-- Approved software release target and current production runtime: `0.5.9-hw`; full electrical-transition hardware checkpoint remains `0.5.6-hw`.
+- Published software release and current production runtime: `0.5.9-hw`; full electrical-transition hardware checkpoint remains `0.5.6-hw`.
 - After a confirmed voltage recovery, persist a 15-minute stability timer in SQLite.
 - If no voltage-state transition occurs for the full period and all configured phases are online and normal, publish a fresh current-status post with `notify=False`, then unpin and delete the recovery post.
 - Any new abnormal/offline transition cancels the timer; restart resumes it from persisted metadata.
@@ -10,7 +10,14 @@
 - The silent replacement does not modify the audible voltage-notification cooldown timestamp.
 - Live promotion from `0.5.8-hw` passed through the standard installer with verified rollback snapshot, exact merged-source parity, healthy/ready service, SQLite continuity, unchanged Telegram status identity and unchanged audible cooldown state.
 - Post-promotion restart continuity passed with Shelly online, zero Telegram failures, no open outage and no synthetic `0 V` rows. Natural physical recovery observation remains pending; no electrical transition was induced for this software deployment.
-- Release metadata is promoted to `0.5.9-hw`; exact tag/source/GHCR publication follows only after this metadata commit passes CI.
+- Tag `v0.5.9-hw` points to exact release commit `c92d86006f17441e42a0a33d0b4b7e56f213aa82`.
+- Source Release run `41544388759`, Container Image run `41544388518` and tag CI run `41544388631` all passed.
+- Published source archive SHA256 is `b73e4e958de960031cd4cac2be1cef842cf5c56c4ddd492e88e053b952ed31dc`; an independent rebuild from the exact tag matched byte-for-byte and the public archive privacy scan passed.
+- Signed multi-architecture GHCR image digest is `sha256:eb563f8b8243b3edfefb4c977f2629adca41c35f4a40bd48bca45c231ce3f8bb`.
+- Independent checksum-verified Cosign v3.0.6 verification passed for the exact tag workflow identity and GitHub OIDC issuer.
+- GHCR contains `linux/amd64` and `linux/arm64`; both architectures expose SPDX document and SLSA provenance v1 attestation layers.
+- Exact public release installation through `scripts/install-release.sh` passed with checksum verification, exact-tag source parity, a verified rollback snapshot and restart continuity.
+- After exact release installation/restart, the service is healthy/ready, Shelly is online, SQLite `quick_check` is OK, no outage is open, no synthetic `0 V` rows exist, Telegram status identity/cooldown are preserved and no recovery timer exists without a real recovery event.
 
 ## 0.5.8-hw — software released / runtime verified
 
