@@ -403,11 +403,12 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Public bootstrap dry-run was validated on a clean Debian 13 container.
 ## Optional hardening after acceptance
 
-- Shelly Digest-auth software path is regression-tested; enable authentication on
-  the physical Shelly and run the live-device auth check when mains/device access is available.
+- Shelly Digest-auth software path is regression-tested. Live auth validation is
+  deferred until the operator independently enables authentication on the physical
+  Shelly; this monitor-only project does not change device authentication settings.
 - Add a second Shelly device only if required later.
 - Add Grafana/Prometheus integration only if useful; current metrics endpoint is already compatible with scraping.
-- Signed container releases are being implemented in `0.5.5-hw` with keyless Sigstore Cosign signing of immutable GHCR digests.
+- Signed container releases are implemented and independently verified in `0.5.5-hw` using keyless Sigstore Cosign signatures over immutable GHCR digests.
 
 
 ## `0.5.4-hw` maintainability audit — RELEASED / HARDWARE ACCEPTED
@@ -425,12 +426,12 @@ No bot token or private chat identifier is stored in public release artifacts or
   valid live samples and no synthetic `0 V` measurements.
 
 
-## `0.5.5-hw` signed container release — SOFTWARE CANDIDATE
+## `0.5.5-hw` signed container release — SUPPLY-CHAIN ACCEPTED
 
-- Keep production on hardware-accepted `0.5.4-hw` while the supply-chain workflow is validated.
+- Keep production on hardware-accepted `0.5.4-hw`; `0.5.5-hw` changes the public release supply chain, not runtime monitoring behavior.
 - Versioned GHCR images install Cosign through an official action pinned to a full commit SHA.
 - Release images are signed keylessly through GitHub OIDC; no long-lived signing key is stored in repository secrets.
 - The signature targets the immutable image digest returned by the multi-architecture build.
 - Ordinary `main` images remain unsigned; only versioned release images receive the release signature.
 - Regression tests enforce OIDC permission, pinned action SHA, digest-based signing and release-only conditions.
-- Final acceptance requires a real GitHub Actions build/sign run and independent `cosign verify` of the published digest.
+- Acceptance completed: GitHub Actions run `41373145505` built and keyless-signed RC2 digest `sha256:df534c7b9b30e2a8f3dfc617b07a0ff6837ecc15b285331dc13e211130dcca4d`; independent Gateway `cosign verify` passed with the expected GitHub Actions certificate identity and OIDC issuer.
