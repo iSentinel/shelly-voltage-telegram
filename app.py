@@ -1402,11 +1402,12 @@ def voltage_event_lines(monitor: Monitor) -> list[str]:
     event = monitor.last_voltage_event
     if event is None:
         return []
-    kind, voltage, frequency, happened_at = event
+    kind, voltage, frequency, happened_at, phase = event
+    phase_prefix = "" if phase == "L1" else f"{phase}: "
     title = (
-        "🚨 Низкое напряжение сети"
+        f"🚨 {phase_prefix}Низкое напряжение сети"
         if kind == "low"
-        else "✅ Напряжение восстановилось"
+        else f"✅ {phase_prefix}Напряжение восстановилось"
     )
     zone = ZoneInfo(monitor.cfg.timezone)
     when = datetime.fromtimestamp(happened_at, zone).strftime("%H:%M")
@@ -1520,7 +1521,9 @@ class Monitor:
         self.alert_level = "normal"
         self.low_voltage_active = False
         self.low_voltage_candidate_since: float | None = None
-        self.last_voltage_event: tuple[str, float, float, float] | None = None
+        self.last_voltage_event: (
+            tuple[str, float, float, float, str] | None
+        ) = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
         self.last_recovery_duration: float | None = None
@@ -1642,6 +1645,7 @@ class Monitor:
         changed = state.error(str(exc), self.cfg.offline_after_failures)
         snap = state.snapshot()
         if changed and snap["connectivity"] == "offline":
+            self.clear_voltage_event(phase)
             started = float(snap["offline_since"] or time.time())
             if self.storage.begin_outage(started, phase):
                 self.maybe_phase_outage(phase)
@@ -1702,17 +1706,13 @@ class Monitor:
             if now - self.phase_low_candidates[phase] < self.alert_dwell:
                 return
             self.phase_low_active[phase] = True
-            self.telegram.send(
-                f"🚨 {phase}: низкое напряжение {voltage:.1f} V / "
-                f"{frequency:.2f} Hz",
-                notify=True,
-            )
+            self.record_voltage_event("low", voltage, frequency, phase)
         elif voltage >= self.low_voltage_recovery_v:
             self.phase_low_candidates.pop(phase, None)
             if self.phase_low_active[phase]:
                 self.phase_low_active[phase] = False
-                self.telegram.send(
-                    f"✅ {phase}: напряжение восстановилось · {voltage:.1f} V"
+                self.record_voltage_event(
+                    "recovered", voltage, frequency, phase
                 )
 
     def maybe_secondary_level(
@@ -1766,9 +1766,12 @@ class Monitor:
             except Exception as exc:
                 logger.warning("Telegram command registration failed: {}", exc)
 
-    def clear_voltage_event(self) -> None:
+    def clear_voltage_event(self, phase: str | None = None) -> None:
         """Remove a stale voltage transition after a confirmed outage."""
 
+        event = self.last_voltage_event
+        if phase is not None and event is not None and event[4] != phase:
+            return
         self.last_voltage_event = None
         self.storage.delete_meta("last_voltage_event")
 
@@ -2095,22 +2098,34 @@ class Monitor:
                 float(payload["voltage"]),
                 float(payload["frequency"]),
                 float(payload["timestamp"]),
+                str(payload.get("phase", "L1")),
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             logger.warning("Ignoring invalid stored voltage event metadata")
 
     def record_voltage_event(
-        self, kind: str, voltage: float, frequency: float
+        self,
+        kind: str,
+        voltage: float,
+        frequency: float,
+        phase: str = "L1",
     ) -> None:
         """Store a voltage transition and refresh the stable status header."""
 
         happened_at = time.time()
-        self.last_voltage_event = (kind, voltage, frequency, happened_at)
+        self.last_voltage_event = (
+            kind,
+            voltage,
+            frequency,
+            happened_at,
+            phase,
+        )
         payload = {
             "kind": kind,
             "voltage": voltage,
             "frequency": frequency,
             "timestamp": happened_at,
+            "phase": phase,
         }
         self.storage.set_meta("last_voltage_event", json.dumps(payload))
         self.last_telegram = 0.0

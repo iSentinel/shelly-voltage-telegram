@@ -167,7 +167,7 @@ Useful examples:
 - Default recovery confirmation: **2 successful polls**.
 - Invalid/unavailable readings are **not stored as fake `0 V` samples**.
 - Raw history retention is configurable; hourly aggregates are created before pruning.
-- Low-voltage thresholds are configurable; low/recovery events are shown in the stable status header instead of separate private messages.
+- Low-voltage thresholds are configurable; L1/L2/L3 low/recovery events are shown in the stable status header instead of separate private messages.
 - Warning/critical thresholds are user settings, not claimed electrical-code limits.
 
 ## HTTP endpoints
