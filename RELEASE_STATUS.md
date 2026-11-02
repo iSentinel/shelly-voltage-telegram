@@ -9,8 +9,8 @@
   `VERSION`, `RELEASE_VERSION` and `LIVE_VERSION`.
 - Final source publication fails closed until `RELEASE_VERSION` is explicitly
   promoted to match `VERSION`.
-- Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software
-  accepted; physical three-phase acceptance is pending device installation.
+- `0.5.6-hw` may be promoted on the current Pro EM-50 after the active blackout recovery baseline verifies and live Telegram/read-only hardware checks pass.
+- Read-only Pro 3EM / 3CT63 physical-acceptance CLI is implemented and software accepted; switching production to the `pro3em` backend remains pending physical device installation.
 - Local CI-equivalent acceptance: Ruff + quality PASS, 116/116 tests PASS,
   ResourceWarning gate PASS, installer/rollback/support-bundle/release-installer
   fixtures PASS, reproducible release PASS, Compose config PASS and candidate
