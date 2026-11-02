@@ -41,8 +41,7 @@
 
 ## Статус проєкту
 
-- Поточний software candidate: **`0.5.5-hw`**.
-- Поточний публічний реліз: **`0.5.4-hw`**.
+- Поточний публічний реліз: **`0.5.5-hw`**.
 - Робочий production уже використовує **`0.5.4-hw`** та пройшов апаратну перевірку на Shelly Pro EM-50 після реального відключення і відновлення живлення.
 - Апаратно підтверджений live checkpoint: **`0.5.4-hw`**.
 - Підтримка Shelly Pro 3EM / Pro 3EM-3CT63 уже реалізована та протестована програмно. Повна трифазна апаратна перевірка буде виконана після встановлення пристрою.
@@ -225,10 +224,10 @@ sudo ./scripts/rollback.sh --dry-run
 ## Docker image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.5-hw
 ```
 
-Образ випускається для `linux/amd64` і `linux/arm64` із SBOM та provenance metadata. У candidate `0.5.5-hw` versioned GHCR-образи також підписуються keyless-підписом Sigstore Cosign.
+Образ випускається для `linux/amd64` і `linux/arm64` із SBOM та provenance metadata. У релізі `0.5.5-hw` versioned GHCR-образи також підписуються keyless-підписом Sigstore Cosign.
 
 
 ## Roadmap

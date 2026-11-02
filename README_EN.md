@@ -41,8 +41,7 @@ The service is designed as a **monitor only**. It does not switch relays, change
 
 ## Project status
 
-- **Current software candidate: `0.5.5-hw`**
-- **Current release: `0.5.4-hw`**
+- **Current release: `0.5.5-hw`**
 - **Production deployment: `0.5.4-hw`**, accepted on a physical Shelly Pro EM-50 after a real mains outage/recovery cycle.
 - **Hardware-accepted live checkpoint: `0.5.4-hw`**.
 - Native Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested. Physical three-phase validation will follow when the device is installed.
@@ -229,10 +228,10 @@ All user-facing scripts provide `-h` / `--help`.
 Release image:
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.5-hw
 ```
 
-The release image is multi-architecture (`linux/amd64`, `linux/arm64`) and is published with SBOM/provenance metadata. Candidate `0.5.5-hw` also signs versioned GHCR images keylessly with Sigstore Cosign.
+The release image is multi-architecture (`linux/amd64`, `linux/arm64`) and is published with SBOM/provenance metadata. Release `0.5.5-hw` signs versioned GHCR images keylessly with Sigstore Cosign.
 
 
 ## Roadmap
