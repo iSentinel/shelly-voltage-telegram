@@ -1,0 +1,39 @@
+name: Apply promotion-check fail-closed fix
+
+on:
+  push:
+    branches:
+      - feature/0.5.6-promotion-check
+    paths:
+      - .promotion-failclosed.patch.gz.b64
+      - .github/workflows/apply-promotion-failclosed.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: feature/0.5.6-promotion-check
+      - name: Verify and apply fail-closed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .promotion-failclosed.patch.gz.b64 | gzip -d > /tmp/fix.patch
+          echo '14ac95c413096a5bac5ca0dae6fab3cc8cef0dc56b31da4e7664f7a8c1ccc1d8  /tmp/fix.patch' | sha256sum -c -
+          git apply --check /tmp/fix.patch
+          git apply /tmp/fix.patch
+          rm -f .promotion-failclosed.patch.gz.b64
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Make promotion checker fail closed'
+          git push origin HEAD:feature/0.5.6-promotion-check
