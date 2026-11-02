@@ -463,13 +463,14 @@ Current hardware gates:
 - Provide repeated sampling, configurable bounds, text/JSON output and stable PASS/FAIL exit codes.
 - Route primary low-voltage/recovery transitions into the stable Telegram status header, including event time, measured voltage and frequency; do not send duplicate private messages.
 - Add read-only `scripts/recovery-acceptance.py` with `baseline` and `verify` modes for real blackout/recovery acceptance. It checks the same outage closes, the stable Telegram status rotates, `/ready` becomes healthy, valid samples increase and synthetic `0 V` remains absent.
+- Add read-only `scripts/promotion-check.py` as the single pre-promotion gate. It reuses recovery verification, requires the live service version to match `LIVE_VERSION`, and fails closed unless the active backend remains `pro_em50`.
 - Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed; this blocks only switching production to the `pro3em` backend, not promotion of the 0.5.6 software on the current Pro EM-50.
 
 
 Software acceptance checkpoint:
 
 - Ruff 0.14.2 formatting/lint and project quality rules PASS.
-- 116/116 Python tests PASS with the ResourceWarning gate enabled.
+- 121/121 Python tests PASS with the ResourceWarning gate enabled.
 - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
   redaction, pinned-release installer and Compose validation PASS.
 - Reproducible source release PASS and excludes Python tool caches.
