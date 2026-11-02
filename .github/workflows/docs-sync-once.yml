@@ -1,0 +1,126 @@
+name: One-time 0.5.4 documentation sync
+
+on:
+  push:
+    paths:
+      - .github/workflows/docs-sync-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Synchronize 0.5.4 documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          replacements = {
+              "README.md": [
+                  ("- Current release: **0.5.3-hw**", "- Current release: **0.5.4-hw**"),
+                  ("- Production deployment: **0.5.3-hw**, hardware-accepted on a physical Shelly Pro EM-50 after a real outage/recovery cycle.", "- Production deployment: **0.5.4-hw**, hardware-accepted on a physical Shelly Pro EM-50."),
+                  ("- Hardware-accepted live checkpoint: **0.5.3-hw**", "- Hardware-accepted live checkpoint: **0.5.4-hw**"),
+                  ("- Candidate `0.5.4-hw` contains the maintainability audit and installer upgrade fixes. Production remains on hardware-accepted `0.5.3-hw` until all candidate gates pass.", "- Release `0.5.4-hw` includes the maintainability audit, installer upgrade fixes and permanent quality gates."),
+                  ("ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw", "ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw"),
+              ],
+              "README_EN.md": [
+                  ("**Current release: `0.5.3-hw`**", "**Current release: `0.5.4-hw`**"),
+                  ("**Production deployment: `0.5.3-hw`**", "**Production deployment: `0.5.4-hw`**"),
+                  ("Hardware-accepted live checkpoint: `0.4.11-hw`", "Hardware-accepted live checkpoint: `0.5.4-hw`"),
+                  ("ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw", "ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw"),
+              ],
+              "README_RU.md": [
+                  ("Текущий публичный релиз: **`0.5.3-hw`**.", "Текущий публичный релиз: **`0.5.4-hw`**."),
+                  ("Рабочий production уже использует **`0.5.3-hw`**", "Рабочий production уже использует **`0.5.4-hw`**"),
+                  ("checkpoint `0.4.11-hw`", "checkpoint `0.5.4-hw`"),
+                  ("ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw", "ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw"),
+              ],
+              "README_UA.md": [
+                  ("Поточний публічний реліз: **`0.5.3-hw`**.", "Поточний публічний реліз: **`0.5.4-hw`**."),
+                  ("Робочий production уже використовує **`0.5.3-hw`**", "Робочий production уже використовує **`0.5.4-hw`**"),
+                  ("checkpoint `0.4.11-hw`", "checkpoint `0.5.4-hw`"),
+                  ("ghcr.io/isentinel/shelly-voltage-telegram:v0.5.3-hw", "ghcr.io/isentinel/shelly-voltage-telegram:v0.5.4-hw"),
+              ],
+          }
+
+          for name, pairs in replacements.items():
+              path = Path(name)
+              text = path.read_text(encoding="utf-8")
+              for old, new in pairs:
+                  text = text.replace(old, new)
+              path.write_text(text, encoding="utf-8")
+
+          hardware = Path("HARDWARE_VALIDATION.md")
+          text = hardware.read_text(encoding="utf-8")
+          text = text.replace("Checkpoint: `0.5.3-hw`", "Checkpoint: `0.5.4-hw`", 1)
+          text = text.replace(
+              "## 2026-11-02 `0.5.4-hw` audit smoke\n\nThe maintainability candidate was validated in isolation while production stayed\nonline on `0.5.3-hw`.",
+              "## 2026-11-02 `0.5.4-hw` audit and promotion acceptance\n\nThe maintainability candidate was first validated in isolation and then promoted\nto production after the full software, package and hardware gates passed.",
+          )
+          if "Production acceptance after promotion:" not in text:
+              text += """
+
+Production acceptance after promotion:
+
+- production version and `LIVE_VERSION`: `0.5.4-hw`;
+- container health: healthy;
+- `/ready`: HTTP 200 / online;
+- physical Shelly Pro EM-50: online during the post-promotion check;
+- SQLite schema metadata: 3;
+- SQLite `PRAGMA quick_check`: `ok`;
+- open outage records: 0;
+- synthetic `0 V` rows: 0;
+- persisted Telegram status message retained across promotion;
+- recent runtime logs contained no application error or warning entries;
+- deployed `app.py` SHA256 matches the audited `0.5.4-hw` candidate.
+"""
+          hardware.write_text(text, encoding="utf-8")
+
+          roadmap = Path("ROADMAP.md")
+          text = roadmap.read_text(encoding="utf-8")
+          replacement = """### 11. GitHub publication — DONE
+
+- Public repository: `iSentinel/shelly-voltage-telegram`.
+- Multilingual README pages and the live dashboard image are published.
+- Release `v0.5.4-hw` is published with source archive and `SHA256SUMS`.
+- CI, container image and source-release workflows are active.
+- Public release excludes `.env`, secrets, SQLite and local validation data.
+- The one-line installer points to the real public repository.
+
+"""
+          text = re.sub(
+              r"### 11\. GitHub publication .*?(?=\n## Optional hardening after acceptance)",
+              replacement.rstrip(),
+              text,
+              count=1,
+              flags=re.S,
+          )
+          roadmap.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Validate documentation metadata
+        run: |
+          python3 -m unittest tests.test_metadata -q
+          python3 scripts/check-quality.py
+
+      - name: Commit synchronized documentation
+        shell: bash
+        run: |
+          rm .github/workflows/docs-sync-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md README_EN.md README_RU.md README_UA.md ROADMAP.md HARDWARE_VALIDATION.md .github/workflows/docs-sync-once.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Synchronize 0.5.4 release documentation"
+          git push origin HEAD:main
