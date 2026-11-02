@@ -42,8 +42,8 @@
 ## Статус проєкту
 
 - Поточний software candidate: **`0.5.9-hw`**.
-- Поточний публічний реліз: **`0.5.8-hw`**.
-- Production використовує candidate **`0.5.9-hw`** на фізичному Shelly Pro EM-50; поточним публічним релізом залишається `0.5.8-hw`, а останнім повністю апаратно підтвердженим checkpoint — `0.5.6-hw`.
+- Поточний публічний реліз: **`0.5.9-hw`**.
+- Production використовує **`0.5.9-hw`** на фізичному Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
 - Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` після 15 хвилин стабільного відновлення беззвучно замінює recovery-повідомлення новим актуальним статусом.
 - Підтримка Shelly Pro 3EM / Pro 3EM-3CT63 реалізована та перевірена програмно; фізична трифазна перевірка буде виконана після встановлення пристрою.
@@ -266,7 +266,7 @@ JSON-звіти recovery verification і promotion не виводять deploym
 ## Docker image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.8-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.9-hw
 ```
 
 Образ випускається для `linux/amd64` і `linux/arm64` із SBOM та provenance metadata. Versioned GHCR-образи підписуються keyless-підписом Sigstore Cosign.

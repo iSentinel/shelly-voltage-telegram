@@ -3,7 +3,7 @@
 Status date: 2026-11-03
 Runtime candidate: `0.5.9-hw` (software and live operational validation passed)
 Latest full hardware checkpoint: `0.5.6-hw`
-Public release: `0.5.8-hw` (source and signed multi-architecture image independently verified)
+Public release target: `0.5.9-hw` (metadata promotion under CI)
 
 
 ## Current next steps
@@ -19,13 +19,14 @@ Public release: `0.5.8-hw` (source and signed multi-architecture image independe
 - DONE: install the exact public release through `scripts/install-release.sh` on the live Pro EM-50 deployment; checksum, restart, SQLite and Telegram continuity checks passed.
 - DONE: `0.5.9-hw` software/live gate — 15-minute stable-recovery rotation, 174 tests, Python 3.11/3.12/3.13, reproducible release, Docker candidate, exact-main deployment, rollback snapshot and restart continuity all passed.
 - DONE: verify all 57 source files, archive checksums, amd64/arm64 images, SBOM, provenance and Cosign signature.
-- NEXT: promote `0.5.9-hw` public release metadata, publish exact tag/source archive/signed multi-architecture image, then continue natural recovery observation without inducing electrical changes.
+- DONE: prepare `0.5.9-hw` public release metadata after software/live validation.
+- NEXT: after release-metadata CI/merge, publish exact `v0.5.9-hw` tag, source archive and signed multi-architecture image, then independently verify them.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
 
 These current steps take precedence over older historical version notes below.
-`RELEASE_VERSION=0.5.8-hw` matches the published software release.
+`RELEASE_VERSION=0.5.9-hw` marks the approved software release target.
 `LIVE_VERSION=0.5.6-hw` remains the latest full physical acceptance checkpoint.
 
 ## Completed
