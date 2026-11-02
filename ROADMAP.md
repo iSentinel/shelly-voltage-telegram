@@ -457,13 +457,14 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Require complete L1/L2/L3 data from one atomic RPC cycle and reject missing phases, zero/implausible values and RPC failures.
 - Provide repeated sampling, configurable bounds, text/JSON output and stable PASS/FAIL exit codes.
 - Route primary low-voltage/recovery transitions into the stable Telegram status header, including event time, measured voltage and frequency; do not send duplicate private messages.
+- Add read-only `scripts/recovery-acceptance.py` with `baseline` and `verify` modes for real blackout/recovery acceptance. It checks the same outage closes, the stable Telegram status rotates, `/ready` becomes healthy, valid samples increase and synthetic `0 V` remains absent.
 - Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed.
 
 
 Software acceptance checkpoint:
 
 - Ruff 0.14.2 formatting/lint and project quality rules PASS.
-- 112/112 Python tests PASS with the ResourceWarning gate enabled.
+- 116/116 Python tests PASS with the ResourceWarning gate enabled.
 - `py_compile`, shell syntax, installer dry-run, rollback, support-bundle
   redaction, pinned-release installer and Compose validation PASS.
 - Reproducible source release PASS and excludes Python tool caches.
