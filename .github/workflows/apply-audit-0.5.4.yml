@@ -1,0 +1,36 @@
+name: Apply audited 0.5.4 patch
+
+on:
+  push:
+    branches: [audit/0.5.4-hw]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Apply audited 0.5.4 patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d .github/audit-0.5.4.patch.gz.b64 > /tmp/audit.patch.gz
+          echo "ebd901c0246450f440f47fbf10f39e6294bace80d9fe1236d947a01589c1c275  /tmp/audit.patch.gz" | sha256sum -c -
+          gzip -dc /tmp/audit.patch.gz | git apply --check -
+          gzip -dc /tmp/audit.patch.gz | git apply -
+          rm -f .github/audit-0.5.4.patch.gz.b64
+          rm -f .github/workflows/apply-audit-0.5.4.yml
+      - name: Commit audited tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'Audit 0.5.4-hw maintainability and upgrade path'
+          git push origin HEAD:audit/0.5.4-hw
