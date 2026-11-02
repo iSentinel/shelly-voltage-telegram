@@ -1,9 +1,9 @@
 # Roadmap
 
 Status date: 2026-11-02
-Runtime candidate: `0.5.7-hw` (software and operational checks passed)
+Runtime candidate: `0.5.8-hw` (software and operational checks passed)
 Latest full hardware checkpoint: `0.5.6-hw`
-Public release: `0.5.7-hw` (source and signed multi-architecture image verified)
+Public release target: `0.5.8-hw` (metadata approved; tag/source/signed image publication next)
 
 
 ## Current next steps
@@ -13,13 +13,15 @@ Public release: `0.5.7-hw` (source and signed multi-architecture image verified)
 - DONE: confirm no open outages or synthetic zero-voltage rows; save a verified online backup.
 - DONE: software validation with 158 unit tests and Python 3.11/3.12/3.13 CI.
 - DONE: publish v0.5.7-hw from approved source 874fc45d81bed3c41ac0005fd801d4e9db291611.
+- DONE: merge PR #25 for `0.5.8-hw`; CI and Container Image workflows passed on exact `main` source `b446604a8e84ddc1a35fa30d375a83f336608f0f`.
+- NEXT: publish `v0.5.8-hw` from the release-metadata commit and verify source archive plus signed amd64/arm64 image.
 - DONE: verify all 57 source files, archive checksums, amd64/arm64 images, SBOM, provenance and Cosign signature.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
 
 These current steps take precedence over older historical version notes below.
-`RELEASE_VERSION=0.5.7-hw` matches the published software release.
+`RELEASE_VERSION=0.5.8-hw` marks the approved software release target.
 `LIVE_VERSION=0.5.6-hw` remains the latest full physical acceptance checkpoint.
 
 ## Completed
