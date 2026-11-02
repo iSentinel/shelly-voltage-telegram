@@ -38,10 +38,10 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.6-hw**
-- Current release: **0.5.5-hw**
-- Production deployment: **0.5.4-hw**, hardware-accepted on a physical Shelly Pro EM-50 after live upgrade validation.
-- Hardware-accepted live checkpoint: **0.5.4-hw**
-- Release `0.5.5-hw` adds keyless Sigstore signing for versioned GHCR images; runtime monitoring behavior remains the hardware-accepted `0.5.4-hw` code path.
+- Current release: **0.5.6-hw**
+- Production deployment: **0.5.6-hw**, hardware-accepted on a physical Shelly Pro EM-50 after blackout recovery and live upgrade validation.
+- Hardware-accepted live checkpoint: **0.5.6-hw**
+- Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 
 ## Supported devices
@@ -61,6 +61,22 @@ flowchart LR
     B --> H["health / ready / metrics / dashboard"]
     B --> R["Backups + support bundle"]
 ```
+
+## Voltage alert status notifications
+
+Low- and high-voltage transitions replace the shared Telegram status message
+instead of creating separate alert messages. The new status is published first;
+the previous status is deleted only after the replacement succeeds.
+
+The first abnormal status may notify normally. Further abnormal replacements
+inside the notification cooldown are silent. Recovery is always silent, and
+quiet hours still force every message to be silent. The cooldown is counted
+from the last loud voltage status and is not extended by silent replacements.
+
+Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
+`10` minutes from `/settings`. The value is persisted in SQLite and applies
+without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
+deployment default.
 
 ## Install in one command
 
@@ -94,7 +110,7 @@ sudo ./scripts/configure.sh
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.5-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.6-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
