@@ -459,7 +459,52 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             restarted.restore_voltage_event()
             self.assertEqual(
                 restarted.last_voltage_event,
-                ("low", 179.3, 50.0, 1234.5),
+                ("low", 179.3, 50.0, 1234.5, "L1"),
+            )
+
+    def test_legacy_voltage_event_defaults_to_l1(self):
+        """Restore pre-phase event metadata as an L1 transition."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy-event.sqlite3"
+            monitor = APP.Monitor(config(database_path=path))
+            monitor.storage.initialize()
+            monitor.storage.set_meta(
+                "last_voltage_event",
+                '{"kind":"low","voltage":179.3,'
+                '"frequency":50.0,"timestamp":1234.5}',
+            )
+            monitor.restore_voltage_event()
+            self.assertEqual(
+                monitor.last_voltage_event,
+                ("low", 179.3, 50.0, 1234.5, "L1"),
+            )
+
+    def test_secondary_low_voltage_uses_status_header(self):
+        """Route L2 low/recovery transitions through the stable status."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "secondary-event.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    alert_dwell_sec=0,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.telegram.send = Mock()
+            monitor.update_status = Mock()
+            monitor.maybe_secondary_low("L2", 179.0, 50.0, 100.0)
+            self.assertEqual(monitor.last_voltage_event[0], "low")
+            self.assertEqual(monitor.last_voltage_event[4], "L2")
+            monitor.maybe_secondary_low("L2", 186.0, 50.0, 101.0)
+            self.assertEqual(monitor.update_status.call_count, 2)
+            monitor.telegram.send.assert_not_called()
+            lines = APP.voltage_event_lines(monitor)
+            self.assertTrue(
+                lines[0].startswith("✅ L2: Напряжение восстановилось")
             )
 
     def test_low_voltage_event_is_rendered_in_status_header(self):
@@ -475,6 +520,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             APP.datetime(
                 2026, 11, 2, 7, 9, tzinfo=APP.ZoneInfo("Europe/Kyiv")
             ).timestamp(),
+            "L1",
         )
         text = APP.multiphase_status_text(monitor)
         self.assertTrue(
@@ -908,7 +954,13 @@ class MonitorRegressionTests(unittest.TestCase):
             path = Path(directory) / "outage-event.sqlite3"
             monitor = APP.Monitor(config(database_path=path))
             monitor.storage.initialize()
-            monitor.last_voltage_event = ("recovered", 186.1, 50.0, 100.0)
+            monitor.last_voltage_event = (
+                "recovered",
+                186.1,
+                50.0,
+                100.0,
+                "L1",
+            )
             monitor.storage.set_meta(
                 "last_voltage_event",
                 '{"kind":"recovered","voltage":186.1,'
@@ -916,6 +968,29 @@ class MonitorRegressionTests(unittest.TestCase):
             )
             for _ in range(monitor.cfg.offline_after_failures):
                 monitor.record_poll_failure(RuntimeError("unreachable"))
+            self.assertIsNone(monitor.last_voltage_event)
+            self.assertIsNone(monitor.storage.get_meta("last_voltage_event"))
+
+    def test_secondary_outage_clears_matching_voltage_event(self):
+        """Clear an L2 voltage header when L2 becomes unavailable."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "secondary-outage.sqlite3"
+            monitor = APP.Monitor(
+                config(database_path=path, phase_l2_host="192.0.2.20")
+            )
+            monitor.storage.initialize()
+            monitor.last_voltage_event = ("low", 179.0, 50.0, 100.0, "L2")
+            monitor.storage.set_meta(
+                "last_voltage_event",
+                '{"kind":"low","voltage":179.0,"frequency":50.0,'
+                '"timestamp":100.0,"phase":"L2"}',
+            )
+            state = monitor.phase_states["L2"]
+            for _ in range(monitor.cfg.offline_after_failures):
+                monitor.record_secondary_failure(
+                    "L2", state, RuntimeError("unreachable")
+                )
             self.assertIsNone(monitor.last_voltage_event)
             self.assertIsNone(monitor.storage.get_meta("last_voltage_event"))
 
