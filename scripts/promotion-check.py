@@ -87,6 +87,8 @@ def promotion_errors(
     """Return reasons why promotion must remain blocked."""
 
     errors = list(recovery.get("errors", []))
+    if recovery.get("status") != "pass" and not errors:
+        errors.append("recovery acceptance did not pass")
     health = recovery.get("health") or {}
     if meter_type != "pro_em50":
         errors.append("live meter type is not pro_em50")
