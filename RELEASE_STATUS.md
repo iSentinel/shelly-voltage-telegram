@@ -1,9 +1,13 @@
 # Release status
 
-## 0.5.7-hw — software release prepared / runtime verified
+## 0.5.7-hw — software released / runtime verified
 
-- Prepared release target: `0.5.7-hw`; the published release and full hardware checkpoint remain `0.5.6-hw` until publication completes.
-- `RELEASE_VERSION=0.5.7-hw` prepares the publication guard; no tag or GitHub Release has been created by this preparation.
+- Published software release: `0.5.7-hw`; the latest full hardware checkpoint remains `0.5.6-hw`.
+- Tag `v0.5.7-hw` points to approved source `874fc45d81bed3c41ac0005fd801d4e9db291611`.
+- Source Release run `41526489280`, Container Image run `41526489577` and CI run `41526489500` all passed.
+- Published source SHA256: `852ecc6f96a8334b0da26d81244bda6d354595d8833eafa01ac962edd70fdb89`; all 57 internal manifest entries verified.
+- Signed amd64/arm64 image digest: `sha256:a0810c569a911c4e4a34f016cd4bf9495a7bd73e59764be3b0042baf5d55827b`.
+- Independent Cosign verification passed for the exact tag workflow identity and GitHub OIDC issuer; SPDX SBOM and SLSA provenance were confirmed for both architectures.
 - PR #22 merged with explicit user approval; source commit and deployed runtime match.
 - Physical Pro EM-50, SQLite and Telegram doctor checks PASS; verified online backup saved.
 - Recent normal-operation observation has no open outage or diagnostic polling gaps.

@@ -16,9 +16,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/dashboard.jpg" alt="Shelly Voltage Telegram live dashboard" width="900">
+  <img src="docs/assets/telegram-status.png" alt="Telegram voltage status message" width="430">
 </p>
-<p align="center"><em>Real live dashboard captured from the hardware deployment. L1 is online; L2/L3 are ready for future sensors.</em></p>
+<p align="center"><em>Telegram voltage status message, cropped to the message boundaries.</em></p>
 
 ---
 
@@ -38,7 +38,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.7-hw**
-- Current release: **0.5.7-hw** (prepared; publication pending)
+- Current release: **0.5.7-hw**
 - Production deployment: **0.5.7-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
