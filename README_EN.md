@@ -70,14 +70,14 @@ The model can be selected from the administrator `/settings` menu. Network addre
 
 ```mermaid
 flowchart LR
-    S1[Shelly meter / L1] -->|read-only RPC| BOT[Shelly Voltage Telegram]
-    S2[Optional L2 meter] -->|read-only RPC| BOT
-    S3[Optional L3 meter] -->|read-only RPC| BOT
-    P3[Pro 3EM / 3CT63] -->|A/B/C in one EM.GetStatus| BOT
-    BOT --> DB[(SQLite WAL)]
-    BOT --> TG[Telegram Bot API]
-    BOT --> HTTP[/health · /ready · /metrics · /dashboard]
-    BOT --> BK[Backups + support bundle]
+    S1["Shelly meter / L1"] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
+    S2["Optional L2 meter"] -->|read-only RPC| BOT
+    S3["Optional L3 meter"] -->|read-only RPC| BOT
+    P3["Pro 3EM / 3CT63"] -->|A/B/C in one EM.GetStatus| BOT
+    BOT --> DB[("SQLite WAL")]
+    BOT --> TG["Telegram Bot API"]
+    BOT --> HTTP["health / ready / metrics / dashboard"]
+    BOT --> BK["Backups + support bundle"]
 ```
 
 For a Pro 3EM in `triphase` mode, one polling cycle maps phase **A → L1**, **B → L2**, **C → L3** with the same local timestamp.

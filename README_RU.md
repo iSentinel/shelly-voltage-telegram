@@ -70,14 +70,14 @@
 
 ```mermaid
 flowchart LR
-    S1[Shelly / L1] -->|read-only RPC| BOT[Shelly Voltage Telegram]
-    S2[Опциональный L2] -->|read-only RPC| BOT
-    S3[Опциональный L3] -->|read-only RPC| BOT
-    P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT
-    BOT --> DB[(SQLite WAL)]
-    BOT --> TG[Telegram Bot API]
-    BOT --> HTTP[/health · /ready · /metrics · /dashboard]
-    BOT --> BK[Backup + support bundle]
+    S1["Shelly / L1"] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
+    S2["Опциональный L2"] -->|read-only RPC| BOT
+    S3["Опциональный L3"] -->|read-only RPC| BOT
+    P3["Pro 3EM / 3CT63"] -->|A/B/C одним EM.GetStatus| BOT
+    BOT --> DB[("SQLite WAL")]
+    BOT --> TG["Telegram Bot API"]
+    BOT --> HTTP["health / ready / metrics / dashboard"]
+    BOT --> BK["Backup + support bundle"]
 ```
 
 Для Pro 3EM в режиме `triphase` один цикл опроса раскладывает **A → L1**, **B → L2**, **C → L3** с общей временной меткой.
