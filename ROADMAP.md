@@ -425,10 +425,10 @@ After the repository owner/name is selected:
 - Consider signed container releases after GitHub publication.
 
 
-## `0.5.4-hw` maintainability audit — SOFTWARE/HARDWARE SMOKE PASS
+## `0.5.4-hw` maintainability audit — RELEASED / HARDWARE ACCEPTED
 
-- Keep production on hardware-accepted `0.5.3-hw` until the audited release is
-  merged and promoted through the normal installer path.
+- Production is running hardware-accepted `0.5.4-hw` after the audited
+  release was merged and promoted through the normal installer path.
 - PEP 8/Ruff checks pass with no source lines over 79 characters.
 - All Python functions, including tests, are limited to 40 lines.
 - Production modules/classes/functions have clear docstrings; application logging
@@ -439,3 +439,12 @@ After the repository owner/name is selected:
   part of the public release tree.
 - Isolated candidate runtime against a physical Pro EM-50 passed with schema v3,
   valid live samples and no synthetic `0 V` measurements.
+
+
+### Next stage after `0.5.4-hw`
+
+- Keep the current Pro EM-50 deployment under normal observation.
+- Perform physical three-phase acceptance when the planned Pro 3EM / Pro 3EM-3CT63 is installed.
+- Validate L1/L2/L3 mapping, outage behavior, Telegram presentation, charts,
+  exports and metrics with real three-phase data before enabling that backend in
+  production.
