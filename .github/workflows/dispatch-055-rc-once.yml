@@ -1,0 +1,29 @@
+name: Dispatch 0.5.5 RC signing verification
+
+on:
+  push:
+    paths:
+      - .github/workflows/dispatch-055-rc-once.yml
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REF: ab5fdb85a9771776ac06dec2867aba3000b44d3c
+      IMAGE_TAG: v0.5.5-hw-rc1
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Dispatch exact source build
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/image.yml/dispatches" \
+            -f ref=main \
+            -f "inputs[ref]=${SOURCE_REF}" \
+            -f "inputs[image_tag]=${IMAGE_TAG}"
