@@ -1,4 +1,15 @@
+## 0.5.7-hw - Telegram status lifecycle and edit window
+
+- Unpin the previous Telegram status before deleting it.
+- Disable status pinning by default while keeping `Pin status` configurable in `/settings`.
+- Remove inline buttons from the public voltage status and clean up legacy buttons at startup.
+- Add a configurable 3/5/10 minute voltage status edit window; default is 10 minutes.
+- Edit the active alert message in place through recovery while the edit window is active.
+- Close the edit window after recovery so the next alert starts a new message cycle.
+- Add a cropped Telegram status example to the GitHub documentation.
+
 ## 0.5.6-hw - Pro EM-50 live acceptance and shared status alerts
+
 
 - Add a standalone read-only Pro 3EM / 3CT63 acceptance CLI.
 - Reuse the existing Digest-auth `Pro3EMClient`; do not initialize Telegram or SQLite.

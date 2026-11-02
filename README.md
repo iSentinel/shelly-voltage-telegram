@@ -37,9 +37,9 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.6-hw**
+- Current software candidate: **0.5.7-hw**
 - Current release: **0.5.6-hw**
-- Production deployment: **0.5.6-hw**, hardware-accepted on a physical Shelly Pro EM-50 after blackout recovery and live upgrade validation.
+- Production deployment: **0.5.7-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
@@ -128,3 +128,9 @@ Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
 ---
 
 <p align="center"><strong>Monitor power. Keep history. Get notified. Never control the load.</strong></p>
+
+### Telegram status message
+
+The public voltage status is published without inline buttons. Status pinning is disabled by default and can be enabled or disabled from the administrator `/settings` menu. Before an old status post is deleted, the bot unpins it first. During a voltage alert episode, transitions are edited in the same message for a configurable 3/5/10 minute window (10 minutes by default).
+
+![Telegram voltage status example](docs/status-message-example.jpg)

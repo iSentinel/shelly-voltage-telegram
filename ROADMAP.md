@@ -555,3 +555,13 @@ Software acceptance checkpoint:
   synthetic `0 V` rows remain zero.
 - Public `0.5.6-hw` release is the next release stage. Physical Pro 3EM /
   3CT63 acceptance remains blocked until that hardware is installed.
+
+### 2026-11-02 `0.5.7-hw` Telegram status lifecycle
+
+- PASS: old shared status is unpinned before deletion.
+- PASS: status pinning defaults to OFF and remains configurable in `/settings`.
+- PASS: public status inline buttons are removed, including startup cleanup for the current status.
+- PASS: voltage alert/recovery transitions use one editable message for 3/5/10 minutes; default is 10 minutes.
+- PASS: recovery closes the edit window and the next alert starts a new message cycle.
+- PASS: quality gate and 143/143 tests passed before deployment.
+- PASS: `0.5.7-hw` is live on Pro EM-50; `/health` and `/ready` are healthy, Pin default is OFF and Edit window default is 10 minutes.

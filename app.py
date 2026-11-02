@@ -109,6 +109,7 @@ class Config:
     telegram_quiet_start_hour: int
     telegram_quiet_end_hour: int
     voltage_notification_cooldown_min: int
+    voltage_status_edit_window_min: int
     low_voltage_alert_enabled: bool
     low_voltage_alert_v: float
     low_voltage_recovery_v: float
@@ -188,6 +189,9 @@ def telegram_policy_settings() -> dict[str, object]:
         ),
         "voltage_notification_cooldown_min": int(
             os.getenv("VOLTAGE_NOTIFICATION_COOLDOWN_MIN", "5")
+        ),
+        "voltage_status_edit_window_min": int(
+            os.getenv("VOLTAGE_STATUS_EDIT_WINDOW_MIN", "10")
         ),
         "low_voltage_alert_enabled": env_bool(
             "LOW_VOLTAGE_ALERT_ENABLED", True
@@ -306,7 +310,7 @@ def monitoring_alert_settings() -> dict[str, object]:
         "daily_summary_enabled": env_bool("DAILY_SUMMARY_ENABLED", True),
         "daily_summary_hour": int(os.getenv("DAILY_SUMMARY_HOUR", "22")),
         "daily_summary_minute": int(os.getenv("DAILY_SUMMARY_MINUTE", "55")),
-        "telegram_pin_status": env_bool("TELEGRAM_PIN_STATUS", True),
+        "telegram_pin_status": env_bool("TELEGRAM_PIN_STATUS", False),
     }
 
 
@@ -362,6 +366,8 @@ def validate_telegram_config(cfg: Config) -> None:
         raise ValueError(
             "VOLTAGE_NOTIFICATION_COOLDOWN_MIN must be between 0 and 60"
         )
+    if cfg.voltage_status_edit_window_min not in {3, 5, 10}:
+        raise ValueError("VOLTAGE_STATUS_EDIT_WINDOW_MIN must be 3, 5, or 10")
     if cfg.low_voltage_recovery_v <= cfg.low_voltage_alert_v:
         raise ValueError(
             "LOW_VOLTAGE_RECOVERY_V must exceed LOW_VOLTAGE_ALERT_V"
@@ -1184,6 +1190,20 @@ class Telegram:
             payload["reply_markup"] = reply_markup
         self.call("editMessageText", payload)
 
+    def clear_reply_markup(
+        self, message_id: int, chat_id: str | None = None
+    ) -> None:
+        """Remove inline controls from one Telegram message."""
+
+        self.call(
+            "editMessageReplyMarkup",
+            {
+                "chat_id": chat_id or self.cfg.telegram_chat_id,
+                "message_id": message_id,
+                "reply_markup": {"inline_keyboard": []},
+            },
+        )
+
     def answer_callback(self, callback_id: str, text: str = "") -> None:
         """Acknowledge an inline-keyboard callback."""
 
@@ -1252,6 +1272,17 @@ class Telegram:
                 "chat_id": chat_id or self.status_chat_id,
                 "message_id": message_id,
                 "disable_notification": True,
+            },
+        )
+
+    def unpin(self, message_id: int, chat_id: str | None = None) -> None:
+        """Unpin one status message before it is removed."""
+
+        self.call(
+            "unpinChatMessage",
+            {
+                "chat_id": chat_id or self.status_chat_id,
+                "message_id": message_id,
             },
         )
 
@@ -1513,6 +1544,7 @@ class Monitor:
         cfg = self.cfg
         self.low_voltage_alert_enabled = cfg.low_voltage_alert_enabled
         self.notification_cooldown_min = cfg.voltage_notification_cooldown_min
+        self.status_edit_window_min = cfg.voltage_status_edit_window_min
         self.low_voltage_alert_v = cfg.low_voltage_alert_v
         self.low_voltage_recovery_v = cfg.low_voltage_recovery_v
         self.alerts_enabled = cfg.alerts_enabled
@@ -1785,6 +1817,8 @@ class Monitor:
                 self.telegram.set_commands()
             except Exception as exc:
                 logger.warning("Telegram command registration failed: {}", exc)
+            self.sync_status_pin_setting()
+            self.clear_status_controls()
 
     def clear_voltage_event(self, phase: str | None = None) -> None:
         """Remove a stale voltage transition after a confirmed outage."""
@@ -1929,20 +1963,10 @@ class Monitor:
             >= self.cfg.significant_change
         )
 
-    def status_keyboard(self) -> dict | None:
-        """Return read-only channel controls for the stable status message."""
+    def status_keyboard(self) -> None:
+        """Keep the public status message free of inline buttons."""
 
-        if not self.cfg.telegram_status_chat_id:
-            return None
-        return {
-            "inline_keyboard": [
-                [
-                    {"text": "🔄 Обновить", "callback_data": "view:refresh"},
-                    {"text": "📊 Сегодня", "callback_data": "view:today"},
-                    {"text": "🔌 Отключения", "callback_data": "view:outages"},
-                ]
-            ]
-        }
+        return None
 
     def status_callback_text(self, action: str) -> str:
         """Render compact read-only responses for status-channel buttons."""
@@ -2064,6 +2088,47 @@ class Monitor:
         except Exception as exc:
             logger.warning("Telegram status pin failed: {}", exc)
 
+    def disable_status_pin(self) -> None:
+        """Unpin the current status when pinning is disabled."""
+
+        pinned = self.storage.get_meta("telegram_status_pinned_id")
+        if not pinned or not self.cfg.telegram_status_chat_id:
+            return
+        try:
+            self.telegram.unpin(int(pinned), self.telegram.status_chat_id)
+        except Exception as exc:
+            logger.warning("Telegram status unpin failed: {}", exc)
+            return
+        self.storage.delete_meta("telegram_status_pinned_id")
+
+    def sync_status_pin_setting(self) -> None:
+        """Apply the current pin setting to the existing status message."""
+
+        current = self.storage.get_meta(self.status_message_key())
+        if self.pin_status:
+            if current:
+                self.ensure_status_pinned(int(current))
+            return
+        self.disable_status_pin()
+
+    def clear_status_controls(self) -> None:
+        """Remove legacy inline buttons from the current public status."""
+
+        if not self.cfg.telegram_status_chat_id:
+            return
+        current = self.storage.get_meta(self.status_message_key())
+        if not current:
+            return
+        try:
+            self.telegram.clear_reply_markup(
+                int(current), self.telegram.status_chat_id
+            )
+        except Exception as exc:
+            if not message_not_modified(exc):
+                logger.warning(
+                    "Telegram status control cleanup failed: {}", exc
+                )
+
     def rotate_status_after_recovery(self, duration: float) -> None:
         """Replace the stable status post after a confirmed power recovery."""
 
@@ -2072,10 +2137,7 @@ class Monitor:
         key = self.status_message_key()
         stored = self.storage.get_meta(key)
         if stored:
-            try:
-                self.telegram.delete(int(stored), self.telegram.status_chat_id)
-            except Exception as exc:
-                logger.warning("Telegram old status delete failed: {}", exc)
+            self.delete_previous_status(stored)
         self.storage.delete_meta(key)
         self.storage.delete_meta("telegram_status_pinned_id")
         self.last_recovery_duration = duration
@@ -2139,16 +2201,65 @@ class Monitor:
             return True
         return now - previous >= self.notification_cooldown_min * 60
 
-    def replace_voltage_status(self, notify: bool, happened_at: float) -> bool:
-        """Publish a new status, then remove the previous status message."""
+    def voltage_status_edit_window_active(self, happened_at: float) -> bool:
+        """Return whether the current voltage episode may reuse its message."""
+
+        if not self.storage.get_meta(self.status_message_key()):
+            return False
+        raw = self.storage.get_meta("voltage_status_edit_window_started_at")
+        if not raw:
+            return False
+        try:
+            started_at = float(raw)
+        except ValueError:
+            self.storage.delete_meta("voltage_status_edit_window_started_at")
+            return False
+        age = happened_at - started_at
+        return 0 <= age <= self.status_edit_window_min * 60
+
+    def finish_voltage_status_update(self) -> None:
+        """Remember the latest state after a successful Telegram update."""
+
+        snap = self.state.snapshot()
+        self.last_sent_voltage = snap["voltage"]
+        self.last_sent_connectivity = str(snap["connectivity"])
+        self.last_telegram = time.monotonic()
+
+    def edit_voltage_status(self, old_id: str, kind: str) -> bool:
+        """Edit one active voltage episode message in place."""
+
+        try:
+            self.telegram.edit(
+                int(old_id),
+                multiphase_status_text(self),
+                chat_id=self.telegram.status_chat_id,
+            )
+        except Exception as exc:
+            if not message_not_modified(exc):
+                logger.warning("Telegram voltage status edit failed: {}", exc)
+                return False
+        if kind == "recovered":
+            self.storage.delete_meta("voltage_status_edit_window_started_at")
+        self.finish_voltage_status_update()
+        return True
+
+    def replace_voltage_status(
+        self, kind: str, notify: bool, happened_at: float
+    ) -> bool:
+        """Edit an active episode or safely replace the shared status."""
 
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
+        if (
+            old_id
+            and self.voltage_status_edit_window_active(happened_at)
+            and self.edit_voltage_status(old_id, kind)
+        ):
+            return True
         try:
             new_id = self.telegram.send(
                 multiphase_status_text(self),
                 notify=notify,
-                reply_markup=self.status_keyboard(),
                 chat_id=self.telegram.status_chat_id,
             )
         except Exception as exc:
@@ -2159,14 +2270,31 @@ class Monitor:
             self.storage.set_meta(
                 "last_voltage_notification_at", str(happened_at)
             )
+        if kind == "recovered":
+            self.storage.delete_meta("voltage_status_edit_window_started_at")
+        else:
+            self.storage.set_meta(
+                "voltage_status_edit_window_started_at", str(happened_at)
+            )
         self.delete_previous_voltage_status(old_id, new_id)
         self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
-        snap = self.state.snapshot()
-        self.last_sent_voltage = snap["voltage"]
-        self.last_sent_connectivity = str(snap["connectivity"])
-        self.last_telegram = time.monotonic()
+        self.finish_voltage_status_update()
         return True
+
+    def delete_previous_status(self, old_id: str) -> None:
+        """Unpin the old status before deleting it."""
+
+        try:
+            self.telegram.unpin(int(old_id), self.telegram.status_chat_id)
+        except Exception as exc:
+            logger.warning("Telegram old status unpin failed: {}", exc)
+            return
+        self.storage.delete_meta("telegram_status_pinned_id")
+        try:
+            self.telegram.delete(int(old_id), self.telegram.status_chat_id)
+        except Exception as exc:
+            logger.warning("Telegram old status delete failed: {}", exc)
 
     def delete_previous_voltage_status(
         self, old_id: str | None, new_id: int
@@ -2175,12 +2303,7 @@ class Monitor:
 
         if not old_id or str(new_id) == old_id:
             return
-        try:
-            self.telegram.delete(int(old_id), self.telegram.status_chat_id)
-        except Exception as exc:
-            logger.warning(
-                "Telegram old voltage status delete failed: {}", exc
-            )
+        self.delete_previous_status(old_id)
 
     def record_voltage_event(
         self,
@@ -2210,7 +2333,7 @@ class Monitor:
         if not self.telegram.enabled:
             return
         notify = self.voltage_event_notify_allowed(kind, happened_at)
-        self.replace_voltage_status(notify, happened_at)
+        self.replace_voltage_status(kind, notify, happened_at)
 
     def maybe_low_voltage_alert(
         self, voltage: float, frequency: float
@@ -2420,6 +2543,7 @@ class Monitor:
             "silent": "1" if self.cfg.telegram_silent_default else "0",
             "quiet_enabled": "1",
             "notify_cooldown": str(self.cfg.voltage_notification_cooldown_min),
+            "status_edit_window": str(self.cfg.voltage_status_edit_window_min),
             "quiet_start": str(self.cfg.telegram_quiet_start_hour),
             "quiet_end": str(self.cfg.telegram_quiet_end_hour),
             "low_enabled": "1" if self.cfg.low_voltage_alert_enabled else "0",
@@ -2461,6 +2585,9 @@ class Monitor:
         self.telegram.quiet_end_hour = int(self.setting_value("quiet_end"))
         self.notification_cooldown_min = int(
             self.setting_value("notify_cooldown")
+        )
+        self.status_edit_window_min = int(
+            self.setting_value("status_edit_window")
         )
         self.low_voltage_alert_enabled = (
             self.setting_value("low_enabled") == "1"
@@ -2509,6 +2636,7 @@ class Monitor:
             "summary": "ON" if self.daily_summary_enabled else "OFF",
             "pin": "ON" if self.pin_status else "OFF",
             "cooldown": cooldown,
+            "edit_window": f"{self.status_edit_window_min} мин",
         }
 
     def settings_text(self) -> str:
@@ -2533,6 +2661,7 @@ class Monitor:
             f"🔕 Обычные сообщения: {labels['silent']}",
             f"🌙 Ночной режим: {labels['quiet']} {quiet_hours}",
             f"🔔 Cooldown voltage alerts: {labels['cooldown']}",
+            f"✏️ Edit window: {labels['edit_window']}",
             f"🚨 Низкое напряжение: {labels['low']} "
             f"< {self.low_voltage_alert_v:g} V",
             f"✅ Сброс тревоги: ≥ {self.low_voltage_recovery_v:g} V",
@@ -2589,6 +2718,11 @@ class Monitor:
             [
                 button("5 мин", "cooldown_5"),
                 button("10 мин", "cooldown_10"),
+            ],
+            [
+                button("✏️ Edit 3m", "editwindow_3"),
+                button("5m", "editwindow_5"),
+                button("10m", "editwindow_10"),
             ],
             [
                 button("◀ Начало -1ч", "start_dec"),
@@ -2711,6 +2845,12 @@ class Monitor:
             if minutes not in {"0", "3", "5", "10"}:
                 raise ValueError("unsupported notification cooldown")
             values["notify_cooldown"] = minutes
+            return True
+        if action.startswith("editwindow_"):
+            minutes = action.removeprefix("editwindow_")
+            if minutes not in {"3", "5", "10"}:
+                raise ValueError("unsupported status edit window")
+            values["status_edit_window"] = minutes
             return True
         if action not in {"start_dec", "start_inc", "end_dec", "end_inc"}:
             return False
@@ -2835,6 +2975,8 @@ class Monitor:
         ):
             raise ValueError("unknown settings action")
         self.persist_settings(values, original, user_id)
+        if original.get("pin_status") != values.get("pin_status"):
+            self.sync_status_pin_setting()
 
     def handle_callback(self, update: dict) -> None:
         """Handle one admin settings callback."""
