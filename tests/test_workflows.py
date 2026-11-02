@@ -73,9 +73,7 @@ class WorkflowSecurityTests(unittest.TestCase):
             text,
         )
         self.assertIn("id: build", text)
-        self.assertIn(
-            "IMAGE_DIGEST: ${{ steps.build.outputs.digest }}", text
-        )
+        self.assertIn("IMAGE_DIGEST: ${{ steps.build.outputs.digest }}", text)
         self.assertIn(
             'cosign sign --yes "${IMAGE_NAME}@${IMAGE_DIGEST}"', text
         )
