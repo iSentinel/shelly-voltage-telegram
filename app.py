@@ -1392,7 +1392,9 @@ def phase_line(monitor: Monitor, phase: str) -> str:
         state = "запуск" if connectivity == "starting" else "нет данных"
         return f"🟡 {phase}: {state}"
     if connectivity == "recovering":
-        return f"🟡 {phase}: {float(snap['voltage']):.1f} V (восстанавливается)"
+        return (
+            f"🟡 {phase}: {float(snap['voltage']):.1f} V (восстанавливается)"
+        )
     return f"🟢 {phase}: {float(snap['voltage']):.1f} V"
 
 
