@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sqlite3
 import sys
@@ -76,6 +77,22 @@ def fetch_json(url: str, timeout: float) -> tuple[int, dict[str, object]]:
         return exc.code, json.load(exc)
 
 
+def status_message_fingerprint(value: object) -> str:
+    """Return a one-way fingerprint for a Telegram status message ID."""
+
+    text = "" if value is None else str(value)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+
+
+def baseline_state(state: dict[str, object]) -> dict[str, object]:
+    """Return baseline state without storing a raw Telegram message ID."""
+
+    safe = dict(state)
+    message_id = safe.pop("status_message_id", None)
+    safe["status_message_fingerprint"] = status_message_fingerprint(message_id)
+    return safe
+
+
 def baseline_payload(args: argparse.Namespace) -> dict[str, object]:
     """Create a baseline while the outage is still open."""
 
@@ -94,7 +111,7 @@ def baseline_payload(args: argparse.Namespace) -> dict[str, object]:
         "kind": "recovery_baseline",
         "created_at": time.time(),
         "database": str(args.db),
-        "state": state,
+        "state": baseline_state(state),
         "status": "pass" if not errors else "fail",
         "errors": errors,
     }
@@ -158,6 +175,30 @@ def outage_matches(
     return all(outage.get(key) == old_outage.get(key) for key in keys)
 
 
+def baseline_message_fingerprint(baseline: dict[str, object]) -> str:
+    """Read a new fingerprint or derive one from a legacy baseline."""
+
+    state = baseline["state"]
+    fingerprint = state.get("status_message_fingerprint")
+    if fingerprint:
+        return str(fingerprint)
+    return status_message_fingerprint(state.get("status_message_id"))
+
+
+def status_message_rotated(
+    baseline: dict[str, object], current_id: object
+) -> bool:
+    """Compare the current Telegram status ID with the captured baseline."""
+
+    old_fingerprint = baseline_message_fingerprint(baseline)
+    current_fingerprint = status_message_fingerprint(current_id)
+    return bool(
+        old_fingerprint
+        and current_fingerprint
+        and current_fingerprint != old_fingerprint
+    )
+
+
 def safe_verification_state(
     state: dict[str, object], baseline: dict[str, object]
 ) -> dict[str, object]:
@@ -165,10 +206,9 @@ def safe_verification_state(
 
     safe = dict(state)
     current_id = safe.pop("status_message_id", None)
-    baseline_id = baseline["state"].get("status_message_id")
     safe["status_message_present"] = bool(current_id)
-    safe["status_message_rotated"] = bool(
-        current_id and baseline_id and current_id != baseline_id
+    safe["status_message_rotated"] = status_message_rotated(
+        baseline, current_id
     )
     return safe
 
@@ -190,7 +230,7 @@ def recovery_errors(
         errors.append("latest outage does not match the captured outage")
     elif outage["ended_at"] is None:
         errors.append("captured outage is still open")
-    if state["status_message_id"] == old_state["status_message_id"]:
+    if not status_message_rotated(baseline, state["status_message_id"]):
         errors.append("stable Telegram status message was not rotated")
     if state["measurement_count"] <= old_state["measurement_count"]:
         errors.append("no new valid measurements were stored after baseline")
