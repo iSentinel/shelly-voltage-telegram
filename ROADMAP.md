@@ -1,9 +1,9 @@
 # Roadmap
 
 Status date: 2026-11-03
-Runtime candidate: `0.5.9-hw` (software and live operational validation passed)
+Runtime release: `0.5.9-hw` (published, independently verified and live)
 Latest full hardware checkpoint: `0.5.6-hw`
-Public release target: `0.5.9-hw` (metadata promotion under CI)
+Public release: `0.5.9-hw` (source and signed multi-architecture image independently verified)
 
 
 ## Current next steps
@@ -20,13 +20,15 @@ Public release target: `0.5.9-hw` (metadata promotion under CI)
 - DONE: `0.5.9-hw` software/live gate — 15-minute stable-recovery rotation, 174 tests, Python 3.11/3.12/3.13, reproducible release, Docker candidate, exact-main deployment, rollback snapshot and restart continuity all passed.
 - DONE: verify all 57 source files, archive checksums, amd64/arm64 images, SBOM, provenance and Cosign signature.
 - DONE: prepare `0.5.9-hw` public release metadata after software/live validation.
-- NEXT: after release-metadata CI/merge, publish exact `v0.5.9-hw` tag, source archive and signed multi-architecture image, then independently verify them.
+- DONE: publish exact `v0.5.9-hw` tag on `c92d86006f17441e42a0a33d0b4b7e56f213aa82`; Source Release `41544388759`, Container Image `41544388518` and tag CI `41544388631` all passed.
+- DONE: independently verify source archive SHA256 `b73e4e958de960031cd4cac2be1cef842cf5c56c4ddd492e88e053b952ed31dc`, byte-for-byte reproducibility, GHCR digest `sha256:eb563f8b8243b3edfefb4c977f2629adca41c35f4a40bd48bca45c231ce3f8bb`, Cosign v3.0.6 signature, amd64/arm64 images and SPDX/SLSA attestations.
+- DONE: install exact public `v0.5.9-hw` through `scripts/install-release.sh`; checksum, exact-tag source parity, rollback snapshot, restart, SQLite and Telegram continuity all passed.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
 
 These current steps take precedence over older historical version notes below.
-`RELEASE_VERSION=0.5.9-hw` marks the approved software release target.
+`RELEASE_VERSION=0.5.9-hw` matches the published software release.
 `LIVE_VERSION=0.5.6-hw` remains the latest full physical acceptance checkpoint.
 
 ## Completed
