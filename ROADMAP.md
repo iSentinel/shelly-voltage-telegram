@@ -26,7 +26,7 @@ Previous hardware checkpoint: `0.5.3-hw`
 - Monitor-only safety is regression-tested: production code permits the measurement
   `GET /rpc/EM1.GetStatus` path and contains no Shelly control/configuration RPCs.
 
-### 3. Telegram implementation — SOFTWARE DONE / LIVE CREDENTIAL TEST PENDING
+### 3. Telegram implementation — DONE / LIVE ACCEPTED
 
 Implemented:
 
@@ -43,7 +43,7 @@ Candidate `0.4.2-hw` additionally validates `/start`, `/help`, `/outages`,
 persisted `getUpdates` offset, optional user-ID ACL, edit throttling, bounded 429
 retry, and `message is not modified` handling.
 
-Pending only external credentials and live Telegram acceptance.
+Live Telegram acceptance is complete; current bot and status-channel destinations are validated by `doctor` and the live command/status flow.
 
 ### 4. Container/runtime hardening — DONE
 
@@ -86,14 +86,14 @@ Pending only external credentials and live Telegram acceptance.
 - bundle SHA256;
 - secret redaction validation.
 
-### 8. Installation UX — DONE FOR LOCAL / GITHUB URL PENDING
+### 8. Installation UX — DONE / PUBLIC BOOTSTRAP ACCEPTED
 
 - `install.sh --dry-run`;
 - idempotent local install/update;
 - secure interactive configuration;
 - hidden Telegram token input;
 - non-interactive mode;
-- future `curl | bash` bootstrap;
+- public `curl | bash` bootstrap, including clean Debian 13 dry-run validation;
 - public `.env.example` separated from deployment `.env`.
 
 ## `0.4.2-hw` hardening and live acceptance
@@ -407,13 +407,12 @@ No bot token or private chat identifier is stored in public release artifacts or
   the physical Shelly and run the live-device auth check when mains/device access is available.
 - Add a second Shelly device only if required later.
 - Add Grafana/Prometheus integration only if useful; current metrics endpoint is already compatible with scraping.
-- Consider signed container releases after GitHub publication.
+- Signed container releases are being implemented in `0.5.5-hw` with keyless Sigstore Cosign signing of immutable GHCR digests.
 
 
-## `0.5.4-hw` maintainability audit — SOFTWARE/HARDWARE SMOKE PASS
+## `0.5.4-hw` maintainability audit — RELEASED / HARDWARE ACCEPTED
 
-- Keep production on hardware-accepted `0.5.3-hw` until the audited release is
-  merged and promoted through the normal installer path.
+- Production and public release are both `0.5.4-hw`; live upgrade acceptance passed.
 - PEP 8/Ruff checks pass with no source lines over 79 characters.
 - All Python functions, including tests, are limited to 40 lines.
 - Production modules/classes/functions have clear docstrings; application logging
@@ -424,3 +423,14 @@ No bot token or private chat identifier is stored in public release artifacts or
   part of the public release tree.
 - Isolated candidate runtime against a physical Pro EM-50 passed with schema v3,
   valid live samples and no synthetic `0 V` measurements.
+
+
+## `0.5.5-hw` signed container release — SOFTWARE CANDIDATE
+
+- Keep production on hardware-accepted `0.5.4-hw` while the supply-chain workflow is validated.
+- Versioned GHCR images install Cosign through an official action pinned to a full commit SHA.
+- Release images are signed keylessly through GitHub OIDC; no long-lived signing key is stored in repository secrets.
+- The signature targets the immutable image digest returned by the multi-architecture build.
+- Ordinary `main` images remain unsigned; only versioned release images receive the release signature.
+- Regression tests enforce OIDC permission, pinned action SHA, digest-based signing and release-only conditions.
+- Final acceptance requires a real GitHub Actions build/sign run and independent `cosign verify` of the published digest.
