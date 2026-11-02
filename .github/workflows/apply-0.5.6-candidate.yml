@@ -1,6 +1,9 @@
 name: Apply 0.5.6 candidate patch
 
 on:
+  push:
+    branches:
+      - candidate/0.5.6-hw
   workflow_dispatch:
 
 permissions:
@@ -8,6 +11,7 @@ permissions:
 
 jobs:
   apply:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Check out candidate branch
