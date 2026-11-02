@@ -450,6 +450,11 @@ No bot token or private chat identifier is stored in public release artifacts or
 
 ## `0.5.6-hw` Pro 3EM acceptance tooling — SOFTWARE CANDIDATE
 
+Current hardware gates:
+
+- **Current Pro EM-50 deployment:** wait for the active outage to recover, run `recovery-acceptance.py verify`, confirm read-only Shelly probe and Telegram status behavior, then `0.5.6-hw` may be promoted.
+- **Future Pro 3EM / 3CT63 backend:** keep disabled in production until the physical three-phase meter is installed and the dedicated acceptance CLI plus L1/L2/L3 UI/data checks pass.
+
 - Separate candidate/source, public release and live hardware checkpoint with `VERSION=0.5.6-hw`, `RELEASE_VERSION=0.5.5-hw` and `LIVE_VERSION=0.5.4-hw`.
 - Final release publication is fail-closed until `RELEASE_VERSION` is explicitly promoted to match `VERSION`.
 - Add standalone read-only `scripts/pro3em-acceptance.py` for physical Pro 3EM / Pro 3EM-3CT63 acceptance.
@@ -458,7 +463,7 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Provide repeated sampling, configurable bounds, text/JSON output and stable PASS/FAIL exit codes.
 - Route primary low-voltage/recovery transitions into the stable Telegram status header, including event time, measured voltage and frequency; do not send duplicate private messages.
 - Add read-only `scripts/recovery-acceptance.py` with `baseline` and `verify` modes for real blackout/recovery acceptance. It checks the same outage closes, the stable Telegram status rotates, `/ready` becomes healthy, valid samples increase and synthetic `0 V` remains absent.
-- Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed.
+- Physical three-phase acceptance remains pending until the Pro 3EM / 3CT63 is installed; this blocks only switching production to the `pro3em` backend, not promotion of the 0.5.6 software on the current Pro EM-50.
 
 
 Software acceptance checkpoint:
@@ -473,6 +478,5 @@ Software acceptance checkpoint:
 - Read-only physical Pro EM-50 probe PASS on the current installation.
 - Pro 3EM acceptance CLI end-to-end HTTP smoke PASS for three atomic
   L1/L2/L3 cycles.
-- Hardware promotion remains blocked until the real Pro 3EM / 3CT63 is
-  installed and L1/L2/L3 mapping/outage/Telegram/chart/export/metrics checks
-  pass on physical three-phase data.
+- Promotion on the current Pro EM-50 is blocked only until the active blackout recovers and the captured recovery baseline verifies successfully; then run a read-only Pro EM-50 probe and Telegram status acceptance before promotion.
+- Switching production to the `pro3em` backend remains blocked until the real Pro 3EM / 3CT63 is installed and L1/L2/L3 mapping, outage behavior, Telegram presentation, charts, exports and metrics pass on physical three-phase data.
