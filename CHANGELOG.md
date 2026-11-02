@@ -23,6 +23,7 @@
 - Pin the official `sigstore/cosign-installer` action to a full commit SHA.
 - Add regression coverage for signing permissions, digest use and release-only conditions.
 - Keyless signing is accepted with GitHub Actions RC2 run `41373145505` plus independent Gateway `cosign verify`; production remains on hardware-accepted `0.5.4-hw` because `0.5.5-hw` changes only the release supply chain.
+- Final `v0.5.5-hw` release published from exact source SHA `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; source assets and the signed amd64/arm64 GHCR image passed final release verification.
 
 ## 0.5.3-hw - 2026-11-01 — generic multi-model Shelly support
 

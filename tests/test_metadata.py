@@ -12,10 +12,7 @@ class MetadataConsistencyTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         changelog = (ROOT / "CHANGELOG.md").read_text()
         hardware = (ROOT / "HARDWARE_VALIDATION.md").read_text()
-        if version == live_version:
-            self.assertIn(f"Current release: **{version}**", readme)
-        else:
-            self.assertIn(f"Current software candidate: **{version}**", readme)
+        self.assertIn(f"Current release: **{version}**", readme)
         self.assertIn(f"## {version} -", changelog)
         self.assertIn(
             f"Hardware-accepted live checkpoint: **{live_version}**", readme

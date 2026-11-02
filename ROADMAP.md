@@ -426,7 +426,7 @@ No bot token or private chat identifier is stored in public release artifacts or
   valid live samples and no synthetic `0 V` measurements.
 
 
-## `0.5.5-hw` signed container release — SUPPLY-CHAIN ACCEPTED
+## `0.5.5-hw` signed container release — RELEASED / SUPPLY-CHAIN ACCEPTED
 
 - Keep production on hardware-accepted `0.5.4-hw`; `0.5.5-hw` changes the public release supply chain, not runtime monitoring behavior.
 - Versioned GHCR images install Cosign through an official action pinned to a full commit SHA.
@@ -435,3 +435,4 @@ No bot token or private chat identifier is stored in public release artifacts or
 - Ordinary `main` images remain unsigned; only versioned release images receive the release signature.
 - Regression tests enforce OIDC permission, pinned action SHA, digest-based signing and release-only conditions.
 - Acceptance completed: GitHub Actions run `41373145505` built and keyless-signed RC2 digest `sha256:df534c7b9b30e2a8f3dfc617b07a0ff6837ecc15b285331dc13e211130dcca4d`; independent Gateway `cosign verify` passed with the expected GitHub Actions certificate identity and OIDC issuer.
+- Final `v0.5.5-hw` publication completed: Source Release run `41373981210` and signed Container Image run `41373982691` succeeded from exact tag source `f669dbb628854ea6bdbedd61d3b505fe613c93bf`; final image digest is `sha256:c2115def9975dcfbb4a722d08713450403f53beaa01e6c54fec75962d82ce47a`, independently verified through Gateway.
