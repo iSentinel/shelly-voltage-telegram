@@ -1,8 +1,8 @@
 # Roadmap
 
-Status date: 2026-11-01
-Live checkpoint: `0.4.11-hw` (deployed and accepted on CT110)
-Previous rollback checkpoint: `0.4.7-hw`
+Status date: 2026-11-02
+Live checkpoint: `0.5.4-hw` (hardware accepted on CT110)
+Previous hardware checkpoint: `0.5.3-hw`
 
 ## Completed
 
@@ -392,30 +392,15 @@ Live acceptance completed on CT110 with the configured private destination:
 
 No bot token or private chat identifier is stored in public release artifacts or documentation.
 
-### 11. GitHub publication — LOCAL PREP DONE / WAITING FOR REPOSITORY DESTINATION
+### 11. GitHub publication — DONE
 
-Prepared and revalidated locally for `0.4.8-hw`:
-
-- README, license, Dockerfile/Compose and public examples;
-- install/configure/bootstrap and rollback scripts;
-- systemd units/timer and support/backup/soak utilities;
-- GitHub CI/image/release workflows with pinned external actions;
-- 39 public files staged with zero unstaged/untracked files;
-- `git diff --cached --check` passes;
-- no `.env`, secrets, SQLite, validation or generated dist paths are staged;
-- final reproducible source archive and `SHA256SUMS` are generated outside the repository;
-- archive checksum verification passes and forbidden private/generated content is absent;
-- no Git remote is configured and no author identity is fabricated on CT110.
-
-After the repository owner/name is selected:
-
-- replace bootstrap placeholder URL with the selected repository;
-- configure the Git remote and create the first commit/tag using the chosen GitHub identity;
-- push and verify the already-prepared CI/image/release workflows in the destination repository;
-- publish the tagged image to GHCR;
-- publish the source release and checksums;
-- test the public one-line installer on a clean Debian 13 instance.
-
+- Public repository: `iSentinel/shelly-voltage-telegram`.
+- Multilingual README pages and the live dashboard image are published.
+- Release `v0.5.4-hw` is published with source archive and `SHA256SUMS`.
+- CI, container image and source-release workflows are active.
+- Public release excludes `.env`, secrets, SQLite and local validation data.
+- The one-line installer points to the real public repository.
+- Public bootstrap dry-run was validated on a clean Debian 13 container.
 ## Optional hardening after acceptance
 
 - Shelly Digest-auth software path is regression-tested; enable authentication on
