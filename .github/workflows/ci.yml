@@ -23,10 +23,7 @@ jobs:
       - name: Install quality tools
         run: python -m pip install ruff==0.14.2
       - name: Code quality
-        run: |
-          ruff format --line-length 79 --check app.py advanced_features.py scripts tests
-          ruff check --line-length 79 --select E,F,I,UP,SIM app.py advanced_features.py scripts tests
-          python scripts/check-quality.py
+        run: ./scripts/quality.sh
       - name: Compile Python
         run: python -m compileall -q app.py advanced_features.py scripts tests
       - name: Unit tests
@@ -47,6 +44,7 @@ jobs:
           bash -n scripts/support-bundle.sh
           bash -n scripts/rollback.sh
           bash -n scripts/release.sh
+          bash -n scripts/quality.sh
           bash -n tests/test_rollback.sh
           bash -n tests/test_release.sh
           bash -n tests/test_install_release.sh
