@@ -49,6 +49,7 @@ class NotificationTestTests(unittest.TestCase):
         monitor = APP.Monitor(
             config(telegram_token="token", telegram_chat_id="123")
         )
+        monitor.storage.initialize()
         monitor.telegram.send_test = Mock(side_effect=[11, 12, 13])
         monitor.telegram.edit = Mock()
         before = monitor.storage.get_meta("last_voltage_notification_at")

@@ -2311,17 +2311,23 @@ class Monitor:
         )
 
     def instability_transition_count(self, now: float | None = None) -> int:
-        """Return recent deduplicated low/high/normal transition count."""
+        """Return recent transitions, or zero before storage is initialized."""
 
-        history = load_history(
-            self.storage.get_meta("voltage_transition_history")
-        )
+        try:
+            raw = self.storage.get_meta("voltage_transition_history")
+        except sqlite3.Error:
+            return 0
+        history = load_history(raw)
         return instability_count(history, now or time.time())
 
     def voltage_episode_summary(self) -> dict[str, object] | None:
-        """Return localized-ready statistics for a finalized episode."""
+        """Return finalized episode statistics when metadata is available."""
 
-        episode = load_json_object(self.storage.get_meta("voltage_episode"))
+        try:
+            raw = self.storage.get_meta("voltage_episode")
+        except sqlite3.Error:
+            return None
+        episode = load_json_object(raw)
         if not episode or not episode.get("finalized_at"):
             return None
         start = float(episode["start_at"])
