@@ -8,10 +8,11 @@
 - Physical three-phase acceptance remains pending until the meter is installed.
 - Add independent `RELEASE_VERSION` metadata and fail-closed final publication until it matches `VERSION`.
 - Exclude `.ruff_cache`, `.pytest_cache` and `.mypy_cache` from public source archives.
-- Software acceptance completed with 116/116 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
+- Software acceptance completed with 122/122 tests, CI-equivalent quality/ResourceWarning gates, release/install fixtures, Compose validation and candidate image build.
 - End-to-end Pro 3EM HTTP acceptance smoke passed for three atomic L1/L2/L3 cycles; real three-phase hardware acceptance remains pending.
 - Low-voltage and recovery transitions now appear at the top of the stable status message with event time, voltage and frequency instead of being sent as separate private messages.
 - Add read-only recovery acceptance tooling that captures an outage baseline and verifies outage closure, stable-message rotation, readiness, new valid samples and absence of synthetic `0 V` after power returns.
+- Add a read-only promotion checker that reuses the recovery result and also verifies the live version marker and `pro_em50` backend before an upgrade is allowed.
 
 ## 0.5.5-hw - supply-chain signing candidate
 

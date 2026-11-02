@@ -204,6 +204,9 @@ docker exec shelly-voltage-bot python /app/app.py doctor
   --db /var/lib/shelly-voltage/voltage.sqlite3 \
   verify --baseline recovery-baseline.json
 
+# Единая read-only проверка перед обновлением production
+./scripts/promotion-check.py --baseline recovery-baseline.json
+
 # Online backup SQLite
 ./scripts/backup.sh
 
