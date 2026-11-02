@@ -1,3 +1,12 @@
+## 0.5.8-hw - event summaries, localization and notification diagnostics
+
+- Add finalized voltage-event summaries using real SQLite samples for min/max/average.
+- Track normalized low/high/normal transitions and time outside normal during the fixed edit window.
+- Add persistent RU/UA/EN Telegram UI selection with immediate command/status refresh.
+- Add administrator loud, silent and edit notification tests without changing real alert cooldown state.
+- Add a persistent unstable-grid indicator after four confirmed transitions within 15 minutes, with an ON/OFF runtime setting.
+- Include the new production modules in Docker, release archives, CI compile checks and the maintainability gate.
+
 ## 0.5.7-hw - Telegram status lifecycle and edit window
 
 - Unpin the previous Telegram status before deleting it.

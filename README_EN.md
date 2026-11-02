@@ -308,3 +308,8 @@ The command requires Ruff 0.14.2 and fails closed if Ruff is missing or a differ
 The edit window is configured in administrator `/settings`: 3, 5 or 10 minutes, with 10 minutes as the default (`VOLTAGE_STATUS_EDIT_WINDOW_MIN`). Its deadline starts with the first published voltage event. Low voltage, high voltage, recovery and repeated transitions within that deadline edit the same message, including after recovery. Edits do not extend the deadline. After expiry, the next transition publishes a new post, then unpins and deletes the previous post.
 
 The audible notification cooldown is a separate setting. Editing a message is silent and does not change the last audible notification time. Quiet hours still apply to new posts. SQLite metadata preserves the setting, message ID and original deadline across restarts. Older databases use the configured default and reuse a recent stored voltage event when available; existing history is retained.
+
+## 0.5.8 candidate features
+
+The candidate adds a finalized voltage-event summary, persistent RU/UA/EN Telegram UI selection, explicit loud/silent/edit notification tests, and a restart-persistent unstable-grid indicator triggered by four confirmed state transitions in 15 minutes. Test notifications never advance the real voltage-alert sound cooldown.
+

@@ -37,9 +37,9 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.7-hw**
+- Current software candidate: **0.5.8-hw**
 - Current release: **0.5.7-hw**
-- Production deployment: **0.5.7-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted checkpoint remains `0.5.6-hw`.
+- Production deployment: **0.5.8-hw candidate**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.6-hw` adds blackout/recovery acceptance, stale-safe status handling, and shared voltage-status notification cooldown while retaining signed versioned GHCR images.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
@@ -77,6 +77,18 @@ Default cooldown is 5 minutes. Administrators can select `Off`, `3`, `5`, or
 `10` minutes from `/settings`. The value is persisted in SQLite and applies
 without a restart. Set `VOLTAGE_NOTIFICATION_COOLDOWN_MIN` to change the
 deployment default.
+
+
+## 0.5.8 candidate features
+
+- Final voltage-event summary after the fixed edit window: start/end, duration,
+  min/max/average voltage from SQLite, transition count, and time outside normal.
+- Telegram UI language can be switched at runtime between **RU / UA / EN** and
+  is persisted in SQLite.
+- `/settings` includes explicit **Test loud**, **Test silent**, and **Test edit**
+  checks that do not alter real voltage-alert cooldown state.
+- An optional instability indicator appears after four confirmed low/high/normal
+  transitions within 15 minutes; transition history survives a restart.
 
 ## Install in one command
 

@@ -62,7 +62,8 @@ validate_inputs() {
         exit 2
     }
     local required=(
-        VERSION RELEASE_VERSION LIVE_VERSION app.py Dockerfile
+        VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py
+        telegram_i18n.py notification_features.py Dockerfile
         compose.yaml requirements.txt README.md
     )
     for file in "${required[@]}"; do

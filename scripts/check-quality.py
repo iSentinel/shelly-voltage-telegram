@@ -30,7 +30,12 @@ def parse_args() -> argparse.Namespace:
 def python_files(root: Path) -> list[Path]:
     """Return Python source files that belong to the project."""
 
-    files = [root / "app.py", root / "advanced_features.py"]
+    files = [
+        root / "app.py",
+        root / "advanced_features.py",
+        root / "telegram_i18n.py",
+        root / "notification_features.py",
+    ]
     files.extend(sorted((root / "scripts").glob("*.py")))
     files.extend(sorted((root / "tests").glob("*.py")))
     return [path for path in files if path.is_file()]

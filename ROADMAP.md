@@ -595,3 +595,16 @@ Software acceptance checkpoint:
 - Fresh online backup SHA256 and SQLite quick_check PASS.
 - Runtime source matches the implementation merged in PR #22.
 - Full hardware checkpoint remains 0.5.6-hw; no electrical transition was induced.
+### 0.5.8-hw Telegram usability stage
+
+- PASS: finalized event summary after the fixed edit window.
+- PASS: persistent RU / UA / EN Telegram UI.
+- PASS: administrator loud / silent / edit notification tests.
+- PASS: restart-persistent unstable-grid indicator (4 transitions / 15 min).
+- PASS: QUALITY GATE, 168/168 tests, installer/rollback/support fixtures, reproducible release archive, container build/import and live Pro EM-50 smoke.
+- PASS: restart continuity; Telegram status message ID preserved; SQLite quick_check OK; no new outage and no synthetic `0 V`.
+- PASS: live Telegram silent/edit diagnostics; real alert sound cooldown remained unchanged.
+- SECURITY: protect `main` with required checks `test (3.11)`, `test (3.12)`, `test (3.13)` and `build`, block force-push/deletion, and require PRs. Application is pending GitHub repository Administration permission; the connected integration currently receives HTTP 403 on branch-protection APIs.
+- NEXT: publish candidate PR and observe a natural threshold/recovery transition for hardware acceptance.
+- BLOCKED separately: physical Pro 3EM / 3CT63 acceptance until hardware is installed.
+
