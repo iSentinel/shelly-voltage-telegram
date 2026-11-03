@@ -462,3 +462,37 @@ Production recovery and promotion were validated on the physical Shelly Pro EM-5
 
 Physical Pro 3EM / 3CT63 production enablement remains blocked until the actual
 three-phase hardware is installed and passes L1/L2/L3 physical acceptance.
+## Natural 15-minute stable-recovery acceptance (`0.5.10-hw`)
+
+This acceptance is intentionally read-only. Do not create a power cut or force a
+voltage threshold transition. Wait for a natural voltage recovery while the bot
+is running. The checker opens SQLite with `mode=ro`, does not call Telegram, and
+does not send any Shelly control/configuration RPC.
+
+When `voltage_recovery_stable_since` is active after the natural recovery, save
+a safe baseline:
+
+```bash
+python scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-baseline \
+  --output validation/stable-recovery-baseline.json
+```
+
+The baseline stores a one-way fingerprint of the Telegram status message, not
+the raw message ID. After at least 15 unchanged minutes, verify the silent
+replacement:
+
+```bash
+python scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-verify \
+  --baseline validation/stable-recovery-baseline.json \
+  --output validation/stable-recovery-result.json
+```
+
+PASS requires the recovery status message to be replaced, the recovery timer and
+transient event/episode context to be cleared, new valid samples to be present,
+SQLite `quick_check` to remain `ok`, zero synthetic `0 V` rows, `/health` and
+`/ready` to remain online, and the audible voltage-notification timestamp to be
+unchanged. A result before the full 15-minute interval fails closed.

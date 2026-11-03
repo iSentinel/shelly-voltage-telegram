@@ -17,6 +17,7 @@ from pathlib import Path
 DEFAULT_DB = Path("/data/voltage.sqlite3")
 DEFAULT_HEALTH = "http://127.0.0.1:8080/health"
 DEFAULT_READY = "http://127.0.0.1:8080/ready"
+STABLE_RECOVERY_SECONDS = 15 * 60
 
 
 def open_db(path: Path) -> sqlite3.Connection:
@@ -35,14 +36,34 @@ def scalar(db: sqlite3.Connection, sql: str, params: tuple = ()) -> object:
     return row[0] if row else None
 
 
+def meta_value(db: sqlite3.Connection, key: str) -> object:
+    """Return one metadata value from the read-only database."""
+
+    return scalar(db, "SELECT value FROM meta WHERE key=?", (key,))
+
+
+def stored_event_kind(raw: object) -> str | None:
+    """Return the persisted voltage event kind without exposing details."""
+
+    if not raw:
+        return None
+    try:
+        payload = json.loads(str(raw))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    kind = payload.get("kind") if isinstance(payload, dict) else None
+    return str(kind) if kind else None
+
+
 def current_db_state(path: Path) -> dict[str, object]:
-    """Read the recovery-relevant database state without modifying it."""
+    """Read recovery-relevant database state without modifying it."""
 
     with closing(open_db(path)) as db:
         outage = db.execute(
             "SELECT id,started_at,ended_at,phase FROM outages "
             "ORDER BY id DESC LIMIT 1"
         ).fetchone()
+        episode = meta_value(db, "voltage_episode")
         return {
             "quick_check": scalar(db, "PRAGMA quick_check"),
             "zero_voltage_rows": scalar(
@@ -51,11 +72,17 @@ def current_db_state(path: Path) -> dict[str, object]:
             "measurement_count": scalar(
                 db, "SELECT COUNT(*) FROM measurements"
             ),
-            "status_message_id": scalar(
-                db,
-                "SELECT value FROM meta WHERE "
-                "key='telegram_status_message_id'",
+            "status_message_id": meta_value(db, "telegram_status_message_id"),
+            "recovery_stable_since": meta_value(
+                db, "voltage_recovery_stable_since"
             ),
+            "last_notification_at": meta_value(
+                db, "last_voltage_notification_at"
+            ),
+            "last_voltage_event_kind": stored_event_kind(
+                meta_value(db, "last_voltage_event")
+            ),
+            "voltage_episode_present": bool(episode),
             "outage": None
             if outage is None
             else {
@@ -262,6 +289,162 @@ def verify_payload(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def safe_stable_state(state: dict[str, object]) -> dict[str, object]:
+    """Return voltage-recovery state without the raw Telegram message ID."""
+
+    safe = dict(state)
+    message_id = safe.pop("status_message_id", None)
+    safe["status_message_present"] = bool(message_id)
+    safe["status_message_fingerprint"] = status_message_fingerprint(message_id)
+    return safe
+
+
+def stable_since_value(state: dict[str, object]) -> float | None:
+    """Parse the persisted stable-recovery timestamp."""
+
+    raw = state.get("recovery_stable_since")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def stable_baseline_errors(
+    state: dict[str, object],
+    health: dict[str, object],
+    ready: dict[str, object],
+) -> list[str]:
+    """Validate a live voltage-recovery timer baseline."""
+
+    errors = []
+    stable_since = stable_since_value(state)
+    if state["quick_check"] != "ok" or state["zero_voltage_rows"] != 0:
+        errors.append("database integrity or zero-voltage check failed")
+    if not state["status_message_id"]:
+        errors.append("stable Telegram status message ID is missing")
+    if stable_since is None:
+        errors.append("stable recovery timer is not active")
+    if state["last_voltage_event_kind"] != "recovered":
+        errors.append("latest voltage event is not recovered")
+    if health.get("connectivity") != "online":
+        errors.append("Shelly connectivity is not online")
+    if ready.get("ready") is not True:
+        errors.append("ready endpoint is not ready")
+    return errors
+
+
+def stable_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
+    """Capture read-only state while the 15-minute recovery timer is active."""
+
+    state = current_db_state(args.db)
+    health_code, health = fetch_json(args.health_url, args.timeout)
+    ready_code, ready = fetch_json(args.ready_url, args.timeout)
+    errors = stable_baseline_errors(state, health, ready)
+    if health_code != 200:
+        errors.append(f"health endpoint returned HTTP {health_code}")
+    if ready_code != 200:
+        errors.append(f"ready endpoint returned HTTP {ready_code}")
+    return {
+        "kind": "stable_recovery_baseline",
+        "created_at": time.time(),
+        "database": str(args.db),
+        "state": safe_stable_state(state),
+        "status": "pass" if not errors else "fail",
+        "errors": errors,
+    }
+
+
+def load_stable_baseline(path: Path) -> dict[str, object]:
+    """Load one stable-recovery baseline."""
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read baseline: {path}") from exc
+    if payload.get("kind") != "stable_recovery_baseline":
+        raise ValueError("file is not a stable recovery baseline")
+    if not isinstance(payload.get("state"), dict):
+        raise ValueError("stable recovery baseline has no state")
+    return payload
+
+
+def stable_status_rotated(
+    baseline: dict[str, object], current_id: object
+) -> bool:
+    """Compare current status ID with a stable-recovery fingerprint."""
+
+    old = str(baseline["state"].get("status_message_fingerprint") or "")
+    current = status_message_fingerprint(current_id)
+    return bool(old and current and old != current)
+
+
+def stable_verify_errors(
+    baseline: dict[str, object],
+    state: dict[str, object],
+    health: dict[str, object],
+    ready: dict[str, object],
+    now: float,
+) -> list[str]:
+    """Validate the completed silent post-recovery rotation."""
+
+    errors = []
+    old = baseline["state"]
+    started = stable_since_value(old)
+    if started is None or now - started < STABLE_RECOVERY_SECONDS:
+        errors.append("15-minute stable recovery period has not elapsed")
+    if not stable_status_rotated(baseline, state["status_message_id"]):
+        errors.append("recovery status message was not rotated")
+    if state["recovery_stable_since"] is not None:
+        errors.append("stable recovery timer was not cleared")
+    if state["last_voltage_event_kind"] is not None:
+        errors.append("recovery event context was not cleared")
+    if state["voltage_episode_present"]:
+        errors.append("voltage episode context was not cleared")
+    if state["last_notification_at"] != old.get("last_notification_at"):
+        errors.append("audible notification cooldown timestamp changed")
+    if state["measurement_count"] <= old.get("measurement_count", 0):
+        errors.append("no new valid measurements were stored")
+    if state["quick_check"] != "ok" or state["zero_voltage_rows"] != 0:
+        errors.append("database integrity or zero-voltage check failed")
+    if (
+        health.get("connectivity") != "online"
+        or ready.get("ready") is not True
+    ):
+        errors.append("service is not online and ready")
+    return errors
+
+
+def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
+    """Verify the 15-minute silent recovery-status replacement."""
+
+    baseline = load_stable_baseline(args.baseline)
+    state = current_db_state(args.db)
+    health_code, health = fetch_json(args.health_url, args.timeout)
+    ready_code, ready = fetch_json(args.ready_url, args.timeout)
+    now = time.time()
+    errors = stable_verify_errors(baseline, state, health, ready, now)
+    if health_code != 200:
+        errors.append(f"health endpoint returned HTTP {health_code}")
+    if ready_code != 200:
+        errors.append(f"ready endpoint returned HTTP {ready_code}")
+    safe = safe_stable_state(state)
+    safe["status_message_rotated"] = stable_status_rotated(
+        baseline, state["status_message_id"]
+    )
+    return {
+        "kind": "stable_recovery_verification",
+        "checked_at": now,
+        "read_only": True,
+        "health": safe_health_payload(health),
+        "ready": ready,
+        "state": safe,
+        "status": "pass" if not errors else "fail",
+        "errors": errors,
+    }
+
+
 def write_output(payload: dict[str, object], output: Path | None) -> None:
     """Print JSON and optionally save the same payload to a file."""
 
@@ -288,6 +471,17 @@ def parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("--baseline", type=Path, required=True)
     verify.add_argument("--output", type=Path)
+    stable_base = sub.add_parser(
+        "stable-baseline",
+        help="capture an active 15-minute voltage recovery timer",
+    )
+    stable_base.add_argument("--output", type=Path)
+    stable_verify = sub.add_parser(
+        "stable-verify",
+        help="verify silent rotation after 15 stable minutes",
+    )
+    stable_verify.add_argument("--baseline", type=Path, required=True)
+    stable_verify.add_argument("--output", type=Path)
     return cli
 
 
@@ -299,11 +493,13 @@ def main() -> int:
         print("ERROR: --timeout must be > 0", file=sys.stderr)
         return 2
     try:
-        payload = (
-            baseline_payload(args)
-            if args.command == "baseline"
-            else verify_payload(args)
-        )
+        handlers = {
+            "baseline": baseline_payload,
+            "verify": verify_payload,
+            "stable-baseline": stable_baseline_payload,
+            "stable-verify": stable_verify_payload,
+        }
+        payload = handlers[args.command](args)
     except (ValueError, OSError, sqlite3.Error, urllib.error.URLError) as exc:
         payload = {"status": "fail", "error_type": exc.__class__.__name__}
     write_output(payload, args.output)

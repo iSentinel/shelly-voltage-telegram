@@ -1877,6 +1877,7 @@ class Monitor:
         self.load_runtime_settings()
         self.last_summary_day = self.storage.get_meta("daily_summary_day")
         self.restore_voltage_event()
+        self.restore_recovery_stability_timer()
         self.restore_voltage_status_window()
         self.restore_voltage_episode()
         for phase in self.phase_states:
@@ -2273,6 +2274,18 @@ class Monitor:
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             logger.warning("Ignoring invalid stored voltage event metadata")
+
+    def restore_recovery_stability_timer(self) -> None:
+        """Restore the timer for a recovered event from an older version."""
+
+        if self.storage.get_meta(RECOVERY_STATUS_STABLE_KEY):
+            return
+        event = self.last_voltage_event
+        if not event or event[0] != "recovered":
+            return
+        if not self.storage.get_meta(self.status_message_key()):
+            return
+        self.storage.set_meta(RECOVERY_STATUS_STABLE_KEY, str(event[3]))
 
     def restore_voltage_episode(self) -> None:
         """Create episode metadata when upgrading an active older event."""

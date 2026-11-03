@@ -784,6 +784,53 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             )
             self.assertEqual(monitor.telegram.send.call_count, 1)
 
+    def test_legacy_recovery_restores_stable_timer(self):
+        """Migrate a pre-0.5.9 recovered event into the stable timer."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy-recovery.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.storage.set_meta("telegram_status_message_id", "301")
+            payload = {
+                "kind": "recovered",
+                "voltage": 230.0,
+                "frequency": 50.0,
+                "timestamp": 1000.0,
+                "phase": "L1",
+            }
+            monitor.storage.set_meta(
+                "last_voltage_event", APP.json.dumps(payload)
+            )
+            monitor.restore_voltage_event()
+            monitor.restore_recovery_stability_timer()
+            self.assertEqual(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY),
+                "1000.0",
+            )
+
+    def test_legacy_abnormal_event_does_not_restore_recovery_timer(self):
+        """Do not migrate an abnormal event into the recovery timer."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "legacy-abnormal.sqlite3"
+            monitor = self._stable_recovery_monitor(path)
+            monitor.storage.set_meta("telegram_status_message_id", "301")
+            payload = {
+                "kind": "warning_high",
+                "voltage": 254.0,
+                "frequency": 50.0,
+                "timestamp": 1000.0,
+                "phase": "L1",
+            }
+            monitor.storage.set_meta(
+                "last_voltage_event", APP.json.dumps(payload)
+            )
+            monitor.restore_voltage_event()
+            monitor.restore_recovery_stability_timer()
+            self.assertIsNone(
+                monitor.storage.get_meta(APP.RECOVERY_STATUS_STABLE_KEY)
+            )
+
     def test_stable_recovery_timer_survives_restart(self):
         """Resume the persisted recovery timer after a process restart."""
 
