@@ -496,3 +496,24 @@ transient event/episode context to be cleared, new valid samples to be present,
 SQLite `quick_check` to remain `ok`, zero synthetic `0 V` rows, `/health` and
 `/ready` to remain online, and the audible voltage-notification timestamp to be
 unchanged. A result before the full 15-minute interval fails closed.
+## 2026-11-03 `0.5.10-hw` migration and restart acceptance
+
+This is operational migration evidence, not a substitute for the still-pending
+natural voltage threshold/recovery acceptance. No electrical transition was
+induced.
+
+- exact merged source: `4ab02a16d5cbe51cadbaf89fd220fcb82165f69b`;
+- pre-upgrade database had a persisted `recovered` event and episode but no
+  `voltage_recovery_stable_since` key;
+- startup migration restored the missing timer from the stored recovery time;
+- after a confirmed normal poll, the old recovery status was replaced silently;
+- transient recovery event, episode, edit-window and stability timer were cleared;
+- audible notification cooldown timestamp remained unchanged;
+- Shelly remained online and `/ready` returned HTTP 200;
+- SQLite `quick_check`: `ok`; open outages: 0; synthetic `0 V`: 0;
+- deployed `VERSION`, `app.py` and recovery-acceptance script matched exact
+  merged source;
+- restart continuity preserved the replacement status and did not recreate
+  recovery context;
+- pre-upgrade source and compressed SQLite snapshot checksums passed, and the
+  restored snapshot database passed `quick_check` with zero synthetic `0 V`.

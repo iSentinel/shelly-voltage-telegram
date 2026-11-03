@@ -42,8 +42,8 @@ The service is designed as a **monitor only**. It does not switch relays, change
 ## Project status
 
 - **Current software candidate: `0.5.10-hw`**
-- **Current release: `0.5.9-hw`**
-- **Production deployment: `0.5.9-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- **Current release: `0.5.10-hw`**
+- **Production deployment: `0.5.10-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Candidate `0.5.9-hw` silently replaces an unchanged recovery post with a fresh current-status post after 15 stable minutes.
 - Candidate `0.5.10-hw` adds read-only field acceptance for the natural 15-minute stable-recovery status rotation.
