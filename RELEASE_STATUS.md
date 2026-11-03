@@ -1,10 +1,14 @@
-## 0.5.11-hw — compact settings candidate
+## 0.5.11-hw — live verified / release target
 
-- Software candidate: `0.5.11-hw`.
-- Production/public release remains `0.5.10-hw` until candidate gates and live validation pass.
+- Software candidate and production runtime: `0.5.11-hw`; public release remains `0.5.10-hw` until the exact release tag completes.
 - `/settings` is reduced to five top-level sections with focused subpages; navigation edits the same message.
 - Reset requires explicit confirmation; legacy settings callbacks remain compatible.
-- Optional Telegram Mini App support is deferred until a public HTTPS endpoint and server-side `initData` validation are available.
+- Local gate: QUALITY PASS, 187/187 tests, clean Python 3.11/3.12/3.13 matrix, installer/rollback/support/release/Docker gates PASS.
+- PR #34 CI and post-merge main CI/container workflows passed on exact source `0f0b5d691f6e8e608d33442e3fe5f42321c62f7b`.
+- Live promotion created a verified rollback snapshot; source parity, health/ready, SQLite continuity and restart continuity passed.
+- Live compact settings render confirms exactly five main buttons and persisted UA language; Telegram status ID, alert cooldown timestamp, edit window and cooldown settings remained unchanged.
+- Optional Telegram Mini App support is deferred until a public HTTPS endpoint and server-side `initData` validation are available; existing health endpoints remain private.
+- Full electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
 
 # Release status
 
