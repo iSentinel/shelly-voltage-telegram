@@ -170,3 +170,16 @@ class MenuTopologyTests(unittest.TestCase):
             for row in keyboard:
                 for button in row:
                     self.assertFalse(button["text"].startswith("menu_"))
+
+    def test_repeated_status_click_ignores_identical_telegram_edit(self):
+        self.monitor.telegram.edit.side_effect = RuntimeError(
+            "Bad Request: message is not modified"
+        )
+        self.monitor.handle_callback(self.callback())
+        self.monitor.telegram.answer_callback.assert_called_once()
+        self.monitor.telegram.send.assert_not_called()
+
+    def test_menu_delivery_failure_is_not_silently_hidden(self):
+        self.monitor.telegram.edit.side_effect = RuntimeError("unavailable")
+        with self.assertRaisesRegex(RuntimeError, "unavailable"):
+            self.monitor.handle_callback(self.callback())

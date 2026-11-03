@@ -2,7 +2,7 @@
 
 - Prepared private `/start` menu, combined Status/settings and model-specific
   voltage topology. Pro EM-50 has one voltage phase displayed as L.
-- Local quality gate and 198 unit tests pass; live promotion and physical
+- Local quality gate and 200 unit tests pass; live promotion and physical
   acceptance are pending. Public release and production remain 0.5.11-hw.
 - Full electrical-transition hardware checkpoint remains 0.5.6-hw.
 - Mini App preparation remains unpublished, as requested.

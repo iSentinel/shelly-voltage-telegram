@@ -4454,11 +4454,18 @@ class Monitor:
             self.handle_file_command("/chart", ["/chart"])
         else:
             text = self.command_text("/" + action)
+            self.edit_menu_response(int(message["message_id"]), text)
+
+    def edit_menu_response(self, message_id: int, text: str) -> None:
+        """Allow repeated clicks when Telegram already has the same text."""
+
+        try:
             self.telegram.edit(
-                int(message["message_id"]),
-                text,
-                reply_markup=self.main_menu_keyboard(),
+                message_id, text, reply_markup=self.main_menu_keyboard()
             )
+        except Exception as exc:
+            if not message_not_modified(exc):
+                raise
 
     def full_status_text(self) -> str:
         """Combine voltage readings with the active safe settings."""
