@@ -252,7 +252,8 @@ def dashboard_html(title: str, rows: list[dict[str, object]]) -> str:
         f"<title>{html.escape(title)}</title>"
         "<style>body{font-family:sans-serif;max-width:900px;margin:30px auto;"
         "background:#111;color:#eee}main{display:grid;grid-template-columns:"
-        "repeat(3,1fr);gap:16px}section{padding:20px;background:#222;"
+        "repeat(auto-fit,minmax(220px,1fr));gap:16px}"
+        "section{padding:20px;background:#222;"
         "border-radius:12px}strong{font-size:2rem}</style>"
         f"<h1>{html.escape(title)}</h1><main>{body}</main>"
     )

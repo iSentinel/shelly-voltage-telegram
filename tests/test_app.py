@@ -507,6 +507,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor = APP.Monitor(
                 config(
                     database_path=path,
+                    shelly_meter_type="pro3em",
                     telegram_token="token",
                     telegram_chat_id="123",
                     alert_dwell_sec=0,
@@ -1521,7 +1522,7 @@ class MonitorRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "secondary-outage.sqlite3"
             monitor = APP.Monitor(
-                config(database_path=path, phase_l2_host="192.0.2.20")
+                config(database_path=path, shelly_meter_type="pro3em")
             )
             monitor.storage.initialize()
             monitor.last_voltage_event = ("low", 179.0, 50.0, 100.0, "L2")
@@ -1778,11 +1779,11 @@ class ConnectivityStateTests(unittest.TestCase):
             return_value={"count": 1, "min": 214.0, "max": 214.0, "avg": 214.0}
         )
         text = APP.multiphase_status_text(monitor)
-        self.assertIn("🔴 L1: недоступна", text)
-        self.assertNotIn("L1: 214.0 V", text)
+        self.assertIn("🔴 L: недоступна", text)
+        self.assertNotIn("L: 214.0 V", text)
         monitor.state.success(228.5, 50.0, 4.0, recovery_after=2)
         text = APP.multiphase_status_text(monitor)
-        self.assertIn("🟡 L1: 228.5 V (восстанавливается)", text)
+        self.assertIn("🟡 L: 228.5 V (восстанавливается)", text)
 
     def test_readiness_distinguishes_offline_from_liveness(self):
         monitor = APP.Monitor(config())
@@ -1961,16 +1962,16 @@ class AdvancedFeatureTests(unittest.TestCase):
                 )
                 self.assertEqual(storage.get_meta("schema_version"), "3")
 
-    def test_unconfigured_phases_are_visible(self):
+    def test_single_voltage_phase_hides_unused_lines(self):
         monitor = APP.Monitor(config())
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0}
         )
         text = APP.multiphase_status_text(monitor)
-        self.assertIn("L1: 220.0 V", text)
-        self.assertIn("L2: не настроена", text)
-        self.assertIn("L3: не настроена", text)
+        self.assertIn("L: 220.0 V", text)
+        self.assertNotIn("L2", text)
+        self.assertNotIn("L3", text)
 
     def test_pro3em_poll_persists_three_phases_with_same_cycle(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2003,7 +2004,7 @@ class AdvancedFeatureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "phase.sqlite3"
             monitor = APP.Monitor(
-                config(database_path=path, phase_l2_host="192.0.2.20")
+                config(database_path=path, shelly_meter_type="pro3em")
             )
             monitor.storage.initialize()
             monitor.phase_clients["L2"].read = Mock(
@@ -2077,7 +2078,9 @@ class AdvancedFeatureTests(unittest.TestCase):
             q = APP.quality_stats(path, "L1", now - 10, 207, 190, 253)
             self.assertEqual(q["samples"], 4)
             self.assertEqual(q["below_critical"], 1)
-            monitor = APP.Monitor(config(database_path=path))
+            monitor = APP.Monitor(
+                config(database_path=path, shelly_meter_type="pro3em")
+            )
             monitor.state.restore(now, 230.0, 50.0)
             page = APP.dashboard_html("test", APP.dashboard_rows(monitor))
             self.assertIn("L1", page)
@@ -2133,7 +2136,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             row = storage.audit_recent(1)[0]
             self.assertEqual(row[1:], ("7", "quiet_start", "23", "22"))
 
-    def test_l2_uses_independent_credentials(self):
+    def test_single_phase_ignores_legacy_secondary_hosts(self):
         monitor = APP.Monitor(
             config(
                 phase_l2_host="192.0.2.20",
@@ -2141,10 +2144,9 @@ class AdvancedFeatureTests(unittest.TestCase):
                 phase_l2_password="secret2",
             )
         )
-        client = monitor.phase_clients["L2"]
-        self.assertEqual(client.user, "phase2")
-        self.assertEqual(client.password, "secret2")
-        self.assertIsInstance(client.auth(), APP.HTTPDigestAuth)
+        self.assertEqual(tuple(monitor.phase_clients), ("L1",))
+        self.assertEqual(monitor.cfg.phase_l2_host, "192.0.2.20")
+        self.assertEqual(monitor.phase_labels(), "L")
 
     def test_file_upload_is_silent(self):
         with tempfile.TemporaryDirectory() as directory:

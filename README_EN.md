@@ -22,6 +22,13 @@
 
 ---
 
+## Telegram menu / Меню Telegram
+
+`/start` opens the bot menu. Status includes voltage and active settings.
+Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
+See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
+Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
+
 ## What it does
 
 **Shelly Voltage Telegram** continuously reads voltage and frequency from supported Shelly meters, stores valid measurements in SQLite, detects confirmed outages, and keeps a Telegram status message up to date.
@@ -37,13 +44,13 @@ The service is designed as a **monitor only**. It does not switch relays, change
 | 📊 **Observability** | `/health`, `/ready`, `/status.json`, `/metrics`, local dashboard. |
 | 🗄️ **SQLite WAL** | Durable history, settings, audit log and outage records. |
 | 🐳 **Docker** | Hardened non-root container, Compose, systemd integration and backups. |
-| 3️⃣ **Three-phase ready** | Native Pro 3EM/3CT63 backend plus optional separate L2/L3 meters. |
+| 3️⃣ **Three-phase ready** | Native Pro 3EM/3CT63: L1/L2/L3; single-phase models: L. |
 
 ## Project status
 
-- **Current software candidate: `0.5.11-hw`**
-- **Current release: `0.5.10-hw`**
-- **Production deployment: `0.5.10-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- **Current software candidate: `0.5.12-hw`**
+- **Current release: `0.5.11-hw`**
+- **Production deployment: `0.5.11-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Candidate `0.5.9-hw` silently replaces an unchanged recovery post with a fresh current-status post after 15 stable minutes.
 - Candidate `0.5.10-hw` adds read-only field acceptance for the natural 15-minute stable-recovery status rotation.
@@ -75,8 +82,6 @@ The model can be selected from the administrator `/settings` menu. Network addre
 ```mermaid
 flowchart LR
     S1[Shelly meter / L1] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
-    S2[Optional L2 meter] -->|read-only RPC| BOT
-    S3[Optional L3 meter] -->|read-only RPC| BOT
     P3[Pro 3EM / 3CT63] -->|A/B/C in one EM.GetStatus| BOT
     BOT --> DB[("SQLite WAL")]
     BOT --> TG["Telegram Bot API"]

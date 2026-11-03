@@ -1,0 +1,172 @@
+"""Verify private navigation and model-specific independent voltage phases."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import Mock
+
+from test_app import APP, config
+
+
+class MenuTopologyTests(unittest.TestCase):
+    """Exercise user-visible navigation and durable topology changes."""
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "monitor.sqlite3"
+        self.monitor = APP.Monitor(
+            config(
+                database_path=self.path,
+                telegram_chat_id="123",
+                telegram_allowed_user_ids=("7", "8"),
+                telegram_admin_user_ids=("7",),
+            )
+        )
+        self.monitor.storage.initialize()
+        self.monitor.telegram.send = Mock()
+        self.monitor.telegram.edit = Mock()
+        self.monitor.telegram.answer_callback = Mock()
+
+    def callback(self, action="status", user=7, chat=123):
+        """Build a callback from the private navigation message."""
+
+        return {
+            "callback_query": {
+                "id": "callback",
+                "from": {"id": user},
+                "data": "menu:" + action,
+                "message": {"chat": {"id": chat}, "message_id": 42},
+            }
+        }
+
+    def test_start_opens_six_action_menu(self):
+        self.monitor.send_command_response("/start")
+        call = self.monitor.telegram.send.call_args
+        rows = call.kwargs["reply_markup"]["inline_keyboard"]
+        actions = [button["callback_data"] for row in rows for button in row]
+        self.assertEqual(
+            actions,
+            [
+                "menu:" + action
+                for action in (
+                    "status",
+                    "settings",
+                    "today",
+                    "outages",
+                    "chart",
+                    "help",
+                )
+            ],
+        )
+        self.assertNotIn("/status", call.args[0])
+
+    def test_status_contains_live_settings_even_without_measurements(self):
+        self.monitor.update_setting("editwindow_3", "7")
+        self.monitor.handle_callback(self.callback())
+        call = self.monitor.telegram.edit.call_args
+        self.assertEqual(call.args[0], 42)
+        self.assertIn(self.monitor.settings_text(), call.args[1])
+        self.assertIn("3", call.args[1])
+        self.assertIn("Pro EM-50", call.args[1])
+        self.assertNotIn("L2", call.args[1])
+
+    def test_status_reflects_new_measurements_and_keeps_public_status_plain(
+        self,
+    ):
+        self.monitor.storage.add(APP.time.time(), 228.5, 50, "L1")
+        self.monitor.state.restore(APP.time.time(), 228.5, 50)
+        text = self.monitor.command_text("/status")
+        self.assertIn("L: 228.5 V", text)
+        self.assertIn(self.monitor.settings_text(), text)
+        public = APP.multiphase_status_text(self.monitor)
+        self.assertNotIn(self.monitor.settings_text(), public)
+
+    def test_other_chat_and_disallowed_sender_cannot_use_menu(self):
+        for query in (self.callback(chat=999), self.callback(user=9)):
+            self.monitor.handle_callback(query)
+        self.monitor.telegram.edit.assert_not_called()
+        self.monitor.telegram.send.assert_not_called()
+        self.monitor.telegram.answer_callback.assert_not_called()
+
+    def test_non_admin_can_read_settings_without_write_buttons(self):
+        self.monitor.handle_callback(self.callback("settings", user=8))
+        self.assertIsNone(
+            self.monitor.telegram.send.call_args.kwargs["reply_markup"]
+        )
+
+    def test_every_model_uses_independent_voltage_phase_count(self):
+        for model in APP.METER_MODELS:
+            with self.subTest(model=model):
+                self.monitor.reconfigure_meter_type(model)
+                expected = ("L1", "L2", "L3") if model == "pro3em" else ("L1",)
+                self.assertEqual(tuple(self.monitor.phase_states), expected)
+                self.assertEqual(tuple(self.monitor.phase_clients), expected)
+                self.assertEqual(self.monitor.cfg.shelly_meter_type, model)
+                labels = "L1, L2, L3" if model == "pro3em" else "L"
+                self.assertEqual(self.monitor.phase_labels(), labels)
+                self.assertIn(labels, self.monitor.settings_device_text())
+
+    def test_switch_and_restart_preserve_all_historical_phases(self):
+        for index, phase in enumerate(("L1", "L2", "L3")):
+            self.monitor.storage.add(APP.time.time(), 220 + index, 50, phase)
+        self.monitor.update_setting("meter_pro3em", "7")
+        self.monitor.update_setting("meter_em50", "7")
+        self.assertEqual(self.monitor.phase_labels(), "L")
+        self.assertEqual(self.monitor.storage.latest("L2")[1], 221)
+        restarted = APP.Monitor(config(database_path=self.path))
+        restarted.storage.initialize()
+        restarted.load_runtime_settings()
+        self.assertEqual(restarted.phase_labels(), "L")
+        restarted.update_setting("meter_pro3em", "7")
+        self.assertEqual(
+            restarted.phase_states["L2"].snapshot()["voltage"], 221
+        )
+        self.assertEqual(
+            restarted.phase_states["L3"].snapshot()["voltage"], 222
+        )
+
+    def test_single_phase_poll_ignores_old_secondary_host_configuration(self):
+        monitor = APP.Monitor(
+            config(
+                database_path=self.path,
+                phase_l2_host="192.0.2.2",
+                phase_l3_host="192.0.2.3",
+            )
+        )
+        monitor.shelly.read = Mock(return_value=(230, 50, 1))
+        monitor.poll_optional_phases = Mock()
+        monitor.next_prune = APP.time.monotonic() + 100
+        self.assertTrue(monitor.poll_cycle())
+        monitor.shelly.read.assert_called_once()
+        monitor.poll_optional_phases.assert_not_called()
+        self.assertEqual(
+            monitor.command_phase_hours(["/chart", "L"]), ("L1", 24)
+        )
+        with self.assertRaises(ValueError):
+            monitor.command_phase_hours(["/chart", "L2"])
+
+    def test_unknown_menu_action_has_no_effect(self):
+        self.monitor.handle_callback(self.callback("unknown"))
+        self.monitor.telegram.edit.assert_not_called()
+        self.monitor.telegram.send.assert_not_called()
+
+    def test_inactive_phase_event_is_not_shown_after_model_change(self):
+        self.monitor.last_voltage_event = ("low", 180, 50, 100, "L2")
+        text = APP.multiphase_status_text(self.monitor)
+        self.assertNotIn("L2", text)
+        self.assertEqual(self.monitor.last_voltage_event[4], "L2")
+
+    def test_menu_and_phase_labels_are_localized(self):
+        for language in ("ru", "uk", "en"):
+            self.monitor.language = language
+            self.monitor.reconfigure_meter_type("pro3em")
+            text = self.monitor.command_text("/status")
+            for phase in ("L1", "L2", "L3"):
+                self.assertIn(phase + ":", text)
+            keyboard = self.monitor.main_menu_keyboard()["inline_keyboard"]
+            for row in keyboard:
+                for button in row:
+                    self.assertFalse(button["text"].startswith("menu_"))

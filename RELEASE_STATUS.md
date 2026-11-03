@@ -1,3 +1,12 @@
+## 0.5.12-hw - software candidate
+
+- Prepared private `/start` menu, combined Status/settings and model-specific
+  voltage topology. Pro EM-50 has one voltage phase displayed as L.
+- Local quality gate and 198 unit tests pass; live promotion and physical
+  acceptance are pending. Public release and production remain 0.5.11-hw.
+- Full electrical-transition hardware checkpoint remains 0.5.6-hw.
+- Mini App preparation remains unpublished, as requested.
+
 ## 0.5.11-hw — public release independently verified
 
 - Release commit: `391be951b85a98b32a82de423d277f6cff595a1d`.

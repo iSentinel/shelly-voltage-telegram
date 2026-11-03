@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 from contextlib import closing, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1459,6 +1459,7 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     if not monitor.phase_configured(phase):
         return tr(lang, "phase_unconfigured", phase=phase)
     snap = monitor.phase_states[phase].snapshot()
+    phase = monitor.phase_label(phase)
     connectivity = str(snap["connectivity"])
     if connectivity == "offline":
         return tr(lang, "phase_offline", phase=phase)
@@ -1477,7 +1478,7 @@ def voltage_event_lines(monitor: Monitor) -> list[str]:
     """Render the latest localized voltage transition."""
 
     event = monitor.last_voltage_event
-    if event is None:
+    if event is None or not monitor.phase_configured(event[4]):
         return []
     kind, voltage, frequency, happened_at, phase = event
     title = tr(monitor.language, f"event_{kind}")
@@ -1528,29 +1529,29 @@ def instability_lines(monitor: Monitor) -> list[str]:
 def multiphase_status_text(
     monitor: Monitor, include_event_context: bool = True
 ) -> str:
-    """Render a localized three-phase shared status."""
+    """Render a coherent status for the selected voltage phases."""
+
+    with monitor.config_lock:
+        return render_voltage_status(monitor, include_event_context)
+
+
+def render_voltage_status(
+    monitor: Monitor, include_event_context: bool
+) -> str:
+    """Render voltage and primary history under the configuration lock."""
 
     lang = monitor.language
     lines = voltage_event_lines(monitor) if include_event_context else []
-    lines.extend([tr(lang, "network_title"), ""])
-    lines.extend(phase_line(monitor, p) for p in ("L1", "L2", "L3"))
+    lines.extend(
+        [tr(lang, "network_title", phases=monitor.phase_labels()), ""]
+    )
+    lines.extend(phase_line(monitor, p) for p in monitor.active_phases())
     l1 = monitor.state.snapshot()
     if l1["voltage"] is None:
-        return "\n".join(lines + ["", tr(lang, "no_measurements")])
+        notice = tr(lang, "no_measurements", phase=monitor.phase_label("L1"))
+        return "\n".join(lines + ["", notice])
     ts = float(l1["last_success"] or time.time())
-    stats = monitor.storage.day_stats(ts, "L1")
-    lines.extend(
-        [
-            "",
-            tr(
-                lang,
-                "l1_today",
-                minimum=fmt(stats["min"]),
-                maximum=fmt(stats["max"]),
-                average=fmt(stats["avg"]),
-            ),
-        ]
-    )
+    lines.extend(primary_day_lines(monitor, ts))
     if monitor.last_recovery_duration is not None:
         lines.append(
             tr(
@@ -1562,8 +1563,32 @@ def multiphase_status_text(
     lines.extend(instability_lines(monitor))
     if include_event_context:
         lines.extend(voltage_episode_summary_lines(monitor))
-    lines.append(tr(lang, "last_l1", stamp=format_time(ts, monitor.cfg)))
+    lines.append(
+        tr(
+            lang,
+            "last_l1",
+            phase=monitor.phase_label("L1"),
+            stamp=format_time(ts, monitor.cfg),
+        )
+    )
     return "\n".join(lines)
+
+
+def primary_day_lines(monitor: Monitor, ts: float) -> list[str]:
+    """Render primary history using its stable L1 database identifier."""
+
+    stats = monitor.storage.day_stats(ts, "L1")
+    return [
+        "",
+        tr(
+            monitor.language,
+            "l1_today",
+            phase=monitor.phase_label("L1"),
+            minimum=fmt(stats["min"]),
+            maximum=fmt(stats["max"]),
+            average=fmt(stats["avg"]),
+        ),
+    ]
 
 
 def message_not_modified(exc: Exception) -> bool:
@@ -1600,6 +1625,7 @@ class Monitor:
     def __init__(self, cfg: Config) -> None:
         """Create storage, meter clients, Telegram, and runtime state."""
         self.cfg = cfg
+        self.config_lock = threading.RLock()
         self.storage = Storage(cfg.database_path, cfg.timezone)
         self.meter_type = cfg.shelly_meter_type
         self.state = RuntimeState()
@@ -1679,52 +1705,42 @@ class Monitor:
 
         if meter_type not in METER_MODELS:
             raise ValueError("unsupported Shelly meter type")
-        self.meter_type = meter_type
-        self.state = RuntimeState()
-        self.shelly = self.create_primary_client()
-        self.phase_states = {"L1": self.state}
-        self.phase_clients = {"L1": self.shelly}
-        self.configure_phases()
-        for phase in self.phase_states:
-            self.restore_phase(phase)
-        self.last_sent_voltage = None
-        self.last_sent_connectivity = None
-        self.last_telegram = 0.0
+        with self.config_lock:
+            self.cfg = replace(self.cfg, shelly_meter_type=meter_type)
+            self.meter_type = meter_type
+            self.state = RuntimeState()
+            self.shelly = self.create_primary_client()
+            self.phase_states = {"L1": self.state}
+            self.phase_clients = {"L1": self.shelly}
+            self.configure_phases()
+            for phase in self.phase_states:
+                self.restore_phase(phase)
+            self.last_sent_voltage = None
+            self.last_sent_connectivity = None
+            self.last_telegram = 0.0
 
     def configure_phases(self) -> None:
-        """Configure virtual Pro3EM phases or optional separate sensors."""
+        """Create states for the selected independent voltage phases."""
 
         if self.meter_type == "pro3em":
             for phase in ("L2", "L3"):
                 self.phase_states[phase] = RuntimeState()
                 self.phase_clients[phase] = self.shelly
-            return
-        self.configure_optional_phases()
 
-    def configure_optional_phases(self) -> None:
-        """Create runtime clients only for configured L2/L3 sensors."""
+    def active_phases(self) -> tuple[str, ...]:
+        """Return stable database identifiers for the selected phases."""
 
-        specs = {
-            "L2": (
-                self.cfg.phase_l2_host,
-                self.cfg.phase_l2_em1_id,
-                self.cfg.phase_l2_user,
-                self.cfg.phase_l2_password,
-            ),
-            "L3": (
-                self.cfg.phase_l3_host,
-                self.cfg.phase_l3_em1_id,
-                self.cfg.phase_l3_user,
-                self.cfg.phase_l3_password,
-            ),
-        }
-        for phase, (host, em1_id, user, password) in specs.items():
-            if not host:
-                continue
-            self.phase_states[phase] = RuntimeState()
-            self.phase_clients[phase] = ShellyClient(
-                self.cfg, host, em1_id, user, password
-            )
+        return ("L1", "L2", "L3") if self.meter_type == "pro3em" else ("L1",)
+
+    def phase_label(self, phase: str) -> str:
+        """Display L for one phase while preserving historical L1 records."""
+
+        return "L" if phase == "L1" and self.meter_type != "pro3em" else phase
+
+    def phase_labels(self) -> str:
+        """List only the independent voltage phases of the selected model."""
+
+        return ", ".join(self.phase_label(p) for p in self.active_phases())
 
     def phase_configured(self, phase: str) -> bool:
         """Return whether a phase has an active sensor configuration."""
@@ -1997,13 +2013,12 @@ class Monitor:
         return bool(readings)
 
     def poll_cycle(self) -> bool:
-        """Poll either a Pro3EM atomically or the legacy/separate sensors."""
+        """Poll the independent voltage phases of the selected model."""
 
-        if self.meter_type == "pro3em":
-            return self.poll_pro3em_once()
-        ok = self.poll_once()
-        self.poll_optional_phases()
-        return ok
+        with self.config_lock:
+            if self.meter_type == "pro3em":
+                return self.poll_pro3em_once()
+            return self.poll_once()
 
     def poll_once(self) -> bool:
         """Read Shelly and persist only valid measurements."""
@@ -2722,9 +2737,10 @@ class Monitor:
             self.cfg.warning_high,
         )
         lang = self.language
+        label = self.phase_label(phase)
         return "\n".join(
             [
-                tr(lang, "quality_title", phase=phase, hours=hours),
+                tr(lang, "quality_title", phase=label, hours=hours),
                 tr(lang, "quality_samples", value=q["samples"]),
                 tr(
                     lang,
@@ -2756,8 +2772,12 @@ class Monitor:
         except sqlite3.Error:
             return self.outage_fallback_text(phase)
         if not rows:
-            return tr(self.language, "no_outages", phase=phase)
-        lines = [tr(self.language, "outages_title", phase=phase)]
+            return tr(
+                self.language, "no_outages", phase=self.phase_label(phase)
+            )
+        lines = [
+            tr(self.language, "outages_title", phase=self.phase_label(phase))
+        ]
         now = time.time()
         for start, end in rows:
             duration = (end or now) - start
@@ -2796,7 +2816,7 @@ class Monitor:
 
         since = time.time() - 86400
         lines = [tr(self.language, "summary_title")]
-        for phase in ("L1", "L2", "L3"):
+        for phase in self.active_phases():
             if not self.phase_configured(phase):
                 lines.append(
                     tr(self.language, "summary_unconfigured", phase=phase)
@@ -2811,7 +2831,7 @@ class Monitor:
                 tr(
                     self.language,
                     "summary_phase",
-                    phase=phase,
+                    phase=self.phase_label(phase),
                     minimum=fmt(st["min"]),
                     maximum=fmt(st["max"]),
                     average=fmt(st["avg"]),
@@ -2844,7 +2864,7 @@ class Monitor:
         """Render read-only device health for configured phases."""
 
         lines = [tr(self.language, "device_title")]
-        for phase in ("L1", "L2", "L3"):
+        for phase in self.active_phases():
             if not self.phase_configured(phase):
                 lines.append(
                     tr(self.language, "device_unconfigured", phase=phase)
@@ -2855,12 +2875,15 @@ class Monitor:
                 skew = info.get("time_skew_sec")
                 skew_text = "n/a" if skew is None else f"{float(skew):+.1f}s"
                 lines.append(
-                    f"{phase}: {info.get('model')} · "
+                    f"{self.phase_label(phase)}: {info.get('model')} · "
                     f"fw {info.get('firmware')} · "
                     f"uptime {info.get('uptime')}s · skew {skew_text}"
                 )
             except Exception as exc:
-                lines.append(f"{phase}: offline ({type(exc).__name__})")
+                lines.append(
+                    f"{self.phase_label(phase)}: offline "
+                    f"({type(exc).__name__})"
+                )
         return "\n".join(lines)
 
     def backup_health_text(self) -> str:
@@ -3088,9 +3111,8 @@ class Monitor:
         return [
             tr(
                 lang,
-                "settings_phases",
-                l2="ON" if self.phase_configured("L2") else "—",
-                l3="ON" if self.phase_configured("L3") else "—",
+                "settings_lines",
+                phases=self.phase_labels(),
             ),
             tr(lang, "settings_outage", state=labels["availability"]),
             tr(
@@ -3160,9 +3182,8 @@ class Monitor:
                 ),
                 tr(
                     self.language,
-                    "settings_phases",
-                    l2="ON" if self.phase_configured("L2") else "—",
-                    l3="ON" if self.phase_configured("L3") else "—",
+                    "settings_lines",
+                    phases=self.phase_labels(),
                 ),
                 tr(self.language, "settings_pin", state=labels["pin"]),
             ]
@@ -4207,6 +4228,9 @@ class Monitor:
         """Handle one localized admin settings callback."""
 
         query = update.get("callback_query") or {}
+        if str(query.get("data", "")).startswith("menu:"):
+            self.handle_menu_callback(query)
+            return
         if str(query.get("data", "")).startswith("view:"):
             self.handle_status_callback(query)
             return
@@ -4371,10 +4395,76 @@ class Monitor:
         text = self.command_text(command)
         if not text:
             return
+        keyboard = self.main_menu_keyboard() if command == "/start" else None
         try:
-            self.telegram.send(text)
+            if keyboard is None:
+                self.telegram.send(text)
+            else:
+                self.telegram.send(text, reply_markup=keyboard)
         except Exception as exc:
             logger.warning("Telegram command response failed: {}", exc)
+
+    def main_menu_keyboard(self) -> dict:
+        """Build localized navigation for the private control chat."""
+
+        rows = (
+            ("status", "settings"),
+            ("today", "outages"),
+            ("chart", "help"),
+        )
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": tr(self.language, "menu_" + action),
+                        "callback_data": "menu:" + action,
+                    }
+                    for action in row
+                ]
+                for row in rows
+            ]
+        }
+
+    def handle_menu_callback(self, query: dict) -> None:
+        """Authorize menu navigation using the control chat access rules."""
+
+        message = query.get("message") or {}
+        user = query.get("from") or {}
+        if (
+            str(message.get("chat", {}).get("id", ""))
+            != self.cfg.telegram_chat_id
+        ):
+            return
+        if not self.message_sender_allowed({"from": user}):
+            return
+        action = str(query.get("data", "")).removeprefix("menu:")
+        if action not in {
+            "status",
+            "settings",
+            "today",
+            "outages",
+            "chart",
+            "help",
+        }:
+            return
+        self.telegram.answer_callback(str(query.get("id", "")))
+        if action == "settings":
+            self.handle_settings_command(str(user.get("id", "")))
+        elif action == "chart":
+            self.handle_file_command("/chart", ["/chart"])
+        else:
+            text = self.command_text("/" + action)
+            self.telegram.edit(
+                int(message["message_id"]),
+                text,
+                reply_markup=self.main_menu_keyboard(),
+            )
+
+    def full_status_text(self) -> str:
+        """Combine voltage readings with the active safe settings."""
+
+        with self.config_lock:
+            return multiphase_status_text(self) + "\n\n" + self.settings_text()
 
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
@@ -4404,7 +4494,10 @@ class Monitor:
         """Parse optional phase and hour arguments for export/chart."""
 
         phase = parts[1].upper() if len(parts) > 1 else "L1"
+        phase = "L1" if phase == "L" else phase
         hours = int(parts[2]) if len(parts) > 2 else 24
+        if not self.phase_configured(phase):
+            raise ValueError("phase is not active for the selected model")
         if phase not in {"L1", "L2", "L3"}:
             raise ValueError("phase must be L1, L2 or L3")
         return phase, max(1, min(hours, 168))
@@ -4413,6 +4506,7 @@ class Monitor:
         """Handle phase-aware text analytics commands."""
 
         phase = parts[1].upper() if len(parts) > 1 else "L1"
+        phase = "L1" if phase == "L" else phase
         if phase not in {"L1", "L2", "L3"}:
             self.telegram.send(tr(self.language, "phase_invalid"))
             return
@@ -4454,7 +4548,7 @@ class Monitor:
         caption = tr(
             self.language,
             "chart_caption",
-            phase=phase,
+            phase=self.phase_label(phase),
             hours=hours,
             count=count,
         )
@@ -4474,7 +4568,7 @@ class Monitor:
         caption = tr(
             self.language,
             "export_caption",
-            phase=phase,
+            phase=self.phase_label(phase),
             hours=hours,
             count=count,
         )
@@ -4505,35 +4599,31 @@ class Monitor:
         """Render localized command responses."""
 
         snap = self.state.snapshot()
-        if command in {"/start", "/help"}:
+        if command == "/start":
+            return tr(self.language, "menu_title")
+        if command == "/help":
             return tr(self.language, "help")
+        if command == "/status":
+            return self.full_status_text()
         if command == "/health":
-            phases = "; ".join(phase_line(self, p) for p in ("L1", "L2", "L3"))
-            return tr(
-                self.language,
-                "service_ok",
-                phases=phases,
-                backup=self.backup_health_text(),
-            )
-        if command == "/quality":
-            return self.quality_text()
-        if command == "/summary":
-            return self.daily_summary_text()
-        if command == "/audit":
-            return self.audit_text()
-        if command == "/device":
-            return self.device_health_text()
+            return self.health_text()
+        reports = {
+            "/quality": self.quality_text,
+            "/summary": self.daily_summary_text,
+            "/audit": self.audit_text,
+            "/device": self.device_health_text,
+        }
+        if command in reports:
+            return reports[command]()
         if snap["voltage"] is None:
             return tr(self.language, "no_current")
         if command == "/voltage":
             return (
                 tr(self.language, "phases_title")
                 + "\n"
-                + "\n".join(
-                    phase_line(self, phase) for phase in ("L1", "L2", "L3")
-                )
+                + "\n".join(phase_line(self, p) for p in self.active_phases())
             )
-        if command in {"/status", "/today", "/minmax"}:
+        if command in {"/today", "/minmax"}:
             return multiphase_status_text(self)
         if command == "/history":
             return self.history_text()
@@ -4541,10 +4631,26 @@ class Monitor:
             return self.outage_history_text()
         return None
 
+    def health_text(self) -> str:
+        """Render health for active voltage lines and the latest backup."""
+
+        with self.config_lock:
+            phases = "; ".join(
+                phase_line(self, phase) for phase in self.active_phases()
+            )
+            return tr(
+                self.language,
+                "service_ok",
+                phases=phases,
+                backup=self.backup_health_text(),
+            )
+
     def history_text(self, phase: str = "L1") -> str:
         """Render localized recent measurements for one phase."""
 
-        lines = [tr(self.language, "history_title", phase=phase)]
+        lines = [
+            tr(self.language, "history_title", phase=self.phase_label(phase))
+        ]
         for ts, voltage, frequency in self.storage.recent(12, phase):
             stamp = format_time(ts, self.cfg).split()[1]
             lines.append(f"{stamp} — {voltage:.1f} V / {frequency:.2f} Hz")
@@ -4641,6 +4747,7 @@ def service_snapshot(monitor: Monitor) -> dict[str, object]:
         )
         for p in ("L1", "L2", "L3")
     }
+    payload["line_labels"] = monitor.phase_labels().split(", ")
     payload["watchdog"] = {
         "loop_age": time.monotonic() - monitor.last_loop_tick,
         "telegram_failures": monitor.telegram_failures,
@@ -4650,19 +4757,23 @@ def service_snapshot(monitor: Monitor) -> dict[str, object]:
 
 
 def dashboard_rows(monitor: Monitor) -> list[dict[str, object]]:
-    """Return three phase cards for the local dashboard."""
+    """Return cards for the selected independent voltage phases."""
 
     rows = []
-    for phase in ("L1", "L2", "L3"):
+    for phase in monitor.active_phases():
         if not monitor.phase_configured(phase):
             rows.append(
-                {"phase": phase, "state": "not configured", "voltage": None}
+                {
+                    "phase": monitor.phase_label(phase),
+                    "state": "not configured",
+                    "voltage": None,
+                }
             )
             continue
         snap = monitor.phase_states[phase].snapshot()
         rows.append(
             {
-                "phase": phase,
+                "phase": monitor.phase_label(phase),
                 "state": snap["connectivity"],
                 "voltage": (
                     snap["voltage"]
