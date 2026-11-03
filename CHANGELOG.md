@@ -1,3 +1,14 @@
+## 0.5.12-hw - navigation and independent voltage phases
+
+- `/start` opens a localized six-action menu in the control chat.
+- Status combines voltage readings with currently applied bot settings.
+- Model selection rebuilds the effective configuration: Pro EM-50 and other
+  single-phase models display L; Pro 3EM displays L1/L2/L3.
+- Preserve historical SQLite phase keys and model settings across restarts.
+- Ignore legacy secondary sensor hosts for single-phase models; serialize
+  polling and model changes. Keep public voltage posts free of menu buttons.
+- See [Telegram menu](docs/TELEGRAM_MENU.md) for usage and compatibility.
+
 ## 0.5.11-hw - compact Telegram settings
 
 - Replace the oversized `/settings` keyboard with five top-level sections: Device, Voltage, Notifications, Schedule, and Service.

@@ -39,7 +39,8 @@ class LanguageSettingTests(unittest.TestCase):
         self.assertTrue(monitor.command_text("/help").startswith("Commands:"))
         text = APP.multiphase_status_text(monitor)
         self.assertIn("Grid voltage", text)
-        self.assertIn("not configured", text)
+        self.assertIn("L: 230.0 V", text)
+        self.assertNotIn("L2", text)
 
 
 class NotificationTestTests(unittest.TestCase):

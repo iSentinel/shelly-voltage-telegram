@@ -22,6 +22,13 @@
 
 ---
 
+## Telegram menu / Меню Telegram
+
+`/start` opens the bot menu. Status includes voltage and active settings.
+Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
+See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
+Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
+
 ## Что делает проект
 
 **Shelly Voltage Telegram** регулярно считывает напряжение и частоту с поддерживаемых Shelly, сохраняет корректные измерения в SQLite, фиксирует подтверждённые отключения и поддерживает актуальное статус-сообщение в Telegram.
@@ -37,13 +44,13 @@
 | 📊 **Наблюдаемость** | `/health`, `/ready`, `/status.json`, `/metrics`, локальный dashboard. |
 | 🗄️ **SQLite WAL** | История, runtime-настройки, аудит и outage-журнал. |
 | 🐳 **Docker** | Непривилегированный контейнер, Compose, systemd и резервные копии. |
-| 3️⃣ **Готовность к 3 фазам** | Нативный Pro 3EM/3CT63 и отдельные L2/L3 при необходимости. |
+| 3️⃣ **Готовность к 3 фазам** | Pro 3EM/3CT63: L1/L2/L3; однофазные модели: L. |
 
 ## Статус проекта
 
-- Текущий software candidate: **`0.5.11-hw`**.
+- Текущий software candidate: **`0.5.12-hw`**.
 - Текущий публичный релиз: **`0.5.11-hw`**.
-- Production использует **`0.5.10-hw`** на физическом Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
+- Production использует **`0.5.11-hw`** на физическом Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
 - Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` через 15 минут стабильного восстановления бесшумно заменяет recovery-сообщение новым актуальным статусом.
 - Candidate `0.5.10-hw` добавляет read-only полевую проверку естественной 15-минутной ротации статуса после восстановления.
@@ -75,8 +82,6 @@
 ```mermaid
 flowchart LR
     S1[Shelly / L1] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
-    S2[Опциональный L2] -->|read-only RPC| BOT
-    S3[Опциональный L3] -->|read-only RPC| BOT
     P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT
     BOT --> DB[("SQLite WAL")]
     BOT --> TG["Telegram Bot API"]

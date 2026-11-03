@@ -22,6 +22,13 @@
 
 ---
 
+## Telegram menu / Меню Telegram
+
+`/start` opens the bot menu. Status includes voltage and active settings.
+Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
+See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
+Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
+
 ## Що робить проєкт
 
 **Shelly Voltage Telegram** регулярно зчитує напругу та частоту з підтримуваних Shelly, зберігає коректні вимірювання в SQLite, фіксує підтверджені відключення та підтримує актуальне статус-повідомлення в Telegram.
@@ -37,13 +44,13 @@
 | 📊 **Спостережуваність** | `/health`, `/ready`, `/status.json`, `/metrics`, локальний dashboard. |
 | 🗄️ **SQLite WAL** | Історія, runtime-налаштування, аудит і журнал відключень. |
 | 🐳 **Docker** | Непривілейований контейнер, Compose, systemd та резервні копії. |
-| 3️⃣ **Готовність до 3 фаз** | Нативний Pro 3EM/3CT63 та окремі L2/L3 за потреби. |
+| 3️⃣ **Готовність до 3 фаз** | Pro 3EM/3CT63: L1/L2/L3; однофазні моделі: L. |
 
 ## Статус проєкту
 
 - Поточний software candidate: **`0.5.11-hw`**.
 - Поточний публічний реліз: **`0.5.11-hw`**.
-- Production використовує **`0.5.10-hw`** на фізичному Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
+- Production використовує **`0.5.11-hw`** на фізичному Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
 - Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` після 15 хвилин стабільного відновлення беззвучно замінює recovery-повідомлення новим актуальним статусом.
 - Candidate `0.5.10-hw` додає read-only польову перевірку природної 15-хвилинної ротації статусу після відновлення.
@@ -75,8 +82,6 @@
 ```mermaid
 flowchart LR
     S1[Shelly / L1] -->|read-only RPC| BOT["Shelly Voltage Telegram"]
-    S2[Опційний L2] -->|read-only RPC| BOT
-    S3[Опційний L3] -->|read-only RPC| BOT
     P3[Pro 3EM / 3CT63] -->|A/B/C одним EM.GetStatus| BOT
     BOT --> DB[("SQLite WAL")]
     BOT --> TG["Telegram Bot API"]
