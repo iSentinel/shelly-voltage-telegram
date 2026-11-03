@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +51,55 @@ def args(path: Path) -> argparse.Namespace:
         baseline=None,
         output=None,
     )
+
+
+def set_meta(path: Path, key: str, value: str | None) -> None:
+    """Set or delete one metadata key in a test database."""
+
+    with closing(sqlite3.connect(path)) as db:
+        if value is None:
+            db.execute("DELETE FROM meta WHERE key=?", (key,))
+        else:
+            db.execute(
+                "INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",
+                (key, value),
+            )
+        db.commit()
+
+
+def make_stable_recovery(path: Path, started_at: float = 1000.0) -> None:
+    """Create metadata produced by one confirmed voltage recovery."""
+
+    event = RECOVERY.json.dumps(
+        {
+            "kind": "recovered",
+            "voltage": 230.0,
+            "frequency": 50.0,
+            "timestamp": started_at,
+            "phase": "L1",
+        }
+    )
+    set_meta(path, "voltage_recovery_stable_since", str(started_at))
+    set_meta(path, "last_voltage_event", event)
+    set_meta(path, "voltage_episode", RECOVERY.json.dumps({"start_at": 900.0}))
+    set_meta(path, "last_voltage_notification_at", "777.0")
+
+
+def complete_stable_rotation(path: Path) -> None:
+    """Simulate successful silent replacement after stable recovery."""
+
+    with closing(sqlite3.connect(path)) as db:
+        db.execute(
+            "UPDATE meta SET value='900' "
+            "WHERE key='telegram_status_message_id'"
+        )
+        db.execute(
+            "DELETE FROM meta WHERE key='voltage_recovery_stable_since'"
+        )
+        db.execute("DELETE FROM meta WHERE key='last_voltage_event'")
+        db.execute("DELETE FROM meta WHERE key='voltage_episode'")
+        db.execute("INSERT INTO measurements VALUES(1901,'L1',230,50,1)")
+        db.commit()
 
 
 class RecoveryAcceptanceTests(unittest.TestCase):
@@ -196,6 +246,165 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             self.assertIn(
                 "stable Telegram status message was not rotated", errors
             )
+
+    def test_stable_baseline_redacts_message_id(self):
+        """Capture active recovery state without serializing Telegram ID."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stable.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                payload = RECOVERY.stable_baseline_payload(args(path))
+            self.assertEqual(payload["status"], "pass")
+            self.assertNotIn("status_message_id", payload["state"])
+            self.assertNotIn('"682"', RECOVERY.json.dumps(payload))
+            self.assertEqual(
+                payload["state"]["last_voltage_event_kind"], "recovered"
+            )
+            self.assertEqual(
+                payload["state"]["recovery_stable_since"], "1000.0"
+            )
+
+    def test_stable_verify_passes_after_silent_rotation(self):
+        """Accept a rotated plain status after the full stable period."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stable-pass.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                baseline = RECOVERY.stable_baseline_payload(args(path))
+            baseline_path = Path(directory) / "stable-baseline.json"
+            baseline_path.write_text(RECOVERY.json.dumps(baseline))
+            complete_stable_rotation(path)
+            verify_args = args(path)
+            verify_args.baseline = baseline_path
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with (
+                patch.object(RECOVERY, "fetch_json", side_effect=responses),
+                patch.object(RECOVERY.time, "time", return_value=1901.0),
+            ):
+                payload = RECOVERY.stable_verify_payload(verify_args)
+            self.assertEqual(payload["status"], "pass")
+            self.assertTrue(payload["read_only"])
+            self.assertTrue(payload["state"]["status_message_rotated"])
+            self.assertIsNone(payload["state"]["recovery_stable_since"])
+            self.assertIsNone(payload["state"]["last_voltage_event_kind"])
+            self.assertFalse(payload["state"]["voltage_episode_present"])
+
+    def test_stable_verify_fails_before_fifteen_minutes(self):
+        """Reject verification before the fixed stability period ends."""
+
+        baseline = {
+            "state": {
+                "recovery_stable_since": "1000.0",
+                "status_message_fingerprint": (
+                    RECOVERY.status_message_fingerprint("682")
+                ),
+                "measurement_count": 1,
+                "last_notification_at": "777.0",
+            }
+        }
+        state = {
+            "quick_check": "ok",
+            "zero_voltage_rows": 0,
+            "measurement_count": 2,
+            "status_message_id": "900",
+            "recovery_stable_since": None,
+            "last_notification_at": "777.0",
+            "last_voltage_event_kind": None,
+            "voltage_episode_present": False,
+        }
+        errors = RECOVERY.stable_verify_errors(
+            baseline,
+            state,
+            {"connectivity": "online"},
+            {"ready": True},
+            1899.0,
+        )
+        self.assertIn(
+            "15-minute stable recovery period has not elapsed", errors
+        )
+
+    def test_stable_verify_detects_changed_audible_cooldown(self):
+        """Fail if silent rotation mutates the audible cooldown timestamp."""
+
+        baseline = {
+            "state": {
+                "recovery_stable_since": "1000.0",
+                "status_message_fingerprint": (
+                    RECOVERY.status_message_fingerprint("682")
+                ),
+                "measurement_count": 1,
+                "last_notification_at": "777.0",
+            }
+        }
+        state = {
+            "quick_check": "ok",
+            "zero_voltage_rows": 0,
+            "measurement_count": 2,
+            "status_message_id": "900",
+            "recovery_stable_since": None,
+            "last_notification_at": "1800.0",
+            "last_voltage_event_kind": None,
+            "voltage_episode_present": False,
+        }
+        errors = RECOVERY.stable_verify_errors(
+            baseline,
+            state,
+            {"connectivity": "online"},
+            {"ready": True},
+            1901.0,
+        )
+        self.assertIn(
+            "audible notification cooldown timestamp changed", errors
+        )
+
+    def test_stable_verify_requires_recovery_context_cleanup(self):
+        """Fail while the recovery timer or event context remains present."""
+
+        baseline = {
+            "state": {
+                "recovery_stable_since": "1000.0",
+                "status_message_fingerprint": (
+                    RECOVERY.status_message_fingerprint("682")
+                ),
+                "measurement_count": 1,
+                "last_notification_at": "777.0",
+            }
+        }
+        state = {
+            "quick_check": "ok",
+            "zero_voltage_rows": 0,
+            "measurement_count": 2,
+            "status_message_id": "900",
+            "recovery_stable_since": "1000.0",
+            "last_notification_at": "777.0",
+            "last_voltage_event_kind": "recovered",
+            "voltage_episode_present": True,
+        }
+        errors = RECOVERY.stable_verify_errors(
+            baseline,
+            state,
+            {"connectivity": "online"},
+            {"ready": True},
+            1901.0,
+        )
+        self.assertIn("stable recovery timer was not cleared", errors)
+        self.assertIn("recovery event context was not cleared", errors)
+        self.assertIn("voltage episode context was not cleared", errors)
 
     def test_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as directory:

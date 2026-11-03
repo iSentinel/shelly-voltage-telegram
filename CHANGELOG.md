@@ -1,3 +1,12 @@
+## 0.5.10-hw - stable recovery field acceptance
+
+- Extend `recovery-acceptance.py` with read-only `stable-baseline` and `stable-verify` modes.
+- Capture the active 15-minute recovery timer, status-message fingerprint and audible cooldown timestamp without exposing the raw Telegram message ID.
+- Verify after a natural recovery that the status message rotated, the recovery timer/event/episode context was cleared, valid measurements continued, and the audible cooldown timestamp did not change.
+- Keep all field verification read-only: SQLite is opened with `mode=ro`, Telegram is not called, and no Shelly control RPC is used.
+- Return stable PASS/FAIL exit codes suitable for CI and field evidence collection.
+- Restore the 15-minute stability timer on upgrade when an older persisted `recovered` event and status message exist but the timer metadata predates `0.5.9-hw`; abnormal legacy events are not migrated.
+
 ## 0.5.9-hw - stable recovery status rotation
 
 - Start a restart-persistent 15-minute stability timer on a confirmed voltage recovery.

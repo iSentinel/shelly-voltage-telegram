@@ -2,6 +2,7 @@
 
 Status date: 2026-11-03
 Runtime release: `0.5.9-hw` (published, independently verified and live)
+Software candidate: `0.5.10-hw` (read-only field-acceptance tooling under validation)
 Latest full hardware checkpoint: `0.5.6-hw`
 Public release: `0.5.9-hw` (source and signed multi-architecture image independently verified)
 
@@ -23,6 +24,8 @@ Public release: `0.5.9-hw` (source and signed multi-architecture image independe
 - DONE: publish exact `v0.5.9-hw` tag on `c92d86006f17441e42a0a33d0b4b7e56f213aa82`; Source Release `41544388759`, Container Image `41544388518` and tag CI `41544388631` all passed.
 - DONE: independently verify source archive SHA256 `b73e4e958de960031cd4cac2be1cef842cf5c56c4ddd492e88e053b952ed31dc`, byte-for-byte reproducibility, GHCR digest `sha256:eb563f8b8243b3edfefb4c977f2629adca41c35f4a40bd48bca45c231ce3f8bb`, Cosign v3.0.6 signature, amd64/arm64 images and SPDX/SLSA attestations.
 - DONE: install exact public `v0.5.9-hw` through `scripts/install-release.sh`; checksum, exact-tag source parity, rollback snapshot, restart, SQLite and Telegram continuity all passed.
+- IN PROGRESS: `0.5.10-hw` extends the existing read-only recovery acceptance CLI with `stable-baseline` / `stable-verify` so the 15-minute recovery rotation can be physically accepted on the next natural event without controlling Shelly or mutating SQLite.
+- IN PROGRESS: migrate the live pre-`0.5.9-hw` persisted recovery context by reconstructing its missing stability timer from the stored recovery timestamp; verify silent status replacement and unchanged audible cooldown after deployment.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.

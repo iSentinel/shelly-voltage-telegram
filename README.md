@@ -37,11 +37,13 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.9-hw**
+- Current software candidate: **0.5.10-hw**
 - Current release: **0.5.9-hw**
 - Production deployment: **0.5.9-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
+- Candidate `0.5.10-hw` extends the read-only recovery acceptance CLI so a natural 15-minute stable-recovery rotation can be verified without controlling Shelly or writing to the live database.
+- It also migrates a persisted pre-`0.5.9-hw` recovery event into the stability timer so an old recovery banner cannot remain indefinitely after an upgrade.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
 
 ## Supported devices

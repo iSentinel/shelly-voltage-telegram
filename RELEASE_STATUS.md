@@ -1,5 +1,15 @@
 # Release status
 
+## 0.5.10-hw — read-only stable-recovery acceptance candidate
+
+- Current software candidate: `0.5.10-hw`; public release and production runtime remain `0.5.9-hw`.
+- Adds read-only field acceptance for the natural 15-minute post-recovery status rotation introduced in `0.5.9-hw`.
+- `stable-baseline` captures only safe recovery evidence, including a SHA-256 fingerprint of the Telegram status message instead of its raw ID.
+- `stable-verify` checks message rotation, timer/event/episode cleanup, measurement growth, SQLite integrity, online/ready state and an unchanged audible cooldown timestamp.
+- No Telegram API call, Shelly write/control RPC or live SQLite write is performed by the acceptance flow.
+- Runtime startup restores a missing stability timer only for a persisted legacy `recovered` event with an existing status message; this closes the upgrade edge case found on the live `0.5.9-hw` database.
+- Physical acceptance remains pending until a natural voltage threshold/recovery event occurs; no electrical transition will be induced for this validation.
+
 ## 0.5.9-hw — software released / runtime verified
 
 - Published software release and current production runtime: `0.5.9-hw`; full electrical-transition hardware checkpoint remains `0.5.6-hw`.
