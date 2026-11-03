@@ -1,3 +1,12 @@
+## 0.5.11-hw - compact Telegram settings
+
+- Replace the oversized `/settings` keyboard with five top-level sections: Device, Voltage, Notifications, Schedule, and Service.
+- Keep each section focused and edit the same Telegram message while navigating.
+- Preserve legacy `cfg:*` callbacks for already-sent settings messages.
+- Require explicit confirmation before resetting runtime settings to `.env` defaults.
+- Keep RU/UA/EN localization and all existing runtime settings.
+- Prepare the settings model for an optional Telegram Mini App frontend without requiring one for normal operation.
+
 ## 0.5.10-hw - stable recovery field acceptance
 
 - Extend `recovery-acceptance.py` with read-only `stable-baseline` and `stable-verify` modes.

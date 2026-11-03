@@ -3108,6 +3108,322 @@ class Monitor:
             ),
         ]
 
+    def settings_main_text(self) -> str:
+        """Render a compact settings dashboard."""
+
+        labels = self.settings_state_labels()
+        lang = self.language
+        return "\n".join(
+            [
+                tr(lang, "settings_title"),
+                tr(
+                    lang,
+                    "settings_module",
+                    value=METER_MODELS.get(self.meter_type, self.meter_type),
+                ),
+                tr(
+                    lang,
+                    "settings_language",
+                    value={"ru": "RU", "uk": "UA", "en": "EN"}[lang],
+                ),
+                tr(
+                    lang,
+                    "settings_levels",
+                    state=labels["levels"],
+                    range=self.voltage_range_text(),
+                ),
+                tr(lang, "settings_outage", state=labels["availability"]),
+                "",
+                tr(lang, "settings_choose"),
+            ]
+        )
+
+    def voltage_range_text(self) -> str:
+        """Return the ordered warning and critical voltage range."""
+
+        return (
+            f"{self.critical_low:g}/{self.warning_low:g}–"
+            f"{self.warning_high:g}/{self.critical_high:g} V"
+        )
+
+    def settings_device_text(self) -> str:
+        """Render the Shelly device settings page."""
+
+        labels = self.settings_state_labels()
+        return "\n".join(
+            [
+                tr(self.language, "settings_section_device"),
+                tr(
+                    self.language,
+                    "settings_module",
+                    value=METER_MODELS.get(self.meter_type, self.meter_type),
+                ),
+                tr(
+                    self.language,
+                    "settings_phases",
+                    l2="ON" if self.phase_configured("L2") else "—",
+                    l3="ON" if self.phase_configured("L3") else "—",
+                ),
+                tr(self.language, "settings_pin", state=labels["pin"]),
+            ]
+        )
+
+    def settings_notifications_text(self) -> str:
+        """Render notification settings without unrelated controls."""
+
+        labels = self.settings_state_labels()
+        lang = self.language
+        quiet = (
+            f"{self.telegram.quiet_start_hour:02d}:00–"
+            f"{self.telegram.quiet_end_hour:02d}:00"
+        )
+        return "\n".join(
+            [
+                tr(lang, "settings_section_notifications"),
+                tr(
+                    lang,
+                    "settings_language",
+                    value={"ru": "RU", "uk": "UA", "en": "EN"}[lang],
+                ),
+                tr(lang, "settings_normal", value=labels["silent"]),
+                tr(lang, "settings_quiet", state=labels["quiet"], hours=quiet),
+                tr(lang, "settings_cooldown", value=labels["cooldown"]),
+                tr(lang, "settings_edit", value=labels["edit_window"]),
+                tr(lang, "settings_instability", state=labels["instability"]),
+            ]
+        )
+
+    def settings_voltage_text(self) -> str:
+        """Render voltage thresholds and dwell settings."""
+
+        labels = self.settings_state_labels()
+        lang = self.language
+        return "\n".join(
+            [
+                tr(lang, "settings_section_voltage"),
+                tr(
+                    lang,
+                    "settings_low",
+                    state=labels["low"],
+                    voltage=self.low_voltage_alert_v,
+                ),
+                tr(
+                    lang,
+                    "settings_recovery",
+                    voltage=self.low_voltage_recovery_v,
+                ),
+                tr(
+                    lang,
+                    "settings_levels",
+                    state=labels["levels"],
+                    range=self.voltage_range_text(),
+                ),
+                tr(
+                    lang,
+                    "settings_dwell",
+                    dwell=self.alert_dwell,
+                    recovery=self.recovery_dwell,
+                ),
+            ]
+        )
+
+    def settings_schedule_text(self) -> str:
+        """Render outage, summary, and status schedule settings."""
+
+        labels = self.settings_state_labels()
+        summary_time = (
+            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        )
+        return "\n".join(
+            [
+                tr(self.language, "settings_section_schedule"),
+                tr(
+                    self.language,
+                    "settings_outage",
+                    state=labels["availability"],
+                ),
+                tr(
+                    self.language,
+                    "settings_summary",
+                    state=labels["summary"],
+                    time=summary_time,
+                ),
+                tr(self.language, "settings_pin", state=labels["pin"]),
+            ]
+        )
+
+    def settings_service_text(self) -> str:
+        """Render maintenance and local storage health."""
+
+        labels = self.settings_state_labels()
+        return "\n".join(
+            [
+                tr(self.language, "settings_section_service"),
+                tr(
+                    self.language,
+                    "settings_maintenance",
+                    state=labels["maintenance"],
+                ),
+                self.backup_health_text(),
+            ]
+        )
+
+    def settings_title_value_text(
+        self, title_key: str, value_key: str, **values: object
+    ) -> str:
+        """Render a focused page with a title and one current value."""
+
+        return "\n".join(
+            [
+                tr(self.language, title_key),
+                tr(self.language, value_key, **values),
+            ]
+        )
+
+    def settings_meter_page_text(self) -> str:
+        """Render the Shelly model selector summary."""
+
+        value = METER_MODELS.get(self.meter_type, self.meter_type)
+        return self.settings_title_value_text(
+            "settings_section_meter", "settings_module", value=value
+        )
+
+    def settings_language_page_text(self) -> str:
+        """Render the language selector summary."""
+
+        value = {"ru": "RU", "uk": "UA", "en": "EN"}[self.language]
+        return self.settings_title_value_text(
+            "settings_section_language", "settings_language", value=value
+        )
+
+    def settings_quiet_page_text(self) -> str:
+        """Render quiet-hours status and current window."""
+
+        state = self.settings_state_labels()["quiet"]
+        start = self.telegram.quiet_start_hour
+        end = self.telegram.quiet_end_hour
+        return self.settings_title_value_text(
+            "settings_section_quiet",
+            "settings_quiet",
+            state=state,
+            hours=f"{start:02d}:00–{end:02d}:00",
+        )
+
+    def settings_policy_page_text(self, page: str) -> str:
+        """Render cooldown or edit-window current value."""
+
+        labels = self.settings_state_labels()
+        mapping = {
+            "cooldown": (
+                "settings_section_cooldown",
+                "settings_cooldown",
+                labels["cooldown"],
+            ),
+            "edit": (
+                "settings_section_edit",
+                "settings_edit",
+                labels["edit_window"],
+            ),
+        }
+        title, value_key, value = mapping[page]
+        return self.settings_title_value_text(title, value_key, value=value)
+
+    def settings_level_page_text(self, page: str) -> str:
+        """Render low or high ordered voltage thresholds."""
+
+        key = (
+            "settings_section_low"
+            if page == "low"
+            else "settings_section_high"
+        )
+        labels = self.settings_state_labels()
+        return self.settings_title_value_text(
+            key,
+            "settings_levels",
+            state=labels["levels"],
+            range=self.voltage_range_text(),
+        )
+
+    def settings_legacy_low_page_text(self) -> str:
+        """Render legacy low-voltage alert thresholds."""
+
+        labels = self.settings_state_labels()
+        lines = [
+            tr(self.language, "settings_section_legacy_low"),
+            tr(
+                self.language,
+                "settings_low",
+                state=labels["low"],
+                voltage=self.low_voltage_alert_v,
+            ),
+            tr(
+                self.language,
+                "settings_recovery",
+                voltage=self.low_voltage_recovery_v,
+            ),
+        ]
+        return "\n".join(lines)
+
+    def settings_dwell_page_text(self) -> str:
+        """Render alert and recovery dwell values."""
+
+        return self.settings_title_value_text(
+            "settings_section_dwell",
+            "settings_dwell",
+            dwell=self.alert_dwell,
+            recovery=self.recovery_dwell,
+        )
+
+    def settings_summary_time_page_text(self) -> str:
+        """Render daily summary state and schedule."""
+
+        labels = self.settings_state_labels()
+        time_value = (
+            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        )
+        return self.settings_title_value_text(
+            "settings_section_summary_time",
+            "settings_summary",
+            state=labels["summary"],
+            time=time_value,
+        )
+
+    def settings_simple_page_text(self, page: str) -> str:
+        """Render one focused settings subpage."""
+
+        handlers = {
+            "meter": self.settings_meter_page_text,
+            "language": self.settings_language_page_text,
+            "quiet": self.settings_quiet_page_text,
+            "cooldown": lambda: self.settings_policy_page_text("cooldown"),
+            "edit": lambda: self.settings_policy_page_text("edit"),
+            "tests": lambda: tr(self.language, "settings_section_tests"),
+            "low": lambda: self.settings_level_page_text("low"),
+            "high": lambda: self.settings_level_page_text("high"),
+            "legacy_low": self.settings_legacy_low_page_text,
+            "dwell": self.settings_dwell_page_text,
+            "summary_time": self.settings_summary_time_page_text,
+            "reset": lambda: tr(self.language, "settings_reset_confirm"),
+        }
+        if page not in handlers:
+            raise ValueError("unknown settings page")
+        return handlers[page]()
+
+    def settings_page_text(self, page: str = "main") -> str:
+        """Render one compact settings page."""
+
+        pages = {
+            "main": self.settings_main_text,
+            "device": self.settings_device_text,
+            "notifications": self.settings_notifications_text,
+            "voltage": self.settings_voltage_text,
+            "schedule": self.settings_schedule_text,
+            "service": self.settings_service_text,
+        }
+        if page in pages:
+            return pages[page]()
+        return self.settings_simple_page_text(page)
+
     def setting_button(self, text: str, data: str) -> dict[str, str]:
         """Build one Telegram settings callback button."""
 
@@ -3261,14 +3577,400 @@ class Monitor:
             [button(tr(self.language, "button_reset"), "reset")],
         ]
 
-    def settings_keyboard(self) -> dict:
-        """Build the admin inline keyboard from small setting groups."""
+    def settings_nav_button(self, key: str, page: str) -> dict[str, str]:
+        """Build one compact settings navigation button."""
 
-        rows = self.meter_setting_rows()
-        rows.extend(self.notification_setting_rows())
-        rows.extend(self.voltage_setting_rows())
-        rows.extend(self.schedule_setting_rows())
-        return {"inline_keyboard": rows}
+        return {
+            "text": tr(self.language, key),
+            "callback_data": f"cfg:nav:{page}",
+        }
+
+    def settings_action_button(
+        self, text: str, page: str, action: str
+    ) -> dict[str, str]:
+        """Build one page-preserving settings action button."""
+
+        return {
+            "text": text,
+            "callback_data": f"cfg:set:{page}:{action}",
+        }
+
+    def settings_back_button(self, page: str) -> dict[str, str]:
+        """Build one localized settings Back button."""
+
+        return self.settings_nav_button("settings_back", page)
+
+    def selected_choice(self, label: str, selected: bool) -> str:
+        """Prefix the active settings choice with a check mark."""
+
+        return f"✅ {label}" if selected else label
+
+    def settings_main_rows(self) -> list[list[dict[str, str]]]:
+        """Build the five compact top-level settings sections."""
+
+        nav = self.settings_nav_button
+        return [
+            [
+                nav("settings_section_device", "device"),
+                nav("settings_section_voltage", "voltage"),
+            ],
+            [
+                nav("settings_section_notifications", "notifications"),
+                nav("settings_section_schedule", "schedule"),
+            ],
+            [nav("settings_section_service", "service")],
+        ]
+
+    def settings_device_rows(self) -> list[list[dict[str, str]]]:
+        """Build device settings navigation."""
+
+        return [
+            [self.settings_nav_button("settings_change_meter", "meter")],
+            [self.settings_back_button("main")],
+        ]
+
+    def settings_meter_rows(self) -> list[list[dict[str, str]]]:
+        """Build a compact Shelly model selector."""
+
+        choices = [
+            ("Pro EM-50", "meter_em50", "pro_em50"),
+            ("EM Gen3", "meter_em_gen3", "em_gen3"),
+            ("PM Mini G3", "meter_pm_mini_gen3", "pm_mini_gen3"),
+            ("Plus PM Mini", "meter_plus_pm_mini", "plus_pm_mini"),
+            ("Plus 1PM", "meter_plus_1pm", "plus_1pm"),
+            ("1PM Gen3", "meter_1pm_gen3", "1pm_gen3"),
+            ("1PM Gen4", "meter_1pm_gen4", "1pm_gen4"),
+            ("1PM Mini G3", "meter_1pm_mini_gen3", "1pm_mini_gen3"),
+            ("1PM Mini G4", "meter_1pm_mini_gen4", "1pm_mini_gen4"),
+            ("Pro 3EM", "meter_pro3em", "pro3em"),
+        ]
+        buttons = [
+            self.settings_action_button(
+                self.selected_choice(label, self.meter_type == value),
+                "device",
+                action,
+            )
+            for label, action, value in choices
+        ]
+        rows = [
+            buttons[index : index + 2] for index in range(0, len(buttons), 2)
+        ]
+        rows.append([self.settings_back_button("device")])
+        return rows
+
+    def settings_notification_rows(self) -> list[list[dict[str, str]]]:
+        """Build compact notification settings controls."""
+
+        nav = self.settings_nav_button
+        action = self.settings_action_button
+        return [
+            [
+                nav("settings_section_language", "language"),
+                action(
+                    tr(self.language, "button_silent"),
+                    "notifications",
+                    "silent_toggle",
+                ),
+            ],
+            [
+                nav("settings_section_quiet", "quiet"),
+                nav("settings_section_cooldown", "cooldown"),
+            ],
+            [
+                nav("settings_section_edit", "edit"),
+                action(
+                    tr(self.language, "button_instability"),
+                    "notifications",
+                    "instability_toggle",
+                ),
+            ],
+            [nav("settings_section_tests", "tests")],
+            [self.settings_back_button("main")],
+        ]
+
+    def settings_language_rows(self) -> list[list[dict[str, str]]]:
+        """Build language choices and return navigation."""
+
+        choices = [("RU", "ru"), ("UA", "uk"), ("EN", "en")]
+        buttons = [
+            self.settings_action_button(
+                self.selected_choice(label, self.language == value),
+                "notifications",
+                f"lang_{value}",
+            )
+            for label, value in choices
+        ]
+        return [buttons, [self.settings_back_button("notifications")]]
+
+    def settings_quiet_rows(self) -> list[list[dict[str, str]]]:
+        """Build quiet-hours controls."""
+
+        action = self.settings_action_button
+
+        def tb(key: str, act: str) -> dict[str, str]:
+            """Build one quiet-hours action button."""
+
+            return action(tr(self.language, key), "quiet", act)
+
+        return [
+            [tb("button_quiet", "quiet_toggle")],
+            [
+                tb("button_start_dec", "start_dec"),
+                tb("button_start_inc", "start_inc"),
+            ],
+            [tb("button_end_dec", "end_dec"), tb("button_end_inc", "end_inc")],
+            [self.settings_back_button("notifications")],
+        ]
+
+    def settings_choice_rows(
+        self, page: str, prefix: str, values: tuple[int, ...]
+    ) -> list[list[dict[str, str]]]:
+        """Build two-column minute choices for cooldown or edit window."""
+
+        current = (
+            self.notification_cooldown_min
+            if prefix == "cooldown"
+            else self.status_edit_window_min
+        )
+        buttons = []
+        for value in values:
+            label = (
+                "OFF"
+                if value == 0
+                else tr(self.language, "minutes", value=value)
+            )
+            buttons.append(
+                self.settings_action_button(
+                    self.selected_choice(label, current == value),
+                    "notifications",
+                    f"{prefix}_{value}",
+                )
+            )
+        rows = [
+            buttons[index : index + 2] for index in range(0, len(buttons), 2)
+        ]
+        rows.append([self.settings_back_button("notifications")])
+        return rows
+
+    def settings_test_rows(self) -> list[list[dict[str, str]]]:
+        """Build explicit notification test controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action(
+                    tr(self.language, "button_test_loud"), "tests", "test_loud"
+                ),
+                action(
+                    tr(self.language, "button_test_silent"),
+                    "tests",
+                    "test_silent",
+                ),
+            ],
+            [
+                action(
+                    tr(self.language, "button_test_edit"), "tests", "test_edit"
+                )
+            ],
+            [self.settings_back_button("notifications")],
+        ]
+
+    def settings_voltage_rows(self) -> list[list[dict[str, str]]]:
+        """Build compact voltage threshold navigation."""
+
+        nav = self.settings_nav_button
+        action = self.settings_action_button
+        return [
+            [
+                action(
+                    tr(self.language, "button_levels"),
+                    "voltage",
+                    "alerts_toggle",
+                )
+            ],
+            [
+                nav("settings_section_low", "low"),
+                nav("settings_section_high", "high"),
+            ],
+            [
+                nav("settings_section_legacy_low", "legacy_low"),
+                nav("settings_section_dwell", "dwell"),
+            ],
+            [self.settings_back_button("main")],
+        ]
+
+    def settings_low_rows(self) -> list[list[dict[str, str]]]:
+        """Build low warning and critical threshold controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action("Crit -5V", "low", "critlow_dec"),
+                action("Crit +5V", "low", "critlow_inc"),
+            ],
+            [
+                action("Warn -5V", "low", "warnlow_dec"),
+                action("Warn +5V", "low", "warnlow_inc"),
+            ],
+            [self.settings_back_button("voltage")],
+        ]
+
+    def settings_high_rows(self) -> list[list[dict[str, str]]]:
+        """Build high warning and critical threshold controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action("Warn -5V", "high", "warnhigh_dec"),
+                action("Warn +5V", "high", "warnhigh_inc"),
+            ],
+            [
+                action("Crit -5V", "high", "crithigh_dec"),
+                action("Crit +5V", "high", "crithigh_inc"),
+            ],
+            [self.settings_back_button("voltage")],
+        ]
+
+    def settings_legacy_low_rows(self) -> list[list[dict[str, str]]]:
+        """Build the legacy low-voltage alert controls."""
+
+        action = self.settings_action_button
+
+        def tb(key: str, act: str, **values: object) -> dict[str, str]:
+            """Build one legacy low-voltage action button."""
+
+            text = tr(self.language, key, **values)
+            return action(text, "legacy_low", act)
+
+        return [
+            [tb("button_low", "low_toggle")],
+            [
+                tb("button_threshold", "low_dec", delta="-5V"),
+                tb("button_threshold", "low_inc", delta="+5V"),
+            ],
+            [
+                tb("button_recovery", "rec_dec", delta="-5V"),
+                tb("button_recovery", "rec_inc", delta="+5V"),
+            ],
+            [self.settings_back_button("voltage")],
+        ]
+
+    def settings_dwell_rows(self) -> list[list[dict[str, str]]]:
+        """Build dwell and recovery-delay controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action("Dwell -5s", "dwell", "dwell_dec"),
+                action("Dwell +5s", "dwell", "dwell_inc"),
+            ],
+            [
+                action("Recovery -5s", "dwell", "recdwell_dec"),
+                action("Recovery +5s", "dwell", "recdwell_inc"),
+            ],
+            [self.settings_back_button("voltage")],
+        ]
+
+    def settings_schedule_rows(self) -> list[list[dict[str, str]]]:
+        """Build schedule and status controls."""
+
+        action = self.settings_action_button
+        nav = self.settings_nav_button
+        return [
+            [
+                action(
+                    tr(self.language, "button_outage"),
+                    "schedule",
+                    "availability_toggle",
+                )
+            ],
+            [
+                action(
+                    tr(self.language, "button_summary"),
+                    "schedule",
+                    "daily_toggle",
+                )
+            ],
+            [nav("settings_section_summary_time", "summary_time")],
+            [
+                action(
+                    tr(self.language, "button_pin"), "schedule", "pin_toggle"
+                )
+            ],
+            [self.settings_back_button("main")],
+        ]
+
+    def settings_summary_time_rows(self) -> list[list[dict[str, str]]]:
+        """Build daily summary time controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action("Hour -1", "summary_time", "dailyhour_dec"),
+                action("Hour +1", "summary_time", "dailyhour_inc"),
+            ],
+            [
+                action("Minute -5", "summary_time", "dailymin_dec"),
+                action("Minute +5", "summary_time", "dailymin_inc"),
+            ],
+            [self.settings_back_button("schedule")],
+        ]
+
+    def settings_service_rows(self) -> list[list[dict[str, str]]]:
+        """Build maintenance and reset controls."""
+
+        action = self.settings_action_button
+        return [
+            [
+                action("🛠 Maintenance 60m", "service", "maint_60"),
+                action("Maintenance OFF", "service", "maint_off"),
+            ],
+            [self.settings_nav_button("button_reset", "reset")],
+            [self.settings_back_button("main")],
+        ]
+
+    def settings_reset_rows(self) -> list[list[dict[str, str]]]:
+        """Build explicit reset confirmation controls."""
+
+        return [
+            [
+                self.settings_action_button(
+                    tr(self.language, "settings_reset_yes"), "service", "reset"
+                )
+            ],
+            [self.settings_nav_button("settings_cancel", "service")],
+        ]
+
+    def settings_keyboard(self, page: str = "main") -> dict:
+        """Build one compact settings keyboard page."""
+
+        handlers = {
+            "main": self.settings_main_rows,
+            "device": self.settings_device_rows,
+            "meter": self.settings_meter_rows,
+            "notifications": self.settings_notification_rows,
+            "language": self.settings_language_rows,
+            "quiet": self.settings_quiet_rows,
+            "cooldown": lambda: self.settings_choice_rows(
+                "cooldown", "cooldown", (0, 3, 5, 10)
+            ),
+            "edit": lambda: self.settings_choice_rows(
+                "edit", "editwindow", (3, 5, 10)
+            ),
+            "tests": self.settings_test_rows,
+            "voltage": self.settings_voltage_rows,
+            "low": self.settings_low_rows,
+            "high": self.settings_high_rows,
+            "legacy_low": self.settings_legacy_low_rows,
+            "dwell": self.settings_dwell_rows,
+            "schedule": self.settings_schedule_rows,
+            "summary_time": self.settings_summary_time_rows,
+            "service": self.settings_service_rows,
+            "reset": self.settings_reset_rows,
+        }
+        if page not in handlers:
+            raise ValueError("unknown settings page")
+        return {"inline_keyboard": handlers[page]()}
 
     def apply_meter_setting(self, action: str, values: dict[str, str]) -> bool:
         """Select one supported Shelly monitoring backend."""
@@ -3513,20 +4215,36 @@ class Monitor:
             return
         callback_id, user_id, message, action = context
         try:
-            self.apply_settings_callback(action, user_id)
-            self.telegram.answer_callback(
-                callback_id, tr(self.language, "saved")
-            )
+            page, setting = self.settings_callback_action(action)
+            if setting is not None:
+                self.apply_settings_callback(setting, user_id)
+                self.telegram.answer_callback(
+                    callback_id, tr(self.language, "saved")
+                )
+            else:
+                self.telegram.answer_callback(callback_id)
             self.telegram.edit(
                 int(message["message_id"]),
-                self.settings_text(),
-                self.settings_keyboard(),
+                self.settings_page_text(page),
+                self.settings_keyboard(page),
             )
         except Exception as exc:
             logger.warning("Telegram settings callback failed: {}", exc)
             self.telegram.answer_callback(
                 callback_id, tr(self.language, "settings_error")
             )
+
+    def settings_callback_action(self, action: str) -> tuple[str, str | None]:
+        """Return target page and optional mutation from callback data."""
+
+        if action.startswith("nav:"):
+            return action.split(":", 1)[1], None
+        if action.startswith("set:"):
+            parts = action.split(":", 2)
+            if len(parts) != 3 or not parts[1] or not parts[2]:
+                raise ValueError("invalid settings callback")
+            return parts[1], parts[2]
+        return "main", action
 
     def settings_callback_context(self, query: dict) -> tuple | None:
         """Validate one settings callback and return its execution context."""
@@ -3641,7 +4359,9 @@ class Monitor:
             self.settings_keyboard() if self.is_admin(sender_id) else None
         )
         try:
-            self.telegram.send(self.settings_text(), reply_markup=keyboard)
+            self.telegram.send(
+                self.settings_page_text("main"), reply_markup=keyboard
+            )
         except Exception as exc:
             logger.warning("Telegram settings response failed: {}", exc)
 

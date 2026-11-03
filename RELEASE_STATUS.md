@@ -1,3 +1,11 @@
+## 0.5.11-hw — compact settings candidate
+
+- Software candidate: `0.5.11-hw`.
+- Production/public release remains `0.5.10-hw` until candidate gates and live validation pass.
+- `/settings` is reduced to five top-level sections with focused subpages; navigation edits the same message.
+- Reset requires explicit confirmation; legacy settings callbacks remain compatible.
+- Optional Telegram Mini App support is deferred until a public HTTPS endpoint and server-side `initData` validation are available.
+
 # Release status
 
 ## 0.5.10-hw — live verified / release target
