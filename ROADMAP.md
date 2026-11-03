@@ -1,4 +1,15 @@
 
+### 0.5.11-hw public release verification
+
+- DONE: tag `v0.5.11-hw` points exactly to release commit `391be951b85a98b32a82de423d277f6cff595a1d`.
+- DONE: Source Release #9, tag CI #314 and Container Image #80 completed successfully.
+- DONE: published source SHA256 `6a1c321682cdf8bf990e2d48fb0c5517076fb9a7d233d3af30aec28c66ca8abe` matched `SHA256SUMS` and an independent rebuild byte-for-byte; archive privacy scan passed.
+- DONE: immutable GHCR digest `sha256:df00b90a300ed27e0758554c5c1e2d99b1bc97b5b98f2505057f1a5d05f5a736` contains linux/amd64 and linux/arm64 images.
+- DONE: independent Cosign v3.0.6 verification passed for the exact tag workflow identity.
+- DONE: both architecture attestations contain SPDX 2.3 SBOMs (122 packages) and SLSA provenance bound to the exact release commit.
+- DONE: live source synchronized to the exact public tag; health/ready, SQLite continuity and persisted Telegram settings remained clean.
+
+
 ### 0.5.11-hw compact settings UX
 
 - PASS: replaced the oversized Telegram `/settings` keyboard with five compact top-level sections and focused subpages.
@@ -47,7 +58,7 @@ Public release: `0.5.10-hw` (source and signed multi-architecture image independ
 - DONE: publish `v0.5.10-hw` from release commit `aff36d905fabab29e75d01cf37fb8d7efa14b6c0`; Source Release #8, Container Image #77 and tag CI #307 passed.
 - DONE: independently verify `0.5.10-hw` source SHA256 `4e0e39da5d2add3985a37fbbc6375c62bea49d2a626693002600eb3aeb873240`, reproducibility/privacy, GHCR digest `sha256:b1a1771c3c35bcb6cac4977773394e88b29b37800087cf58127dd266c986c880`, Cosign signature, amd64/arm64 SPDX 2.3 SBOM and SLSA provenance.
 - DONE: `0.5.11-hw` compact settings software/live gate and restart continuity passed on physical Pro EM-50 without changing persisted Telegram settings.
-- IN PROGRESS: publish `v0.5.11-hw` from exact promoted release metadata and independently verify artifacts.
+- DONE: `v0.5.11-hw` public source and signed multi-architecture image independently verified.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.

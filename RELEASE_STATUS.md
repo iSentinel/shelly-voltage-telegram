@@ -1,3 +1,14 @@
+## 0.5.11-hw — public release independently verified
+
+- Release commit: `391be951b85a98b32a82de423d277f6cff595a1d`.
+- Source Release #9, tag CI #314 and Container Image #80: PASS.
+- Source archive SHA256: `6a1c321682cdf8bf990e2d48fb0c5517076fb9a7d233d3af30aec28c66ca8abe`; published checksum and independent reproducible rebuild match byte-for-byte.
+- GHCR digest: `sha256:df00b90a300ed27e0758554c5c1e2d99b1bc97b5b98f2505057f1a5d05f5a736`; linux/amd64 and linux/arm64 are present.
+- Cosign v3.0.6 signature verification: PASS.
+- SPDX 2.3 SBOM and SLSA provenance: PASS for both architectures; each SBOM contains 122 packages and provenance references the exact release revision.
+- Live source is synchronized with the exact public tag; service remains healthy/ready with preserved SQLite and Telegram settings.
+- Full electrical-transition hardware checkpoint remains `0.5.6-hw` until a natural threshold/recovery event is observed.
+
 ## 0.5.11-hw — live verified / release target
 
 - Software candidate and production runtime: `0.5.11-hw`; public release remains `0.5.10-hw` until the exact release tag completes.
