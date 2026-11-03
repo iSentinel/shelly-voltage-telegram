@@ -38,12 +38,12 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.11-hw**
-- Current release: **0.5.10-hw**
-- Production deployment: **0.5.10-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- Current release: **0.5.11-hw**
+- Production deployment: **0.5.11-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
 - Candidate `0.5.10-hw` extends the read-only recovery acceptance CLI so a natural 15-minute stable-recovery rotation can be verified without controlling Shelly or writing to the live database.
-- Candidate `0.5.11-hw` replaces the oversized `/settings` keyboard with five compact sections and focused subpages. Existing callback actions remain compatible; reset now requires confirmation.
+- `0.5.11-hw` replaces the oversized `/settings` keyboard with five compact sections and focused subpages. Existing callback actions remain compatible; reset now requires confirmation. Live promotion, exact-main parity, restart continuity and SQLite/Telegram continuity passed.
 - A Telegram Mini App is planned as an optional settings frontend after a public HTTPS endpoint is available; the compact inline menu remains the no-extra-infrastructure fallback.
 - It also migrates a persisted pre-`0.5.9-hw` recovery event into the stability timer so an old recovery banner cannot remain indefinitely after an upgrade.
 - Shelly Pro 3EM / Pro 3EM-3CT63 support is implemented and software-tested; physical three-phase validation follows after device installation.
@@ -126,7 +126,7 @@ sudo ./scripts/configure.sh
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.10-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.11-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.

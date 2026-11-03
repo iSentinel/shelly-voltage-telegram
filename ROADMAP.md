@@ -9,16 +9,20 @@
 - PASS: QUALITY gate and full regression suite: 187/187 tests.
 - PASS: clean Python 3.11/3.12/3.13 matrix: 187/187 on each version.
 - PASS: installer, rollback, support-bundle, reproducible release and Docker candidate gates.
-- NEXT: GitHub PR/CI, exact-main rebuild, then safe live promotion.
+- PASS: PR #34 merged as exact `main` commit `0f0b5d691f6e8e608d33442e3fe5f42321c62f7b`; PR CI #309, main CI #310 and Container Image #78 passed.
+- PASS: exact-main live promotion through the standard installer created rollback snapshot `20261103-031423-0.5.10-hw`.
+- PASS: live `/settings` renders exactly five top-level buttons using persisted UA settings; navigation was validated without sending a Telegram message.
+- PASS: post-promotion and restart continuity: healthy/ready, Shelly online, Telegram failures 0, SQLite `quick_check=ok`, zero open outages and zero synthetic `0 V` rows; status ID and notification timestamps/settings remained unchanged.
+- NEXT: publish `v0.5.11-hw` from promoted release metadata, then independently verify source and signed container artifacts.
 - FUTURE: optional Telegram Mini App settings frontend after a public HTTPS endpoint is available and Telegram `initData` is validated server-side.
 
 # Roadmap
 
 Status date: 2026-11-03
-Runtime release: `0.5.9-hw` (published, independently verified and live)
-Software candidate: `0.5.11-hw`; production runtime: `0.5.10-hw`
+Runtime release: `0.5.11-hw` (live; public release target)
+Software candidate / production runtime: `0.5.11-hw`
 Latest full hardware checkpoint: `0.5.6-hw`
-Public release: `0.5.9-hw` (source and signed multi-architecture image independently verified)
+Public release: `0.5.10-hw` (source and signed multi-architecture image independently verified)
 
 
 ## Current next steps
@@ -40,13 +44,16 @@ Public release: `0.5.9-hw` (source and signed multi-architecture image independe
 - DONE: install exact public `v0.5.9-hw` through `scripts/install-release.sh`; checksum, exact-tag source parity, rollback snapshot, restart, SQLite and Telegram continuity all passed.
 - DONE: `0.5.10-hw` extends the existing read-only recovery acceptance CLI with `stable-baseline` / `stable-verify` so the 15-minute recovery rotation can be physically accepted on the next natural event without controlling Shelly or mutating SQLite.
 - DONE: live pre-`0.5.9-hw` recovery context migrated successfully; status rotated silently, recovery metadata cleared, audible cooldown unchanged, restart continuity and rollback snapshot integrity passed.
-- IN PROGRESS: publish `v0.5.10-hw` from the exact release metadata commit after CI; independently verify source checksum, signed multi-architecture image, SBOM and SLSA provenance.
+- DONE: publish `v0.5.10-hw` from release commit `aff36d905fabab29e75d01cf37fb8d7efa14b6c0`; Source Release #8, Container Image #77 and tag CI #307 passed.
+- DONE: independently verify `0.5.10-hw` source SHA256 `4e0e39da5d2add3985a37fbbc6375c62bea49d2a626693002600eb3aeb873240`, reproducibility/privacy, GHCR digest `sha256:b1a1771c3c35bcb6cac4977773394e88b29b37800087cf58127dd266c986c880`, Cosign signature, amd64/arm64 SPDX 2.3 SBOM and SLSA provenance.
+- DONE: `0.5.11-hw` compact settings software/live gate and restart continuity passed on physical Pro EM-50 without changing persisted Telegram settings.
+- IN PROGRESS: publish `v0.5.11-hw` from exact promoted release metadata and independently verify artifacts.
 - CONTINUE: observe normal operation without inducing power cuts or voltage changes.
 - WAITING FOR HARDWARE: physical Pro 3EM / 3CT63 L1/L2/L3 acceptance.
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
 
 These current steps take precedence over older historical version notes below.
-`RELEASE_VERSION=0.5.9-hw` matches the published software release.
+`RELEASE_VERSION=0.5.11-hw` is promoted as the next public release target; current published release is `0.5.10-hw`.
 `LIVE_VERSION=0.5.6-hw` remains the latest full physical acceptance checkpoint.
 
 ## Completed
