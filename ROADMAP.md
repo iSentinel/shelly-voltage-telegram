@@ -1,8 +1,22 @@
+
+### 0.5.11-hw compact settings UX
+
+- PASS: replaced the oversized Telegram `/settings` keyboard with five compact top-level sections and focused subpages.
+- PASS: navigation edits one message and does not persist settings by itself.
+- PASS: old `cfg:*` callback actions remain supported.
+- PASS: reset is moved behind an explicit confirmation page.
+- PASS: RU/UA/EN labels cover the new menu hierarchy.
+- PASS: QUALITY gate and full regression suite: 187/187 tests.
+- PASS: clean Python 3.11/3.12/3.13 matrix: 187/187 on each version.
+- PASS: installer, rollback, support-bundle, reproducible release and Docker candidate gates.
+- NEXT: GitHub PR/CI, exact-main rebuild, then safe live promotion.
+- FUTURE: optional Telegram Mini App settings frontend after a public HTTPS endpoint is available and Telegram `initData` is validated server-side.
+
 # Roadmap
 
 Status date: 2026-11-03
 Runtime release: `0.5.9-hw` (published, independently verified and live)
-Software candidate / production runtime: `0.5.10-hw` (live migration and restart checks passed)
+Software candidate: `0.5.11-hw`; production runtime: `0.5.10-hw`
 Latest full hardware checkpoint: `0.5.6-hw`
 Public release: `0.5.9-hw` (source and signed multi-architecture image independently verified)
 

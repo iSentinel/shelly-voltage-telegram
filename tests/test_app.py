@@ -1043,6 +1043,18 @@ class TelegramSettingsTests(unittest.TestCase):
         monitor.storage.set_meta = Mock()
         return monitor
 
+    def _callback(self, data: str, message_id: int = 10) -> dict:
+        """Build one authorized settings callback update."""
+
+        return {
+            "callback_query": {
+                "id": "cb",
+                "from": {"id": 7},
+                "data": data,
+                "message": {"message_id": message_id, "chat": {"id": 123}},
+            }
+        }
+
     def test_settings_command_admin_gets_keyboard(self):
         monitor = self._monitor()
         monitor.telegram.send = Mock(return_value=1)
@@ -1118,6 +1130,102 @@ class TelegramSettingsTests(unittest.TestCase):
         self.assertFalse(monitor.telegram.silent_default)
         self.assertEqual(values["silent"], "0")
         monitor.telegram.edit.assert_called_once()
+
+    def test_compact_main_settings_has_five_buttons(self):
+        monitor = self._monitor()
+        rows = monitor.settings_keyboard()["inline_keyboard"]
+        buttons = [button for row in rows for button in row]
+        callbacks = {button["callback_data"] for button in buttons}
+        self.assertEqual(len(buttons), 5)
+        self.assertEqual(
+            callbacks,
+            {
+                "cfg:nav:device",
+                "cfg:nav:voltage",
+                "cfg:nav:notifications",
+                "cfg:nav:schedule",
+                "cfg:nav:service",
+            },
+        )
+
+    def test_navigation_does_not_persist_settings(self):
+        monitor = self._monitor()
+        monitor.telegram.answer_callback = Mock()
+        monitor.telegram.edit = Mock()
+        monitor.handle_callback(self._callback("cfg:nav:notifications"))
+        monitor.storage.set_meta.assert_not_called()
+        monitor.telegram.answer_callback.assert_called_once_with("cb")
+        text = monitor.telegram.edit.call_args.args[1]
+        self.assertIn("Уведомления", text)
+
+    def test_contextual_action_stays_on_current_page(self):
+        monitor = self._monitor()
+        values = monitor.setting_defaults().copy()
+        monitor.storage.get_meta.side_effect = (
+            lambda key: values.get(key.removeprefix("telegram_setting_"))
+            if key.startswith("telegram_setting_")
+            else None
+        )
+        monitor.storage.set_meta.side_effect = (
+            lambda key, value: values.__setitem__(
+                key.removeprefix("telegram_setting_"), value
+            )
+        )
+        monitor.telegram.answer_callback = Mock()
+        monitor.telegram.edit = Mock()
+        data = "cfg:set:notifications:silent_toggle"
+        monitor.handle_callback(self._callback(data))
+        self.assertEqual(values["silent"], "0")
+        self.assertIn("Уведомления", monitor.telegram.edit.call_args.args[1])
+
+    def test_reset_requires_confirmation_page(self):
+        monitor = self._monitor()
+        service = monitor.settings_keyboard("service")["inline_keyboard"]
+        service_data = {
+            button["callback_data"] for row in service for button in row
+        }
+        self.assertIn("cfg:nav:reset", service_data)
+        self.assertNotIn("cfg:set:service:reset", service_data)
+        reset = monitor.settings_keyboard("reset")["inline_keyboard"]
+        reset_data = {
+            button["callback_data"] for row in reset for button in row
+        }
+        self.assertIn("cfg:set:service:reset", reset_data)
+        self.assertIn("cfg:nav:service", reset_data)
+
+    def test_legacy_settings_callback_remains_supported(self):
+        monitor = self._monitor()
+        values = monitor.setting_defaults().copy()
+        monitor.storage.get_meta.side_effect = (
+            lambda key: values.get(key.removeprefix("telegram_setting_"))
+            if key.startswith("telegram_setting_")
+            else None
+        )
+        monitor.storage.set_meta.side_effect = (
+            lambda key, value: values.__setitem__(
+                key.removeprefix("telegram_setting_"), value
+            )
+        )
+        monitor.telegram.answer_callback = Mock()
+        monitor.telegram.edit = Mock()
+        monitor.handle_callback(self._callback("cfg:silent_toggle"))
+        self.assertEqual(values["silent"], "0")
+        self.assertIn(
+            "Выберите раздел", monitor.telegram.edit.call_args.args[1]
+        )
+
+    def test_compact_pages_render_all_languages(self):
+        monitor = self._monitor()
+        expected = {
+            "ru": "Уведомления",
+            "uk": "Сповіщення",
+            "en": "Notifications",
+        }
+        for language, title in expected.items():
+            with self.subTest(language=language):
+                monitor.language = language
+                text = monitor.settings_page_text("notifications")
+                self.assertIn(title, text)
 
     def test_reset_restores_environment_defaults(self):
         monitor = self._monitor()
@@ -2090,21 +2198,21 @@ class AdvancedFeatureTests(unittest.TestCase):
 
     def test_settings_offer_all_supported_shelly_models(self):
         monitor = APP.Monitor(config())
-        keyboard = monitor.settings_keyboard()["inline_keyboard"]
+        keyboard = monitor.settings_keyboard("meter")["inline_keyboard"]
         callbacks = {
             button["callback_data"] for row in keyboard for button in row
         }
         expected = {
-            "cfg:meter_em50",
-            "cfg:meter_em_gen3",
-            "cfg:meter_pm_mini_gen3",
-            "cfg:meter_plus_pm_mini",
-            "cfg:meter_plus_1pm",
-            "cfg:meter_1pm_gen3",
-            "cfg:meter_1pm_gen4",
-            "cfg:meter_1pm_mini_gen3",
-            "cfg:meter_1pm_mini_gen4",
-            "cfg:meter_pro3em",
+            "cfg:set:device:meter_em50",
+            "cfg:set:device:meter_em_gen3",
+            "cfg:set:device:meter_pm_mini_gen3",
+            "cfg:set:device:meter_plus_pm_mini",
+            "cfg:set:device:meter_plus_1pm",
+            "cfg:set:device:meter_1pm_gen3",
+            "cfg:set:device:meter_1pm_gen4",
+            "cfg:set:device:meter_1pm_mini_gen3",
+            "cfg:set:device:meter_1pm_mini_gen4",
+            "cfg:set:device:meter_pro3em",
         }
         self.assertTrue(expected.issubset(callbacks))
 
@@ -2153,12 +2261,12 @@ class AdvancedFeatureTests(unittest.TestCase):
                 monitor.storage.get_meta("telegram_setting_meter_type"),
                 "pro3em",
             )
-            keyboard = monitor.settings_keyboard()["inline_keyboard"]
+            keyboard = monitor.settings_keyboard("meter")["inline_keyboard"]
             data = [
                 button["callback_data"] for row in keyboard for button in row
             ]
-            self.assertIn("cfg:meter_em50", data)
-            self.assertIn("cfg:meter_pro3em", data)
+            self.assertIn("cfg:set:device:meter_em50", data)
+            self.assertIn("cfg:set:device:meter_pro3em", data)
             self.assertIn("Shelly Pro 3EM", monitor.settings_text())
 
     def test_runtime_settings_reload_after_restart(self):

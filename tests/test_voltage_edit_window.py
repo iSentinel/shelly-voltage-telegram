@@ -261,7 +261,7 @@ class VoltageEditWindowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             monitor.update_setting("editwindow_4", "7")
         self.assertEqual(monitor.status_edit_window_min, 10)
-        keyboard = str(monitor.settings_keyboard())
+        keyboard = str(monitor.settings_keyboard("edit"))
         for minutes in (3, 5, 10):
             self.assertIn(f"editwindow_{minutes}", keyboard)
 
