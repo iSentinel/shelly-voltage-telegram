@@ -1,0 +1,15 @@
+[Unit]
+Description=Capture read-only Shelly event baselines
+After=local-fs.target
+ConditionPathExists=/var/lib/shelly-voltage/voltage.sqlite3
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/shelly-voltage
+ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/recovery-acceptance.py --db /var/lib/shelly-voltage/voltage.sqlite3 --timeout 3 capture-once --output-dir /opt/shelly-voltage/validation/natural-baselines
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
