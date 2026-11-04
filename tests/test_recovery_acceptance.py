@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 import sqlite3
+import stat
 import sys
 import tempfile
 import unittest
@@ -434,6 +435,66 @@ class RecoveryAcceptanceTests(unittest.TestCase):
         self.assertIn("stable recovery timer was not cleared", errors)
         self.assertIn("recovery event context was not cleared", errors)
         self.assertIn("voltage episode context was not cleared", errors)
+
+    def test_capture_once_is_private_and_idempotent(self):
+        """Keep the first outage baseline while measurements advance."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "active.sqlite3"
+            create_database(path)
+            request = args(path)
+            request.output_dir = Path(directory) / "private"
+            first = RECOVERY.capture_once_payload(request)
+            self.assertEqual(first["status"], "pass")
+            self.assertTrue(first["created"])
+            target = Path(first["path"])
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            self.assertEqual(
+                stat.S_IMODE(target.parent.stat().st_mode), 0o700
+            )
+            first_bytes = target.read_bytes()
+            self.assertNotIn(b'"682"', first_bytes)
+            with closing(sqlite3.connect(path)) as db:
+                db.execute(
+                    "INSERT INTO measurements VALUES(2,'L1',225,50,1)"
+                )
+                db.commit()
+            second = RECOVERY.capture_once_payload(request)
+            self.assertFalse(second["created"])
+            self.assertEqual(first_bytes, target.read_bytes())
+
+    def test_capture_once_skips_when_idle(self):
+        """Do not create or backfill files after an outage has ended."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "idle.sqlite3"
+            create_database(path, open_outage=False)
+            request = args(path)
+            request.output_dir = Path(directory) / "private"
+            result = RECOVERY.capture_once_payload(request)
+            self.assertEqual(result["status"], "skip")
+            self.assertFalse(request.output_dir.exists())
+
+    def test_capture_once_saves_live_stable_timer(self):
+        """Capture a real stable timer using read-only health endpoints."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stable.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            request = args(path)
+            request.output_dir = Path(directory) / "private"
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                result = RECOVERY.capture_once_payload(request)
+            self.assertEqual(result["status"], "pass")
+            self.assertTrue(result["created"])
+            self.assertEqual(
+                result["baseline_kind"], "stable_recovery_baseline"
+            )
 
     def test_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as directory:
