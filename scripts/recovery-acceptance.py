@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -455,6 +456,70 @@ def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def checkpoint_name(payload: dict[str, object]) -> str:
+    """Name a checkpoint using the actual event, not the current date."""
+
+    state = payload["state"]
+    if payload["kind"] == "recovery_baseline":
+        outage = state["outage"]
+        return (
+            f"outage-{int(outage['id'])}-"
+            f"{int(float(outage['started_at']) * 1000)}.json"
+        )
+    started = stable_since_value(state)
+    if started is None:
+        raise ValueError("stable checkpoint has no start timestamp")
+    return f"stable-{int(started * 1000)}.json"
+
+
+def write_private_checkpoint(path: Path, payload: dict[str, object]) -> bool:
+    """Write once using a private directory and atomic exclusive creation."""
+
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.parent.stat().st_mode & 0o077:
+        raise ValueError("checkpoint directory must have mode 0700")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    flags |= getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except FileExistsError:
+        return False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return True
+
+
+def capture_once_payload(args: argparse.Namespace) -> dict[str, object]:
+    """Capture real outage or voltage-recovery context once, without RPC."""
+
+    state = current_db_state(args.db)
+    outage = state["outage"]
+    if outage is not None and outage["ended_at"] is None:
+        payload = baseline_payload(args)
+    elif stable_since_value(state) is not None:
+        payload = stable_baseline_payload(args)
+    else:
+        return {"kind": "natural_checkpoint", "status": "skip"}
+    if payload["status"] != "pass":
+        return payload
+    path = args.output_dir / checkpoint_name(payload)
+    created = write_private_checkpoint(path, payload)
+    return {
+        "kind": "natural_checkpoint",
+        "status": "pass",
+        "path": str(path),
+        "created": created,
+        "baseline_kind": payload["kind"],
+    }
+
+
 def write_output(payload: dict[str, object], output: Path | None) -> None:
     """Print JSON and optionally save the same payload to a file."""
 
@@ -492,6 +557,14 @@ def parser() -> argparse.ArgumentParser:
     )
     stable_verify.add_argument("--baseline", type=Path, required=True)
     stable_verify.add_argument("--output", type=Path)
+    capture = sub.add_parser(
+        "capture-once", help="save natural event baseline if one is active"
+    )
+    capture.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("validation/natural-baselines"),
+    )
     return cli
 
 
@@ -508,12 +581,13 @@ def main() -> int:
             "verify": verify_payload,
             "stable-baseline": stable_baseline_payload,
             "stable-verify": stable_verify_payload,
+            "capture-once": capture_once_payload,
         }
         payload = handlers[args.command](args)
     except (ValueError, OSError, sqlite3.Error, urllib.error.URLError) as exc:
         payload = {"status": "fail", "error_type": exc.__class__.__name__}
-    write_output(payload, args.output)
-    return 0 if payload.get("status") == "pass" else 2
+    write_output(payload, getattr(args, "output", None))
+    return 0 if payload.get("status") in {"pass", "skip"} else 2
 
 
 if __name__ == "__main__":
