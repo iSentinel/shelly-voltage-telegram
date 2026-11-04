@@ -1,3 +1,24 @@
+## 2026-11-04 current checkpoint
+
+- DONE: public `v0.5.12-hw` release is published at
+  https://github.com/iSentinel/shelly-voltage-telegram/releases/tag/v0.5.12-hw.
+  The tag points to commit `d5819ed9b110f887fc032c62dfadad70cff20b0f`.
+- DONE: Source Release and Container Image GitHub workflows passed.
+  Published source archive SHA256:
+  `b716d59efff5858a2b7dfef1b8ee9bf47dfd1b744920fd77b560a037f2feef44`.
+- DONE: public read-only local-connectivity troubleshooting guide merged
+  through PR #39; CI passed on Python 3.11, 3.12 and 3.13.
+- DONE: device IP is now DHCP-reserved. A local Pro EM-50 HTTP RPC check
+  succeeded after reservation. Do not infer Docker readiness from device
+  reachability; check `/ready` independently.
+- PENDING: independent Cosign and SPDX/SLSA verification for v0.5.12-hw
+  (the publication workflow completed, but that is not independent proof).
+- PENDING: physical voltage-threshold and stable-recovery acceptance after
+  a natural electrical event; latest full hardware checkpoint is 0.5.6-hw.
+- PENDING: physical Pro 3EM / Pro 3EM-3CT63 acceptance.
+- ON HOLD: optional Mini App publication without a public HTTPS endpoint
+  and server-side Telegram `initData` verification.
+
 ## 0.5.12-hw - software candidate / live acceptance
 
 - PASS: exact GitHub `main` source deployed in production and source parity
@@ -46,11 +67,11 @@
 
 # Roadmap
 
-Status date: 2026-11-03
-Runtime release: `0.5.12-hw` (live; public release target)
+Status date: 2026-11-04
+Runtime release: `0.5.12-hw` (live; public release published)
 Software candidate / production runtime: `0.5.12-hw`
 Latest full hardware checkpoint: `0.5.6-hw`
-Previous verified public release: `0.5.11-hw` (source and signed image independently verified)
+Published public release: `0.5.12-hw` (source independently checked; signature verification pending)
 
 
 ## Current next steps
