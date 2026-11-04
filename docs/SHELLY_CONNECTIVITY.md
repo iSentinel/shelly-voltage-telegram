@@ -6,7 +6,8 @@ the monitoring loop, and Telegram delivery **in that order**.
 The Shelly app can reach a device through its cloud service. This does not
 prove that a container can reach the device over the local network.
 Do not restart the bot or change Shelly settings until the failing layer is
-identified. All checks below are read-only.
+identified. Diagnostic checks below are read-only. The optional remediation
+in section 5 changes the Docker service only when you explicitly run it.
 
 ## 1. Confirm the active address
 
