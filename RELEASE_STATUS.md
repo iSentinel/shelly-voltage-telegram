@@ -8,8 +8,14 @@
   PASS on Python 3.11, 3.12, and 3.13 CI.
 - Local Pro EM-50 RPC was verified after DHCP reservation. A new Docker
   `/ready` result remains necessary to assert current monitor readiness.
-- Independent Cosign, SPDX/SLSA evidence inspection is still outstanding
-  for this release; passing publication workflows alone is not that check.
+- Independent image verification PASS: PR #41 merged reusable read-only
+  verifier after Cosign identity check and direct OCI manifest/attestation
+  inspection for both linux/amd64 and linux/arm64. Immutable image digest:
+  `sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46`.
+  Each image config has release commit `d5819ed9b110f887fc032c62dfadad70cff20b0f`;
+  each linked in-toto statement includes SPDX 2.3 or SLSA provenance and
+  references its platform image digest. Workflow `41860089060` PASS;
+  Python 3.11/3.12/3.13 CI `41860089059` PASS.
 - Full natural voltage-transition hardware checkpoint remains `0.5.6-hw`.
 - No production runtime, SQLite, or Telegram configuration was changed by
   these documentation updates.
