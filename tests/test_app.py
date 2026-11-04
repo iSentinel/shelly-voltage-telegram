@@ -2415,7 +2415,7 @@ class OutageInterpretationTests(unittest.TestCase):
             monitor.storage.end_outage(now - 30)
             phrases = {
                 "ru": "недоступность Shelly",
-                "ua": "недоступність Shelly",
+                "uk": "недоступність Shelly",
                 "en": "Shelly connectivity gaps",
             }
             for language, phrase in phrases.items():
