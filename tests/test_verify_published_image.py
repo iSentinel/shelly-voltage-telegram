@@ -71,9 +71,11 @@ class PublishedImageTests(unittest.TestCase):
             ]
         }
         fn = SCRIPT["statement_types"]
-        with patch.dict(fn.__globals__, {"fetch_object": lambda *_: source}):
-            with self.assertRaises(ValueError):
-                fn("token", manifest, DIGEST)
+        with (
+            patch.dict(fn.__globals__, {"fetch_object": lambda *_: source}),
+            self.assertRaises(ValueError),
+        ):
+            fn("token", manifest, DIGEST)
 
     @staticmethod
     def sample_index() -> dict:
