@@ -320,9 +320,7 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             self.assertEqual(baseline["status"], "pass")
             complete_stable_rotation(path)
             with closing(sqlite3.connect(path)) as db:
-                db.execute(
-                    "INSERT INTO outages VALUES(8,1500,1600,'L1')"
-                )
+                db.execute("INSERT INTO outages VALUES(8,1500,1600,'L1')")
                 db.commit()
             errors = RECOVERY.stable_verify_errors(
                 baseline,
