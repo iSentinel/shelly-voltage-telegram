@@ -27,7 +27,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
+Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
 
 ## Що робить проєкт
 
@@ -48,9 +48,9 @@ Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
 
 ## Статус проєкту
 
-- Поточний software candidate: **`0.5.11-hw`**.
-- Поточний публічний реліз: **`0.5.11-hw`**.
-- Production використовує **`0.5.11-hw`** на фізичному Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
+- Поточний software candidate: **`0.5.12-hw`**.
+- Поточний публічний реліз: **`0.5.12-hw`**.
+- Production використовує **`0.5.12-hw`** на фізичному Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
 - Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` після 15 хвилин стабільного відновлення беззвучно замінює recovery-повідомлення новим актуальним статусом.
 - Candidate `0.5.10-hw` додає read-only польову перевірку природної 15-хвилинної ротації статусу після відновлення.

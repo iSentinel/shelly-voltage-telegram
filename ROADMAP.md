@@ -1,9 +1,17 @@
-## 0.5.12-hw - software candidate
+## 0.5.12-hw - software candidate / live acceptance
 
+- PASS: exact GitHub `main` source deployed in production and source parity
+  verified on the physical Pro EM-50 without changing monitoring behavior.
+- PASS: quality gate, 200/200 unit tests, healthy/ready service, fresh read-only
+  voltage samples, SQLite quick_check, zero synthetic 0 V rows and Telegram
+  connectivity after recovering from a changed local DHCP address.
+- Operational follow-up: reserve the device IP by its MAC address on the LAN
+  DHCP server, so an electrical outage cannot change the address unnoticed.
+- Physical voltage-threshold/recovery behavior remains awaiting a natural event.
 - Prepared private `/start` menu, combined Status/settings and model-specific
   voltage topology. Pro EM-50 has one voltage phase displayed as L.
-- Local quality gate and 200 unit tests pass; live promotion and physical
-  acceptance are pending. Public release and production remain 0.5.11-hw.
+- Main CI and image workflow completed successfully. Public release
+  metadata is promoted for `v0.5.12-hw`; physical acceptance is pending.
 - Full electrical-transition hardware checkpoint remains 0.5.6-hw.
 - Mini App preparation remains unpublished, as requested.
 
@@ -39,10 +47,10 @@
 # Roadmap
 
 Status date: 2026-11-03
-Runtime release: `0.5.11-hw` (live; public release target)
-Software candidate / production runtime: `0.5.11-hw`
+Runtime release: `0.5.12-hw` (live; public release target)
+Software candidate / production runtime: `0.5.12-hw`
 Latest full hardware checkpoint: `0.5.6-hw`
-Public release: `0.5.10-hw` (source and signed multi-architecture image independently verified)
+Previous verified public release: `0.5.11-hw` (source and signed image independently verified)
 
 
 ## Current next steps
@@ -73,7 +81,7 @@ Public release: `0.5.10-hw` (source and signed multi-architecture image independ
 - Full physical voltage-transition acceptance for the new edit-window behavior remains outstanding.
 
 These current steps take precedence over older historical version notes below.
-`RELEASE_VERSION=0.5.11-hw` is promoted as the next public release target; current published release is `0.5.10-hw`.
+`RELEASE_VERSION=0.5.12-hw` is promoted as the next public release target; the previous verified release is `0.5.11-hw`.
 `LIVE_VERSION=0.5.6-hw` remains the latest full physical acceptance checkpoint.
 
 ## Completed

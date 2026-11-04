@@ -1,9 +1,17 @@
-## 0.5.12-hw - software candidate
+## 0.5.12-hw - live validated / release target
 
-- Prepared private `/start` menu, combined Status/settings and model-specific
-  voltage topology. Pro EM-50 has one voltage phase displayed as L.
-- Local quality gate and 200 unit tests pass; live promotion and physical
-  acceptance are pending. Public release and production remain 0.5.11-hw.
+- Private `/start` menu, combined Status/settings and model-specific voltage
+  topology are deployed. Pro EM-50 shows its single voltage phase as L.
+- Live runtime source matches GitHub main `63c4e56a1eabd1374e38dbe9982008a2b4df04cf`.
+  Main CI and Container Image completed successfully on that source.
+- Local quality gate and 200/200 unit tests PASS; the device is reachable,
+  live voltage/frequency readings are fresh, readiness and Docker health PASS.
+- During an electrical-service interruption the device acquired a different
+  DHCP address. Updating only SHELLY_HOST and restarting Compose restored
+  connectivity. A permission-restricted copy of the previous .env was saved.
+- SQLite quick_check PASS, no fake 0 V measurements, Telegram failures 0;
+  measurement history and the existing service configuration are preserved.
+- NEXT: publish `v0.5.12-hw` from the exact release-metadata merge commit after CI.
 - Full electrical-transition hardware checkpoint remains 0.5.6-hw.
 - Mini App preparation remains unpublished, as requested.
 
