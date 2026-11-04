@@ -1,4 +1,20 @@
-## 0.5.12-hw - live validated / release target
+## 0.5.12-hw — public release published (2026-11-04)
+
+- Published release: https://github.com/iSentinel/shelly-voltage-telegram/releases/tag/v0.5.12-hw
+- Exact release tag commit: `d5819ed9b110f887fc032c62dfadad70cff20b0f`.
+- Source Release and multi-architecture Container Image workflows: PASS.
+- Published archive SHA256: `b716d59efff5858a2b7dfef1b8ee9bf47dfd1b744920fd77b560a037f2feef44`.
+- GitHub PR #39 contributed a read-only Shelly troubleshooting guide with
+  PASS on Python 3.11, 3.12, and 3.13 CI.
+- Local Pro EM-50 RPC was verified after DHCP reservation. A new Docker
+  `/ready` result remains necessary to assert current monitor readiness.
+- Independent Cosign, SPDX/SLSA evidence inspection is still outstanding
+  for this release; passing publication workflows alone is not that check.
+- Full natural voltage-transition hardware checkpoint remains `0.5.6-hw`.
+- No production runtime, SQLite, or Telegram configuration was changed by
+  these documentation updates.
+
+## 0.5.12-hw - live validated / publication history
 
 - Private `/start` menu, combined Status/settings and model-specific voltage
   topology are deployed. Pro EM-50 shows its single voltage phase as L.
@@ -11,7 +27,7 @@
   connectivity. A permission-restricted copy of the previous .env was saved.
 - SQLite quick_check PASS, no fake 0 V measurements, Telegram failures 0;
   measurement history and the existing service configuration are preserved.
-- NEXT: publish `v0.5.12-hw` from the exact release-metadata merge commit after CI.
+- DONE: published `v0.5.12-hw` from the exact release-metadata commit; see current checkpoint above.
 - Full electrical-transition hardware checkpoint remains 0.5.6-hw.
 - Mini App preparation remains unpublished, as requested.
 
