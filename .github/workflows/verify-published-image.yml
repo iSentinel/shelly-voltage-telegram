@@ -63,6 +63,11 @@ jobs:
           assert isinstance(value, list) and value, "No verified signatures"
           print("COSIGN IMMUTABLE IMAGE SIGNATURE: PASS")
           '
+      - name: Preview exact Ruff formatting
+        shell: bash
+        run: |
+          python3 -m pip install ruff==0.14.2
+          ruff format --diff --line-length 79 scripts/verify-published-image.py || true
       - name: Independently verify image, SBOM and provenance
         shell: bash
         run: |
