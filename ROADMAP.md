@@ -11,8 +11,16 @@
 - DONE: device IP is now DHCP-reserved. A local Pro EM-50 HTTP RPC check
   succeeded after reservation. Do not infer Docker readiness from device
   reachability; check `/ready` independently.
-- PENDING: independent Cosign and SPDX/SLSA verification for v0.5.12-hw
-  (the publication workflow completed, but that is not independent proof).
+- DONE: independent Cosign verification for the immutable v0.5.12-hw
+  GHCR digest `sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46`.
+  The signer identity matches the tag build workflow and the GitHub OIDC issuer.
+- DONE: independently retrieved and SHA256-checked OCI manifests, both
+  linux/amd64 and linux/arm64 image configs and each digest-linked in-toto
+  attestation. Source revision matches tag commit `d5819ed9b110f887fc032c62dfadad70cff20b0f`.
+  Both architectures include SPDX 2.3 packages and SLSA provenance linked
+  to their exact image-manifest digests. Verification workflow run
+  `41860089060` passed; Python 3.11/3.12/3.13 CI `41860089059` passed.
+  Reusable independent verifier merged through PR #41.
 - PENDING: physical voltage-threshold and stable-recovery acceptance after
   a natural electrical event; latest full hardware checkpoint is 0.5.6-hw.
 - PENDING: physical Pro 3EM / Pro 3EM-3CT63 acceptance.
@@ -71,7 +79,7 @@ Status date: 2026-11-04
 Runtime release: `0.5.12-hw` (live; public release published)
 Software candidate / production runtime: `0.5.12-hw`
 Latest full hardware checkpoint: `0.5.6-hw`
-Published public release: `0.5.12-hw` (source independently checked; signature verification pending)
+Published public release: `0.5.12-hw` (source, Cosign and OCI attestations verified)
 
 
 ## Current next steps
