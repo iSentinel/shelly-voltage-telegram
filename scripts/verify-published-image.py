@@ -140,11 +140,10 @@ def statement_types(token: str, manifest: dict, image_digest: str) -> set[str]:
                 raise ValueError("SPDX 2.3 metadata is missing")
             if not predicate.get("packages"):
                 raise ValueError("SPDX has no packages")
-        if kind.startswith("https://slsa.dev/provenance/"):
-            if not (
-                predicate.get("buildType") or predicate.get("buildDefinition")
-            ):
-                raise ValueError("SLSA build information is missing")
+        if kind.startswith("https://slsa.dev/provenance/") and not (
+            predicate.get("buildType") or predicate.get("buildDefinition")
+        ):
+            raise ValueError("SLSA build information is missing")
         kinds.add(kind)
     return kinds
 
