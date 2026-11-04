@@ -1,3 +1,32 @@
+## 2026-11-04 natural restoration evidence (partial hardware acceptance)
+
+- PASS: a naturally occurring Pro EM-50 availability outage was recorded
+  as SQLite outage id `6`, L1, from 18:49:40 to 19:46:30 Europe/Kyiv
+  (56 minutes 50 seconds). The operator reported that power was off.
+  These are *monitor-connectivity* boundaries, not independently verified
+  electrical mains-on/off timestamps.
+- PASS: at approximately 20:07 local time the device's local EM1 RPC
+  returned HTTP 200 (236.8 V, 50 Hz), the Docker monitor was healthy,
+  `/ready` reported fresh online measurements, SQLite `quick_check`
+  was `ok`, zero-voltage measurements remained at 0, and no outage
+  remained open. The database contained 16,689 measurements.
+  The Telegram watchdog failure counter was 0 at inspection time.
+- OBSERVED: the Telegram status-message fingerprint differed from the
+  earlier 18:44 stable baseline and the persisted recovery context
+  had been cleared. This is evidence of a changed status message, not
+  proof of uninterrupted 15-minute stable recovery.
+- PENDING: a separate open-outage baseline was **not** captured for
+  event id 6 because Gateway's Tailscale regional executor was unavailable.
+  The earlier stable baseline belongs to a prior voltage episode and must
+  not be reused to promote the physical acceptance checkpoint.
+- DONE: PR #44 added a read-only baseline validation guard that rejects
+  a stable-verification result if the recorded outage changed since its
+  baseline. Python 3.11, 3.12 and 3.13 CI passed. This tool update is
+  in GitHub `main`, not deployed as a new physical release.
+- NEXT: capture a fresh event-specific baseline during a future natural
+  event and verify closure, status rotation, and continuous stability
+  without issuing any control RPCs or artificially disconnecting mains.
+
 ## 2026-11-04 current checkpoint
 
 - DONE: public `v0.5.12-hw` release is published at
