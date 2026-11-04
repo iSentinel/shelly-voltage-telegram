@@ -380,6 +380,14 @@ def stable_status_rotated(
     return bool(old and current and old != current)
 
 
+def stable_outage_unchanged(
+    old: dict[str, object], state: dict[str, object]
+) -> bool:
+    """Reject a stable baseline spanning another connectivity outage."""
+
+    return "outage" in old and old["outage"] == state.get("outage")
+
+
 def stable_verify_errors(
     baseline: dict[str, object],
     state: dict[str, object],
@@ -394,6 +402,8 @@ def stable_verify_errors(
     started = stable_since_value(old)
     if started is None or now - started < STABLE_RECOVERY_SECONDS:
         errors.append("15-minute stable recovery period has not elapsed")
+    if not stable_outage_unchanged(old, state):
+        errors.append("Shelly outage changed since stable baseline")
     if not stable_status_rotated(baseline, state["status_message_id"]):
         errors.append("recovery status message was not rotated")
     if state["recovery_stable_since"] is not None:
