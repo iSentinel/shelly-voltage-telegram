@@ -221,6 +221,9 @@ Telegram stable status also hides last-good V/Hz while the phase is offline; the
 
 ## Diagnostics and backups
 
+For local network and stale Telegram status issues, see [Shelly connectivity troubleshooting](docs/SHELLY_CONNECTIVITY.md).
+
+
 ```bash
 # Shelly + SQLite + Telegram diagnostic check
 docker exec shelly-voltage-bot python /app/app.py doctor
