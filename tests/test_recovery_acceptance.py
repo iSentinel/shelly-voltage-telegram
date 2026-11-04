@@ -449,15 +449,11 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             self.assertTrue(first["created"])
             target = Path(first["path"])
             self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
-            self.assertEqual(
-                stat.S_IMODE(target.parent.stat().st_mode), 0o700
-            )
+            self.assertEqual(stat.S_IMODE(target.parent.stat().st_mode), 0o700)
             first_bytes = target.read_bytes()
             self.assertNotIn(b'"682"', first_bytes)
             with closing(sqlite3.connect(path)) as db:
-                db.execute(
-                    "INSERT INTO measurements VALUES(2,'L1',225,50,1)"
-                )
+                db.execute("INSERT INTO measurements VALUES(2,'L1',225,50,1)")
                 db.commit()
             second = RECOVERY.capture_once_payload(request)
             self.assertFalse(second["created"])
