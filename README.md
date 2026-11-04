@@ -27,7 +27,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Software candidate: `0.5.12-hw`; public release and production: `0.5.11-hw`.
+Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
 
 ## Overview
 
@@ -45,8 +45,8 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.12-hw**
-- Current release: **0.5.11-hw**
-- Production deployment: **0.5.11-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- Current release: **0.5.12-hw**
+- Production deployment: **0.5.12-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
 - Candidate `0.5.10-hw` extends the read-only recovery acceptance CLI so a natural 15-minute stable-recovery rotation can be verified without controlling Shelly or writing to the live database.
@@ -133,7 +133,7 @@ sudo ./scripts/configure.sh
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.11-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.12-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
