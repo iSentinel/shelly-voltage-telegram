@@ -26,9 +26,7 @@ def arguments() -> argparse.Namespace:
     cli.add_argument(
         "--digest", required=True, help="Pinned image SHA-256 digest"
     )
-    cli.add_argument(
-        "--commit", required=True, help="Expected Git commit SHA"
-    )
+    cli.add_argument("--commit", required=True, help="Expected Git commit SHA")
     return cli.parse_args()
 
 
