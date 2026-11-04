@@ -2398,5 +2398,36 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertIn("loop_age", snap["watchdog"])
 
 
+class OutageInterpretationTests(unittest.TestCase):
+    """Avoid calling Shelly connectivity gaps confirmed electrical cuts."""
+
+    def test_reports_explain_connectivity_only(self):
+        """Show the explanation in all supported languages and reports."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = APP.Monitor(
+                config(database_path=Path(directory) / "outage.sqlite3")
+            )
+            monitor.storage.initialize()
+            now = APP.time.time()
+            monitor.storage.add(now, 223.0, 50.0)
+            monitor.storage.begin_outage(now - 70)
+            monitor.storage.end_outage(now - 30)
+            phrases = {
+                "ru": "недоступность Shelly",
+                "ua": "недоступність Shelly",
+                "en": "Shelly connectivity gaps",
+            }
+            for language, phrase in phrases.items():
+                with self.subTest(language=language):
+                    monitor.language = language
+                    for report in (
+                        monitor.outage_history_text(),
+                        monitor.outage_fallback_text("L1"),
+                        monitor.daily_summary_text(),
+                    ):
+                        self.assertIn(phrase, report)
+
+
 if __name__ == "__main__":
     unittest.main()
