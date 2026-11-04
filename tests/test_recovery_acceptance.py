@@ -304,6 +304,35 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             self.assertIsNone(payload["state"]["last_voltage_event_kind"])
             self.assertFalse(payload["state"]["voltage_episode_present"])
 
+    def test_stable_verify_rejects_later_outage(self):
+        """Do not count a stable interval broken by another outage."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "interrupted.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                baseline = RECOVERY.stable_baseline_payload(args(path))
+            self.assertEqual(baseline["status"], "pass")
+            complete_stable_rotation(path)
+            with closing(sqlite3.connect(path)) as db:
+                db.execute("INSERT INTO outages VALUES(8,1500,1600,'L1')")
+                db.commit()
+            errors = RECOVERY.stable_verify_errors(
+                baseline,
+                RECOVERY.current_db_state(path),
+                {"connectivity": "online"},
+                {"ready": True},
+                1901.0,
+            )
+            self.assertIn(
+                "Shelly outage changed since stable baseline", errors
+            )
+
     def test_stable_verify_fails_before_fifteen_minutes(self):
         """Reject verification before the fixed stability period ends."""
 
