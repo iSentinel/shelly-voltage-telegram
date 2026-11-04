@@ -140,6 +140,9 @@ Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.
 
 ## Documentation
 
+Troubleshooting: [Shelly online in the app, but offline in Telegram](docs/SHELLY_CONNECTIVITY.md).
+
+
 - 🇬🇧 [English documentation](README_EN.md)
 - 🇷🇺 [Русская документация](README_RU.md)
 - 🇺🇦 [Українська документація](README_UA.md)
