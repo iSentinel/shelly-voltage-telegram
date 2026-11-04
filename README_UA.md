@@ -222,7 +222,6 @@ http://127.0.0.1:8080/dashboard
 
 Якщо Shelly доступний у фірмовому застосунку, але бот показує offline, див. [перевірку локального підключення](docs/SHELLY_CONNECTIVITY.md).
 
-
 ```bash
 # Перевірка Shelly + SQLite + Telegram
 docker exec shelly-voltage-bot python /app/app.py doctor
