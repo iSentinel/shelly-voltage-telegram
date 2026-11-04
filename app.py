@@ -2787,6 +2787,7 @@ class Monitor:
                 else duration_text(duration, self.language)
             )
             lines.append(f"{format_stamp(start, self.cfg.timezone)} — {state}")
+        lines.append(tr(self.language, "outage_interpretation"))
         return "\n".join(lines)
 
     def outage_fallback_text(self, phase: str) -> str:
@@ -2808,6 +2809,7 @@ class Monitor:
                     failures=self.cfg.offline_after_failures,
                     successes=self.cfg.recovery_after_successes,
                 ),
+                tr(lang, "outage_interpretation"),
             ]
         )
 
@@ -2839,6 +2841,7 @@ class Monitor:
                     duration=outage_duration,
                 )
             )
+        lines.append(tr(self.language, "outage_interpretation"))
         return "\n".join(lines)
 
     def maybe_daily_summary(self) -> None:

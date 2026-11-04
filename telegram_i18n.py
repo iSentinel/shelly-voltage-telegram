@@ -173,6 +173,10 @@ _TEXT = {
         "outage_boundaries": (
             "ℹ️ Границы: {failures} ошибок / {successes} успешных опросов"
         ),
+        "outage_interpretation": (
+            "ℹ️ Зафиксирована недоступность Shelly. Это не всегда означает "
+            "отключение электричества (возможна проблема сети или IP)."
+        ),
         "summary_title": "📅 Суточная сводка",
         "summary_unconfigured": "⚪ {phase}: не настроена",
         "quality_title": "📊 Качество {phase} за {hours}ч",
@@ -320,6 +324,10 @@ _TEXT = {
         "outage_boundaries": (
             "ℹ️ Межі: {failures} помилок / {successes} успішних опитувань"
         ),
+        "outage_interpretation": (
+            "ℹ️ Зафіксовано недоступність Shelly. Це не завжди означає "
+            "зникнення електрики (можлива проблема мережі або IP)."
+        ),
         "summary_title": "📅 Добове зведення",
         "summary_unconfigured": "⚪ {phase}: не налаштована",
         "quality_title": "📊 Якість {phase} за {hours}г",
@@ -464,6 +472,10 @@ _TEXT = {
         "outage_unavailable": "⏱ Confirmed unavailability: {duration}",
         "outage_boundaries": (
             "ℹ️ Boundaries: {failures} failures / {successes} successful polls"
+        ),
+        "outage_interpretation": (
+            "ℹ️ These are Shelly connectivity gaps, not confirmed power "
+            "cuts. Network or IP changes can cause them."
         ),
         "summary_title": "📅 Daily summary",
         "summary_unconfigured": "⚪ {phase}: not configured",
