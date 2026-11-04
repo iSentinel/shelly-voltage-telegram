@@ -561,7 +561,8 @@ def parser() -> argparse.ArgumentParser:
         "capture-once", help="save natural event baseline if one is active"
     )
     capture.add_argument(
-        "--output-dir", type=Path,
+        "--output-dir",
+        type=Path,
         default=Path("validation/natural-baselines"),
     )
     return cli
