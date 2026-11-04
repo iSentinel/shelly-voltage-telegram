@@ -1,0 +1,72 @@
+name: Verify Published Release
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-published-image.yml"
+      - "scripts/verify-published-image.py"
+      - "tests/test_verify_published_image.py"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing public release tag"
+        required: true
+        type: string
+        default: v0.5.12-hw
+      digest:
+        description: "Immutable signed image digest"
+        required: true
+        type: string
+        default: sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46
+      commit:
+        description: "Exact expected release source commit"
+        required: true
+        type: string
+        default: d5819ed9b110f887fc032c62dfadad70cff20b0f
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_VERSION: ${{ inputs.version || 'v0.5.12-hw' }}
+      RELEASE_DIGEST: ${{ inputs.digest || 'sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46' }}
+      RELEASE_COMMIT: ${{ inputs.commit || 'd5819ed9b110f887fc032c62dfadad70cff20b0f' }}
+    steps:
+      - name: Check out independent verifier
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Verify immutable image signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^v[0-9A-Za-z._-]+$ ]]
+          [[ "$RELEASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          image="ghcr.io/isentinel/shelly-voltage-telegram@${RELEASE_DIGEST}"
+          identity="https://github.com/iSentinel/shelly-voltage-telegram/.github/workflows/image.yml@refs/tags/${RELEASE_VERSION}"
+          cosign verify \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$image" > "$RUNNER_TEMP/cosign-verify.json"
+          python3 -c '
+          import json
+          from pathlib import Path
+          value = json.loads(
+              (Path(__import__("os").environ["RUNNER_TEMP"]) /
+               "cosign-verify.json").read_text()
+          )
+          assert isinstance(value, list) and value, "No verified signatures"
+          print("COSIGN IMMUTABLE IMAGE SIGNATURE: PASS")
+          '
+      - name: Independently verify image, SBOM and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-published-image.py \
+            --digest "$RELEASE_DIGEST" \
+            --commit "$RELEASE_COMMIT"
