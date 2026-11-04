@@ -483,9 +483,6 @@ def write_private_checkpoint(path: Path, payload: dict[str, object]) -> bool:
     try:
         fd = os.open(path, flags, 0o600)
     except FileExistsError:
-        saved = json.loads(path.read_text(encoding="utf-8"))
-        if saved != payload:
-            raise ValueError("existing checkpoint has different contents")
         return False
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
