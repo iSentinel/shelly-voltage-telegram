@@ -1702,18 +1702,14 @@ def voltage_timeline_events(
             continue
         stamp_text = format_stamp(stamp, monitor.cfg.timezone)
         label = tr(monitor.language, "events_state_" + state)
-        rows.append(
-            (
-                stamp,
-                tr(
-                    monitor.language,
-                    "events_warning",
-                    phase=monitor.phase_label(phase),
-                    state=label,
-                    time=stamp_text,
-                ),
-            )
+        message = tr(
+            monitor.language,
+            "events_warning",
+            phase=monitor.phase_label(phase),
+            state=label,
+            time=stamp_text,
         )
+        rows.append((stamp, message))
     return rows
 
 
