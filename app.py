@@ -22,6 +22,7 @@ import requests
 from loguru import logger
 from requests.auth import HTTPDigestAuth
 
+from apartment_phases import ApartmentRegistry, apartment_command
 from advanced_features import (
     backup_health,
     chart_png,
@@ -4493,12 +4494,36 @@ class Monitor:
             self.handle_file_command(command, parts)
         elif command in {"/quality", "/history", "/outages"}:
             self.handle_phase_command(command, parts)
+        elif command == "/apartments":
+            self.handle_apartments_command(sender_id, parts)
         elif command == "/maintenance":
             self.handle_maintenance(sender_id, parts)
         elif command == "/settings":
             self.handle_settings_command(sender_id)
         else:
             self.send_command_response(command)
+
+    def handle_apartments_command(
+        self, sender_id: str, parts: list[str]
+    ) -> None:
+        """Manage apartment mappings in administrator direct messages."""
+
+        if not sender_id or not self.is_admin(sender_id):
+            return
+        registry = ApartmentRegistry(self.cfg.database_path)
+        try:
+            registry.initialize()
+            active = set(self.active_phases())
+            response = apartment_command(registry, parts, active)
+        except (ValueError, sqlite3.Error) as exc:
+            response = f"Apartment mapping error: {exc}"
+        try:
+            self.telegram.send(response, notify=False, chat_id=sender_id)
+        except Exception as exc:
+            logger.warning(
+                "Apartment mapping private response failed: {}",
+                exc.__class__.__name__,
+            )
 
     def command_phase_hours(self, parts: list[str]) -> tuple[str, int]:
         """Parse optional phase and hour arguments for export/chart."""
