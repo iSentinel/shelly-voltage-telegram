@@ -1,10 +1,15 @@
 # Telegram UX v2: compact power-status dashboard
 
-Status: **P1 source implemented, not deployed**. PR #96 introduced the
-localized compact status and read-only `/events` timeline. The final
-RU/UK language audit is being validated separately. P2/P3 items remain
-proposals pending testing and explicit release approval.
-This document is independent of the firmware's physical release gate.
+Status: **P1 and selected P2 features implemented in source, not deployed**.
+The RU/UK/EN compact status, read-only `/events`, on-demand `/week`,
+per-administrator `/view` preferences and explicit `/week subscribe`
+were merged by PRs #96–#103. The optional Telegram Mini App and
+physical Pro 3EM acceptance are still pending. Production stays on
+`0.5.12-hw` until hardware acceptance and approval of the candidate
+`0.5.13-hw`.
+
+See [the administrator guide](TELEGRAM_ADMIN_GUIDE.md) for current
+candidate commands, privacy rules and safe acceptance steps.
 
 ## Goals
 
@@ -93,10 +98,11 @@ message in the channel, and it does not change the default display.
 When Shelly is unavailable, current voltage is unknown; only the
 timestamp of the last valid sample is shown.
 
-The setting to permanently choose compact or detailed layout has
-**not** been enabled. Physical approval of the release and a
-rollback plan are prerequisites to making this preview available
-in the running Telegram bot.
+The administrator can now select `/view compact` or `/view detailed`
+in their own private chat. Preferences persist per administrator;
+the public-channel layout remains unchanged. This is not yet active
+on production. Full hardware acceptance and a verified rollback plan
+remain prerequisites to using it in the running bot.
 
 1. **P1** — A safe text renderer with RU/UA/EN and tests for online,
    warning, offline, recovering, missing data and fresh timestamps.
@@ -106,13 +112,15 @@ in the running Telegram bot.
 2. **P1** — Read-only 24-hour event timeline combining confirmed voltage
    transitions and outages. Show real timestamps, duration, phase and
    validity. Do not invent unavailable events or fabricate 0 V readings.
-3. **P2 (weekly on-demand source implemented)** — The read-only
-   `/week` command reports seven-day min/max/average, connection loss
-   and observed versus unknown sample coverage. Opt-in weekly
-   scheduled delivery is still pending explicit approval.
-4. **P2** — Display preferences: compact/detailed, local timezone,
-   opt-in schedules; do not change the existing 10-minute edit window
-   or default pin=false.
+3. **P2 (source implemented)** — The read-only `/week` report shows
+   seven-day min/max/average, recorded connection losses, and observed
+   versus unknown sample coverage. Optional private weekly delivery
+   is available only after explicit `/week subscribe`, on Sunday
+   at 20:00 local time. New installations default to unsubscribed.
+4. **P2 (source implemented)** — Private administrator layout preference
+   `/view compact` / `/view detailed` persists in SQLite. Public
+   status, local timezone, the existing 10-minute edit window, and
+   default pin=false are not modified.
 5. **P2** — After hardware arrival, optional three-phase comparison with
    explicit `EM.GetStatus` health diagnostics, without power control.
 6. **P3** — Telegram Mini App with responsive charts and optional
