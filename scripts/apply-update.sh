@@ -190,6 +190,8 @@ main() {
     parse_args "$@"
     requirements
     preflight
+    python3 "$ROOT/scripts/github_update.py" guard \
+        --root "$ROOT" --state "$STATE" --version "$VERSION"
     local digest
     digest="$(python3 "$ROOT/scripts/github_update.py" digest \
         --version "$VERSION")"
