@@ -287,7 +287,6 @@ def apartment_command(
 ) -> str:
     """Execute one validated administrator command with plain responses."""
 
-
     if len(parts) < 2:
         return APARTMENT_USAGE
     action = parts[1].lower()
