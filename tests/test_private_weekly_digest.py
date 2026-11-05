@@ -162,7 +162,7 @@ class PrivateWeeklyDigestTests(unittest.TestCase):
         )
 
     def test_channel_and_non_admin_cannot_subscribe(self):
-        """Ignore private subscription commands in all unauthorized contexts."""
+        """Ignore subscriptions from a channel or non-administrators."""
 
         for message in (
             update(7, "/week subscribe", "channel"),
