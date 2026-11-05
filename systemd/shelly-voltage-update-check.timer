@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for published Shelly Voltage Telegram updates every day
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=15m
+Persistent=true
+Unit=shelly-voltage-update-check.service
+
+[Install]
+WantedBy=timers.target
