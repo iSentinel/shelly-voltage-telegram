@@ -20,7 +20,7 @@ class UpdaterWorkspaceTests(unittest.TestCase):
                 'source "$1"; '
                 "requirements() { :; }; preflight() { :; }; "
                 "verify_image() { :; }; "
-                'python3() { '
+                "python3() { "
                 'if [[ "$*" == *" digest "* ]]; then echo "sha256:abc"; fi; '
                 "}; "
                 "verify_source_archive() { "
