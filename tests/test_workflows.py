@@ -92,7 +92,8 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn(
             "github.event_name == 'push' && "
-            "startsWith(github.ref, 'refs/tags/v')", text
+            "startsWith(github.ref, 'refs/tags/v')",
+            text,
         )
         self.assertNotIn("startsWith(inputs.image_tag, 'v')", text)
 
