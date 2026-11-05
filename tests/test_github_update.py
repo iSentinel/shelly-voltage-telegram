@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import tempfile
+import time
 import unittest
 from contextlib import closing
 from pathlib import Path
@@ -30,6 +31,10 @@ class ReleaseUpdaterTests(unittest.TestCase):
         with closing(sqlite3.connect(self.db)) as db, db:
             db.execute("CREATE TABLE outages (ended_at REAL)")
             db.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+            db.execute("CREATE TABLE measurements (ts REAL, voltage REAL)")
+            db.execute(
+                "INSERT INTO measurements VALUES(?, 230)", (time.time(),)
+            )
         self.latest = {
             "tag_name": "v0.5.13-hw",
             "draft": False,
@@ -131,6 +136,35 @@ class ReleaseUpdaterTests(unittest.TestCase):
                 {"ready": True, "connectivity": "online"}
             )
             with self.assertRaisesRegex(ValueError, "alarm"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_target_guard_refuses_downgrades(self):
+        """Reject already installed, older or unpublished releases."""
+
+        with patch.object(updater, "published_release", return_value=self.latest):
+            updater.guard_target(self.root, self.state, "0.5.13-hw")
+            for target in ("0.5.12-hw", "0.5.11-hw"):
+                with self.subTest(target=target), self.assertRaises(ValueError):
+                    updater.guard_target(self.root, self.state, target)
+
+    def test_preflight_rejects_low_voltage_and_recovery(self):
+        """Keep the updater idle during low voltage or recovery."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("UPDATE measurements SET voltage=117.5")
+        status = {"ready": True, "connectivity": "online"}
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "upgrade band"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("UPDATE measurements SET voltage=230")
+            db.execute(
+                "INSERT INTO meta VALUES('voltage_recovery_stable_since','1')"
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "not yet stable"):
                 updater.preflight(self.db, "http://127.0.0.1:8080/ready")
 
     def test_atomic_status_output(self):
