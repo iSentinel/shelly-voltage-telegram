@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,7 +17,7 @@ import advanced_features as QUALITY
 def make_database(path: Path) -> None:
     """Create only the tables needed by the read-only aggregate queries."""
 
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.executescript(
             "CREATE TABLE measurements("
             "ts REAL, voltage REAL, frequency REAL, phase TEXT);"
@@ -34,7 +35,7 @@ class WeeklyQualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "quality.sqlite3"
             make_database(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executemany(
                     "INSERT INTO measurements VALUES(?,?,50,'L1')",
                     [(100, 200), (110, 230), (140, 260), (220, 225)],
@@ -67,7 +68,7 @@ class WeeklyQualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "phases.sqlite3"
             make_database(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.execute("INSERT INTO measurements VALUES(100,240,50,'L2')")
             result = QUALITY.weekly_quality_stats(path, "L1", 0, 300, 207, 253)
             self.assertEqual(result["count"], 0)
@@ -79,7 +80,7 @@ class WeeklyQualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "outages.sqlite3"
             make_database(path)
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executemany(
                     "INSERT INTO outages VALUES(?,?,'L1')",
                     [(-20, 20), (100, None), (400, 450)],
@@ -99,7 +100,7 @@ class WeeklyQualityTests(unittest.TestCase):
                 config(database_path=path, telegram_language="uk")
             )
             monitor.storage.initialize()
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db, db:
                 db.executemany(
                     "INSERT INTO measurements(ts,voltage,frequency,phase) "
                     "VALUES(?,?,50,'L1')",
