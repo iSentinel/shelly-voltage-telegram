@@ -1,3 +1,26 @@
+## 2026-11-05 natural low-voltage threshold observation (partial hardware acceptance)
+
+- PASS on physical Shelly Pro EM-50 with production `0.5.12-hw`: after
+  natural outage #10 had closed, measured voltage dropped below the
+  configured 207 V warning threshold (minimum 200.0 V). The critical
+  threshold remained 190 V and was not crossed.
+- PASS: persisted phase L1 transition history records `low` at
+  19:31:47 and `normal` at 19:34:49 Europe/Kyiv, a 182.4-second
+  low-state interval. The last audible-notification timestamp matches
+  the transition into `low`. The persisted warning dwell is 15 seconds,
+  and recovery dwell is 30 seconds.
+- PASS: follow-up read-only verification found healthy/ready production,
+  no open outages, SQLite quick_check=ok, and no fabricated 0 V readings.
+  A private redacted evidence record was saved at
+  `/opt/shelly-voltage/validation/2026-11-05-natural-voltage-transition.json`.
+- LIMIT: These observations validate a real warning-level detection and
+  recovery in the deployed `0.5.12-hw` runtime. They do not prove
+  Telegram subscriber receipt, same-message editing, a full 15-minute
+  stable-recovery rotation, a critical-voltage transition, or physical
+  threshold handling in the unpromoted `0.5.13-hw` candidate.
+- SAFETY: no Shelly control commands, test power cuts, Telegram
+  messages, deployment upgrades, or production restarts were performed.
+
 ## 2026-11-05 independent image attestation and QA checkpoint
 
 - PASS: Production release `v0.5.12-hw` has a public OCI image index
