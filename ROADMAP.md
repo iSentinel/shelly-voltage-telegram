@@ -1,3 +1,31 @@
+## 2026-11-05 natural outage #10 recovery and host updater API acceptance
+
+- PASS: Gateway confirmed Shelly online and production `/ready` HTTP 200
+  with fresh 216.6 V / 50.0 Hz at 19:26 Kyiv time. Natural outage #10
+  closed on its own; SQLite recorded no open outages, no synthetic 0 V,
+  and `PRAGMA quick_check=ok`. Production LXC 110 remains at
+  `0.5.12-hw`, Docker healthy with zero restarts.
+- PASS: the read-only `scripts/recovery-acceptance.py verify` compared
+  production with the previously captured outage #10 baseline. Exit code
+  zero, status `pass`, empty errors, latest outage id 10 ended,
+  fresh measurements continued, no active voltage episode and the
+  Telegram status-message ID rotated. A database ID change is not an
+  independent Telegram delivery receipt.
+- IMPLEMENTED IN SOURCE (not deployed): the separate host-side updater
+  `scripts/github_update.py` now bounds GitHub/GHCR JSON to 128 KiB,
+  rejects malformed metadata or release assets and requires both the
+  matching source tarball and SHA256SUMS. Invalid OCI metadata is denied;
+  the release URL is generated from the validated tag.
+- PASS: isolated Gateway checkout with 292/292 unit tests, pinned Ruff,
+  PEP8 and short-function quality gates. A real read-only GitHub check
+  returned installed=latest=`0.5.12-hw`, auto_install=false.
+  A real GHCR digest lookup matched the previously verified
+  `sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46`.
+- NEXT: GitHub Actions CI/merge for the host checker hardening, then
+  private Telegram delivery acceptance with an authorized administrator
+  and candidate release tests on isolated LXC 111. Do not induce a power
+  failure, publish an unaccepted release or update production automatically.
+
 ## 2026-11-05 offline software checkpoint after PR #72-75
 
 - CURRENT PHYSICAL STATE: Shelly Pro EM-50 is offline during natural
