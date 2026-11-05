@@ -1,4 +1,4 @@
-"""Test read-only GitHub update information for Telegram."""
+"""Test private read-only GitHub release messages in three languages."""
 
 import json
 import unittest
@@ -7,65 +7,119 @@ from unittest.mock import patch
 import update_info
 
 
+def release(version="0.5.13-hw"):
+    """Return published release metadata with verified source assets."""
+
+    return {
+        "tag_name": "v" + version,
+        "assets": [
+            {"name": f"shelly-voltage-telegram-{version}.tar.gz"},
+            {"name": "SHA256SUMS"},
+        ],
+    }
+
+
 class GitHubUpdateInfoTests(unittest.TestCase):
-    """Cover release notices without requiring GitHub connectivity."""
+    """Cover localized messages without sending Telegram or HTTP requests."""
 
     def test_available_release_is_reported(self):
-        """Show the newer stable version without installing it."""
+        """Show an available stable update but never advertise auto-install."""
 
-        response = _Reply({"tag_name": "v0.5.13-hw"})
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch(
+            "urllib.request.urlopen", return_value=_Reply(release())
+        ):
             result = update_info.release_notice("0.5.12-hw")
         self.assertIn("Update available: yes", result)
         self.assertIn("Automatic installation: disabled", result)
+        self.assertIn(
+            "https://github.com/iSentinel/"
+            "shelly-voltage-telegram/releases/tag/v0.5.13-hw",
+            result,
+        )
 
     def test_current_release_has_no_update(self):
-        """Treat a matching release as current."""
+        """Treat a matching release as already current."""
 
         with patch(
             "urllib.request.urlopen",
-            return_value=_Reply({"tag_name": "v0.5.12-hw"}),
+            return_value=_Reply(release("0.5.12-hw")),
         ):
             result = update_info.release_notice("0.5.12-hw")
         self.assertIn("Update available: no", result)
 
-    def test_refuse_prerelease_and_unsupported_tag(self):
-        """Do not advertise invalid or prerelease tags."""
+    def test_russian_ukrainian_and_english_labels(self):
+        """Honor the administrator's configured Telegram language."""
 
-        for release in (
-            {"tag_name": "v0.5.13-hw", "prerelease": True},
-            {"tag_name": "latest"},
+        for language, label in (
+            ("ru", "Обновление доступно: да"),
+            ("uk", "Оновлення доступне: так"),
+            ("en", "Update available: yes"),
+        ):
+            with (
+                self.subTest(language=language),
+                patch(
+                    "urllib.request.urlopen", return_value=_Reply(release())
+                ),
+            ):
+                result = update_info.release_notice(
+                    "0.5.12-hw", language
+                )
+                self.assertIn(label, result)
+
+    def test_refuse_prerelease_and_unsupported_tag(self):
+        """Ignore draft, prerelease and malformed version metadata."""
+
+        for metadata in (
+            {**release(), "prerelease": True},
+            {**release(), "draft": True},
+            {**release(), "tag_name": "latest"},
         ):
             with (
                 patch(
-                    "urllib.request.urlopen",
-                    return_value=_Reply(release),
+                    "urllib.request.urlopen", return_value=_Reply(metadata)
                 ),
                 self.assertRaises(ValueError),
             ):
                 update_info.release_notice("0.5.12-hw")
 
+    def test_incomplete_release_cannot_be_advertised(self):
+        """Require a source archive and checksum before offering an update."""
+
+        for assets in (
+            [],
+            [{"name": "SHA256SUMS"}],
+            [{"name": "shelly-voltage-telegram-0.5.13-hw.tar.gz"}],
+        ):
+            with (
+                patch(
+                    "urllib.request.urlopen",
+                    return_value=_Reply({**release(), "assets": assets}),
+                ),
+                self.assertRaisesRegex(ValueError, "source archive"),
+            ):
+                update_info.release_notice("0.5.12-hw")
+
 
 class _Reply:
-    """Emulate a JSON-only HTTP response."""
+    """Emulate a small HTTPS JSON response."""
 
     def __init__(self, data):
-        """Record a small test response."""
+        """Encode the GitHub API test metadata."""
 
         self.payload = json.dumps(data).encode()
 
     def __enter__(self):
-        """Support a context-managed HTTP request."""
+        """Enter the fake network response."""
 
         return self
 
     def __exit__(self, *_arguments):
-        """Close the fake connection without hiding errors."""
+        """Leave the response without hiding errors."""
 
         return False
 
     def read(self):
-        """Return encoded test content."""
+        """Return the complete test response."""
 
         return self.payload
 
