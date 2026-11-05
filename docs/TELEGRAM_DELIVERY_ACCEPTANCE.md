@@ -37,6 +37,31 @@ retained monitor history, **not** proof of Telegram delivery, message
 editing or subscriber visibility. No channel ID, bot token or
 subscriber information is required to run the report.
 
+## Administrator acceptance for the 22:11–22:28 recovery
+
+The read-only 15-minute recovery verifier for November 5, 2026
+returned PASS at **22:28:14 Europe/Kyiv**. It verified a changed
+fingerprint of the Telegram status message ID, but it did **not**
+retrieve any message from the channel or prove subscriber visibility.
+
+**Action for the authorized channel administrator:**
+
+1. Open the configured Telegram status channel around 22:11–22:29
+   on November 5, 2026.
+2. Find the recovery/online status. Verify the displayed state and
+   timestamp are plausible and that there is no duplicate or stale
+   pinned status message.
+3. Record the visible result as `PASS`, `FAIL`, or `NOT FOUND`.
+   Store one private, redacted screenshot if possible. Do **not**
+   publish Telegram tokens, IDs, subscriber data, or channel secrets.
+4. If the status cannot be found, keep the delivery gate open and
+   investigate read-only Bot API/send-edit logs. Do not induce an
+   electrical outage just to create a new notification.
+
+The same check is required after candidate `0.5.13-hw` is safely
+staged and approved for live testing. Passing the old release's
+message check does not prove the uninstalled candidate's delivery.
+
 ## Final manual visibility check
 
 The authorized channel administrator should open the target Telegram
