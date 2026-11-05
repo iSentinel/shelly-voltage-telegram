@@ -93,9 +93,10 @@ and remain compatible with RU/UA/EN.
 2. **P1** — Read-only 24-hour event timeline combining confirmed voltage
    transitions and outages. Show real timestamps, duration, phase and
    validity. Do not invent unavailable events or fabricate 0 V readings.
-3. **P2** — Opt-in daily/weekly quality digest: min/max/average,
-   confirmed outages, sample coverage and time below/above configured
-   thresholds. Report unknown periods separately.
+3. **P2 (weekly on-demand source implemented)** — The read-only
+   `/week` command reports seven-day min/max/average, connection loss
+   and observed versus unknown sample coverage. Opt-in weekly
+   scheduled delivery is still pending explicit approval.
 4. **P2** — Display preferences: compact/detailed, local timezone,
    opt-in schedules; do not change the existing 10-minute edit window
    or default pin=false.
