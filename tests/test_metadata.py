@@ -5,6 +5,33 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def is_public_text_file(path: Path) -> bool:
+    """Select public text files while excluding private runtime files."""
+
+    private_dirs = {
+        ".git",
+        ".ruff_cache",
+        "__pycache__",
+        "validation",
+        "secrets",
+        "dist",
+        "dist-audit",
+        "dist-publish",
+    }
+    if any(part in private_dirs for part in path.parts):
+        return False
+    if path.name == ".env" or (
+        path.name.startswith(".env.") and path.name != ".env.example"
+    ):
+        return False
+    return path.is_file() and path.suffix.lower() not in {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gz",
+    }
+
+
 class MetadataConsistencyTests(unittest.TestCase):
     def test_public_metadata_matches_version(self):
         version = (ROOT / "VERSION").read_text().strip()
@@ -44,15 +71,14 @@ class MetadataConsistencyTests(unittest.TestCase):
             self.assertIsNone(private_ipv4.search(text), name)
             self.assertIsNone(mac.search(text), name)
 
+    def test_private_env_backups_are_excluded(self):
+        """Never read sensitive local configuration backup files."""
+
+        for name in (".env", ".env.pre-ip-fix-20261104", ".env.bak"):
+            self.assertFalse(is_public_text_file(ROOT / name))
+        self.assertTrue(is_public_text_file(ROOT / ".env.example"))
+
     def test_public_tree_has_no_deployment_specific_ids(self):
-        excluded = {
-            ".env",
-            ".ruff_cache",
-            "validation",
-            "secrets",
-            "dist",
-            "dist-publish",
-        }
         deployment_values = {}
         env_path = ROOT / ".env"
         if env_path.exists() and env_path.stat().st_mode & 0o004:
@@ -71,11 +97,7 @@ class MetadataConsistencyTests(unittest.TestCase):
                 ):
                     deployment_values[key] = value
         for path in ROOT.rglob("*"):
-            if not path.is_file() or any(
-                part in excluded for part in path.parts
-            ):
-                continue
-            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gz"}:
+            if not is_public_text_file(path):
                 continue
             text = path.read_text(errors="ignore")
             for label, value in deployment_values.items():
