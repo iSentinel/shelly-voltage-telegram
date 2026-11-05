@@ -1,3 +1,23 @@
+## 2026-11-05 candidate promotion preflight version semantics
+
+- FIX IN SOURCE: the read-only `scripts/promotion-check.py` compared
+  the running service version to `LIVE_VERSION`. That marker records
+  the *latest fully accepted hardware checkpoint* (`0.5.6-hw`),
+  not the running Docker release (`0.5.12-hw`). It would incorrectly
+  reject an otherwise healthy runtime when the hardware checkpoint lags.
+- The checker now verifies that the running `/health` version matches
+  `RELEASE_VERSION` (the published/deployed `0.5.12-hw` marker),
+  keeping `LIVE_VERSION` as an independent historical checkpoint.
+  It also rejects a candidate matching either the deployed release
+  or the accepted checkpoint.
+- This is a **preflight consistency correction**, not authorization
+  to install or promote `0.5.13-hw`. User-visible Telegram delivery,
+  real hardware acceptance, rollback readiness and source-artifact
+  parity remain separate release conditions.
+- Source and unit tests can be checked independently in CI, while
+  the real LXC 110 read-only check requires restored Gateway/Tailscale
+  connector access. No server files were modified by this change.
+
 ## 2026-11-05 stable-recovery continuous-voltage evidence hardening
 
 - PREVIOUS HARDWARE CHECKPOINT: the automated read-only verification
