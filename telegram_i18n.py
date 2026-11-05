@@ -39,8 +39,12 @@ _TEXT = {
         "updates_yes": "да",
         "updates_no": "нет",
         "updates_auto_disabled": "Автоматическая установка: выключена",
-        "updates_manual_required": "Для установки требуется подтверждение администратора на сервере.",
-        "updates_check_failed": "Не удалось проверить опубликованный релиз GitHub.",
+        "updates_manual_required": (
+            "Для установки требуется подтверждение администратора на сервере."
+        ),
+        "updates_check_failed": (
+            "Не удалось проверить опубликованный релиз GitHub."
+        ),
         "phase_unconfigured": "⚪ {phase}: не настроена",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -232,8 +236,12 @@ _TEXT = {
         "updates_yes": "так",
         "updates_no": "ні",
         "updates_auto_disabled": "Автоматичне встановлення: вимкнено",
-        "updates_manual_required": "Для встановлення потрібне підтвердження адміністратора на сервері.",
-        "updates_check_failed": "Не вдалося перевірити опублікований реліз GitHub.",
+        "updates_manual_required": (
+            "Для встановлення потрібне підтвердження адміністратора на сервері."
+        ),
+        "updates_check_failed": (
+            "Не вдалося перевірити опублікований реліз GitHub."
+        ),
         "phase_unconfigured": "⚪ {phase}: не налаштована",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -394,7 +402,9 @@ _TEXT = {
         "updates_yes": "yes",
         "updates_no": "no",
         "updates_auto_disabled": "Automatic installation: disabled",
-        "updates_manual_required": "Installation requires explicit administrator approval on the host.",
+        "updates_manual_required": (
+            "Installation requires explicit administrator approval on the host."
+        ),
         "updates_check_failed": "GitHub release check unavailable.",
         "phase_unconfigured": "⚪ {phase}: not configured",
         "phase_offline": "🔴 {phase}: unavailable",
