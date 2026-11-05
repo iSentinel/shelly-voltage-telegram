@@ -201,9 +201,7 @@ def preflight(database: Path, ready_url: str) -> None:
         verify_voltage_sample(db)
 
 
-def storage_preflight(
-    database: Path, state: Path, docker_root: Path
-) -> None:
+def storage_preflight(database: Path, state: Path, docker_root: Path) -> None:
     """Require space for the image, backup and recovery snapshot."""
 
     if not database.is_file():
