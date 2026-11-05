@@ -5109,6 +5109,9 @@ class Monitor:
         }
         if command in reports:
             return reports[command]()
+        known = {"/voltage", "/today", "/minmax", "/history", "/outages"}
+        if command not in known:
+            return None
         if snap["voltage"] is None:
             return tr(self.language, "no_current")
         if command == "/voltage":
