@@ -124,13 +124,22 @@ sudo ./scripts/configure.sh
 
 ## Telegram commands
 
+The following commands are in the **source candidate**. Not all
+commands are available in the currently published `0.5.12-hw` image.
+
 ```text
 /start       /help         /voltage      /status
 /today       /minmax       /history      /outages
 /quality     /chart        /export       /summary
-/device      /health       /settings     /audit
-/maintenance
+/events      /week         /device       /health
+/settings    /audit        /maintenance
 ```
+
+The administrator's **private chat** also supports `/preview`,
+`/view compact`, `/view detailed`, `/week subscribe`, and
+`/week unsubscribe`. These candidate-only controls do not modify
+the public channel, are opt-in where applicable, and require a
+validated production release before use.
 
 ## Container image
 
@@ -147,6 +156,7 @@ Troubleshooting: [Shelly online in the app, but offline in Telegram](docs/SHELLY
 - 🇬🇧 [English documentation](README_EN.md)
 - 🇷🇺 [Русская документация](README_RU.md)
 - 🇺🇦 [Українська документація](README_UA.md)
+- 🔐 [Telegram administrator guide](docs/TELEGRAM_ADMIN_GUIDE.md)
 - 🧭 [Roadmap](ROADMAP.md)
 - 🧪 [Hardware validation](HARDWARE_VALIDATION.md)
 - 📝 [Changelog](CHANGELOG.md)
