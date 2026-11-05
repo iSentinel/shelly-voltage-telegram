@@ -49,9 +49,7 @@ def published_release_tag() -> str:
     if not isinstance(source_assets, list):
         raise ValueError("release asset list is unavailable")
     assets = {
-        asset.get("name")
-        for asset in source_assets
-        if isinstance(asset, dict)
+        asset.get("name") for asset in source_assets if isinstance(asset, dict)
     }
     if not expected.issubset(assets):
         raise ValueError("the release has no verified source archive")
