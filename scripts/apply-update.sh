@@ -139,7 +139,16 @@ restore_snapshot_database() {
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
     if [[ -f "$DB" ]]; then
-        cp -a "$DB" "$rescue"
+        python3 - "$DB" "$rescue" <<'PY'
+import sqlite3
+import sys
+from contextlib import closing
+
+source = "file:" + sys.argv[1] + "?mode=ro"
+with closing(sqlite3.connect(source, uri=True)) as original:
+    with closing(sqlite3.connect(sys.argv[2])) as destination:
+        original.backup(destination)
+PY
         chmod 0600 "$rescue"
     fi
     temp="$(mktemp "${DB}.recovery.XXXXXXXX")"
