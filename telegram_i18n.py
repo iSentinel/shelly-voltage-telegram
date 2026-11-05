@@ -237,7 +237,8 @@ _TEXT = {
         "updates_no": "ні",
         "updates_auto_disabled": "Автоматичне встановлення: вимкнено",
         "updates_manual_required": (
-            "Для встановлення потрібне підтвердження адміністратора на сервері."
+            "Для встановлення потрібне підтвердження "
+            "адміністратора на сервері."
         ),
         "updates_check_failed": (
             "Не вдалося перевірити опублікований реліз GitHub."
@@ -403,7 +404,8 @@ _TEXT = {
         "updates_no": "no",
         "updates_auto_disabled": "Automatic installation: disabled",
         "updates_manual_required": (
-            "Installation requires explicit administrator approval on the host."
+            "Installation requires explicit administrator "
+            "approval on the host."
         ),
         "updates_check_failed": "GitHub release check unavailable.",
         "phase_unconfigured": "⚪ {phase}: not configured",
