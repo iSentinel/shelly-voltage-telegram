@@ -87,6 +87,30 @@ class ApartmentRegistry:
                 (building, number, phase),
             )
 
+    def assign_range(
+        self, building: str, start: str, end: str, phase: str
+    ) -> int:
+        """Assign one small apartment range in a single transaction."""
+
+        building = valid_building(building)
+        first = valid_apartment(start)
+        last = valid_apartment(end)
+        phase = valid_phase(phase)
+        if last < first or last - first >= 200:
+            raise ValueError("range must contain 1-200 apartments")
+        entries = [
+            (building, number, phase)
+            for number in range(first, last + 1)
+        ]
+        with closing(self.connect()) as db, db:
+            db.executemany(
+                "INSERT INTO apartment_phases(building, apartment, phase) "
+                "VALUES(?,?,?) ON CONFLICT(building,apartment) "
+                "DO UPDATE SET phase=excluded.phase",
+                entries,
+            )
+        return len(entries)
+
     def remove(self, building: str, apartment: str) -> bool:
         """Remove one assignment and report whether it existed."""
 
@@ -129,6 +153,7 @@ def apartment_command(
     usage = (
         "Usage: /apartments list [L1|L2|L3]; "
         "/apartments add BUILDING NUMBER PHASE; "
+        "/apartments range BUILDING FIRST LAST PHASE; "
         "/apartments remove BUILDING NUMBER"
     )
     if len(parts) < 2:
@@ -153,6 +178,12 @@ def apartment_command(
             raise ValueError("phase is not configured on this monitor")
         registry.assign(parts[2], parts[3], phase)
         return f"Saved: {parts[2]} #{int(parts[3])} → {phase}"
+    if action == "range" and len(parts) == 6:
+        phase = valid_phase(parts[5])
+        if phase not in allowed:
+            raise ValueError("phase is not configured on this monitor")
+        count = registry.assign_range(parts[2], parts[3], parts[4], phase)
+        return f"Saved {count} apartments in {parts[2]} on {phase}"
     if action == "remove" and len(parts) == 4:
         removed = registry.remove(parts[2], parts[3])
         return "Removed" if removed else "Assignment not found"
