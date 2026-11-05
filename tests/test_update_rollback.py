@@ -122,6 +122,26 @@ class OfflineRollbackTests(unittest.TestCase):
                 db.execute("SELECT id FROM samples").fetchone(), (42,)
             )
 
+    def test_rescue_includes_uncheckpointed_wal_data(self):
+        """Rescue must include committed rows still residing in the WAL."""
+
+        writer = sqlite3.connect(self.database)
+        try:
+            writer.execute("PRAGMA journal_mode=WAL")
+            writer.execute("PRAGMA wal_autocheckpoint=0")
+            writer.execute("UPDATE samples SET id=777")
+            writer.commit()
+            self.assertTrue(Path(str(self.database) + "-wal").exists())
+            result = self.run_restore()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rescue = self.snapshot / "failed-upgrade-database.sqlite3"
+            with closing(sqlite3.connect(rescue)) as db:
+                self.assertEqual(
+                    db.execute("SELECT id FROM samples").fetchone(), (777,)
+                )
+        finally:
+            writer.close()
+
     def test_bad_checksum_leaves_active_database_unchanged(self):
         """Reject a corrupted backup before any database replacement."""
 
