@@ -52,6 +52,7 @@ def release_notice(installed: str, language: str = "en") -> str:
         tr(language, "updates_available", answer=answer),
         tr(language, "updates_auto_disabled"),
         tr(language, "updates_manual_required"),
-        f"https://github.com/iSentinel/shelly-voltage-telegram/releases/tag/{tag}",
+        "https://github.com/iSentinel/"
+        f"shelly-voltage-telegram/releases/tag/{tag}",
     ]
     return "\n".join(lines)
