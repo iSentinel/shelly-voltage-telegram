@@ -88,7 +88,7 @@ wait_healthy() {
 }
 
 start_stack() {
-    "$ROOT/scripts/start-compose.sh"
+    /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
 rollback() {
