@@ -224,6 +224,8 @@ _TEXT = {
         "events_state_high": "повышенное напряжение",
         "events_state_normal": "напряжение восстановилось",
         "device_unknown": "нет данных",
+        "events_reconnected": "✅ {phase}: связь восстановлена · {time}",
+        "unit_seconds": "с",
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -431,6 +433,8 @@ _TEXT = {
         "events_state_high": "підвищена напруга",
         "events_state_normal": "напруга відновилася",
         "device_unknown": "немає даних",
+        "events_reconnected": "✅ {phase}: зв'язок відновлено · {time}",
+        "unit_seconds": "с",
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -636,6 +640,8 @@ _TEXT = {
         "events_state_high": "high voltage",
         "events_state_normal": "voltage recovered",
         "device_unknown": "n/a",
+        "events_reconnected": "✅ {phase}: connection restored · {time}",
+        "unit_seconds": "s",
         "backup_missing": "💾 Backup: missing",
     },
 }
