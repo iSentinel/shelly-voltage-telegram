@@ -66,6 +66,21 @@ class ReleaseUpdaterTests(unittest.TestCase):
         self.assertEqual(status["installed"], "0.5.12-hw")
         self.assertEqual((self.root / "VERSION").read_text(), "0.5.12-hw\n")
 
+    def test_release_metadata_precedes_unpublished_candidate(self):
+        """Do not treat a checked-out candidate as the running release."""
+
+        (self.root / "VERSION").write_text("0.5.13-hw\n")
+        (self.root / "RELEASE_VERSION").write_text("0.5.12-hw\n")
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
+            status = updater.check(self.root, self.state)
+        self.assertTrue(status["available"])
+        self.assertEqual(status["installed"], "0.5.12-hw")
+        self.assertEqual(
+            updater.installed_version(self.root, self.state), "0.5.12-hw"
+        )
+
     def test_recorded_deployment_takes_precedence(self):
         """Compare against the running signed-image version after upgrade."""
 
