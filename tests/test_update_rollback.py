@@ -150,9 +150,9 @@ class OfflineRollbackTests(unittest.TestCase):
             env={**os.environ, "CAPTURE": str(capture)},
         )
         self.assertEqual(result.returncode, 19)
-        self.assertEqual(capture.read_text().splitlines(), [
-            "recovered", "restarted"
-        ])
+        self.assertEqual(
+            capture.read_text().splitlines(), ["recovered", "restarted"]
+        )
 
     def test_cosign_version_gate(self):
         """Require compatible Cosign 3 before changing host state."""
