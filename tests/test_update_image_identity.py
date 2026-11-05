@@ -18,12 +18,12 @@ class ImageIdentityTests(unittest.TestCase):
 
         script = (
             'source "$1"; '
-            'docker() { '
+            "docker() { "
             'if [[ "$1" == "compose" ]]; then echo test-container; '
             'else printf "%s|%s|%s\\n" '
             '"$MOCK_IMAGE" "$MOCK_HEALTH" "$MOCK_RUNNING"; fi; }; '
             'curl() { echo "$MOCK_HTTP"; }; '
-            'seq() { echo 1; }; sleep() { :; }; '
+            "seq() { echo 1; }; sleep() { :; }; "
             'wait_healthy "$2"'
         )
         env = dict(os.environ)
