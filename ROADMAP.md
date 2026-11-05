@@ -1,3 +1,31 @@
+## 2026-11-06 private compact-status preview
+
+- **P2 source stage:** `/preview` is an administrator-only Telegram
+  command accepted in the administrator's private chat, not the
+  public status channel or general control chat. Its response is
+  silent and contains only a localized compact read-only view.
+- **Safety:** preview does not send to, edit or pin the channel
+  status, change persisted preferences, query Shelly, generate
+  measurements, or send test voltage notifications.
+- **Offline semantics:** when Shelly has no active connection,
+  the current voltage is explicitly unknown; a previously valid
+  reading may only contribute its last-observed timestamp. Preview
+  never claims cached voltage is live or fabricates a zero reading.
+- **Localization:** RU/UK/EN title and explanatory note are checked
+  with the existing translation-key and placeholder parity tests.
+- **Defense in depth:** unknown commands now produce no response
+  even during a connectivity outage. Channel messages cannot invoke
+  the private-only preview command.
+- **QA:** 353/353 unit tests PASS in a network-disabled isolated
+  Docker test run, Ruff 0.14.2 PASS and project quality gate PASS.
+- **Deployment gate:** `/preview` is candidate source functionality,
+  unavailable on live `0.5.12-hw`. The current power outage must not
+  be used to force a release; production changes require a separately
+  accepted Pro EM-50 hardware candidate and rollback readiness.
+- **Next work:** optional compact/detailed display preference in
+  private chat and opt-in weekly report scheduling only after
+  explicit user-facing behavior approval and deployment QA.
+
 ## 2026-11-06 on-demand weekly voltage-quality digest
 
 - **P2 software stage:** candidate adds read-only `/week`, a rolling
