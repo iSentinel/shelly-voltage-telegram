@@ -4232,6 +4232,9 @@ class Monitor:
         """Handle one localized admin settings callback."""
 
         query = update.get("callback_query") or {}
+        if str(query.get("data", "")).startswith("apt:list:"):
+            self.handle_apartment_callback(query)
+            return
         if str(query.get("data", "")).startswith("menu:"):
             self.handle_menu_callback(query)
             return
@@ -4509,6 +4512,50 @@ class Monitor:
         else:
             self.send_command_response(command)
 
+    def apartment_phase_keyboard(self) -> dict:
+        """Build a phase selector for administrator private messages."""
+
+        phases = ["all", *self.active_phases()]
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": phase.upper() if phase != "all" else "All",
+                        "callback_data": "apt:list:" + phase,
+                    }
+                    for phase in phases
+                ]
+            ]
+        }
+
+    def handle_apartment_callback(self, query: dict) -> None:
+        """Show a selected phase only in the administrator private chat."""
+
+        user_id = str((query.get("from") or {}).get("id", ""))
+        message = query.get("message") or {}
+        chat = message.get("chat") or {}
+        if not self.is_admin(user_id):
+            return
+        if str(chat.get("id", "")) != user_id:
+            return
+        phase = str(query.get("data", "")).removeprefix("apt:list:")
+        if phase != "all" and phase not in self.active_phases():
+            return
+        parts = ["/apartments", "list"]
+        if phase != "all":
+            parts.append(phase)
+        registry = ApartmentRegistry(self.cfg.database_path)
+        registry.initialize()
+        response = apartment_command(
+            registry, parts, set(self.active_phases())
+        )
+        self.telegram.answer_callback(str(query.get("id", "")))
+        self.telegram.edit(
+            int(message["message_id"]), response,
+            reply_markup=self.apartment_phase_keyboard(),
+            chat_id=user_id,
+        )
+
     def handle_apartments_command(
         self, sender_id: str, parts: list[str]
     ) -> None:
@@ -4524,7 +4571,10 @@ class Monitor:
         except (ValueError, sqlite3.Error) as exc:
             response = f"Apartment mapping error: {exc}"
         try:
-            self.telegram.send(response, notify=False, chat_id=sender_id)
+            self.telegram.send(
+                response, notify=False, chat_id=sender_id,
+                reply_markup=self.apartment_phase_keyboard(),
+            )
         except Exception as exc:
             logger.warning(
                 "Apartment mapping private response failed: {}",
