@@ -1,3 +1,27 @@
+## 2026-11-05 Telegram UX v2 source stage and locale parity
+
+- P1 SOURCE COMPLETE: PR #96 merged the localized compact power-status
+  view, a read-only `/events` timeline, private-menu entries for
+  events and summary, and automated RU/UK/EN key/placeholder checks.
+  Unit tests: 335/335 PASS in an isolated network-disabled container
+  and GitHub CI on Python 3.11, 3.12, and 3.13 PASS.
+- FOLLOW-UP LOCALE AUDIT: remove the Russian `avg`, `отключений`,
+  `maintenance mode` and `Maintenance:` fragments, translate the
+  L1 activation label for RU/UK, list `/events` in help, render
+  voltage units through the selected language, and translate missing
+  clock-difference diagnostics. Additional regression tests are part
+  of this candidate-only source stage.
+- SAFETY: a disconnected Shelly is not proof of physical mains outage;
+  current voltage remains unknown when no valid sample exists.
+  Public channel messages do not receive private admin controls.
+- PENDING: independent Telegram delivery/visual acceptance of the new
+  layout, complete Pro EM-50 hardware acceptance for candidate
+  `0.5.13-hw`, retained source/rollback verification, and user-approved
+  promotion before touching the healthy production `0.5.12-hw`.
+- LATER: optional detailed/compact preference, opt-in weekly quality
+  summaries, and Pro 3EM phase comparison only after physical meter
+  installation. Mini App requires HTTPS and signed initData validation.
+
 ## 2026-11-05 recovery banner visibility window
 
 - The user supplied a real Ukrainian status example showing
