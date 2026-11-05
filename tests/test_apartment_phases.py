@@ -3,6 +3,7 @@
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from apartment_phases import ApartmentRegistry, apartment_command
@@ -66,12 +67,12 @@ class ApartmentRegistryTests(unittest.TestCase):
     def test_repeated_initialization_preserves_existing_tables(self):
         """Schema initialization must not clear monitoring history."""
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("CREATE TABLE measurements (id INTEGER PRIMARY KEY)")
             db.execute("INSERT INTO measurements VALUES (1)")
         self.registry.assign("A", "1", "L1")
         self.registry.initialize()
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(
                 db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0],
                 1,
