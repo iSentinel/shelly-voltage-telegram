@@ -1,3 +1,30 @@
+## 2026-11-05 outage #10 and updater rollback acceptance
+
+- OBSERVED: natural Shelly connectivity outage #10 is open on the physical
+  Pro EM-50. The most recent valid voltage before disconnection was 215.1 V;
+  it is a stale reading, not current mains voltage. Production `/ready`
+  returns HTTP 503 as intended. Docker is healthy with zero restarts.
+- PASS: an event-specific read-only recovery baseline was stored on LXC 110:
+  `validation/0.5.12-hw-outage-10-baseline-20261105.json` (status PASS).
+  It records outage id 10, 18,850 existing readings and no synthetic 0 V.
+- PASS: installed Cosign 3.0.6 at `/usr/local/bin/cosign` independently
+  validates the published `v0.5.12-hw` GHCR image signature. Debian Cosign
+  2.5.0 does not discover that signature; the updater requires Cosign v3+.
+- PASS: the published source's update preflight was executed read-only on
+  the offline LXC and denied deployment due to HTTP 503. No updater systemd
+  units, update timer or new application image were installed in production.
+- FIXED in PR #59: use unique `mktemp` recovery files for SQLite rollback,
+  preventing collision with an interrupted earlier rollback; 251/251 tests.
+- FIXED in PR #60: preserve committed SQLite WAL records in the post-failure
+  rescue snapshot using the SQLite backup API, not a main-file-only copy;
+  252/252 tests passed, including a WAL-specific regression test.
+- PASS: GitHub Actions on Python 3.11, 3.12 and 3.13 for both PRs.
+- NEXT: after natural power recovery, verify outage #10 closure and stable
+  voltage against its baseline, then validate the versioned signed update
+  and crash/reboot rollback on a disposable test LXC before production.
+- BLOCKED: no installation or promotion of the candidate while the active
+  electrical/connectivity event remains unresolved.
+
 ## 2026-11-05 secure GitHub updater implementation
 
 - IMPLEMENTED IN CODE (not deployed): read-only daily GitHub Releases checker with a 24-hour
