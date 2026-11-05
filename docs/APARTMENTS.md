@@ -16,12 +16,14 @@ reject the private reply.
 /apartments list L1
 /apartments add HouseA 12 L1
 /apartments add HouseA 13 L1
+/apartments range HouseA 20 40 L1
 /apartments add HouseA 12 L2
 /apartments remove HouseA 13
 ```
 
 Use `L` or `L1` for a single-phase Pro EM-50. The command refuses to assign
 apartments to L2/L3 unless those phases are configured in the monitor.
+The `range` command accepts up to 200 apartment numbers in one transaction.
 Apartment numbers must be between 1 and 99999. Building identifiers accept
 1-32 Latin letters, digits, underscores and hyphens, without spaces.
 
