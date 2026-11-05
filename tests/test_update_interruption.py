@@ -104,6 +104,21 @@ class InterruptedUpdateTests(unittest.TestCase):
                 db.execute("SELECT id FROM samples").fetchone()[0], 99
             )
 
+    def test_retry_keeps_original_post_failure_rescue(self):
+        """Retrying recovery must not replace the first rescue snapshot."""
+
+        rescue = self.snapshot / "failed-upgrade-database.sqlite3"
+        with closing(sqlite3.connect(rescue)) as db, db:
+            db.execute("CREATE TABLE samples (id INTEGER)")
+            db.execute("INSERT INTO samples VALUES (777)")
+        result = self.recover()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.sample(), 42)
+        with closing(sqlite3.connect(rescue)) as db:
+            self.assertEqual(
+                db.execute("SELECT id FROM samples").fetchone()[0], 777
+            )
+
     def test_invalid_checksum_keeps_pending_marker(self):
         """Block startup and preserve the journal when restoration fails."""
 
