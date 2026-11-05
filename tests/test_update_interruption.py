@@ -91,9 +91,13 @@ class InterruptedUpdateTests(unittest.TestCase):
         )
         result = subprocess.run(
             [
-                "bash", "-c", command, "bash",
+                "bash",
+                "-c",
+                command,
+                "bash",
                 str(ROOT / "scripts" / "apply-update.sh"),
-                str(self.state), SNAPSHOT_NAME,
+                str(self.state),
+                SNAPSHOT_NAME,
             ],
             capture_output=True,
             text=True,
