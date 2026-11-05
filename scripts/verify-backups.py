@@ -7,7 +7,6 @@ import argparse
 import gzip
 import hashlib
 import re
-import shutil
 import sqlite3
 import sys
 import tempfile
@@ -23,19 +22,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Read command options and provide the standard help message."""
 
     parser = argparse.ArgumentParser(
-        description="Check backup SHA256 and restore SQLite in temporary files."
+        description="Verify SHA256 and SQLite integrity in temporary files."
     )
     parser.add_argument(
-        "--backup-dir", type=Path,
+        "--backup-dir",
+        type=Path,
         default=Path("/var/backups/shelly-voltage"),
         help="Directory containing voltage-*.sqlite3.gz archives.",
     )
     parser.add_argument(
-        "--count", type=int, default=3,
+        "--count",
+        type=int,
+        default=3,
         help="Number of newest backups to validate (default: 3).",
     )
     parser.add_argument(
-        "--max-size-mib", type=int, default=2048,
+        "--max-size-mib",
+        type=int,
+        default=2048,
         help="Maximum unpacked size per backup (default: 2048 MiB).",
     )
     return parser.parse_args(argv)
@@ -60,9 +64,7 @@ def checksum_error(archive: Path) -> str | None:
     return None if digest.hexdigest() == expected else "SHA256 mismatch"
 
 
-def unpack_archive(
-    archive: Path, destination: Path, max_bytes: int
-) -> None:
+def unpack_archive(archive: Path, destination: Path, max_bytes: int) -> None:
     """Unpack a bounded archive into a disposable temporary directory."""
 
     count = 0
@@ -70,7 +72,9 @@ def unpack_archive(
         for chunk in iter(lambda: source.read(BLOCK_SIZE), b""):
             count += len(chunk)
             if count > max_bytes:
-                raise ValueError("unpacked archive exceeds the configured limit")
+                raise ValueError(
+                    "unpacked archive exceeds the configured limit"
+                )
             out.write(chunk)
 
 
