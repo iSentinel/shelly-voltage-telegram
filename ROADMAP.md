@@ -1,3 +1,27 @@
+## 2026-11-05 stable-recovery continuous-voltage evidence hardening
+
+- PREVIOUS HARDWARE CHECKPOINT: the automated read-only verification
+  for the natural 22:11:29 Europe/Kyiv recovery reported PASS at
+  22:28:14, with new measurements, no new Shelly outages, a rotated
+  Telegram status message ID, and an unchanged audible cooldown.
+  Its private report is stored on LXC 110 under
+  `validation/natural-baselines/stable-verify-20261105-2229.json`.
+  This is not independent subscriber-visible Telegram delivery.
+- SOFTWARE HARDENING: a separate read-only continuity guard now checks
+  retained `voltage_transition_history` during `stable-verify`,
+  requires the captured `normal` transition to be present, and
+  rejects any later transition (including a second `low → normal`
+  cycle). Missing, corrupted, or older-than-one-hour evidence must
+  not produce a false PASS.
+- QA: regression cases include an otherwise valid status rotation
+  after another low-voltage episode, absent or malformed history, and
+  expired evidence. This guard is candidate code, not an automatic
+  deployment to production `0.5.12-hw`.
+- RELEASE GATE: keep independent confirmation of user-visible
+  Telegram messages and complete `0.5.13-hw` hardware acceptance
+  distinct from tests that only validate state persisted in SQLite.
+  Pro 3EM / 3CT63 hardware validation still waits for user installation.
+
 ## 2026-11-05 official Shelly EM.GetStatus error handling
 
 - BUG CONFIRMED against Shelly Gen2 EM status documentation:
