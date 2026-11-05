@@ -1,3 +1,24 @@
+## 2026-11-06 Telegram administrator documentation checkpoint
+
+- PR #103 merged source-only opt-in weekly digest delivery, with
+  `/week subscribe` and `/week unsubscribe` accepted in the
+  administrator's direct chat. Public channel arguments are ignored.
+  Isolated full-suite test: 383/383 PASS; CI 3.11/3.12/3.13 PASS.
+- Added an operator-facing administrator guide covering `/events`,
+  `/week`, `/preview`, `/view`, weekly scheduling, opt-out,
+  privacy, coverage interpretation and a no-disruption acceptance
+  checklist. Main README and Telegram UX proposal now point to it
+  and distinguish source candidate from installed production.
+- Last read-only field checkpoint: Proxmox LXC 110 running,
+  production `0.5.12-hw` Docker healthy, restart count 0,
+  Shelly unavailable with HTTP `/ready=503`, one open
+  connectivity-loss episode, SQLite `quick_check=ok` and no
+  synthetic zero-voltage records.
+- **Blocked by hardware:** `0.5.13-hw` promotion requires live
+  Pro EM-50, a new natural recovery baseline, visible Telegram
+  administrator acceptance, owner approval and verified rollback.
+  Pro 3EM / 3CT63 acceptance must wait for the actual meter.
+
 ## 2026-11-06 optional weekly private digest
 
 - **Candidate source only:** admins may explicitly opt in from a
