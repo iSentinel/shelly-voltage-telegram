@@ -161,13 +161,17 @@ _TEXT = {
         "chart_caption": "{phase} · {hours}ч · {count} точек",
         "export_caption": "{phase} · {hours}ч · {count} строк",
         "command_error": "Ошибка: {error}",
-        "maintenance_admin_only": ("Только администратор может менять режим обслуживания."),
+        "maintenance_admin_only": (
+            "Только администратор может менять режим обслуживания."
+        ),
         "maintenance_status": "🛠 Обслуживание: {value}",
         "maintenance_usage": (
             "Использование: /maintenance 60 или /maintenance off"
         ),
-        "summary_phase": ("{phase}: {minimum}–{maximum} V, ср. {average} V; "
-            "потерь связи: {count}, {duration}"),
+        "summary_phase": (
+            "{phase}: {minimum}–{maximum} V, ср. {average} V; "
+            "потерь связи: {count}, {duration}"
+        ),
         "test_loud": "🔔 Тест громкого уведомления",
         "test_silent": "🔕 Тест тихого уведомления",
         "test_edit_start": "✏️ Проверка редактирования · шаг 1/2",
