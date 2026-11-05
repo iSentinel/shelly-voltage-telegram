@@ -54,7 +54,10 @@ _TEXT = {
         "network_title": "⚡ Напряжение сети · {phases}",
         "no_measurements": "{phase}: нет корректных измерений.",
         "l1_today": "{phase} сегодня: {minimum}–{maximum} В, ср. {average} В",
-        "power_recovered": "✅ Питание восстановлено · перерыв связи {duration}",
+        "power_recovered": (
+            "✅ Питание восстановлено · перерыв связи "
+            "{duration}"
+        ),
         "last_l1": "🕐 Последние данные {phase}: {stamp}",
         "event_low": "🚨 Низкое напряжение сети",
         "event_warning_low": "⚠️ Пониженное напряжение",
@@ -108,7 +111,10 @@ _TEXT = {
         "settings_outage": "🔌 Уведомления о потере связи: {state}",
         "settings_summary": "📅 Сводка: {state} {time}",
         "settings_pin": "📌 Закрепление статуса: {state}",
-        "settings_dwell": "⏳ Подтверждение: {dwell:g} с / восстановление {recovery:g} с",
+        "settings_dwell": (
+            "⏳ Подтверждение: {dwell:g} с / восстановление "
+            "{recovery:g} с"
+        ),
         "settings_instability": (
             "⚡ Индикатор нестабильности: {state} · 4/15 мин"
         ),
@@ -203,15 +209,24 @@ _TEXT = {
         "audit_title": "🧾 Последние изменения настроек",
         "status_online": "🟢 Связь с Shelly установлена",
         "status_recovering": "🟡 Shelly восстанавливает соединение",
-        "status_offline": "🔴 Нет связи с Shelly · напряжение сейчас неизвестно",
+        "status_offline": (
+            "🔴 Нет связи с Shelly · напряжение сейчас "
+            "неизвестно"
+        ),
         "status_starting": "🟡 Ожидаем измерений Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
         "unit_voltage": "V",
         "unit_frequency": "Гц",
         "state_on": "вкл.",
         "state_off": "выкл.",
-        "backup_ok": "💾 Резервная копия: {stamp}, {size} КиБ · SQLite: {integrity}",
-        "device_details": "{phase}: {model} · прошивка {firmware} · работает {uptime} с · часы {skew}",
+        "backup_ok": (
+            "💾 Резервная копия: {stamp}, {size} КиБ · SQLite: "
+            "{integrity}"
+        ),
+        "device_details": (
+            "{phase}: {model} · прошивка {firmware} · "
+            "работает {uptime} с · часы {skew}"
+        ),
         "device_offline": "{phase}: нет связи ({error})",
         "menu_events": "🕘 События",
         "events_title": "🕘 События за 24 часа",
@@ -219,7 +234,10 @@ _TEXT = {
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: потеря связи · {time}",
         "menu_summary": "📅 Сводка",
-        "events_notice": "ℹ️ Перерывы связи — за 24 ч; переходы напряжения — только из сохранённой истории (обычно 1 ч).",
+        "events_notice": (
+            "ℹ️ Перерывы связи — за 24 ч; переходы напряжения "
+            "— только из сохранённой истории (обычно 1 ч)."
+        ),
         "events_state_low": "пониженное напряжение",
         "events_state_high": "повышенное напряжение",
         "events_state_normal": "напряжение восстановилось",
@@ -279,8 +297,14 @@ _TEXT = {
         "phase_recovering": "🟡 {phase}: {voltage:.1f} В (відновлюється)",
         "network_title": "⚡ Напруга мережі · {phases}",
         "no_measurements": "{phase}: немає коректних вимірювань.",
-        "l1_today": "{phase} сьогодні: {minimum}–{maximum} В, сер. {average} В",
-        "power_recovered": "✅ Живлення відновлено · перерва зв'язку {duration}",
+        "l1_today": (
+            "{phase} сьогодні: {minimum}–{maximum} В, сер. "
+            "{average} В"
+        ),
+        "power_recovered": (
+            "✅ Живлення відновлено · перерва зв'язку "
+            "{duration}"
+        ),
         "last_l1": "🕐 Останні дані {phase}: {stamp}",
         "event_low": "🚨 Низька напруга мережі",
         "event_warning_low": "⚠️ Знижена напруга",
@@ -314,7 +338,9 @@ _TEXT = {
         "settings_section_summary_time": "🕒 Час зведення",
         "settings_back": "⬅️ Назад",
         "settings_change_meter": "📟 Змінити модель",
-        "settings_reset_confirm": "⚠️ Скинути поточні налаштування до значень .env?",
+        "settings_reset_confirm": (
+            "⚠️ Скинути поточні налаштування до значень .env?"
+        ),
         "settings_reset_yes": "✅ Скинути",
         "settings_cancel": "❌ Скасувати",
         "settings_module": "📟 Модуль: {value}",
@@ -332,7 +358,10 @@ _TEXT = {
         "settings_outage": "🔌 Сповіщення про втрату зв'язку: {state}",
         "settings_summary": "📅 Зведення: {state} {time}",
         "settings_pin": "📌 Закріплення статусу: {state}",
-        "settings_dwell": "⏳ Підтвердження: {dwell:g} с / відновлення {recovery:g} с",
+        "settings_dwell": (
+            "⏳ Підтвердження: {dwell:g} с / відновлення "
+            "{recovery:g} с"
+        ),
         "settings_instability": (
             "⚡ Індикатор нестабільності: {state} · 4/15 хв"
         ),
@@ -395,9 +424,17 @@ _TEXT = {
         "quality_bad": "Поза нормою: {value:.2f}%",
         "audit_title": "🧾 Останні зміни налаштувань",
         "phase_sensor_offline": "⚠️ {phase}: датчик недоступний",
-        "phase_sensor_recovered": "✅ {phase}: зв'язок із датчиком відновлено · {duration}",
-        "availability_offline": "⚠️ Немає зв'язку із Shelly. Останнє вимірювання збережено.",
-        "availability_recovered": "✅ Зв'язок із Shelly відновлено · {duration}",
+        "phase_sensor_recovered": (
+            "✅ {phase}: зв'язок із датчиком відновлено · "
+            "{duration}"
+        ),
+        "availability_offline": (
+            "⚠️ Немає зв'язку із Shelly. Останнє вимірювання "
+            "збережено."
+        ),
+        "availability_recovered": (
+            "✅ Зв'язок із Shelly відновлено · {duration}"
+        ),
         "callback_today": "Сьогодні: {value}",
         "callback_outages": "Перерви зв'язку: {value}",
         "callback_updated": "Стан оновлено",
@@ -408,21 +445,39 @@ _TEXT = {
         "chart_caption": "{phase} · {hours} год · {count} точок",
         "export_caption": "{phase} · {hours} год · {count} рядків",
         "command_error": "Помилка: {error}",
-        "maintenance_admin_only": "Лише адміністратор може змінювати режим обслуговування",
+        "maintenance_admin_only": (
+            "Лише адміністратор може змінювати режим "
+            "обслуговування"
+        ),
         "maintenance_status": "🛠 Обслуговування: {value}",
-        "maintenance_usage": "Використання: /maintenance 60 або /maintenance off",
-        "summary_phase": "{phase}: {minimum}–{maximum} В, сер. {average} В; перерв зв'язку: {count}, {duration}",
+        "maintenance_usage": (
+            "Використання: /maintenance 60 або /maintenance "
+            "off"
+        ),
+        "summary_phase": (
+            "{phase}: {minimum}–{maximum} В, сер. {average} "
+            "В; перерв зв'язку: {count}, {duration}"
+        ),
         "status_online": "🟢 Зв'язок із Shelly є",
         "status_recovering": "🟡 Shelly відновлює з'єднання",
-        "status_offline": "🔴 Немає зв'язку із Shelly · поточна напруга невідома",
+        "status_offline": (
+            "🔴 Немає зв'язку із Shelly · поточна напруга "
+            "невідома"
+        ),
         "status_starting": "🟡 Очікуємо вимірювань Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
         "unit_voltage": "В",
         "unit_frequency": "Гц",
         "state_on": "увімкн.",
         "state_off": "вимкн.",
-        "backup_ok": "💾 Резервна копія: {stamp}, {size} КіБ · SQLite: {integrity}",
-        "device_details": "{phase}: {model} · прошивка {firmware} · працює {uptime} с · годинник {skew}",
+        "backup_ok": (
+            "💾 Резервна копія: {stamp}, {size} КіБ · SQLite: "
+            "{integrity}"
+        ),
+        "device_details": (
+            "{phase}: {model} · прошивка {firmware} · працює "
+            "{uptime} с · годинник {skew}"
+        ),
         "device_offline": "{phase}: немає зв'язку ({error})",
         "menu_events": "🕘 Події",
         "events_title": "🕘 Події за 24 години",
@@ -430,7 +485,10 @@ _TEXT = {
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: втрата зв'язку · {time}",
         "menu_summary": "📅 Зведення",
-        "events_notice": "ℹ️ Перерви зв'язку — за 24 год; зміни напруги — лише зі збереженої історії (зазвичай 1 год).",
+        "events_notice": (
+            "ℹ️ Перерви зв'язку — за 24 год; зміни напруги — "
+            "лише зі збереженої історії (зазвичай 1 год)."
+        ),
         "events_state_low": "знижена напруга",
         "events_state_high": "підвищена напруга",
         "events_state_normal": "напруга відновилася",
@@ -604,8 +662,14 @@ _TEXT = {
         "quality_bad": "Outside normal range: {value:.2f}%",
         "audit_title": "🧾 Recent settings changes",
         "phase_sensor_offline": "⚠️ {phase}: sensor unavailable",
-        "phase_sensor_recovered": "✅ {phase}: sensor connection restored · {duration}",
-        "availability_offline": "⚠️ Shelly is unreachable. Last valid reading is preserved.",
+        "phase_sensor_recovered": (
+            "✅ {phase}: sensor connection restored · "
+            "{duration}"
+        ),
+        "availability_offline": (
+            "⚠️ Shelly is unreachable. Last valid reading is "
+            "preserved."
+        ),
         "availability_recovered": "✅ Shelly connection restored · {duration}",
         "callback_today": "Today: {value}",
         "callback_outages": "Connection losses: {value}",
@@ -617,10 +681,16 @@ _TEXT = {
         "chart_caption": "{phase} · {hours} h · {count} points",
         "export_caption": "{phase} · {hours} h · {count} rows",
         "command_error": "Error: {error}",
-        "maintenance_admin_only": "Only an administrator can change maintenance mode",
+        "maintenance_admin_only": (
+            "Only an administrator can change maintenance "
+            "mode"
+        ),
         "maintenance_status": "🛠 Maintenance: {value}",
         "maintenance_usage": "Usage: /maintenance 60 or /maintenance off",
-        "summary_phase": "{phase}: {minimum}–{maximum} V, avg {average} V; connection losses: {count}, {duration}",
+        "summary_phase": (
+            "{phase}: {minimum}–{maximum} V, avg {average} V; "
+            "connection losses: {count}, {duration}"
+        ),
         "status_online": "🟢 Shelly is connected",
         "status_recovering": "🟡 Shelly connection recovering",
         "status_offline": "🔴 Shelly is offline · current voltage unknown",
@@ -631,7 +701,10 @@ _TEXT = {
         "state_on": "on",
         "state_off": "off",
         "backup_ok": "💾 Backup: {stamp}, {size} KiB · SQLite: {integrity}",
-        "device_details": "{phase}: {model} · firmware {firmware} · uptime {uptime} s · clock {skew}",
+        "device_details": (
+            "{phase}: {model} · firmware {firmware} · uptime "
+            "{uptime} s · clock {skew}"
+        ),
         "device_offline": "{phase}: unreachable ({error})",
         "menu_events": "🕘 Events",
         "events_title": "🕘 Events in last 24 hours",
@@ -639,7 +712,10 @@ _TEXT = {
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: connection lost · {time}",
         "menu_summary": "📅 Summary",
-        "events_notice": "ℹ️ Connection losses: last 24 h; voltage changes: retained history only (usually 1 h).",
+        "events_notice": (
+            "ℹ️ Connection losses: last 24 h; voltage "
+            "changes: retained history only (usually 1 h)."
+        ),
         "events_state_low": "low voltage",
         "events_state_high": "high voltage",
         "events_state_normal": "voltage recovered",
