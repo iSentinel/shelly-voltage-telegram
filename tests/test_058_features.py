@@ -159,8 +159,9 @@ class TranslationHelperTests(unittest.TestCase):
         for language in APP.LANGUAGES:
             with self.subTest(language=language):
                 descriptions = APP.command_descriptions(language)
-                self.assertEqual(len(descriptions), 17)
+                self.assertEqual(len(descriptions), 18)
                 self.assertTrue(descriptions["settings"])
+                self.assertTrue(descriptions["updates"])
 
     def test_episode_metadata_is_json_serializable(self):
         episode = APP.new_episode("warning_high", 254.0, 1.0, "L1")
