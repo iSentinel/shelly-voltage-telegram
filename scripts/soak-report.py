@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sqlite3
 import sys
 import time
@@ -75,6 +76,69 @@ def read_data(
                 (now, now, cutoff),
             ).fetchall()
     return integrity, version, rows, outages
+
+
+def transition_result(status: str, events: list[dict]) -> dict[str, object]:
+    """Show limited transition evidence without claiming message delivery."""
+
+    return {
+        "voltage_transition_history_status": status,
+        "voltage_transition_count": len(events),
+        "voltage_transition_events": events,
+        "voltage_transition_interpretation": (
+            "retained recent state changes only, not a complete alert "
+            "archive or Telegram delivery receipt"
+        ),
+    }
+
+
+def safe_transition(item: dict, stamp: float, zone: ZoneInfo) -> dict:
+    """Return only the phase, state, and timestamp of a voltage change."""
+
+    return {
+        "at": local_time(stamp, zone),
+        "phase": item["phase"],
+        "state": item["state"],
+    }
+
+
+def voltage_transitions(
+    path: Path, cutoff: float, now: float, zone: ZoneInfo
+) -> dict[str, object]:
+    """Read stored voltage-state changes without modifying the database."""
+
+    uri = path.resolve().as_uri() + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True)) as db:
+        if not table_exists(db, "meta"):
+            return transition_result("absent", [])
+        row = db.execute(
+            "SELECT value FROM meta WHERE key='voltage_transition_history'"
+        ).fetchone()
+    if not row or not row[0]:
+        return transition_result("absent", [])
+    try:
+        history = json.loads(row[0])
+    except (TypeError, ValueError):
+        return transition_result("invalid", [])
+    if not isinstance(history, list):
+        return transition_result("invalid", [])
+    events = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        try:
+            stamp = float(item["at"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not math.isfinite(stamp) or not cutoff <= stamp <= now:
+            continue
+        if item.get("state") not in {"low", "normal", "high"}:
+            continue
+        if item.get("phase") not in {"L", "L1", "L2", "L3"}:
+            continue
+        events.append(safe_transition(item, stamp, zone))
+    events.sort(key=lambda event: event["at"])
+    return transition_result("ok", events)
 
 
 def gaps(rows: list[tuple], expected: float) -> dict[str, float | int]:
@@ -205,6 +269,7 @@ def build_report(
     report.update(sample_timing(rows, current))
     report.update(gaps(rows, args.expected_interval))
     report.update(outage_report(outages, cutoff, current, zone))
+    report.update(voltage_transitions(Path(args.db), cutoff, current, zone))
     return report
 
 
