@@ -1,3 +1,32 @@
+## 2026-11-05 final read-only updater and Git tag acceptance
+
+- PASS: a real Github Releases API request from the isolated LXC 111
+  returned latest public `0.5.12-hw` relative to installed QA
+  `0.5.11-hw`, with `Update available: yes` and automatic installation
+  disabled. No Telegram message, release publication or Docker action
+  was performed.
+- PASS: the QA-only `shelly-voltage-update-check.service` executed under
+  systemd with DynamicUser, stored its JSON status, and exited normally.
+  Its timer was temporarily enabled and its 24-hour cadence parameters
+  inspected, then disabled again. The test container's ID, start time and
+  restart counter remained identical.
+- PASS: the new release policy CLI was exercised against a temporary,
+  real Git repository and real `v0.5.13-hw` tag: matching
+  `VERSION=RELEASE_VERSION=0.5.13-hw` and matching commit were accepted.
+  Changing `RELEASE_VERSION` to `0.5.12-hw` was denied. No tag was
+  created in GitHub and no image was published.
+- PASS: PR #69 implemented signed release promotion controls, 274/274
+  unit tests, pinned Ruff/maintainability checks, and GitHub CI on
+  Python 3.11, 3.12 and 3.13.
+- LIMITATION: actual Telegram delivery of an update notice to a
+  privileged administrator still requires separate authorized acceptance;
+  checking GitHub and showing text in a synthetic fixture do not prove
+  Telegram delivery.
+- PRODUCTION: LXC 110 remains at `0.5.12-hw`, Shelly offline with
+  natural outage #10 open, SQLite intact and no updater timer installed.
+  Do not upgrade, restart, publish a new release or modify real meter data
+  until stable power recovery and acceptance.
+
 ## 2026-11-05 daily release check and secure image promotion QA
 
 - PASS: In isolated LXC 111, `shelly-voltage-update-check.service`
