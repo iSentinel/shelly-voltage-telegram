@@ -542,6 +542,66 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                     )
                 )
 
+    def test_output_is_private_and_never_overwrites(self):
+        """Protect accepted evidence against accidental replacement."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "private" / "acceptance.json"
+            with patch("builtins.print"):
+                RECOVERY.write_output({"status": "pass"}, target)
+            before = target.read_bytes()
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+            with (
+                patch("builtins.print"),
+                self.assertRaises(FileExistsError),
+            ):
+                RECOVERY.write_output({"status": "fail"}, target)
+            self.assertEqual(target.read_bytes(), before)
+
+    def test_output_does_not_follow_symlink(self):
+        """A symlink must not redirect a captured acceptance report."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "existing.txt"
+            destination.write_text("unchanged")
+            output = Path(directory) / "baseline.json"
+            output.symlink_to(destination)
+            with (
+                patch("builtins.print"),
+                self.assertRaises(FileExistsError),
+            ):
+                RECOVERY.write_output({"status": "pass"}, output)
+            self.assertEqual(destination.read_text(), "unchanged")
+
+    def test_main_returns_failure_when_output_exists(self):
+        """Write errors return a stable exit code without claiming PASS."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "existing.json"
+            output.write_text("saved")
+            request = argparse.Namespace(
+                command="baseline", timeout=1.0, output=output
+            )
+            with (
+                patch.object(RECOVERY, "parser") as mock_parser,
+                patch.object(
+                    RECOVERY,
+                    "baseline_payload",
+                    return_value={"status": "pass"},
+                ),
+                patch("builtins.print") as mock_print,
+            ):
+                mock_parser.return_value.parse_args.return_value = request
+                result = RECOVERY.main()
+            self.assertEqual(result, 2)
+            self.assertEqual(output.read_text(), "saved")
+            self.assertTrue(
+                any(
+                    "ERROR: cannot save acceptance output" in str(call)
+                    for call in mock_print.call_args_list
+                )
+            )
+
     def test_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "missing.sqlite3"
