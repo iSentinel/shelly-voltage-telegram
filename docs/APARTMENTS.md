@@ -18,6 +18,7 @@ reject the private reply.
 /apartments add HouseA 12 L1
 /apartments add HouseA 13 L1
 /apartments range HouseA 20 40 L1
+/apartments place HouseA 12 2 5
 /apartments add HouseA 12 L2
 /apartments remove HouseA 13
 ```
@@ -27,6 +28,10 @@ apartments to L2/L3 unless those phases are configured in the monitor.
 The `range` command accepts up to 200 apartment numbers in one transaction.
 Apartment numbers must be between 1 and 99999. Building identifiers accept
 1-32 Latin letters, digits, underscores and hyphens, without spaces.
+
+`place` sets entrance (1-100) and floor (0-200) for an existing assignment.
+It does not create a new apartment. Existing rows migrate in place, with
+entrance and floor initially unset. Moving a phase keeps both fields.
 
 `add` also moves an existing apartment to another phase without creating
 duplicates. `list` shows up to 100 assignments and reports the total.

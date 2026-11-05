@@ -116,6 +116,63 @@ class ApartmentRegistryTests(unittest.TestCase):
                 self.registry.assign_range("A", first, last, "L1")
         self.assertEqual(self.registry.list_entries()[1], 30)
 
+    def test_entrance_floor_migration_and_restart(self):
+        """Adding location fields preserves previously assigned phases."""
+
+        self.registry.assign("HouseA", "12", "L1")
+        self.registry.initialize()
+        self.registry.set_location("HouseA", "12", "2", "5")
+        restarted = ApartmentRegistry(self.path)
+        restarted.initialize()
+        self.assertEqual(restarted.list_entries(), ([("HouseA", 12, "L1")], 1))
+        response = apartment_command(
+            restarted, ["/apartments", "list"], {"L1"}
+        )
+        self.assertIn("entrance 2, floor 5", response)
+        restarted.assign("HouseA", "12", "L2")
+        self.assertIn(
+            "entrance 2, floor 5",
+            apartment_command(restarted, ["/apartments", "list"], {"L2"}),
+        )
+
+    def test_location_rejects_invalid_and_missing_apartments(self):
+        """Do not save invalid location details or invent apartments."""
+
+        self.registry.assign("A", "4", "L1")
+        for entrance, floor in (
+            ("0", "2"),
+            ("101", "2"),
+            ("1", "201"),
+            ("-1", "2"),
+            ("x", "2"),
+        ):
+            with (
+                self.subTest(entrance=entrance, floor=floor),
+                self.assertRaises(ValueError),
+            ):
+                self.registry.set_location("A", "4", entrance, floor)
+        with self.assertRaises(ValueError):
+            self.registry.set_location("A", "999", "1", "2")
+        self.assertEqual(self.registry.list_entries(), ([("A", 4, "L1")], 1))
+        self.assertEqual(
+            self.registry.list_locations()[0][0][3:], (None, None)
+        )
+
+    def test_place_command_and_ground_floor(self):
+        """Location commands accept ground floor and preserve other data."""
+
+        self.registry.assign("A", "4", "L1")
+        reply = apartment_command(
+            self.registry,
+            ["/apartments", "place", "A", "4", "1", "0"],
+            {"L1"},
+        )
+        self.assertIn("Location saved", reply)
+        self.assertIn(
+            "entrance 1, floor 0",
+            apartment_command(self.registry, ["/apartments", "list"], {"L1"}),
+        )
+
     def test_listing_is_bounded(self):
         """Return a bounded listing while preserving an accurate total."""
 
