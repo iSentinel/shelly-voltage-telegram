@@ -492,6 +492,56 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                 result["baseline_kind"], "stable_recovery_baseline"
             )
 
+    def test_failed_recovery_baseline_cannot_be_reused(self):
+        """A failed capture must never authorize recovery acceptance."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "failed.json"
+            payload = {
+                "kind": "recovery_baseline",
+                "status": "fail",
+                "state": {"outage": {"id": 7}},
+            }
+            path.write_text(RECOVERY.json.dumps(payload))
+            with self.assertRaisesRegex(ValueError, "not accepted"):
+                RECOVERY.load_baseline(path)
+
+    def test_failed_stable_baseline_cannot_be_reused(self):
+        """A failed timer capture must never authorize stable acceptance."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "failed-stable.json"
+            payload = {
+                "kind": "stable_recovery_baseline",
+                "status": "fail",
+                "state": {"recovery_stable_since": "1000.0"},
+            }
+            path.write_text(RECOVERY.json.dumps(payload))
+            with self.assertRaisesRegex(ValueError, "not accepted"):
+                RECOVERY.load_stable_baseline(path)
+
+    def test_recovery_baseline_requires_json_object(self):
+        """Reject JSON arrays and scalars instead of crashing."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid.json"
+            path.write_text("[]")
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                RECOVERY.load_baseline(path)
+            with self.assertRaisesRegex(ValueError, "JSON object"):
+                RECOVERY.load_stable_baseline(path)
+
+    def test_stable_timer_rejects_nonfinite_values(self):
+        """Never accept NaN, infinity or a negative recovery timestamp."""
+
+        for value in ("NaN", "Infinity", "-Infinity", "-1", "0"):
+            with self.subTest(value=value):
+                self.assertIsNone(
+                    RECOVERY.stable_since_value(
+                        {"recovery_stable_since": value}
+                    )
+                )
+
     def test_missing_database_is_not_created(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "missing.sqlite3"
