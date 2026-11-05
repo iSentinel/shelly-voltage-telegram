@@ -4632,18 +4632,11 @@ class Monitor:
         if not self.message_sender_allowed({"from": user}):
             return
         action = str(query.get("data", "")).removeprefix("menu:")
-        if action not in {
-            "status",
-            "settings",
-            "today",
-            "outages",
-            "chart",
-            "help",
-            "apartments",
-            "updates",
-            "events",
-            "summary",
-        }:
+        allowed = {
+            "status", "settings", "today", "outages", "chart",
+            "help", "apartments", "updates", "events", "summary",
+        }
+        if action not in allowed:
             return
         self.telegram.answer_callback(str(query.get("id", "")))
         if action == "apartments":
