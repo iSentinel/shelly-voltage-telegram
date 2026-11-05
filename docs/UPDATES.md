@@ -40,6 +40,12 @@ GHCR image's Cosign certificate identity and GitHub Actions OIDC issuer.
 
 ## Before any installation
 
+The installer checks available space on the Docker data filesystem, the
+backup directory and the temporary-files filesystem **before pulling** an
+image and again **before the SQLite backup**. It requires at least 768 MiB
+free on each, or more for a large database. It does not automatically prune
+old images: they may be needed for a safe rollback.
+
 The updater verifies that SQLite is intact, Shelly is online, its latest
 reading is at most 120 seconds old, voltage is in the conservative
 207–253 V upgrade band, and there is no open outage, active voltage episode,
