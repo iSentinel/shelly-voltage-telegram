@@ -2074,36 +2074,36 @@ class AdvancedFeatureTests(unittest.TestCase):
 
         monitor = APP.Monitor(config())
         monitor.state.restore(1000.0, 225.9, 50.0)
-        monitor.storage.day_stats = Mock(return_value={
-            "count": 5, "min": 117.5, "max": 251.5, "avg": 219.0
-        })
+        stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
+        monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60
         monitor.last_recovery_at = 1000.0
+        expected = APP.tr(
+            monitor.language,
+            "power_recovered",
+            duration=APP.duration_text(354 * 60, monitor.language),
+        )
         with patch.object(APP.time, "time", return_value=1100.0):
             status = APP.multiphase_status_text(monitor)
-        self.assertIn(APP.tr(monitor.language, "power_recovered",
-                              duration=APP.duration_text(354 * 60,
-                                                         monitor.language)),
-                      status)
+        self.assertIn(expected, status)
 
     def test_old_recovery_banner_does_not_stay_forever(self):
         """Keep outages in history without advertising a stale recovery."""
 
         monitor = APP.Monitor(config())
         monitor.state.restore(1000.0, 225.9, 50.0)
-        monitor.storage.day_stats = Mock(return_value={
-            "count": 5, "min": 117.5, "max": 251.5, "avg": 219.0
-        })
+        stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
+        monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60
         monitor.last_recovery_at = 1000.0
+        expected = APP.tr(
+            monitor.language,
+            "power_recovered",
+            duration=APP.duration_text(354 * 60, monitor.language),
+        )
         with patch.object(APP.time, "time", return_value=2800.0):
             status = APP.multiphase_status_text(monitor)
-        self.assertNotIn(
-            APP.tr(monitor.language, "power_recovered",
-                   duration=APP.duration_text(354 * 60,
-                                              monitor.language)),
-            status,
-        )
+        self.assertNotIn(expected, status)
         self.assertEqual(monitor.last_recovery_duration, 354 * 60)
 
     def test_pro3em_poll_persists_three_phases_with_same_cycle(self):
