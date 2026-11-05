@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -152,8 +153,12 @@ def load_baseline(path: Path) -> dict[str, object]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read baseline: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("recovery baseline must be a JSON object")
     if payload.get("kind") != "recovery_baseline":
         raise ValueError("file is not a recovery baseline")
+    if payload.get("status") != "pass":
+        raise ValueError("recovery baseline was not accepted at capture")
     state = payload.get("state")
     valid_state = isinstance(state, dict) and isinstance(
         state.get("outage"), dict
@@ -307,9 +312,10 @@ def stable_since_value(state: dict[str, object]) -> float | None:
     if raw is None:
         return None
     try:
-        return float(raw)
-    except (TypeError, ValueError):
+        value = float(raw)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return value if math.isfinite(value) and value > 0 else None
 
 
 def stable_baseline_errors(
@@ -364,8 +370,12 @@ def load_stable_baseline(path: Path) -> dict[str, object]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"cannot read baseline: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("stable baseline must be a JSON object")
     if payload.get("kind") != "stable_recovery_baseline":
         raise ValueError("file is not a stable recovery baseline")
+    if payload.get("status") != "pass":
+        raise ValueError("stable baseline was not accepted at capture")
     if not isinstance(payload.get("state"), dict):
         raise ValueError("stable recovery baseline has no state")
     return payload
