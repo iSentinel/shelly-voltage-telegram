@@ -437,6 +437,55 @@ def stable_verify_errors(
     return errors
 
 
+def parse_voltage_transitions(raw: object) -> list[tuple[float, str]] | None:
+    """Parse compact voltage transitions without returning private fields."""
+
+    try:
+        rows = json.loads(str(raw))
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(rows, list):
+        return None
+    result = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        try:
+            stamp = float(row["at"])
+        except (KeyError, TypeError, ValueError, OverflowError):
+            return None
+        state = row.get("state")
+        if not math.isfinite(stamp) or state not in ("low", "normal", "high"):
+            return None
+        result.append((stamp, state))
+    return result
+
+
+def stable_transition_continuity_errors(
+    db_path: Path, baseline: dict[str, object], now: float
+) -> list[str]:
+    """Reject any unverified voltage transition inside the stable window."""
+
+    started = stable_since_value(baseline["state"])
+    if started is None:
+        return ["stable voltage recovery timestamp is invalid"]
+    if now < started or now - started > 3600:
+        return ["stable voltage transition evidence is outside one hour"]
+    with closing(open_db(db_path)) as db:
+        raw = meta_value(db, "voltage_transition_history")
+    transitions = parse_voltage_transitions(raw)
+    if transitions is None:
+        return ["voltage transition history is missing or malformed"]
+    if not any(
+        state == "normal" and abs(stamp - started) <= 2
+        for stamp, state in transitions
+    ):
+        return ["captured recovery is missing from transition history"]
+    if any(stamp > started for stamp, _state in transitions):
+        return ["voltage changed again during the stability interval"]
+    return []
+
+
 def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     """Verify the 15-minute silent recovery-status replacement."""
 
@@ -446,6 +495,7 @@ def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     ready_code, ready = fetch_json(args.ready_url, args.timeout)
     now = time.time()
     errors = stable_verify_errors(baseline, state, health, ready, now)
+    errors.extend(stable_transition_continuity_errors(args.db, baseline, now))
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:

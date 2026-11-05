@@ -84,6 +84,13 @@ def make_stable_recovery(path: Path, started_at: float = 1000.0) -> None:
     set_meta(path, "last_voltage_event", event)
     set_meta(path, "voltage_episode", RECOVERY.json.dumps({"start_at": 900.0}))
     set_meta(path, "last_voltage_notification_at", "777.0")
+    set_meta(
+        path,
+        "voltage_transition_history",
+        RECOVERY.json.dumps(
+            [{"at": started_at, "phase": "L1", "state": "normal"}]
+        ),
+    )
 
 
 def complete_stable_rotation(path: Path) -> None:
@@ -304,6 +311,85 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             self.assertIsNone(payload["state"]["recovery_stable_since"])
             self.assertIsNone(payload["state"]["last_voltage_event_kind"])
             self.assertFalse(payload["state"]["voltage_episode_present"])
+
+    def test_stable_verify_rejects_repeated_voltage_dips(self):
+        """A later low/normal episode invalidates the original 15 minutes."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "repeated-dip.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            responses = [
+                (200, {"connectivity": "online"}),
+                (200, {"ready": True}),
+            ]
+            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+                baseline = RECOVERY.stable_baseline_payload(args(path))
+            assert baseline["status"] == "pass"
+            checkpoint = Path(directory) / "baseline.json"
+            checkpoint.write_text(RECOVERY.json.dumps(baseline))
+            complete_stable_rotation(path)
+            set_meta(
+                path,
+                "voltage_transition_history",
+                RECOVERY.json.dumps(
+                    [
+                        {"at": 1000.0, "phase": "L1", "state": "normal"},
+                        {"at": 1200.0, "phase": "L1", "state": "low"},
+                        {"at": 1300.0, "phase": "L1", "state": "normal"},
+                    ]
+                ),
+            )
+            request = args(path)
+            request.baseline = checkpoint
+            with (
+                patch.object(RECOVERY, "fetch_json", side_effect=responses),
+                patch.object(RECOVERY.time, "time", return_value=1901.0),
+            ):
+                verdict = RECOVERY.stable_verify_payload(request)
+            self.assertEqual(verdict["status"], "fail")
+            self.assertIn(
+                "voltage changed again during the stability interval",
+                verdict["errors"],
+            )
+
+    def test_stable_verify_rejects_missing_transition_history(self):
+        """Missing history cannot prove an uninterrupted recovery."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing-history.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            set_meta(path, "voltage_transition_history", None)
+            result = RECOVERY.stable_transition_continuity_errors(
+                path, {"state": {"recovery_stable_since": "1000.0"}}, 1901.0
+            )
+            self.assertIn("voltage transition history is missing", result[0])
+
+    def test_stable_verify_rejects_expired_transition_evidence(self):
+        """History outside its retention window is not proof of stability."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "expired-history.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            result = RECOVERY.stable_transition_continuity_errors(
+                path, {"state": {"recovery_stable_since": "1000.0"}}, 4701.0
+            )
+            self.assertIn("outside one hour", result[0])
+
+    def test_stable_verify_rejects_malformed_transition_history(self):
+        """Malformed transition history never counts as PASS."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid-history.sqlite3"
+            create_database(path, open_outage=False)
+            make_stable_recovery(path)
+            set_meta(path, "voltage_transition_history", "NaN")
+            result = RECOVERY.stable_transition_continuity_errors(
+                path, {"state": {"recovery_stable_since": "1000.0"}}, 1901.0
+            )
+            self.assertIn("missing or malformed", result[0])
 
     def test_stable_verify_rejects_later_outage(self):
         """Do not count a stable interval broken by another outage."""
