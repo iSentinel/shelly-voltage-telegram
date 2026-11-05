@@ -43,6 +43,7 @@ from notification_features import (
     update_history,
 )
 from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
+from update_info import release_notice
 
 
 def read_version() -> str:
@@ -4505,12 +4506,31 @@ class Monitor:
             self.handle_phase_command(command, parts)
         elif command == "/apartments":
             self.handle_apartments_command(sender_id, parts)
+        elif command == "/updates":
+            self.handle_updates_command(sender_id)
         elif command == "/maintenance":
             self.handle_maintenance(sender_id, parts)
         elif command == "/settings":
             self.handle_settings_command(sender_id)
         else:
             self.send_command_response(command)
+
+    def handle_updates_command(self, sender_id: str) -> None:
+        """Send release information only to a Telegram administrator."""
+
+        if not sender_id or not self.is_admin(sender_id):
+            return
+        try:
+            message = release_notice(VERSION)
+        except (ValueError, OSError, KeyError) as exc:
+            message = f"GitHub release check unavailable: {exc}"
+        try:
+            self.telegram.send(message, notify=False, chat_id=sender_id)
+        except Exception as exc:
+            logger.warning(
+                "Private update check response failed: {}",
+                exc.__class__.__name__,
+            )
 
     def apartment_phase_keyboard(self) -> dict:
         """Build a phase selector for administrator private messages."""
