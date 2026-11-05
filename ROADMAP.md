@@ -1,3 +1,25 @@
+## 2026-11-05 interrupted-upgrade boot recovery
+
+- IMPLEMENTED IN CODE (not deployed): write and flush a root-only
+  `pending-update` journal before changing the pinned Compose image.
+- IMPLEMENTED IN CODE (not deployed): the Compose systemd unit runs
+  `apply-update.sh --recover` before starting the bot. An interrupted update
+  stops the unconfirmed image and restores the former image selection and
+  verified SQLite snapshot.
+- SAFETY: malformed markers or damaged backups block startup; keep the
+  pending journal for manual intervention. A first post-failure rescue copy
+  is not overwritten during repeated recovery attempts.
+- PASS: 6 isolated interruption tests, including no pending update, valid
+  recovery, invalid journal, damaged backup, retained rescue and durable
+  journal write.
+- PASS: the complete 258/258 Python unit tests, pinned Ruff/maintainability
+  gate, Bash syntax, systemd unit verification and release dry-run.
+- NOT VERIFIED: an actual interrupted Docker replacement and full LXC
+  reboot; these require a disposable test LXC before production acceptance.
+- BLOCKED: no updater systemd unit, timer or new application image is
+  installed in production. The physical Shelly is still offline with
+  natural outage #10 unresolved.
+
 ## 2026-11-05 outage #10 and updater rollback acceptance
 
 - OBSERVED: natural Shelly connectivity outage #10 is open on the physical
