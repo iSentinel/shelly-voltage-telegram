@@ -2,6 +2,7 @@
 
 import gzip
 import hashlib
+import os
 import sqlite3
 import subprocess
 import tempfile
@@ -63,6 +64,38 @@ class OfflineRollbackTests(unittest.TestCase):
             text=True,
             check=False,
         )
+
+    def test_recovery_clears_public_version_without_deployment(self):
+        """Restoring the original image clears stale version metadata."""
+
+        state = self.root / "private"
+        public = self.root / "public"
+        state.mkdir()
+        public.mkdir()
+        (public / "deployed.json").write_text(
+            '{"version":"0.5.13-hw"}', encoding="utf-8"
+        )
+        script = ROOT / "scripts" / "apply-update.sh"
+        environment = {
+            **os.environ,
+            "SVT_UPDATE_STATE": str(state),
+            "SVT_PUBLIC_STATE": str(public),
+        }
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'source "$1"; sync_public_version',
+                "bash",
+                str(script),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=environment,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((public / "deployed.json").exists())
 
     def test_cosign_version_gate(self):
         """Require compatible Cosign 3 before changing host state."""

@@ -71,6 +71,13 @@ preflight() {
     python3 "$ROOT/scripts/github_update.py" preflight --database "$DB"
 }
 
+storage_preflight() {
+    local docker_root
+    docker_root="$(docker info --format '{{.DockerRootDir}}')"
+    python3 "$ROOT/scripts/github_update.py" storage \
+        --database "$DB" --state "$STATE" --docker-root "$docker_root"
+}
+
 verify_image() {
     local target="$IMAGE@$1"
     cosign verify \
@@ -129,7 +136,7 @@ sync_public_version() {
     if [[ -f "$STATE/deployed.json" ]]; then
         install -m 0644 "$STATE/deployed.json" "$PUBLIC_STATE/deployed.json"
     else
-        rm -f "$public_state/deployed.json"
+        rm -f "$PUBLIC_STATE/deployed.json"
     fi
 }
 
@@ -282,8 +289,10 @@ main() {
         echo "DRY-RUN PASS: signed $IMAGE@$digest, no changes"
         return
     fi
+    storage_preflight
     docker pull "$IMAGE@$digest"
     preflight
+    storage_preflight
     snapshot
     trap rollback ERR INT TERM
     activate "$digest"

@@ -9,6 +9,7 @@ import time
 import unittest
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import github_update as updater
@@ -186,6 +187,41 @@ class ReleaseUpdaterTests(unittest.TestCase):
             request.return_value.__enter__.return_value = _JsonReply(status)
             with self.assertRaisesRegex(ValueError, "not yet stable"):
                 updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_storage_preflight_accepts_sufficient_space(self):
+        """Verify image and snapshot locations before pulling an image."""
+
+        self.state.mkdir()
+        docker_dir = self.base / "docker"
+        docker_dir.mkdir()
+        available = SimpleNamespace(free=2 * 1024**3)
+        with patch.object(
+            updater.shutil, "disk_usage", return_value=available
+        ) as disk_usage:
+            updater.storage_preflight(self.db, self.state, docker_dir)
+        self.assertEqual(disk_usage.call_count, 3)
+
+    def test_storage_preflight_refuses_low_space(self):
+        """Insufficient free space must prevent any container updates."""
+
+        self.state.mkdir()
+        docker_dir = self.base / "docker"
+        docker_dir.mkdir()
+        available = SimpleNamespace(free=200 * 1024**2)
+        with (
+            patch.object(updater.shutil, "disk_usage", return_value=available),
+            self.assertRaisesRegex(ValueError, "insufficient backup"),
+        ):
+            updater.storage_preflight(self.db, self.state, docker_dir)
+
+    def test_storage_preflight_refuses_missing_docker_path(self):
+        """An invalid Docker storage path is a hard failure."""
+
+        self.state.mkdir()
+        with self.assertRaisesRegex(ValueError, "Docker filesystem"):
+            updater.storage_preflight(
+                self.db, self.state, self.base / "missing-docker"
+            )
 
     def test_atomic_status_output(self):
         """Status is valid JSON after atomic replacement."""
