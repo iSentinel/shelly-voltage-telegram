@@ -42,7 +42,7 @@ class MenuTopologyTests(unittest.TestCase):
             }
         }
 
-    def test_start_opens_eight_action_menu(self):
+    def test_start_opens_ten_action_menu(self):
         self.monitor.send_command_response("/start")
         call = self.monitor.telegram.send.call_args
         rows = call.kwargs["reply_markup"]["inline_keyboard"]
@@ -53,10 +53,12 @@ class MenuTopologyTests(unittest.TestCase):
                 "menu:" + action
                 for action in (
                     "status",
-                    "settings",
+                    "events",
                     "today",
-                    "outages",
+                    "summary",
                     "chart",
+                    "settings",
+                    "outages",
                     "help",
                     "apartments",
                     "updates",
