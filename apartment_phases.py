@@ -99,8 +99,7 @@ class ApartmentRegistry:
         if last < first or last - first >= 200:
             raise ValueError("range must contain 1-200 apartments")
         entries = [
-            (building, number, phase)
-            for number in range(first, last + 1)
+            (building, number, phase) for number in range(first, last + 1)
         ]
         with closing(self.connect()) as db, db:
             db.executemany(
