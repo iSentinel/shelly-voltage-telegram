@@ -179,7 +179,9 @@ def parser() -> argparse.ArgumentParser:
     """Define the minimal, non-interactive updater CLI."""
 
     command = argparse.ArgumentParser(description=__doc__)
-    command.add_argument("action", choices=("check", "preflight", "digest", "guard"))
+    command.add_argument(
+        "action", choices=("check", "preflight", "digest", "guard")
+    )
     command.add_argument(
         "--root", type=Path, default=Path("/opt/shelly-voltage")
     )
