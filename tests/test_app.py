@@ -631,9 +631,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 179.3, "max": 220.0, "avg": 205.0}
         )
-        monitor.last_voltage_event = (
-            "recovered", 186.1, 50.0, stamp, "L1"
-        )
+        monitor.last_voltage_event = ("recovered", 186.1, 50.0, stamp, "L1")
         text = APP.multiphase_status_text(monitor)
         when = APP.datetime.fromtimestamp(
             stamp, APP.ZoneInfo("Europe/Kyiv")
@@ -641,7 +639,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         self.assertTrue(
             text.startswith(f"✅ Напряжение восстановилось · {when}")
         )
-        self.assertIn("186.1 V · 50.00 Hz", text.splitlines()[1])
+        self.assertIn("186.1 V · 50.00 Гц", text.splitlines()[1])
 
     def test_old_voltage_recovery_header_is_not_repeated(self):
         """A fresh status cannot repeat an old recovery notification."""
@@ -653,7 +651,11 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             return_value={"count": 1, "min": 200.0, "max": 230.0, "avg": 220.0}
         )
         monitor.last_voltage_event = (
-            "recovered", 226.0, 50.0, stamp - 3600, "L1"
+            "recovered",
+            226.0,
+            50.0,
+            stamp - 3600,
+            "L1",
         )
         text = APP.multiphase_status_text(monitor)
         self.assertNotIn("✅ Напряжение восстановилось", text)
