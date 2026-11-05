@@ -6,7 +6,8 @@ electrical phases. It does not measure or control an individual apartment.
 ## Telegram commands
 
 The administrator sends commands in the configured control chat. The bot sends
-the list or confirmation to the administrator's private Telegram chat. Start a
+the list or confirmation to the administrator's private Telegram chat. The
+private list includes inline buttons for All and each configured phase. Start a
 private conversation with the bot before using these commands, or Telegram may
 reject the private reply.
 
