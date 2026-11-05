@@ -76,6 +76,50 @@ class GitHubUpdateInfoTests(unittest.TestCase):
             ):
                 update_info.release_notice("0.5.12-hw")
 
+    def test_malformed_api_data_is_rejected_safely(self):
+        """Unexpected API shapes must not crash the Telegram command."""
+
+        for response in (
+            None,
+            [release()],
+            {**release(), "assets": None},
+            {**release(), "assets": "unexpected"},
+            {**release(), "tag_name": "0.5.13-hw"},
+        ):
+            with (
+                self.subTest(response=type(response).__name__),
+                patch(
+                    "urllib.request.urlopen",
+                    return_value=_Reply(response),
+                ),
+                self.assertRaises(ValueError),
+            ):
+                update_info.release_notice("0.5.12-hw")
+
+    def test_invalid_json_is_rejected(self):
+        """Do not accept incomplete GitHub JSON as a stable release."""
+
+        response = _Reply(release())
+        response.payload = b'{"tag_name":'
+        with (
+            patch("urllib.request.urlopen", return_value=response),
+            self.assertRaises(ValueError),
+        ):
+            update_info.release_notice("0.5.12-hw")
+
+    def test_unbounded_github_response_is_rejected(self):
+        """Never read arbitrarily large release JSON into the bot."""
+
+        oversized = {**release(), "body": "a" * 150000}
+        with (
+            patch(
+                "urllib.request.urlopen",
+                return_value=_Reply(oversized),
+            ),
+            self.assertRaisesRegex(ValueError, "too large"),
+        ):
+            update_info.release_notice("0.5.12-hw")
+
     def test_incomplete_release_cannot_be_advertised(self):
         """Require a source archive and checksum before offering an update."""
 
@@ -112,10 +156,12 @@ class _Reply:
 
         return False
 
-    def read(self):
-        """Return the complete test response."""
+    def read(self, size=-1):
+        """Return only the requested response bytes."""
 
-        return self.payload
+        if size < 0:
+            return self.payload
+        return self.payload[:size]
 
 
 if __name__ == "__main__":
