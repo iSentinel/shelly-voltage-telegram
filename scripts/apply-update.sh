@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 
 ROOT="${SVT_ROOT:-/opt/shelly-voltage}"
