@@ -108,6 +108,32 @@ class MenuTopologyTests(unittest.TestCase):
         )
         self.monitor.telegram.edit.assert_not_called()
 
+    def test_apartment_phase_selector_stays_private(self):
+        """Only the administrator can switch apartment list phases."""
+
+        self.monitor.handle_apartments_command(
+            "7", ["/apartments", "add", "A", "4", "L1"]
+        )
+        query = {
+            "id": "phase-choice",
+            "from": {"id": 7},
+            "data": "apt:list:L1",
+            "message": {"chat": {"id": 7}, "message_id": 55},
+        }
+        self.monitor.handle_callback({"callback_query": query})
+        self.assertIn("A #4: L1", self.monitor.telegram.edit.call_args.args[1])
+        self.assertEqual(
+            self.monitor.telegram.edit.call_args.kwargs["chat_id"], "7"
+        )
+        self.monitor.telegram.edit.reset_mock()
+        query["from"]["id"] = 8
+        self.monitor.handle_callback({"callback_query": query})
+        self.monitor.telegram.edit.assert_not_called()
+        query["from"]["id"] = 7
+        query["message"]["chat"]["id"] = 123
+        self.monitor.handle_callback({"callback_query": query})
+        self.monitor.telegram.edit.assert_not_called()
+
     def test_non_admin_can_read_settings_without_write_buttons(self):
         self.monitor.handle_callback(self.callback("settings", user=8))
         self.assertIsNone(
