@@ -136,9 +136,9 @@ def voltage_transitions(
             continue
         if item.get("phase") not in {"L", "L1", "L2", "L3"}:
             continue
-        events.append(safe_transition(item, stamp, zone))
-    events.sort(key=lambda event: event["at"])
-    return transition_result("ok", events)
+        events.append((stamp, safe_transition(item, stamp, zone)))
+    events.sort(key=lambda event: event[0])
+    return transition_result("ok", [item for _, item in events])
 
 
 def gaps(rows: list[tuple], expected: float) -> dict[str, float | int]:
