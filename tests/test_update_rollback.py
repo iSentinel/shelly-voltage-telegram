@@ -64,6 +64,25 @@ class OfflineRollbackTests(unittest.TestCase):
             check=False,
         )
 
+    def test_cosign_version_gate(self):
+        """Require compatible Cosign 3 before changing host state."""
+
+        script = ROOT / "scripts" / "apply-update.sh"
+        for version, accepted in (("v3.0.6", True), ("devel", False), ("v2.5.0", False)):
+            command = (
+                'source "$1"; '
+                'cosign() { printf "GitVersion: %s\\n" "$2"; }; '
+                'check_cosign_compatibility'
+            )
+            result = subprocess.run(
+                ["bash", "-c", command, "bash", str(script), version],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            with self.subTest(version=version):
+                self.assertEqual(result.returncode == 0, accepted)
+
     def test_valid_snapshot_restores_previous_database(self):
         """Recover old records and retain post-failure data separately."""
 
