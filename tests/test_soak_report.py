@@ -113,8 +113,12 @@ class SoakReportTests(unittest.TestCase):
                 db.execute("CREATE TABLE meta(key TEXT,value TEXT)")
                 items = [
                     {"at": 1600, "phase": "L1", "state": "normal"},
-                    {"at": 1800, "phase": "L1", "state": "low",
-                     "device_secret": "should-not-leak"},
+                    {
+                        "at": 1800,
+                        "phase": "L1",
+                        "state": "low",
+                        "device_secret": "should-not-leak",
+                    },
                     {"at": 1850, "phase": "L1", "state": "normal"},
                     {"at": 1880, "phase": "private", "state": "low"},
                     {"at": "NaN", "phase": "L1", "state": "high"},
@@ -126,9 +130,7 @@ class SoakReportTests(unittest.TestCase):
             report = SOAK.voltage_transitions(
                 path, 1700, 2000, ZoneInfo("Europe/Kyiv")
             )
-            self.assertEqual(
-                report["voltage_transition_history_status"], "ok"
-            )
+            self.assertEqual(report["voltage_transition_history_status"], "ok")
             self.assertEqual(report["voltage_transition_count"], 2)
             self.assertEqual(
                 [
