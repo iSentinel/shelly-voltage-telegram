@@ -69,7 +69,7 @@ def published_release(tag: str | None = None) -> dict:
 
 
 def installed_version(root: Path, state: Path) -> str:
-    """Prefer deployed version, then installed release over candidate source."""
+    """Prefer deployed or published release to candidate source version."""
 
     deployed = state / "deployed.json"
     if deployed.is_file():
