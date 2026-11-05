@@ -1085,6 +1085,47 @@ class RpcMeterClient(ShellyClient):
         return float(voltage), float(frequency), rpc_ms
 
 
+EM_ERROR_FIELDS = (
+    "errors",
+    "a_errors",
+    "b_errors",
+    "c_errors",
+    "n_errors",
+    "total_errors",
+)
+KNOWN_EM_ERRORS = frozenset(
+    {
+        "power_meter_failure",
+        "phase_sequence",
+        "ct_type_not_set",
+        "out_of_range:active_power",
+        "out_of_range:apparent_power",
+        "out_of_range:voltage",
+        "out_of_range:current",
+    }
+)
+
+
+def em_status_errors(payload: dict) -> list[str]:
+    """Describe reported meter faults without exposing arbitrary RPC data."""
+
+    faults = []
+    for field in EM_ERROR_FIELDS:
+        if field not in payload:
+            continue
+        values = payload[field]
+        if not isinstance(values, list):
+            faults.append(f"{field}:invalid_format")
+            continue
+        for value in values[:8]:
+            code = value if isinstance(value, str) else ""
+            safe_code = code if code in KNOWN_EM_ERRORS else "unknown_error"
+            faults.append(f"{field}:{safe_code}")
+        if len(values) > 8:
+            faults.append(f"{field}:additional_errors")
+    return faults
+
+
 class Pro3EMClient(ShellyClient):
     """Read all three phases from Shelly Pro 3EM in triphase profile."""
 
@@ -1093,6 +1134,13 @@ class Pro3EMClient(ShellyClient):
 
         started = time.perf_counter()
         payload = self.rpc("EM.GetStatus", {"id": 0})
+        if not isinstance(payload, dict):
+            raise RuntimeError("EM.GetStatus returned invalid status")
+        faults = em_status_errors(payload)
+        if faults:
+            raise RuntimeError(
+                "EM.GetStatus meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
         result = {}
         for phase, prefix in (("L1", "a"), ("L2", "b"), ("L3", "c")):
