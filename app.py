@@ -1440,9 +1440,10 @@ class Telegram:
 def private_weekly_due_key(local_time: datetime) -> str | None:
     """Return the ISO week only on Sunday at or after 20:00 local."""
 
-    if local_time.weekday() != 6 or (
-        local_time.hour, local_time.minute
-    ) < (20, 0):
+    if local_time.weekday() != 6 or (local_time.hour, local_time.minute) < (
+        20,
+        0,
+    ):
         return None
     week = local_time.isocalendar()
     return f"{week.year}-W{week.week:02d}"
@@ -4907,9 +4908,7 @@ class Monitor:
             return False
         return True
 
-    def handle_private_weekly(
-        self, sender_id: str, parts: list[str]
-    ) -> None:
+    def handle_private_weekly(self, sender_id: str, parts: list[str]) -> None:
         """Serve manual reports and explicit weekly private subscriptions."""
 
         action = parts[1].lower() if len(parts) == 2 else ""
