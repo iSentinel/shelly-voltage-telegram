@@ -1,0 +1,17 @@
+[Unit]
+Description=Manually apply signed Shelly Voltage Telegram image %i
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/shelly-voltage/scripts/apply-update.sh
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/shelly-voltage
+ExecStart=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --version %i
+TimeoutStartSec=300
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# Deliberately no [Install]: manual systemctl start only.
