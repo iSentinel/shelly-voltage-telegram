@@ -1,3 +1,22 @@
+## 2026-11-05 existing apartment CSV importer safety audit
+
+- REUSED: existing `scripts/import_apartments.py` CSV implementation and
+  its test suite. An initial duplicate prototype was discarded before
+  merge to keep the code simple and maintainable.
+- HARDENED IN SOURCE (not deployed): refuse CSV files larger than
+  256 KiB, reject repeated/missing header columns, and deny symlinks
+  as input CSV or target SQLite paths. The established 1000-row limit,
+  explicit `--apply`, configured-phase checks and all-or-nothing
+  transaction remain in force.
+- PASS: 288/288 tests on an isolated Gateway checkout, pinned Ruff and
+  maintainability gate. New regression tests cover input-size denial,
+  duplicate headers, symlink protection and transaction rollback on a
+  second-row SQLite constraint error.
+- PENDING: GitHub CI and branch merge. No production database was
+  opened for writing, and no Telegram command or image was deployed.
+- HARDWARE: natural outage #10 remains open, physical Shelly offline.
+  Production LXC 110 stays on 0.5.12-hw pending stable recovery.
+
 ## 2026-11-05 secure private administrator commands
 
 - IMPLEMENTED IN SOURCE (not deployed): Telegram administrators may send
