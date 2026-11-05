@@ -1,3 +1,22 @@
+## 2026-11-05 Telegram channel access and message acceptance boundary
+
+- PASS: following natural Shelly recovery and outage #10 closure,
+  read-only Telegram Bot API `getMe`, `getChat`, and `getChatMember`
+  succeeded from LXC 110 using the configured production credentials.
+  The status destination is a channel; the bot is an administrator with
+  permission to post and edit messages.
+- PASS: the existing read-only outage #10 recovery acceptance check
+  confirmed SQLite message-ID rotation and fresh measurements.
+- NOT PROVEN: actual user-visible receipt of the specific Telegram
+  recovery/status message. Bot API has no general message-history lookup
+  by chat/message ID. No messages were sent or edited during this check.
+- DOCUMENTED: `docs/TELEGRAM_DELIVERY_ACCEPTANCE.md` explains the
+  authorized administrator's visual verification and safe evidence
+  collection without exposing secrets or inducing an outage.
+- RELEASE GATE: published production stays at `0.5.12-hw`. The
+  locally built `0.5.13-hw` candidate has passed synthetic Docker
+  tests, but remains unpromoted pending its own physical acceptance.
+
 ## 2026-11-05 current candidate isolated Docker acceptance
 
 - PASS: Candidate `0.5.13-hw` was built in disposable QA LXC 111
