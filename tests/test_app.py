@@ -623,25 +623,43 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             )
 
     def test_low_voltage_event_is_rendered_in_status_header(self):
+        """Recent recovered voltage remains visible in status context."""
+
         monitor = APP.Monitor(config())
-        monitor.state.restore(APP.time.time(), 186.1, 50.0)
+        stamp = APP.time.time()
+        monitor.state.restore(stamp, 186.1, 50.0)
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 179.3, "max": 220.0, "avg": 205.0}
         )
+        monitor.last_voltage_event = ("recovered", 186.1, 50.0, stamp, "L1")
+        text = APP.multiphase_status_text(monitor)
+        when = APP.datetime.fromtimestamp(
+            stamp, APP.ZoneInfo("Europe/Kyiv")
+        ).strftime("%H:%M")
+        self.assertTrue(
+            text.startswith(f"✅ Напряжение восстановилось · {when}")
+        )
+        self.assertIn("186.1 V · 50.00 Гц", text.splitlines()[1])
+
+    def test_old_voltage_recovery_header_is_not_repeated(self):
+        """A fresh status cannot repeat an old recovery notification."""
+
+        monitor = APP.Monitor(config())
+        stamp = APP.time.time()
+        monitor.state.restore(stamp, 226.0, 50.0)
+        monitor.storage.day_stats = Mock(
+            return_value={"count": 1, "min": 200.0, "max": 230.0, "avg": 220.0}
+        )
         monitor.last_voltage_event = (
             "recovered",
-            186.1,
+            226.0,
             50.0,
-            APP.datetime(
-                2026, 11, 2, 7, 9, tzinfo=APP.ZoneInfo("Europe/Kyiv")
-            ).timestamp(),
+            stamp - 3600,
             "L1",
         )
         text = APP.multiphase_status_text(monitor)
-        self.assertTrue(
-            text.startswith("✅ Напряжение восстановилось · 07:09")
-        )
-        self.assertIn("186.1 V · 50.00 Hz", text.splitlines()[1])
+        self.assertNotIn("✅ Напряжение восстановилось", text)
+        self.assertIn("L: 226.0 V", text)
 
     def test_voltage_status_notification_cooldown(self):
         """Only the first abnormal shared status is loud inside cooldown."""
