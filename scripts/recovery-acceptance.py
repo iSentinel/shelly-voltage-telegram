@@ -531,13 +531,23 @@ def capture_once_payload(args: argparse.Namespace) -> dict[str, object]:
 
 
 def write_output(payload: dict[str, object], output: Path | None) -> None:
-    """Print JSON and optionally save the same payload to a file."""
+    """Save private JSON without overwriting evidence, then print it."""
 
     text = json.dumps(payload, indent=2, sort_keys=True)
-    print(text)
     if output is not None:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(text + "\n", encoding="utf-8")
+        output.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(output, flags, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(text + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            output.unlink(missing_ok=True)
+            raise
+    print(text)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -596,7 +606,14 @@ def main() -> int:
         payload = handlers[args.command](args)
     except (ValueError, OSError, sqlite3.Error, urllib.error.URLError) as exc:
         payload = {"status": "fail", "error_type": exc.__class__.__name__}
-    write_output(payload, getattr(args, "output", None))
+    try:
+        write_output(payload, getattr(args, "output", None))
+    except OSError as exc:
+        print(
+            f"ERROR: cannot save acceptance output: {exc.__class__.__name__}",
+            file=sys.stderr,
+        )
+        return 2
     return 0 if payload.get("status") in {"pass", "skip"} else 2
 
 
