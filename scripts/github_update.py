@@ -10,6 +10,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import time
 import urllib.request
 from contextlib import closing
 from datetime import datetime, timezone
@@ -21,6 +22,9 @@ API = f"https://api.github.com/repos/{REPO}/releases"
 DEFAULT_STATE = Path("/var/lib/shelly-voltage-updater")
 VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)-hw\Z")
 REQUEST_TIMEOUT = 12
+SAFE_VOLTAGE_MIN = 207.0
+SAFE_VOLTAGE_MAX = 253.0
+MAX_SAMPLE_AGE = 120
 
 
 def version_tuple(text: str) -> tuple[int, int, int]:
@@ -173,6 +177,19 @@ def preflight(database: Path, ready_url: str) -> None:
         ).fetchone()
         if alarm and alarm[0]:
             raise ValueError("a voltage alarm episode is active")
+        recovery = db.execute(
+            "SELECT value FROM meta "
+            "WHERE key='voltage_recovery_stable_since'"
+        ).fetchone()
+        if recovery and recovery[0]:
+            raise ValueError("voltage recovery is not yet stable")
+        sample = db.execute(
+            "SELECT ts, voltage FROM measurements ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+        if not sample or not 0 <= time.time() - sample[0] <= MAX_SAMPLE_AGE:
+            raise ValueError("voltage sample is missing or stale")
+        if not SAFE_VOLTAGE_MIN <= sample[1] <= SAFE_VOLTAGE_MAX:
+            raise ValueError("measured voltage is outside the upgrade band")
 
 
 def parser() -> argparse.ArgumentParser:
