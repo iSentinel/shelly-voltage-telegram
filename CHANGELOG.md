@@ -1,5 +1,9 @@
 ## 0.5.13-hw - apartment phase management candidate
 
+- Add administrator-only `/updates` release information and Telegram menu button.
+- Add an optional 24-hour GitHub update-check timer with auto-install disabled.
+- Prepare root-only, manually authorized signed GHCR updates with source SHA256,
+  backup, voltage/outage guards and rollback, pending offline acceptance.
 - Store apartment-to-phase assignments by building, with validated numbers,
   atomic range assignments, relocation between phases and removal.
 - Add administrator-only private Telegram apartment listings and phase buttons.

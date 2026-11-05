@@ -62,7 +62,7 @@ validate_inputs() {
         exit 2
     }
     local required=(
-        VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py
+        VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py
         telegram_i18n.py notification_features.py Dockerfile
         compose.yaml requirements.txt README.md
     )

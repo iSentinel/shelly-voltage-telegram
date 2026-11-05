@@ -8,8 +8,8 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/shelly-voltage
-ExecStart=/usr/bin/docker compose up -d
-ExecReload=/usr/bin/docker compose up -d
+ExecStart=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
+ExecReload=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
 ExecStop=/usr/bin/docker compose stop
 TimeoutStartSec=0
 

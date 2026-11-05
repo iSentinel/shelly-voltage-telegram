@@ -1,3 +1,29 @@
+## 2026-11-05 secure GitHub updater implementation
+
+- IMPLEMENTED IN CODE (not deployed): read-only daily GitHub Releases checker with a 24-hour
+  systemd timer; automatic installation explicitly disabled by default.
+- IMPLEMENTED IN CODE (not deployed): administrator-only Telegram `/updates` command sends
+  version information privately. The application has no Docker socket access
+  and no authority to start the root updater.
+- IMPLEMENTED IN CODE (not deployed): separate manually started root systemd oneshot downloads
+  an immutable GHCR image, verifies its Cosign GitHub Actions identity and the
+  published source archive SHA256, and refuses unlisted or older releases.
+- IMPLEMENTED IN CODE (not deployed): enforce `/ready`, fresh voltage between 207 V and 253 V,
+  SQLite integrity, no open outage, no active voltage episode and no
+  unfinished stable-recovery timer before and after a candidate restart.
+- IMPLEMENTED IN CODE (not deployed): create protected database/configuration/secret snapshots,
+  preserve the image pin across reboots, and restore previous image/database
+  after detected update failures with an additional post-failure DB rescue.
+- PASS: 249 Python tests and the pinned Ruff/maintainability gate, systemd
+  unit verification, Docker build and isolated Compose configuration, release
+  and installer dry-runs, source checks and offline SQLite rollback tests.
+- PENDING: full signed-image replacement and interrupted-host validation on a
+  disposable LXC; no released v0.5.13-hw container exists yet.
+- NOT DEPLOYED: no updater timer or host service is enabled in production.
+  An actual update is blocked while outage/voltage acceptance is incomplete.
+- PENDING: independently validate interrupted host reboot, Telegram delivery,
+  and manual recovery on a disposable LXC before production promotion.
+
 ## 2026-11-05 outage #9 and v0.5.13-hw offline candidate audit
 
 - OBSERVED: natural voltage readings fell from approximately 222.6 V to

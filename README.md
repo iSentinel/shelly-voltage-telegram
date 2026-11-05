@@ -27,6 +27,8 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
+The private administrator **Updates** menu checks GitHub Releases without
+installing automatically; see [safe updates](docs/UPDATES.md).
 Software candidate: `0.5.13-hw`; public release and production: `0.5.12-hw`.
 
 ## Overview
