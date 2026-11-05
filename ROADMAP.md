@@ -1,3 +1,20 @@
+## 2026-11-05 defensive GitHub update response validation
+
+- DONE: PR #71 merged localized, administrator-only GitHub update
+  information for RU/UK/EN and rejected stable releases missing
+  the matching source archive or SHA256SUMS. Automatic installation
+  remains disabled.
+- IMPLEMENTED IN SOURCE (not deployed): constrain public GitHub API
+  response size to 128 KiB; reject malformed JSON, unexpected response
+  shapes and noncanonical release tags before showing an update notice.
+- TESTING: regression tests cover malformed metadata, missing assets,
+  invalid JSON and oversized responses. GitHub CI must pass before merge.
+- PRODUCTION: physical Shelly remains offline in natural outage #10;
+  LXC 110 stays on 0.5.12-hw without any updater service/timer deployed.
+- NEXT: after natural recovery, verify real Telegram delivery and exact
+  outage #10 closure using the private event baseline. Do not force
+  a hardware outage or an in-place update during the current event.
+
 ## 2026-11-05 private and localized update-check follow-up
 
 - IMPLEMENTED IN SOURCE (not deployed): administrator-only `/updates`
