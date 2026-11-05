@@ -9,8 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import telegram_i18n as I18N
 from test_app import APP, config
+
+import telegram_i18n as I18N
 
 
 def template_fields(template: str) -> set[str]:
