@@ -103,6 +103,25 @@ class OfflineRollbackTests(unittest.TestCase):
                 db.execute("SELECT id FROM samples").fetchone(), (99,)
             )
 
+    def test_restore_does_not_overwrite_stale_temp_file(self):
+        """A previous recovery temporary file must remain untouched."""
+
+        stale = Path(str(self.database) + ".recovery.$")
+        stale.write_text("previous interrupted attempt", encoding="utf-8")
+        result = self.run_restore()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            stale.read_text(encoding="utf-8"),
+            "previous interrupted attempt",
+        )
+        self.assertEqual(
+            list(self.root.glob("monitor.sqlite3.recovery.????????")), []
+        )
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(
+                db.execute("SELECT id FROM samples").fetchone(), (42,)
+            )
+
     def test_bad_checksum_leaves_active_database_unchanged(self):
         """Reject a corrupted backup before any database replacement."""
 
