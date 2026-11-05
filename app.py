@@ -1705,37 +1705,57 @@ def primary_day_lines(monitor: Monitor, ts: float) -> list[str]:
     ]
 
 
+def weekly_measurement_line(
+    monitor: Monitor, phase: str, data: dict[str, float | int | None]
+) -> str:
+    """Format actual voltage samples without claiming unknown periods."""
+
+    return tr(
+        monitor.language,
+        "weekly_phase",
+        phase=monitor.phase_label(phase),
+        minimum=fmt(data["min"]),
+        maximum=fmt(data["max"]),
+        average=fmt(data["avg"]),
+        count=data["count"],
+    )
+
+
 def weekly_phase_lines(
     monitor: Monitor, phase: str, since: float, now: float
 ) -> list[str]:
     """Render seven-day quality with measured and unknown time separate."""
 
     data = weekly_quality_stats(
-        monitor.cfg.database_path, phase, since, now,
-        monitor.warning_low, monitor.warning_high
+        monitor.cfg.database_path,
+        phase,
+        since,
+        now,
+        monitor.warning_low,
+        monitor.warning_high,
     )
     outages = weekly_connection_stats(
         monitor.cfg.database_path, phase, since, now
     )
     lang = monitor.language
     return [
+        weekly_measurement_line(monitor, phase, data),
         tr(
-            lang, "weekly_phase", phase=monitor.phase_label(phase),
-            minimum=fmt(data["min"]), maximum=fmt(data["max"]),
-            average=fmt(data["avg"]), count=data["count"],
-        ),
-        tr(
-            lang, "weekly_coverage",
+            lang,
+            "weekly_coverage",
             observed=duration_text(data["observed"], lang),
             unknown=duration_text(data["unknown"], lang),
         ),
         tr(
-            lang, "weekly_threshold",
+            lang,
+            "weekly_threshold",
             below=duration_text(data["below"], lang),
             above=duration_text(data["above"], lang),
         ),
         tr(
-            lang, "weekly_connection", count=outages["count"],
+            lang,
+            "weekly_connection",
+            count=outages["count"],
             duration=duration_text(outages["duration"], lang),
         ),
     ]
