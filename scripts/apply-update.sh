@@ -10,6 +10,7 @@ VERSION=""
 DRY_RUN=false
 SNAPSHOT=""
 CHANGED=false
+PENDING_FILE="$STATE/pending-update"
 
 usage() {
     cat <<'EOF'
@@ -131,6 +132,42 @@ sync_public_version() {
     fi
 }
 
+mark_pending() {
+    local token temp
+    token="$(basename "$SNAPSHOT")"
+    temp="$(mktemp "$STATE/.pending.XXXXXXXX")"
+    printf '%s\n' "$token" > "$temp"
+    chmod 0600 "$temp"
+    mv -f "$temp" "$PENDING_FILE"
+    sync -f "$PENDING_FILE"
+}
+
+recover_pending() {
+    local token
+    [[ -f "$PENDING_FILE" ]] || return 0
+    token="$(cat "$PENDING_FILE")"
+    if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
+        echo "FAIL: invalid pending update marker" >&2
+        return 1
+    fi
+    SNAPSHOT="$STATE/snapshots/$token"
+    [[ -d "$SNAPSHOT" ]] || return 1
+    echo "RECOVERY: interrupted update $token" >&2
+    if [[ -f "$SNAPSHOT/override.yaml" ]]; then
+        cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
+    else
+        rm -f "$STATE/override.yaml"
+    fi
+    if [[ -f "$SNAPSHOT/deployed.json" ]]; then
+        cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json"
+    else
+        rm -f "$STATE/deployed.json"
+    fi
+    restore_snapshot_database
+    sync_public_version
+    rm -f "$PENDING_FILE"
+}
+
 restore_snapshot_database() {
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
@@ -175,23 +212,12 @@ rollback() {
     local exit_code=$?
     [[ "$exit_code" -ne 0 ]] || exit_code=1
     trap - ERR INT TERM
-    if [[ "$CHANGED" == true && -n "$SNAPSHOT" ]]; then
-        echo "ROLLBACK: restoring previous image selection" >&2
-        if [[ -f "$SNAPSHOT/override.yaml" ]]; then
-            cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
+    if [[ "$CHANGED" == true ]]; then
+        if recover_pending; then
+            start_stack || echo "FAIL: manual intervention required" >&2
         else
-            rm -f "$STATE/override.yaml"
+            echo "FAIL: recovery remains pending; do not start stack" >&2
         fi
-        if [[ -f "$SNAPSHOT/deployed.json" ]]; then
-            cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json"
-        else
-            rm -f "$STATE/deployed.json"
-        fi
-        restore_snapshot_database || {
-            echo "FAIL: database rescue restore failed" >&2
-        }
-        start_stack || echo "FAIL: manual intervention required" >&2
-        sync_public_version || echo "WARN: version status update failed" >&2
     fi
     echo "FAIL: update aborted (exit $exit_code)" >&2
     exit "$exit_code"
@@ -203,8 +229,9 @@ activate() {
     printf 'services:\n  shelly-voltage:\n    image: %s@%s\n' \
         "$IMAGE" "$digest" >"$tmp"
     chmod 0600 "$tmp"
-    mv -f "$tmp" "$STATE/override.yaml"
+    mark_pending
     CHANGED=true
+    mv -f "$tmp" "$STATE/override.yaml"
     start_stack
     wait_healthy
     preflight
@@ -227,6 +254,14 @@ PY
 }
 
 main() {
+    if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
+        [[ $EUID -eq 0 ]] || return 2
+        mkdir -p "$STATE"
+        exec 9>/run/lock/shelly-voltage-updater.lock
+        flock -w 120 9 || return 3
+        recover_pending
+        return
+    fi
     parse_args "$@"
     requirements
     preflight
@@ -249,6 +284,7 @@ main() {
     snapshot
     trap rollback ERR INT TERM
     activate "$digest"
+    rm -f "$PENDING_FILE"
     trap - ERR INT TERM
     sync_public_version || echo "WARN: version status update failed" >&2
     echo "UPDATE PASS: $VERSION"
