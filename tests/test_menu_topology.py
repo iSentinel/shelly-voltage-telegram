@@ -42,7 +42,7 @@ class MenuTopologyTests(unittest.TestCase):
             }
         }
 
-    def test_start_opens_seven_action_menu(self):
+    def test_start_opens_eight_action_menu(self):
         self.monitor.send_command_response("/start")
         call = self.monitor.telegram.send.call_args
         rows = call.kwargs["reply_markup"]["inline_keyboard"]
@@ -59,6 +59,7 @@ class MenuTopologyTests(unittest.TestCase):
                     "chart",
                     "help",
                     "apartments",
+                    "updates",
                 )
             ],
         )
@@ -91,6 +92,23 @@ class MenuTopologyTests(unittest.TestCase):
         self.monitor.telegram.edit.assert_not_called()
         self.monitor.telegram.send.assert_not_called()
         self.monitor.telegram.answer_callback.assert_not_called()
+
+    def test_update_menu_callback_is_admin_only(self):
+        """The update menu never publishes release details in the group."""
+
+        with unittest.mock.patch.object(
+            APP, "release_notice", return_value="Latest stable: 0.5.13-hw"
+        ) as lookup:
+            self.monitor.handle_callback(self.callback("updates", user=8))
+            lookup.assert_not_called()
+            self.monitor.telegram.send.assert_not_called()
+            self.monitor.handle_callback(self.callback("updates", user=7))
+            lookup.assert_called_once()
+        self.monitor.telegram.send.assert_called_once()
+        self.assertEqual(
+            self.monitor.telegram.send.call_args.kwargs["chat_id"], "7"
+        )
+        self.monitor.telegram.edit.assert_not_called()
 
     def test_apartment_menu_is_admin_only_and_uses_private_chat(self):
         """Apartment assignments must never appear in the shared menu."""
