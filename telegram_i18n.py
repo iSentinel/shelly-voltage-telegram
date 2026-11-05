@@ -268,6 +268,7 @@ _TEXT = {
             "ℹ️ Предпросмотр только для администратора. "
             "Сообщение канала не изменено."
         ),
+        "phase_cached": "🟡 {phase}: {voltage:.1f} {unit} · сохранено (ожидаем опрос)",
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -536,6 +537,7 @@ _TEXT = {
             "ℹ️ Попередній перегляд лише для адміністратора. "
             "Повідомлення в каналі не змінено."
         ),
+        "phase_cached": "🟡 {phase}: {voltage:.1f} {unit} · збережено (очікуємо вимір)",
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -784,6 +786,7 @@ _TEXT = {
         "compact_preview_note": (
             "ℹ️ Admin preview only. The channel message has not changed."
         ),
+        "phase_cached": "🟡 {phase}: {voltage:.1f} {unit} · cached (awaiting fresh reading)",
         "backup_missing": "💾 Backup: missing",
     },
 }
