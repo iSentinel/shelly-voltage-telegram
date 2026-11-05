@@ -32,6 +32,29 @@ voltage behavior, or production approval for the `0.5.13-hw` candidate.
 The last full electrical-transition checkpoint remains `0.5.6-hw`
 until the other mandatory checks pass.
 
+### Repeat the read-only transition check
+
+Run the reporting script against the existing SQLite database:
+
+```bash
+python3 scripts/soak-report.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  --hours 3 --json
+```
+
+The JSON fields `voltage_transition_history_status`,
+`voltage_transition_count`, and `voltage_transition_events` show
+retained `low` / `normal` / `high` changes with their phase and
+local time. A status of `absent` means no saved transition history;
+`invalid` means the saved data could not be parsed. Old events outside
+the chosen time window are excluded. Clock changes are sorted in
+actual chronological order.
+
+This utility reads SQLite without writing to it. The retained list
+is **not** a complete alert archive. It does not prove that Telegram
+subscribers saw or heard any particular status update. Continue to
+use the independent channel-delivery checklist for that acceptance.
+
 ## Device identity
 
 Validated against a physical Shelly Pro EM-50:
