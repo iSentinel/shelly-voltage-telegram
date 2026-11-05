@@ -41,7 +41,9 @@ def current_commit(root: Path) -> str:
     ).strip()
 
 
-def validate(event: str, ref: str, build_ref: str, image_tag: str, root: Path) -> None:
+def validate(
+    event: str, ref: str, build_ref: str, image_tag: str, root: Path
+) -> None:
     """Reserve stable signed versions for exact Git tag push events."""
 
     if event == "workflow_dispatch":
