@@ -4490,11 +4490,38 @@ class Monitor:
         with self.config_lock:
             return multiphase_status_text(self) + "\n\n" + self.settings_text()
 
+    def handle_private_admin_message(self, msg: dict) -> bool:
+        """Allow administrator-only commands in a direct chat."""
+
+        chat = msg.get("chat") or {}
+        sender_id = str((msg.get("from") or {}).get("id", ""))
+        if (
+            chat.get("type") != "private"
+            or str(chat.get("id", "")) != sender_id
+            or not self.is_admin(sender_id)
+        ):
+            return False
+        parts = str(msg.get("text", "")).split()
+        if not parts:
+            return False
+        command = parts[0].split("@")[0].lower()
+        if command == "/updates":
+            self.handle_updates_command(sender_id)
+        elif command == "/apartments":
+            self.handle_apartments_command(sender_id, parts)
+        else:
+            return False
+        return True
+
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
 
         msg = update.get("message") or update.get("channel_post")
-        if not msg or str(msg["chat"]["id"]) != self.cfg.telegram_chat_id:
+        if not msg:
+            return
+        if self.handle_private_admin_message(msg):
+            return
+        if str(msg["chat"]["id"]) != self.cfg.telegram_chat_id:
             return
         if not self.message_sender_allowed(msg):
             return

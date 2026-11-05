@@ -1,3 +1,19 @@
+## 2026-11-05 secure private administrator commands
+
+- IMPLEMENTED IN SOURCE (not deployed): Telegram administrators may send
+  `/updates` and `/apartments` directly to their own private bot chat,
+  instead of posting apartment-management commands in a shared control
+  chat. Existing authenticated control-chat navigation is preserved.
+- SECURITY: the direct message must have `chat.type=private`, the chat
+  ID must match the sender ID, and the sender must be in the explicit
+  administrator allowlist. Nonadministrators, forged chat IDs, and
+  unrelated group-only commands are denied.
+- PASS: 285/285 tests on an isolated Gateway source checkout, pinned
+  Ruff/PEP8 and maintainability checks. Tests include private updates,
+  apartment modifications, denied spoofing and unrelated direct commands.
+- PENDING: GitHub CI/merge and authorized real Telegram delivery. No
+  production restart or update during physical Shelly outage #10.
+
 ## 2026-11-05 malformed GitHub release asset hardening
 
 - IMPLEMENTED IN SOURCE (not deployed): GitHub Releases update notices now
