@@ -1,3 +1,31 @@
+## 2026-11-06 read-only promotion check while Shelly is offline
+
+- **Observed via Gateway:** LXC 110 and the `0.5.12-hw` Docker
+  service remain running, with zero restarts. Shelly was offline
+  after a real electricity interruption; `/ready=503`, while
+  SQLite `quick_check=ok`, no synthetic 0 V entries and one open
+  lost-connection episode were observed.
+- **Release blocked as intended:** the read-only `promotion-check.py`
+  using the private historical baseline on production returned
+  `status=fail`, exit code 2. Reasons: Shelly not online, readiness
+  unavailable, and the current lost-connection event does not match
+  the old captured outage. No promotion or deployment occurred.
+- **Missing baseline UX fix:** private validation evidence is not
+  included with a fresh public source checkout. Without an explicit
+  `--baseline` path the old CLI returned only `ValueError`.
+  The candidate CLI now identifies missing/inaccessible required
+  inputs by safe **labels** without exposing host paths, and returns
+  a redacted error message for unexpected failures.
+- **Safety:** no physical power, Shelly relays, Telegram channel
+  messages, deployment settings or live SQLite records were changed.
+- **QA:** 360/360 isolated tests PASS, pinned Ruff and short-function
+  quality gates PASS, with new tests for missing baseline and
+  secret-safe unexpected exceptions.
+- **Next release gate:** once electricity returns, capture a
+  new natural recovery baseline, repeat the real hardware
+  verification and obtain administrator-visible Telegram evidence
+  before considering `0.5.13-hw` promotion.
+
 ## 2026-11-06 cached-voltage labeling during power interruptions
 
 - **Software guard:** `RuntimeState.restore()` intentionally preserves

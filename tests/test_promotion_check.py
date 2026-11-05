@@ -49,7 +49,70 @@ def good_recovery() -> dict[str, object]:
     }
 
 
+def cli_argv(root: Path) -> list[str]:
+    """Build an explicit read-only preflight invocation."""
+
+    return [
+        "promotion-check.py",
+        "--root",
+        str(root),
+        "--live-env",
+        str(root / ".env"),
+        "--db",
+        str(root / "db.sqlite3"),
+        "--baseline",
+        str(root / "baseline.json"),
+    ]
+
+
 class PromotionCheckTests(unittest.TestCase):
+    def test_missing_baseline_reports_safe_failure(self):
+        """Never start an online check without its private baseline."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_versions(root)
+            env = root / ".env"
+            env.write_text("SHELLY_METER_TYPE=pro_em50")
+            (root / "db.sqlite3").touch()
+            with (
+                patch.object(sys, "argv", cli_argv(root)),
+                patch.object(PROMOTION, "build_payload") as build,
+                patch.object(PROMOTION, "print_result") as report,
+            ):
+                self.assertEqual(PROMOTION.main(), 2)
+            build.assert_not_called()
+            payload = report.call_args.args[0]
+            self.assertEqual(payload["status"], "fail")
+            self.assertTrue(payload["read_only"])
+            self.assertIn("recovery baseline", payload["errors"][0])
+            self.assertNotIn(str(root), str(payload))
+
+    def test_invalid_evidence_errors_hide_exception_details(self):
+        """An unexpected parser exception must not expose private data."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_versions(root)
+            env = root / ".env"
+            env.write_text("SHELLY_METER_TYPE=pro_em50")
+            (root / "db.sqlite3").touch()
+            (root / "baseline.json").write_text("{}")
+            with (
+                patch.object(sys, "argv", cli_argv(root)),
+                patch.object(
+                    PROMOTION,
+                    "build_payload",
+                    side_effect=ValueError("PRIVATE_TOKEN"),
+                ),
+                patch.object(PROMOTION, "print_result") as report,
+            ):
+                self.assertEqual(PROMOTION.main(), 2)
+            payload = report.call_args.args[0]
+            self.assertEqual(payload["error_type"], "ValueError")
+            self.assertNotIn("PRIVATE_TOKEN", str(payload))
+            self.assertIn("could not complete", payload["errors"][0])
+
     def test_promotion_passes_after_valid_recovery(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

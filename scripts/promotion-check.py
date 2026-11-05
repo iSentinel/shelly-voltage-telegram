@@ -146,6 +146,24 @@ def print_result(payload: dict[str, object], json_output: bool) -> None:
         print(f"- {error}")
 
 
+def missing_input_errors(args: argparse.Namespace) -> list[str]:
+    """Report missing private evidence without disclosing its path."""
+
+    required = (
+        ("candidate VERSION", args.root / "VERSION"),
+        ("published RELEASE_VERSION", args.root / "RELEASE_VERSION"),
+        ("accepted LIVE_VERSION", args.root / "LIVE_VERSION"),
+        ("deployment configuration", args.live_env),
+        ("measurements database", args.db),
+        ("recovery baseline", args.baseline),
+    )
+    return [
+        f"{name} is missing or inaccessible"
+        for name, path in required
+        if not path.is_file()
+    ]
+
+
 def main() -> int:
     """Run the checker and return a stable PASS/FAIL exit code."""
 
@@ -153,10 +171,19 @@ def main() -> int:
     if args.timeout <= 0:
         print("ERROR: --timeout must be > 0", file=sys.stderr)
         return 2
-    try:
-        payload = build_payload(args)
-    except Exception as exc:
-        payload = {"status": "fail", "error_type": exc.__class__.__name__}
+    missing = missing_input_errors(args)
+    if missing:
+        payload = {"status": "fail", "read_only": True, "errors": missing}
+    else:
+        try:
+            payload = build_payload(args)
+        except Exception as exc:
+            payload = {
+                "status": "fail",
+                "read_only": True,
+                "error_type": exc.__class__.__name__,
+                "errors": ["pre-promotion verification could not complete"],
+            }
     print_result(payload, args.json_output)
     return 0 if payload.get("status") == "pass" else 2
 
