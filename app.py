@@ -1513,7 +1513,7 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     connectivity = str(snap["connectivity"])
     if connectivity == "offline":
         return tr(lang, "phase_offline", phase=phase)
-    if snap["voltage"] is None:
+    if snap["voltage"] is None or connectivity == "starting":
         key = (
             "phase_starting" if connectivity == "starting" else "phase_no_data"
         )
@@ -1521,7 +1521,12 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     voltage = float(snap["voltage"])
     if connectivity == "recovering":
         return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
-    return f"🟢 {phase}: {voltage:.1f} V"
+    warning = voltage <= monitor.warning_low or voltage >= monitor.warning_high
+    critical = (
+        voltage <= monitor.critical_low or voltage >= monitor.critical_high
+    )
+    icon = "🔴" if critical else "🟡" if warning else "🟢"
+    return f"{icon} {phase}: {voltage:.1f} {tr(lang, 'unit_voltage')}"
 
 
 def voltage_event_lines(monitor: Monitor) -> list[str]:
@@ -1531,13 +1536,21 @@ def voltage_event_lines(monitor: Monitor) -> list[str]:
     if event is None or not monitor.phase_configured(event[4]):
         return []
     kind, voltage, frequency, happened_at, phase = event
+    if kind == "recovered" and time.time() - happened_at >= 1800:
+        return []
     title = tr(monitor.language, f"event_{kind}")
     if phase != "L1":
         icon, _, rest = title.partition(" ")
         title = f"{icon} {phase}: {rest}"
     zone = ZoneInfo(monitor.cfg.timezone)
     when = datetime.fromtimestamp(happened_at, zone).strftime("%H:%M")
-    return [f"{title} · {when}", f"{voltage:.1f} V · {frequency:.2f} Hz", ""]
+    unit_v = tr(monitor.language, "unit_voltage")
+    unit_f = tr(monitor.language, "unit_frequency")
+    return [
+        f"{title} · {when}",
+        f"{voltage:.1f} {unit_v} · {frequency:.2f} {unit_f}",
+        "",
+    ]
 
 
 def voltage_episode_summary_lines(monitor: Monitor) -> list[str]:
@@ -1613,8 +1626,16 @@ def render_voltage_status(
     lines.extend(
         [tr(lang, "network_title", phases=monitor.phase_labels()), ""]
     )
-    lines.extend(phase_line(monitor, p) for p in monitor.active_phases())
     l1 = monitor.state.snapshot()
+    connectivity = str(l1["connectivity"])
+    status_key = "status_" + connectivity
+    if connectivity not in {"online", "recovering", "offline", "starting"}:
+        status_key = "status_starting"
+    lines.append(tr(lang, status_key))
+    lines.extend(phase_line(monitor, p) for p in monitor.active_phases())
+    frequency = l1.get("frequency")
+    if connectivity == "online" and frequency is not None:
+        lines.append(tr(lang, "status_frequency", value=float(frequency)))
     if l1["voltage"] is None:
         notice = tr(lang, "no_measurements", phase=monitor.phase_label("L1"))
         return "\n".join(lines + ["", notice])
@@ -1650,6 +1671,72 @@ def primary_day_lines(monitor: Monitor, ts: float) -> list[str]:
             average=fmt(stats["avg"]),
         ),
     ]
+
+
+def voltage_timeline_events(
+    monitor: Monitor, since: float, now: float
+) -> list[tuple[float, str]]:
+    """Read retained state changes without inventing missing history."""
+
+    raw = monitor.storage.get_meta("voltage_transition_history")
+    try:
+        events = json.loads(raw) if raw else []
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(events, list):
+        return []
+    rows: list[tuple[float, str]] = []
+    for item in events[-48:]:
+        if not isinstance(item, dict):
+            continue
+        state, phase = item.get("state"), item.get("phase")
+        if state not in {"low", "high", "normal"}:
+            continue
+        if phase not in monitor.active_phases():
+            continue
+        try:
+            stamp = float(item["at"])
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+        if not since <= stamp <= now:
+            continue
+        stamp_text = format_stamp(stamp, monitor.cfg.timezone)
+        label = tr(monitor.language, "events_state_" + state)
+        rows.append((
+            stamp,
+            tr(monitor.language, "events_warning",
+               phase=monitor.phase_label(phase),
+               state=label, time=stamp_text),
+        ))
+    return rows
+
+
+def connectivity_timeline_events(
+    monitor: Monitor, since: float, now: float
+) -> list[tuple[float, str]]:
+    """Read confirmed Shelly connectivity loss and recovery records."""
+
+    rows: list[tuple[float, str]] = []
+    for phase in monitor.active_phases():
+        try:
+            outages = outage_history(monitor.cfg.database_path, phase, 24)
+        except (OSError, sqlite3.Error):
+            continue
+        for start, end in outages:
+            label = monitor.phase_label(phase)
+            if since <= start <= now:
+                rows.append((
+                    start, tr(monitor.language, "events_connection",
+                              phase=label,
+                              time=format_stamp(start, monitor.cfg.timezone)),
+                ))
+            if end is not None and since <= end <= now:
+                rows.append((
+                    end, tr(monitor.language, "events_reconnected",
+                            phase=label,
+                            time=format_stamp(end, monitor.cfg.timezone)),
+                ))
+    return rows
 
 
 def message_not_modified(exc: Exception) -> bool:
@@ -2907,6 +2994,23 @@ class Monitor:
         lines.append(tr(self.language, "outage_interpretation"))
         return "\n".join(lines)
 
+    def event_timeline_text(self) -> str:
+        """Display bounded recent events with an explicit history limit."""
+
+        with self.config_lock:
+            now = time.time()
+            since = now - 86400
+            rows = voltage_timeline_events(self, since, now)
+            rows.extend(connectivity_timeline_events(self, since, now))
+            rows.sort(key=lambda row: row[0], reverse=True)
+            lines = [tr(self.language, "events_title")]
+            if not rows:
+                lines.append(tr(self.language, "events_empty"))
+            else:
+                lines.extend(text for _, text in rows[:20])
+            lines.append(tr(self.language, "events_notice"))
+            return "\n".join(lines)
+
     def maybe_daily_summary(self) -> None:
         """Post one daily summary after the configured local time."""
 
@@ -2941,14 +3045,22 @@ class Monitor:
                 skew = info.get("time_skew_sec")
                 skew_text = "n/a" if skew is None else f"{float(skew):+.1f}s"
                 lines.append(
-                    f"{self.phase_label(phase)}: {info.get('model')} · "
-                    f"fw {info.get('firmware')} · "
-                    f"uptime {info.get('uptime')}s · skew {skew_text}"
+                    tr(
+                        self.language, "device_details",
+                        phase=self.phase_label(phase),
+                        model=info.get("model"),
+                        firmware=info.get("firmware"),
+                        uptime=info.get("uptime"),
+                        skew=skew_text,
+                    )
                 )
             except Exception as exc:
                 lines.append(
-                    f"{self.phase_label(phase)}: offline "
-                    f"({type(exc).__name__})"
+                    tr(
+                        self.language, "device_offline",
+                        phase=self.phase_label(phase),
+                        error=type(exc).__name__,
+                    )
                 )
         return "\n".join(lines)
 
@@ -2960,9 +3072,12 @@ class Monitor:
             return tr(self.language, "backup_missing")
         stamp = format_stamp(float(info["mtime"]), self.cfg.timezone)
         size = int(info["size"]) // 1024
-        return (
-            f"💾 Backup: {stamp}, {size} KiB; "
-            f"SQLite: {self.storage.integrity()}"
+        return tr(
+            self.language,
+            "backup_ok",
+            stamp=stamp,
+            size=size,
+            integrity=self.storage.integrity(),
         )
 
     def audit_text(self) -> str:
@@ -3077,23 +3192,23 @@ class Monitor:
         cooldown = (
             tr(self.language, "minutes", value=self.notification_cooldown_min)
             if self.notification_cooldown_min
-            else "OFF"
+            else tr(self.language, "state_off")
         )
+        on = tr(self.language, "state_on")
+        off = tr(self.language, "state_off")
         return {
             "silent": tr(
                 self.language,
                 "silent" if self.telegram.silent_default else "audible",
             ),
-            "quiet": "ON" if self.telegram.quiet_enabled else "OFF",
-            "low": "ON" if self.low_voltage_alert_enabled else "OFF",
-            "levels": "ON" if self.alerts_enabled else "OFF",
-            "maintenance": "ON" if self.maintenance_active() else "OFF",
-            "availability": "ON"
-            if self.availability_alerts_enabled
-            else "OFF",
-            "summary": "ON" if self.daily_summary_enabled else "OFF",
-            "pin": "ON" if self.pin_status else "OFF",
-            "instability": "ON" if self.instability_enabled else "OFF",
+            "quiet": on if self.telegram.quiet_enabled else off,
+            "low": on if self.low_voltage_alert_enabled else off,
+            "levels": on if self.alerts_enabled else off,
+            "maintenance": on if self.maintenance_active() else off,
+            "availability": on if self.availability_alerts_enabled else off,
+            "summary": on if self.daily_summary_enabled else off,
+            "pin": on if self.pin_status else off,
+            "instability": on if self.instability_enabled else off,
             "cooldown": cooldown,
             "edit_window": tr(
                 self.language, "minutes", value=self.status_edit_window_min
@@ -4477,9 +4592,10 @@ class Monitor:
         """Build localized navigation for the private control chat."""
 
         rows = (
-            ("status", "settings"),
-            ("today", "outages"),
-            ("chart", "help"),
+            ("status", "events"),
+            ("today", "summary"),
+            ("chart", "settings"),
+            ("outages", "help"),
             ("apartments", "updates"),
         )
         return {
@@ -4517,6 +4633,8 @@ class Monitor:
             "help",
             "apartments",
             "updates",
+            "events",
+            "summary",
         }:
             return
         self.telegram.answer_callback(str(query.get("id", "")))
@@ -4818,6 +4936,7 @@ class Monitor:
         reports = {
             "/quality": self.quality_text,
             "/summary": self.daily_summary_text,
+            "/events": self.event_timeline_text,
             "/audit": self.audit_text,
             "/device": self.device_health_text,
         }
@@ -4861,7 +4980,11 @@ class Monitor:
         ]
         for ts, voltage, frequency in self.storage.recent(12, phase):
             stamp = format_time(ts, self.cfg).split()[1]
-            lines.append(f"{stamp} — {voltage:.1f} V / {frequency:.2f} Hz")
+            unit_v = tr(self.language, "unit_voltage")
+            unit_f = tr(self.language, "unit_frequency")
+            lines.append(
+                f"{stamp} — {voltage:.1f} {unit_v} / {frequency:.2f} {unit_f}"
+            )
         return "\n".join(lines)
 
 
