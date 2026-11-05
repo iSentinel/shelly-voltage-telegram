@@ -23,6 +23,7 @@ API = f"https://api.github.com/repos/{REPO}/releases"
 DEFAULT_STATE = Path("/var/lib/shelly-voltage-update-check")
 VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)-hw\Z")
 REQUEST_TIMEOUT = 12
+MAX_RESPONSE_BYTES = 128 * 1024
 SAFE_VOLTAGE_MIN = 207.0
 SAFE_VOLTAGE_MAX = 253.0
 MAX_SAMPLE_AGE = 120
@@ -38,6 +39,18 @@ def version_tuple(text: str) -> tuple[int, int, int]:
     return tuple(int(part) for part in match.groups())
 
 
+def decode_json_response(reply) -> dict:
+    """Reject oversized, incomplete or unexpected API JSON data."""
+
+    payload = reply.read(MAX_RESPONSE_BYTES + 1)
+    if len(payload) > MAX_RESPONSE_BYTES:
+        raise ValueError("API response exceeds 128 KiB")
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("API response must be a JSON object")
+    return data
+
+
 def request_json(url: str, headers: dict | None = None) -> dict:
     """Fetch a bounded HTTPS JSON response with a fixed timeout."""
 
@@ -48,7 +61,7 @@ def request_json(url: str, headers: dict | None = None) -> dict:
     with urllib.request.urlopen(
         urllib.request.Request(url, headers=head), timeout=REQUEST_TIMEOUT
     ) as reply:
-        return json.load(reply)
+        return decode_json_response(reply)
 
 
 def published_release(tag: str | None = None) -> dict:
@@ -56,17 +69,27 @@ def published_release(tag: str | None = None) -> dict:
 
     url = f"{API}/tags/{tag}" if tag else f"{API}/latest"
     release = request_json(url)
+    if not isinstance(release, dict):
+        raise ValueError("invalid GitHub release metadata")
     if release.get("draft") or release.get("prerelease"):
         raise ValueError("draft or prerelease is not eligible")
-    actual = release.get("tag_name", "")
+    actual = release.get("tag_name")
+    if not isinstance(actual, str) or not actual.startswith("v"):
+        raise ValueError("stable release tag is missing")
     version_tuple(actual)
     if tag and actual != tag:
         raise ValueError("release tag mismatch")
-    if not any(
-        asset.get("name") == f"shelly-voltage-telegram-{actual[1:]}.tar.gz"
-        for asset in release.get("assets", [])
-    ):
-        raise ValueError("source release archive is missing")
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        raise ValueError("release assets must be a list")
+    names = {
+        item["name"]
+        for item in assets
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    required = {f"shelly-voltage-telegram-{actual[1:]}.tar.gz", "SHA256SUMS"}
+    if not required.issubset(names):
+        raise ValueError("source archive and checksums are required")
     return release
 
 
@@ -110,7 +133,7 @@ def check(root: Path, state: Path) -> dict:
         "installed": current,
         "latest": latest,
         "available": version_tuple(latest) > version_tuple(current),
-        "release_url": release["html_url"],
+        "release_url": f"https://github.com/{REPO}/releases/tag/v{latest}",
         "auto_install": False,
     }
 
@@ -143,12 +166,13 @@ def manifest_digest(tag: str) -> str:
     ) as reply:
         media_type = reply.headers.get("Content-Type", "")
         digest = reply.headers.get("Docker-Content-Digest", "")
-        manifest = json.load(reply)
+        manifest = decode_json_response(reply)
     if "image.index" not in media_type:
         raise ValueError("expected a signed multi-platform OCI index")
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
         raise ValueError("registry did not return a valid digest")
-    if not manifest.get("manifests"):
+    manifests = manifest.get("manifests")
+    if not isinstance(manifests, list) or not manifests:
         raise ValueError("OCI index has no platform manifests")
     return digest
 
@@ -171,7 +195,7 @@ def preflight(database: Path, ready_url: str) -> None:
     if ready_url != "http://127.0.0.1:8080/ready":
         raise ValueError("only the local readiness endpoint is allowed")
     with urllib.request.urlopen(ready_url, timeout=5) as response:
-        status = json.load(response)
+        status = decode_json_response(response)
     if (
         status.get("ready") is not True
         or status.get("connectivity") != "online"

@@ -44,7 +44,10 @@ class ReleaseUpdaterTests(unittest.TestCase):
                 "https://github.com/iSentinel/shelly-voltage-telegram/"
                 "releases/tag/v0.5.13-hw"
             ),
-            "assets": [{"name": "shelly-voltage-telegram-0.5.13-hw.tar.gz"}],
+            "assets": [
+                {"name": "shelly-voltage-telegram-0.5.13-hw.tar.gz"},
+                {"name": "SHA256SUMS"},
+            ],
         }
 
     def test_release_version_rejects_tags_and_nonsense(self):
@@ -115,6 +118,66 @@ class ReleaseUpdaterTests(unittest.TestCase):
             self.assertRaises(ValueError),
         ):
             updater.published_release()
+
+    def test_host_api_rejects_oversized_or_unexpected_json(self):
+        """The host checker must fail closed on untrusted JSON responses."""
+
+        for body in (
+            ["unexpected"],
+            {"tag_name": "v" + "a" * 140000},
+            None,
+        ):
+            with (
+                self.subTest(body_type=type(body).__name__),
+                patch("urllib.request.urlopen") as request,
+                self.assertRaises(ValueError),
+            ):
+                request.return_value.__enter__.return_value = _JsonReply(body)
+                updater.request_json(updater.API + "/latest")
+
+    def test_host_release_rejects_invalid_asset_shapes(self):
+        """Missing checksums and malformed asset names cannot be published."""
+
+        archive = "shelly-voltage-telegram-0.5.13-hw.tar.gz"
+        for assets in (
+            None,
+            "not-a-list",
+            [{"name": archive}],
+            [{"name": archive}, {"name": ["SHA256SUMS"]}],
+            [{"name": archive}, {"name": {"invalid": True}}],
+        ):
+            with (
+                self.subTest(assets=type(assets).__name__),
+                patch.object(
+                    updater,
+                    "request_json",
+                    return_value={**self.latest, "assets": assets},
+                ),
+                self.assertRaises(ValueError),
+            ):
+                updater.published_release()
+
+    def test_host_release_rejects_nondict_and_wrong_tag_types(self):
+        """Require a valid JSON object and a canonical stable tag."""
+
+        for result in ([], None, {**self.latest, "tag_name": ["v0.5.13-hw"]}):
+            with (
+                patch.object(updater, "request_json", return_value=result),
+                self.assertRaises((ValueError, AttributeError)),
+            ):
+                updater.published_release()
+
+    def test_local_readiness_rejects_malformed_json_shape(self):
+        """No install can proceed when the local health data is invalid."""
+
+        with (
+            patch("urllib.request.urlopen") as request,
+            self.assertRaises(ValueError),
+        ):
+            request.return_value.__enter__.return_value = _JsonReply(
+                [{"ready": True, "connectivity": "online"}]
+            )
+            updater.preflight(self.db, "http://127.0.0.1:8080/ready")
 
     def test_preflight_online_and_no_outages(self):
         """Approve a healthy local monitor without any active alarms."""
