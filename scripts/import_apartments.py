@@ -22,6 +22,7 @@ from apartment_phases import (  # noqa: E402
 
 COLUMNS = {"building", "apartment", "phase", "entrance", "floor"}
 MAX_ROWS = 1000
+MAX_BYTES = 262144
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -60,11 +61,16 @@ def parse_row(row: dict, allowed: set[str]) -> tuple:
 def read_rows(path: Path, allowed: set[str]) -> list[tuple]:
     """Validate the complete file before opening a writable database."""
 
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("CSV must be an existing regular file")
+    if path.stat().st_size > MAX_BYTES:
+        raise ValueError("CSV exceeds 256 KiB")
     records: list[tuple] = []
     seen: set[tuple[str, int]] = set()
     with path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
-        if set(reader.fieldnames or ()) != COLUMNS:
+        fields = reader.fieldnames or []
+        if len(fields) != len(COLUMNS) or set(fields) != COLUMNS:
             raise ValueError(
                 "CSV columns must be building,apartment,phase,entrance,floor"
             )
@@ -90,7 +96,7 @@ def read_rows(path: Path, allowed: set[str]) -> list[tuple]:
 def save_rows(db_path: Path, rows: list[tuple]) -> None:
     """Commit the validated assignments as one SQLite transaction."""
 
-    if not db_path.is_file():
+    if db_path.is_symlink() or not db_path.is_file():
         raise ValueError("database must already exist")
     registry = ApartmentRegistry(db_path)
     registry.initialize()
