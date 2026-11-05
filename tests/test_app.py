@@ -152,6 +152,102 @@ class ShellyClientTests(unittest.TestCase):
         self.assertEqual(result["L2"][:2], (229.8, 50.01))
         self.assertEqual(result["L3"][:2], (232.4, 50.0))
 
+    def test_pro3em_common_component_errors_fail_closed(self):
+        """Block three-phase samples despite plausible voltage readings."""
+
+        for code in (
+            "power_meter_failure",
+            "phase_sequence",
+            "ct_type_not_set",
+        ):
+            with self.subTest(code=code):
+                client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+                client.rpc = Mock(
+                    return_value={
+                        "a_voltage": 230.0,
+                        "a_freq": 50.0,
+                        "b_voltage": 231.0,
+                        "b_freq": 50.0,
+                        "c_voltage": 232.0,
+                        "c_freq": 50.0,
+                        "errors": [code],
+                    }
+                )
+                with self.assertRaisesRegex(RuntimeError, code):
+                    client.read_phases()
+
+    def test_pro3em_phase_errors_fail_closed(self):
+        """An individual phase error also invalidates the RPC cycle."""
+
+        for field in ("a_errors", "b_errors", "c_errors", "n_errors"):
+            with self.subTest(field=field):
+                client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+                client.rpc = Mock(
+                    return_value={
+                        "a_voltage": 230.0,
+                        "a_freq": 50.0,
+                        "b_voltage": 231.0,
+                        "b_freq": 50.0,
+                        "c_voltage": 232.0,
+                        "c_freq": 50.0,
+                        field: ["out_of_range:voltage"],
+                    }
+                )
+                with self.assertRaisesRegex(RuntimeError, field):
+                    client.read_phases()
+
+    def test_pro3em_malformed_errors_fail_closed(self):
+        """Do not silently ignore malformed common fault fields."""
+
+        for raw in ("power_meter_failure", None, {"invalid": "shape"}):
+            with self.subTest(error_type=type(raw).__name__):
+                client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+                client.rpc = Mock(return_value={"errors": raw})
+                with self.assertRaisesRegex(RuntimeError, "invalid_format"):
+                    client.read_phases()
+
+    def test_pro3em_unknown_errors_are_redacted(self):
+        """Unknown error text must reject samples without leaking data."""
+
+        marker = "private-device-marker"
+        client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+        client.rpc = Mock(return_value={"errors": [marker]})
+        with self.assertRaisesRegex(RuntimeError, "unknown_error") as err:
+            client.read_phases()
+        self.assertNotIn(marker, str(err.exception))
+
+    def test_pro3em_empty_errors_and_flags_remain_valid(self):
+        """Empty errors and separate alarm flags are not meter failures."""
+
+        client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+        client.rpc = Mock(
+            return_value={
+                "a_voltage": 230.0,
+                "a_freq": 50.0,
+                "b_voltage": 231.0,
+                "b_freq": 50.0,
+                "c_voltage": 232.0,
+                "c_freq": 50.0,
+                "errors": [],
+                "a_errors": [],
+                "b_errors": [],
+                "c_errors": [],
+                "a_flags": ["undervoltage"],
+            }
+        )
+        readings = client.read_phases()
+        self.assertEqual(sorted(readings), ["L1", "L2", "L3"])
+
+    def test_pro3em_legacy_error_field_fails_closed(self):
+        """Do not silently trust nonstandard legacy status fields."""
+
+        client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
+        client.rpc = Mock(
+            return_value={"total_errors": ["power_meter_failure"]}
+        )
+        with self.assertRaisesRegex(RuntimeError, "total_errors"):
+            client.read_phases()
+
     def test_pro3em_skips_missing_phase_instead_of_zero(self):
         client = APP.Pro3EMClient(config(shelly_meter_type="pro3em"))
         client.rpc = Mock(
@@ -1999,6 +2095,33 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual([row[0] for row in rows], ["L1", "L2", "L3"])
             self.assertEqual([row[1] for row in rows], [230.0, 231.0, 232.0])
             self.assertEqual(len({row[2] for row in rows}), 1)
+
+    def test_pro3em_component_error_never_persists_measurements(self):
+        """A shared meter fault rejects the entire three-phase cycle."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "failed-pro3em.sqlite3"
+            monitor = APP.Monitor(
+                config(database_path=path, shelly_meter_type="pro3em")
+            )
+            monitor.storage.initialize()
+            monitor.shelly.rpc = Mock(
+                return_value={
+                    "a_voltage": 230.0,
+                    "a_freq": 50.0,
+                    "b_voltage": 231.0,
+                    "b_freq": 50.0,
+                    "c_voltage": 232.0,
+                    "c_freq": 50.0,
+                    "errors": ["power_meter_failure"],
+                }
+            )
+            self.assertFalse(monitor.poll_pro3em_once())
+            with closing(APP.sqlite3.connect(path)) as db:
+                count = db.execute(
+                    "SELECT COUNT(*) FROM measurements"
+                ).fetchone()[0]
+            self.assertEqual(count, 0)
 
     def test_l2_poll_is_stored_separately(self):
         with tempfile.TemporaryDirectory() as directory:
