@@ -82,7 +82,13 @@ class OfflineRollbackTests(unittest.TestCase):
             "SVT_PUBLIC_STATE": str(public),
         }
         result = subprocess.run(
-            ["bash", "-c", 'source "$1"; sync_public_version', "bash", str(script)],
+            [
+                "bash",
+                "-c",
+                'source "$1"; sync_public_version',
+                "bash",
+                str(script),
+            ],
             capture_output=True,
             text=True,
             check=False,
