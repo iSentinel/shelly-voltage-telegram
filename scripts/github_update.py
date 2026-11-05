@@ -19,7 +19,7 @@ from pathlib import Path
 REPO = "iSentinel/shelly-voltage-telegram"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram"
 API = f"https://api.github.com/repos/{REPO}/releases"
-DEFAULT_STATE = Path("/var/lib/shelly-voltage-updater")
+DEFAULT_STATE = Path("/var/lib/shelly-voltage-update-check")
 VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)-hw\Z")
 REQUEST_TIMEOUT = 12
 SAFE_VOLTAGE_MIN = 207.0
