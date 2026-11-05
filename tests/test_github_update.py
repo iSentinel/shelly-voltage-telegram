@@ -132,9 +132,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
                 patch("urllib.request.urlopen") as request,
                 self.assertRaises(ValueError),
             ):
-                request.return_value.__enter__.return_value = _JsonReply(
-                    body
-                )
+                request.return_value.__enter__.return_value = _JsonReply(body)
                 updater.request_json(updater.API + "/latest")
 
     def test_host_release_rejects_invalid_asset_shapes(self):
