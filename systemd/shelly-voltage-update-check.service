@@ -1,0 +1,21 @@
+[Unit]
+Description=Check Shelly Voltage Telegram GitHub releases (read only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=shelly-voltage-updater
+StateDirectoryMode=0750
+WorkingDirectory=/opt/shelly-voltage
+ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/github_update.py check
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
