@@ -42,8 +42,6 @@ if [[ "$actual_version" != "$REQUIRED_RUFF_VERSION" ]]; then
 fi
 
 cd "$ROOT"
-# TEMPORARY: surface the exact 79-column formatting diff in CI logs.
-ruff format --line-length 79 --diff app.py telegram_i18n.py tests/test_telegram_localization.py || true
 ruff format --line-length 79 --check app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py scripts tests
 ruff check --line-length 79 --select E,F,I,UP,SIM app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py scripts tests
 "$PYTHON_BIN" scripts/check-quality.py
