@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import tempfile
 import unittest
-from contextlib import closing, redirect_stderr, redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -42,11 +42,15 @@ class ApartmentCsvTests(unittest.TestCase):
 
         output = StringIO()
         with redirect_stdout(output), redirect_stderr(output):
-            result = main([
-                "--csv", str(self.csv_file),
-                "--db", str(self.db_path),
-                *arguments,
-            ])
+            result = main(
+                [
+                    "--csv",
+                    str(self.csv_file),
+                    "--db",
+                    str(self.db_path),
+                    *arguments,
+                ]
+            )
         return result, output.getvalue()
 
     def test_dry_run_does_not_create_assignments(self):
@@ -61,10 +65,12 @@ class ApartmentCsvTests(unittest.TestCase):
     def test_apply_is_atomic_and_idempotent(self):
         """Apply the entire file, then repeat it without duplicates."""
 
-        self.write_csv([
-            ("A", "12", "L1", "2", "5"),
-            ("A", "13", "L1", "", ""),
-        ])
+        self.write_csv(
+            [
+                ("A", "12", "L1", "2", "5"),
+                ("A", "13", "L1", "", ""),
+            ]
+        )
         for _ in range(2):
             code, message = self.execute("--apply")
             self.assertEqual(code, 0, message)
@@ -75,10 +81,12 @@ class ApartmentCsvTests(unittest.TestCase):
         """Reject a whole CSV containing one invalid phase."""
 
         self.registry.assign("A", "8", "L1")
-        self.write_csv([
-            ("A", "12", "L1", "", ""),
-            ("A", "13", "L3", "", ""),
-        ])
+        self.write_csv(
+            [
+                ("A", "12", "L1", "", ""),
+                ("A", "13", "L3", "", ""),
+            ]
+        )
         code, message = self.execute("--apply")
         self.assertEqual(code, 1)
         self.assertIn("line 3", message)
@@ -87,10 +95,12 @@ class ApartmentCsvTests(unittest.TestCase):
     def test_reject_duplicates_and_excess_rows(self):
         """Protect against ambiguous and unbounded imports."""
 
-        self.write_csv([
-            ("A", "1", "L1", "", ""),
-            ("A", "1", "L2", "", ""),
-        ])
+        self.write_csv(
+            [
+                ("A", "1", "L1", "", ""),
+                ("A", "1", "L2", "", ""),
+            ]
+        )
         with self.assertRaisesRegex(ValueError, "duplicate"):
             read_rows(self.csv_file, {"L1", "L2"})
         self.write_csv([("A", str(i), "L1", "", "") for i in range(1, 1002)])
