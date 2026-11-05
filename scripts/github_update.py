@@ -110,14 +110,16 @@ def check(root: Path, state: Path) -> dict:
 def manifest_digest(tag: str) -> str:
     """Resolve the published tag to the immutable GHCR index digest."""
 
-    scope = f"repository:isentinel/shelly-voltage-telegram:pull"
+    scope = "repository:isentinel/shelly-voltage-telegram:pull"
     token_url = f"https://ghcr.io/token?service=ghcr.io&scope={scope}"
     token = request_json(token_url)["token"]
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.oci.image.index.v1+json",
     }
-    url = f"https://ghcr.io/v2/isentinel/shelly-voltage-telegram/manifests/{tag}"
+    url = (
+        f"https://ghcr.io/v2/isentinel/shelly-voltage-telegram/manifests/{tag}"
+    )
     with urllib.request.urlopen(
         urllib.request.Request(url, headers=headers), timeout=REQUEST_TIMEOUT
     ) as reply:
@@ -140,7 +142,10 @@ def preflight(database: Path, ready_url: str) -> None:
         raise ValueError("only the local readiness endpoint is allowed")
     with urllib.request.urlopen(ready_url, timeout=5) as response:
         status = json.load(response)
-    if status.get("ready") is not True or status.get("connectivity") != "online":
+    if (
+        status.get("ready") is not True
+        or status.get("connectivity") != "online"
+    ):
         raise ValueError("Shelly is offline or readings are not fresh")
     if not database.is_file():
         raise ValueError("SQLite database is missing")
@@ -165,10 +170,15 @@ def parser() -> argparse.ArgumentParser:
 
     command = argparse.ArgumentParser(description=__doc__)
     command.add_argument("action", choices=("check", "preflight", "digest"))
-    command.add_argument("--root", type=Path, default=Path("/opt/shelly-voltage"))
+    command.add_argument(
+        "--root", type=Path, default=Path("/opt/shelly-voltage")
+    )
     command.add_argument("--state", type=Path, default=DEFAULT_STATE)
-    command.add_argument("--database", type=Path, default=Path(
-        "/var/lib/shelly-voltage/voltage.sqlite3"))
+    command.add_argument(
+        "--database",
+        type=Path,
+        default=Path("/var/lib/shelly-voltage/voltage.sqlite3"),
+    )
     command.add_argument("--version", default="")
     return command
 
