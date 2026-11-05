@@ -182,8 +182,9 @@ class ApartmentRegistry:
             ("entrance", entrance),
             ("floor", floor),
         )
-        clauses = [f"{column}=?" for column, value in filters
-                   if value is not None]
+        clauses = [
+            f"{column}=?" for column, value in filters if value is not None
+        ]
         params = tuple(value for _, value in filters if value is not None)
         predicate = "WHERE " + " AND ".join(clauses) if clauses else ""
         with closing(self.connect()) as db:
@@ -267,9 +268,7 @@ def apartment_location_query(
     if action == "floor" and len(parts) == 5:
         entrance = valid_location_number(parts[3], "entrance", 1, 100)
         level = valid_location_number(parts[4], "floor", 0, 200)
-        return format_apartment_list(
-            registry, None, parts[2], entrance, level
-        )
+        return format_apartment_list(registry, None, parts[2], entrance, level)
     raise ValueError("invalid apartment location filter")
 
 
