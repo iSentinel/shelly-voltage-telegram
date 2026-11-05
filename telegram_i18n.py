@@ -50,7 +50,7 @@ _TEXT = {
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
         "phase_no_data": "нет данных",
-        "phase_recovering": "🟡 {phase}: {voltage:.1f} В (восстанавливается)",
+        "phase_recovering": "🟡 {phase}: {voltage:.1f} V (восстанавливается)",
         "network_title": "⚡ Напряжение сети · {phases}",
         "no_measurements": "{phase}: нет корректных измерений.",
         "l1_today": "{phase} сегодня: {minimum}–{maximum} В, ср. {average} В",
@@ -206,7 +206,7 @@ _TEXT = {
         "status_offline": "🔴 Нет связи с Shelly · напряжение сейчас неизвестно",
         "status_starting": "🟡 Ожидаем измерений Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
-        "unit_voltage": "В",
+        "unit_voltage": "V",
         "unit_frequency": "Гц",
         "state_on": "вкл.",
         "state_off": "выкл.",
@@ -226,6 +226,8 @@ _TEXT = {
         "device_unknown": "нет данных",
         "events_reconnected": "✅ {phase}: связь восстановлена · {time}",
         "unit_seconds": "с",
+        "button_cooldown_off": "🔔 Пауза: выкл.",
+        "button_cooldown_min": "{value} мин",
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -435,6 +437,8 @@ _TEXT = {
         "device_unknown": "немає даних",
         "events_reconnected": "✅ {phase}: зв'язок відновлено · {time}",
         "unit_seconds": "с",
+        "button_cooldown_off": "🔔 Пауза: вимкн.",
+        "button_cooldown_min": "{value} хв",
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -642,16 +646,18 @@ _TEXT = {
         "device_unknown": "n/a",
         "events_reconnected": "✅ {phase}: connection restored · {time}",
         "unit_seconds": "s",
+        "button_cooldown_off": "🔔 Cooldown: off",
+        "button_cooldown_min": "{value} min",
         "backup_missing": "💾 Backup: missing",
     },
 }
 
 
 def tr(language: str, key: str, **values: object) -> str:
-    """Translate one UI key with Russian fallback."""
+    """Translate only from the selected language; missing keys are errors."""
 
     lang = language if language in LANGUAGES else "ru"
-    template = _TEXT.get(lang, {}).get(key) or _TEXT["ru"][key]
+    template = _TEXT[lang][key]
     return template.format(**values)
 
 
