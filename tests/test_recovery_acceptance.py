@@ -84,9 +84,13 @@ def make_stable_recovery(path: Path, started_at: float = 1000.0) -> None:
     set_meta(path, "last_voltage_event", event)
     set_meta(path, "voltage_episode", RECOVERY.json.dumps({"start_at": 900.0}))
     set_meta(path, "last_voltage_notification_at", "777.0")
-    set_meta(path, "voltage_transition_history", RECOVERY.json.dumps(
-        [{"at": started_at, "phase": "L1", "state": "normal"}]
-    ))
+    set_meta(
+        path,
+        "voltage_transition_history",
+        RECOVERY.json.dumps(
+            [{"at": started_at, "phase": "L1", "state": "normal"}]
+        ),
+    )
 
 
 def complete_stable_rotation(path: Path) -> None:
@@ -325,11 +329,17 @@ class RecoveryAcceptanceTests(unittest.TestCase):
             checkpoint = Path(directory) / "baseline.json"
             checkpoint.write_text(RECOVERY.json.dumps(baseline))
             complete_stable_rotation(path)
-            set_meta(path, "voltage_transition_history", RECOVERY.json.dumps([
-                {"at": 1000.0, "phase": "L1", "state": "normal"},
-                {"at": 1200.0, "phase": "L1", "state": "low"},
-                {"at": 1300.0, "phase": "L1", "state": "normal"},
-            ]))
+            set_meta(
+                path,
+                "voltage_transition_history",
+                RECOVERY.json.dumps(
+                    [
+                        {"at": 1000.0, "phase": "L1", "state": "normal"},
+                        {"at": 1200.0, "phase": "L1", "state": "low"},
+                        {"at": 1300.0, "phase": "L1", "state": "normal"},
+                    ]
+                ),
+            )
             request = args(path)
             request.baseline = checkpoint
             with (
