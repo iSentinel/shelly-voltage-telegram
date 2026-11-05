@@ -131,9 +131,7 @@ class OfflineRollbackTests(unittest.TestCase):
             writer.execute("PRAGMA wal_autocheckpoint=0")
             writer.execute("UPDATE samples SET id=777")
             writer.commit()
-            self.assertTrue(
-                Path(str(self.database) + "-wal").exists()
-            )
+            self.assertTrue(Path(str(self.database) + "-wal").exists())
             result = self.run_restore()
             self.assertEqual(result.returncode, 0, result.stderr)
             rescue = self.snapshot / "failed-upgrade-database.sqlite3"
