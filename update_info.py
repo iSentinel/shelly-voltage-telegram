@@ -39,7 +39,8 @@ def release_notice(installed: str, language: str = "en") -> str:
     available = version_numbers(newest) > version_numbers(installed)
     expected = {f"shelly-voltage-telegram-{newest}.tar.gz", "SHA256SUMS"}
     assets = {
-        asset.get("name") for asset in release.get("assets", [])
+        asset.get("name")
+        for asset in release.get("assets", [])
         if isinstance(asset, dict)
     }
     if not expected.issubset(assets):
