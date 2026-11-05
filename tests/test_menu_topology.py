@@ -222,7 +222,9 @@ class MenuTopologyTests(unittest.TestCase):
         msg["from"]["id"] = 7
         msg["text"] = "/apartments list"
         self.monitor.handle_update({"message": msg})
-        self.assertIn("A #12: L1", self.monitor.telegram.send.call_args.args[0])
+        self.assertIn(
+            "A #12: L1", self.monitor.telegram.send.call_args.args[0]
+        )
 
     def test_unrelated_private_commands_are_not_enabled(self):
         """Private access must not expose other group-only commands."""
