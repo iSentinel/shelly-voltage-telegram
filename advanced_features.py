@@ -66,8 +66,7 @@ def quality_stats(
 
 
 def weekly_time_categories(
-    path: Path, phase: str, since: float, until: float,
-    low: float, high: float
+    path: Path, phase: str, since: float, until: float, low: float, high: float
 ) -> dict[str, float]:
     """Count observed threshold time without filling long sample gaps."""
 
@@ -104,8 +103,7 @@ def weekly_time_categories(
 
 
 def weekly_quality_stats(
-    path: Path, phase: str, since: float, until: float,
-    low: float, high: float
+    path: Path, phase: str, since: float, until: float, low: float, high: float
 ) -> dict[str, float | int | None]:
     """Summarize one phase and exclude gaps from time estimates."""
 
@@ -118,8 +116,11 @@ def weekly_quality_stats(
         ).fetchone()
     coverage = weekly_time_categories(path, phase, since, until, low, high)
     return {
-        "count": int(row[0]), "min": row[1], "max": row[2],
-        "avg": row[3], **coverage,
+        "count": int(row[0]),
+        "min": row[1],
+        "max": row[2],
+        "avg": row[3],
+        **coverage,
     }
 
 
