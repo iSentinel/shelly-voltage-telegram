@@ -1,3 +1,51 @@
+## 2026-11-05 LXC 111 signed updater and reboot acceptance
+
+- PASS: Gateway reconfirmed that dedicated, unprivileged QA LXC 111
+  `shelly-updater-qa` is running with Docker, Compose, Cosign 3.0.6, and a
+  separate synthetic HTTP/SQLite monitoring fixture. No production Shelly,
+  Telegram secret or SQLite history was copied into the fixture.
+- PASS: updater dry-run from QA release `0.5.11-hw` to public
+  `v0.5.12-hw`: fresh synthetic 230 V reading, GitHub target policy,
+  GHCR signature identity and Cosign certificate, public archive SHA256,
+  and `DRY-RUN PASS`. An initially stale fixture was correctly rejected.
+- PASS: a real attempted signed-image replacement in QA failed to become
+  healthy, as expected without the physical Shelly configuration.
+  The updater exited nonzero and restored the prior
+  `shelly-qa-http:old` container, the verified SQLite snapshot (2 rows),
+  and original image choice. Both fixture HTTP readiness and SQLite
+  integrity passed after rollback; pending journal was cleared.
+- PASS: the QA-only Compose systemd service was installed and enabled with
+  `ExecStartPre=apply-update.sh --recover`. A durable, QA-only pending
+  marker and invalid override were prepared, then LXC 111 was actually
+  rebooted. Startup logged `RECOVERY: interrupted update`, restored the
+  previous image and SQLite, removed the pending marker/override, and
+  returned healthy/ready responses.
+- PASS: a second real QA reboot with an intentionally malformed pending
+  marker made systemd refuse to start the Compose unit. No container was
+  running. The bad journal was retained for investigation. After deleting
+  only this QA test marker and resetting the failed unit, the old fixture
+  returned healthy/ready.
+- PASS: third real QA reboot with a checksum-corrupted SQLite backup.
+  The Compose service detected SHA256 mismatch, refused to start, left the
+  pending journal in place, and did not launch a container. After restoring
+  the correct checksum from the QA-only fixture, systemd recovered the prior
+  image, cleared the pending marker, and SQLite integrity plus /health and
+  /ready all passed.
+- LIMITATION: these were controlled LXC reboots with a prepared durable
+  interruption marker. They do not demonstrate recovery from an actual
+  uncontrolled power loss, filesystem corruption, or an unresponsive
+  Docker daemon.
+- PENDING: positive acceptance of a *fully healthy upgraded application*
+  in a disposable environment with simulated Shelly responses. A failure
+  followed by successful rollback is not proof that the new image runs
+  correctly when fully configured.
+- PENDING: validate failure handling for a checksum-corrupted snapshot and
+  backup restoration with the systemd unit in QA, plus public release
+  promotion rules and Telegram delivery verification.
+- PRODUCTION: LXC 110 still runs `0.5.12-hw` with natural outage #10 open,
+  `/ready` HTTP 503 and no updater services installed. Do not install,
+  reboot or promote the candidate while that condition persists.
+
 ## 2026-11-05 disposable LXC acceptance preparation
 
 - PREPARED: dedicated QA container VMID 111, hostname
