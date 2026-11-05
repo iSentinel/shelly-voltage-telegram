@@ -69,14 +69,16 @@ def published_release(tag: str | None = None) -> dict:
 
 
 def installed_version(root: Path, state: Path) -> str:
-    """Prefer the confirmed runtime version over the source version."""
+    """Prefer deployed or published release to candidate source version."""
 
     deployed = state / "deployed.json"
     if deployed.is_file():
         data = json.loads(deployed.read_text(encoding="utf-8"))
         version = data["version"]
     else:
-        version = (root / "VERSION").read_text(encoding="utf-8").strip()
+        release = root / "RELEASE_VERSION"
+        path = release if release.is_file() else root / "VERSION"
+        version = path.read_text(encoding="utf-8").strip()
     version_tuple(version)
     return version.removeprefix("v")
 
