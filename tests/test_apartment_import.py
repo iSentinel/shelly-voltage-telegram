@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import csv
+import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import closing, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -106,6 +107,56 @@ class ApartmentCsvTests(unittest.TestCase):
         self.write_csv([("A", str(i), "L1", "", "") for i in range(1, 1002)])
         with self.assertRaisesRegex(ValueError, "1000-row"):
             read_rows(self.csv_file, {"L1"})
+
+    def test_reject_oversized_csv_and_duplicate_headers(self):
+        """Reject excessive bytes and ambiguous CSV headers."""
+
+        self.csv_file.write_bytes(b"a" * 262145)
+        code, message = self.execute("--apply")
+        self.assertEqual(code, 1)
+        self.assertIn("256 KiB", message)
+        self.csv_file.write_text(
+            "building,apartment,phase,entrance,floor,building\nA,12,L1,,,A\n",
+            encoding="utf-8",
+        )
+        code, message = self.execute("--apply")
+        self.assertEqual(code, 1)
+        self.assertIn("CSV columns", message)
+        self.assertEqual(self.registry.list_entries()[1], 0)
+
+    def test_reject_symlinked_csv_and_database(self):
+        """Refuse redirection through symlinked input or database paths."""
+
+        self.write_csv([("A", "12", "L1", "", "")])
+        actual = self.root / "real.csv"
+        self.csv_file.rename(actual)
+        self.csv_file.symlink_to(actual)
+        code, message = self.execute("--apply")
+        self.assertEqual(code, 1)
+        self.assertIn("regular file", message)
+        self.csv_file.unlink()
+        self.write_csv([("A", "12", "L1", "", "")])
+        linked_db = self.root / "linked.sqlite3"
+        linked_db.symlink_to(self.db_path)
+        code, message = self.execute("--apply", "--db", str(linked_db))
+        self.assertEqual(code, 1)
+        self.assertIn("database must already exist", message)
+        self.assertEqual(self.registry.list_entries()[1], 0)
+
+    def test_sqlite_error_rolls_back_entire_csv_batch(self):
+        """A database constraint error must undo earlier valid rows."""
+
+        with closing(sqlite3.connect(self.db_path)) as db, db:
+            db.execute(
+                "CREATE TRIGGER reject_13 BEFORE INSERT "
+                "ON apartment_phases WHEN NEW.apartment=13 "
+                "BEGIN SELECT RAISE(ABORT, 'blocked'); END"
+            )
+        self.write_csv([("A", "12", "L1", "", ""), ("A", "13", "L1", "", "")])
+        code, message = self.execute("--apply")
+        self.assertEqual(code, 1)
+        self.assertIn("blocked", message)
+        self.assertEqual(self.registry.list_entries()[1], 0)
 
     def test_blank_locations_preserve_existing_metadata(self):
         """An import without locations does not erase saved locations."""
