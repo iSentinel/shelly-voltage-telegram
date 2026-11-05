@@ -22,6 +22,14 @@ availability in Telegram. Malformed JSON, missing release assets, unsupported
 tags or unexpected metadata types fail closed with a private localized error.
 This check never sends Docker commands.
 
+The separate host-side checker (`scripts/github_update.py`) also limits
+GitHub and GHCR JSON responses to 128 KiB. It rejects unexpected structures,
+malformed release assets, missing `SHA256SUMS`, invalid release tags, and
+malformed OCI manifest metadata. Its release URL is constructed from the
+validated project tag. Failures block updates; they do not fall back to
+unsigned images or automatic installation.
+
+
 ## Host services
 
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
