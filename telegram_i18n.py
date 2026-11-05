@@ -106,7 +106,7 @@ _TEXT = {
         "settings_levels": "⚠️ Уровни: {state} {range}",
         "settings_maintenance": "🛠 Обслуживание: {state}",
         "settings_lines": "🔌 {phases}",
-        "settings_phases": "🔌 Фазы: L1 ON · L2 {l2} · L3 {l3}",
+        "settings_phases": "🔌 Фазы: L1 вкл. · L2 {l2} · L3 {l3}",
         "settings_outage": "🔌 Уведомления о потере связи: {state}",
         "settings_summary": "📅 Сводка: {state} {time}",
         "settings_pin": "📌 Закрепление статуса: {state}",
@@ -162,15 +162,15 @@ _TEXT = {
         "export_caption": "{phase} · {hours}ч · {count} строк",
         "command_error": "Ошибка: {error}",
         "maintenance_admin_only": (
-            "Только администратор может менять maintenance mode."
+            "Только администратор может менять режим обслуживания."
         ),
-        "maintenance_status": "🛠 Maintenance: {value}",
+        "maintenance_status": "🛠 Обслуживание: {value}",
         "maintenance_usage": (
             "Использование: /maintenance 60 или /maintenance off"
         ),
         "summary_phase": (
-            "{phase}: {minimum}–{maximum} V, avg {average} V; "
-            "отключений {count}, {duration}"
+            "{phase}: {minimum}–{maximum} V, ср. {average} V; "
+            "потерь связи: {count}, {duration}"
         ),
         "test_loud": "🔔 Тест громкого уведомления",
         "test_silent": "🔕 Тест тихого уведомления",
@@ -178,7 +178,7 @@ _TEXT = {
         "test_edit_done": "✅ Редактирование Telegram работает · шаг 2/2",
         "help": (
             "Команды: /voltage /status /today /minmax /history /outages "
-            "/health /settings /chart /export /quality /summary "
+            "/health /settings /chart /export /quality /summary /events "
             "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Сервис работает; {phases}\n{backup}",
@@ -348,7 +348,7 @@ _TEXT = {
         "settings_levels": "⚠️ Рівні: {state} {range}",
         "settings_maintenance": "🛠 Обслуговування: {state}",
         "settings_lines": "🔌 {phases}",
-        "settings_phases": "🔌 Фази: L1 ON · L2 {l2} · L3 {l3}",
+        "settings_phases": "🔌 Фази: L1 увімкн. · L2 {l2} · L3 {l3}",
         "settings_outage": "🔌 Сповіщення про втрату зв'язку: {state}",
         "settings_summary": "📅 Зведення: {state} {time}",
         "settings_pin": "📌 Закріплення статусу: {state}",
@@ -389,7 +389,7 @@ _TEXT = {
         "test_edit_done": "✅ Редагування Telegram працює · крок 2/2",
         "help": (
             "Команди: /voltage /status /today /minmax /history /outages "
-            "/health /settings /chart /export /quality /summary "
+            "/health /settings /chart /export /quality /summary /events "
             "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Сервіс працює; {phases}\n{backup}",
@@ -621,7 +621,7 @@ _TEXT = {
         "test_edit_done": "✅ Telegram editing works · step 2/2",
         "help": (
             "Commands: /voltage /status /today /minmax /history /outages "
-            "/health /settings /chart /export /quality /summary "
+            "/health /settings /chart /export /quality /summary /events "
             "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Service is running; {phases}\n{backup}",

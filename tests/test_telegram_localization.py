@@ -188,6 +188,50 @@ class TelegramLocaleTests(unittest.TestCase):
         self.assertTrue(any("Події" in value for value in buttons))
         self.assertTrue(any("Зведення" in value for value in buttons))
 
+    def test_russian_summary_does_not_contain_english_labels(self):
+        """The Russian summary must not use avg or mixed outage terms."""
+
+        monitor = APP.Monitor(config(telegram_language="ru"))
+        monitor.storage.outage_stats = Mock(
+            return_value={"count": 4, "duration": 48300.0}
+        )
+        stats = {"min": 117.5, "max": 251.5, "avg": 219.1}
+        with patch.object(APP, "phase_stats", return_value=stats):
+            message = monitor.daily_summary_text()
+        self.assertIn("ср. 219.1 V", message)
+        self.assertIn("потерь связи: 4", message)
+        self.assertNotIn("avg ", message)
+        self.assertNotIn("отключений 4", message)
+
+    def test_maintenance_is_localized_in_russian(self):
+        """Technical maintenance notifications should not mix languages."""
+
+        warning = I18N.tr("ru", "maintenance_admin_only")
+        status = I18N.tr("ru", "maintenance_status", value="30 мин")
+        self.assertIn("режим обслуживания", warning)
+        self.assertIn("Обслуживание", status)
+        self.assertNotIn("maintenance mode", warning)
+        self.assertNotIn("Maintenance:", status)
+
+    def test_help_lists_new_events_command_in_every_language(self):
+        """Expose the same read-only timeline feature in each language."""
+
+        for language in I18N.LANGUAGES:
+            with self.subTest(language=language):
+                self.assertIn("/events", I18N.tr(language, "help"))
+
+    def test_ukrainian_device_diagnostics_and_voltage_units(self):
+        """Display local voltage and clock units in Ukrainian settings."""
+
+        monitor = ukrainian_monitor()
+        self.assertTrue(monitor.voltage_range_text().endswith(" В"))
+        self.assertEqual(APP.localized_clock_skew("uk", None), "немає даних")
+        self.assertEqual(APP.localized_clock_skew("uk", 1.25), "+1.2с")
+        self.assertIn(
+            "увімкн.",
+            I18N.tr("uk", "settings_phases", l2="вимкн.", l3="вимкн."),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
