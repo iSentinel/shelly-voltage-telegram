@@ -84,7 +84,7 @@ def promotion_errors(
     meter_type: str,
     recovery: dict[str, object],
 ) -> list[str]:
-    """Return reasons why promotion must remain blocked."""
+    """Reject unsafe releases without confusing runtime and hardware tags."""
 
     errors = list(recovery.get("errors", []))
     if recovery.get("status") != "pass" and not errors:
@@ -92,10 +92,12 @@ def promotion_errors(
     health = recovery.get("health") or {}
     if meter_type != "pro_em50":
         errors.append("live meter type is not pro_em50")
-    if health.get("version") != versions["live"]:
-        errors.append("live service version does not match LIVE_VERSION")
+    if health.get("version") != versions["release"]:
+        errors.append("runtime does not match RELEASE_VERSION")
+    if versions["candidate"] == versions["release"]:
+        errors.append("candidate already matches published release")
     if versions["candidate"] == versions["live"]:
-        errors.append("candidate already matches live checkpoint")
+        errors.append("candidate already matches full hardware checkpoint")
     return errors
 
 
