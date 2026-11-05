@@ -39,8 +39,12 @@ class ApartmentRegistryTests(unittest.TestCase):
 
         self.registry.assign("A", "5", "L1")
         self.registry.assign("B", "5", "L2")
-        self.assertEqual(self.registry.list_entries("L1"), ([("A", 5, "L1")], 1))
-        self.assertEqual(self.registry.list_entries("L2"), ([("B", 5, "L2")], 1))
+        self.assertEqual(
+            self.registry.list_entries("L1"), ([("A", 5, "L1")], 1)
+        )
+        self.assertEqual(
+            self.registry.list_entries("L2"), ([("B", 5, "L2")], 1)
+        )
 
     def test_bad_input_does_not_change_rows(self):
         """Reject invalid names, numbers and phase labels."""
