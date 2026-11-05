@@ -1,3 +1,27 @@
+## 2026-11-06 on-demand weekly voltage-quality digest
+
+- **P2 software stage:** candidate adds read-only `/week`, a rolling
+  seven-day quality report in RU/UK/EN. The summary includes
+  phase-specific sample min/max/average, measured and unknown time,
+  estimated time below/above configured voltage thresholds, and
+  *confirmed lost-connection intervals* with their overlap duration.
+- **Confidence guard:** only consecutive valid samples separated by
+  at most 30 seconds contribute to observed time; longer or missing
+  periods are counted as UNKNOWN. The bot never assumes zero voltage
+  during a Shelly connection loss. Threshold durations are estimates
+  from the preceding sample and are not a certified power-quality log.
+- **Delivery safety:** `/week` is on demand only. No Telegram
+  scheduled sends, device-control RPC, pin policy, edit-window policy,
+  production restart, or SQLite write was introduced.
+- **QA:** tests cover 80-second unknown gaps, separate L1/L2 phases,
+  missing readings, clipping outage spans to the seven-day window,
+  Ukrainian report labels and RU/UK/EN command registration.
+- **Release gate:** continue production `0.5.12-hw` until an approved
+  `0.5.13-hw` hardware acceptance, rollback plan and channel-visible
+  Telegram confirmation. The new CLI alone is not a release approval.
+- **Next work:** opt-in weekly scheduling and a compact/detailed
+  message setting, after explicit behavior acceptance and hardware QA.
+
 ## 2026-11-05 Telegram UX v2 source stage and locale parity
 
 - P1 SOURCE COMPLETE: PR #96 merged the localized compact power-status
