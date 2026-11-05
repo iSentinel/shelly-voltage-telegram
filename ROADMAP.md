@@ -1,21 +1,24 @@
 ## 2026-11-05 secure GitHub updater implementation
 
-- IN PROGRESS (PR): read-only daily GitHub Releases checker with a 24-hour
+- IMPLEMENTED IN CODE (not deployed): read-only daily GitHub Releases checker with a 24-hour
   systemd timer; automatic installation explicitly disabled by default.
-- IN PROGRESS (PR): administrator-only Telegram `/updates` command sends
+- IMPLEMENTED IN CODE (not deployed): administrator-only Telegram `/updates` command sends
   version information privately. The application has no Docker socket access
   and no authority to start the root updater.
-- IN PROGRESS (PR): separate manually started root systemd oneshot downloads
+- IMPLEMENTED IN CODE (not deployed): separate manually started root systemd oneshot downloads
   an immutable GHCR image, verifies its Cosign GitHub Actions identity and the
   published source archive SHA256, and refuses unlisted or older releases.
-- IN PROGRESS (PR): enforce `/ready`, fresh voltage between 207 V and 253 V,
+- IMPLEMENTED IN CODE (not deployed): enforce `/ready`, fresh voltage between 207 V and 253 V,
   SQLite integrity, no open outage, no active voltage episode and no
   unfinished stable-recovery timer before and after a candidate restart.
-- IN PROGRESS (PR): create protected database/configuration/secret snapshots,
+- IMPLEMENTED IN CODE (not deployed): create protected database/configuration/secret snapshots,
   preserve the image pin across reboots, and restore previous image/database
   after detected update failures with an additional post-failure DB rescue.
-- TESTING: test failure paths, check full Python quality rules, Docker build,
-  systemd unit syntax, and run rollback simulations before merging.
+- PASS: 249 Python tests and the pinned Ruff/maintainability gate, systemd
+  unit verification, Docker build and isolated Compose configuration, release
+  and installer dry-runs, source checks and offline SQLite rollback tests.
+- PENDING: full signed-image replacement and interrupted-host validation on a
+  disposable LXC; no released v0.5.13-hw container exists yet.
 - NOT DEPLOYED: no updater timer or host service is enabled in production.
   An actual update is blocked while outage/voltage acceptance is incomplete.
 - PENDING: independently validate interrupted host reboot, Telegram delivery,
