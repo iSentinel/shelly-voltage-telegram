@@ -44,11 +44,16 @@ class BackupVerificationTests(unittest.TestCase):
     def verify(self, count: int = 1, size: int = 16) -> int:
         """Run the CLI against only the isolated fixture directory."""
 
-        return BACKUPS.main([
-            "--backup-dir", str(self.root),
-            "--count", str(count),
-            "--max-size-mib", str(size),
-        ])
+        return BACKUPS.main(
+            [
+                "--backup-dir",
+                str(self.root),
+                "--count",
+                str(count),
+                "--max-size-mib",
+                str(size),
+            ]
+        )
 
     def test_valid_backup_passes_without_modification(self):
         """Checking an archive must leave it and the checksum unchanged."""
@@ -57,9 +62,7 @@ class BackupVerificationTests(unittest.TestCase):
         sidecar = Path(f"{archive}.sha256")
         before = (archive.read_bytes(), sidecar.read_bytes())
         self.assertEqual(self.verify(), 0)
-        self.assertEqual(
-            (archive.read_bytes(), sidecar.read_bytes()), before
-        )
+        self.assertEqual((archive.read_bytes(), sidecar.read_bytes()), before)
         self.assertEqual(len(list(self.root.glob("*.sqlite3"))), 0)
 
     def test_three_distinct_backups_pass(self):
@@ -122,9 +125,9 @@ class BackupVerificationTests(unittest.TestCase):
         """Unavailable backup storage returns an explicit nonzero status."""
 
         self.assertEqual(
-            BACKUPS.main([
-                "--backup-dir", str(self.root / "missing"), "--count", "1"
-            ]),
+            BACKUPS.main(
+                ["--backup-dir", str(self.root / "missing"), "--count", "1"]
+            ),
             2,
         )
 
