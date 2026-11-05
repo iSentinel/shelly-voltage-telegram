@@ -1,4 +1,4 @@
-"""Store apartment-to-phase assignments without controlling electrical devices."""
+"""Store apartment-to-phase assignments without controlling power."""
 
 from __future__ import annotations
 
@@ -137,11 +137,15 @@ def apartment_command(
     if action == "list" and len(parts) in (2, 3):
         phase = valid_phase(parts[2]) if len(parts) == 3 else None
         rows, total = registry.list_entries(phase)
-        lines = [f"{building} #{number}: {phase_name}"
-                 for building, number, phase_name in rows]
+        lines = [
+            f"{building} #{number}: {phase_name}"
+            for building, number, phase_name in rows
+        ]
         return (
-            f"Apartments: {total}" + (" (first 100)" if total > MAX_LIST else "")
-            + "\n" + ("\n".join(lines) if lines else "No assignments")
+            f"Apartments: {total}"
+            + (" (first 100)" if total > MAX_LIST else "")
+            + "\n"
+            + ("\n".join(lines) if lines else "No assignments")
         )
     if action == "add" and len(parts) == 5:
         phase = valid_phase(parts[4])
