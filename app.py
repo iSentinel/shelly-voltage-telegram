@@ -4551,7 +4551,8 @@ class Monitor:
         )
         self.telegram.answer_callback(str(query.get("id", "")))
         self.telegram.edit(
-            int(message["message_id"]), response,
+            int(message["message_id"]),
+            response,
             reply_markup=self.apartment_phase_keyboard(),
             chat_id=user_id,
         )
@@ -4572,7 +4573,9 @@ class Monitor:
             response = f"Apartment mapping error: {exc}"
         try:
             self.telegram.send(
-                response, notify=False, chat_id=sender_id,
+                response,
+                notify=False,
+                chat_id=sender_id,
                 reply_markup=self.apartment_phase_keyboard(),
             )
         except Exception as exc:
