@@ -2,9 +2,10 @@
 Description=Check for published Shelly Voltage Telegram updates every day
 
 [Timer]
-OnCalendar=daily
-RandomizedDelaySec=15m
-Persistent=true
+OnBootSec=10m
+OnUnitActiveSec=24h
+AccuracySec=5m
+RandomizedDelaySec=10m
 Unit=shelly-voltage-update-check.service
 
 [Install]
