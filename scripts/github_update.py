@@ -107,6 +107,16 @@ def check(root: Path, state: Path) -> dict:
     }
 
 
+def guard_target(root: Path, state: Path, version: str) -> None:
+    """Refuse reinstall, downgrade, or unpublished update targets."""
+
+    target = version_tuple(version)
+    current = version_tuple(installed_version(root, state))
+    if target <= current:
+        raise ValueError("target must be newer than the deployed version")
+    published_release("v" + version.removeprefix("v"))
+
+
 def manifest_digest(tag: str) -> str:
     """Resolve the published tag to the immutable GHCR index digest."""
 
@@ -169,7 +179,7 @@ def parser() -> argparse.ArgumentParser:
     """Define the minimal, non-interactive updater CLI."""
 
     command = argparse.ArgumentParser(description=__doc__)
-    command.add_argument("action", choices=("check", "preflight", "digest"))
+    command.add_argument("action", choices=("check", "preflight", "digest", "guard"))
     command.add_argument(
         "--root", type=Path, default=Path("/opt/shelly-voltage")
     )
@@ -195,6 +205,9 @@ def main() -> int:
         elif args.action == "preflight":
             preflight(args.database, "http://127.0.0.1:8080/ready")
             print("PREFLIGHT PASS")
+        elif args.action == "guard":
+            guard_target(args.root, args.state, args.version)
+            print("TARGET PASS")
         else:
             tag = "v" + args.version.removeprefix("v")
             version_tuple(tag)
