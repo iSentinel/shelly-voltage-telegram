@@ -43,7 +43,7 @@ def good_recovery() -> dict[str, object]:
 
     return {
         "status": "pass",
-        "health": {"version": "0.5.4-hw", "connectivity": "online"},
+        "health": {"version": "0.5.5-hw", "connectivity": "online"},
         "ready": {"ready": True},
         "errors": [],
     }
@@ -63,6 +63,32 @@ class PromotionCheckTests(unittest.TestCase):
                 payload = PROMOTION.build_payload(args(root, env))
             self.assertEqual(payload["status"], "pass")
             self.assertTrue(payload["read_only"])
+
+    def test_hardware_checkpoint_may_lag_running_release(self):
+        """A validated old hardware checkpoint is not the runtime tag."""
+
+        versions = {
+            "candidate": "0.5.13-hw",
+            "release": "0.5.12-hw",
+            "live": "0.5.6-hw",
+        }
+        recovery = good_recovery()
+        recovery["health"]["version"] = "0.5.12-hw"
+        errors = PROMOTION.promotion_errors(versions, "pro_em50", recovery)
+        self.assertEqual(errors, [])
+
+    def test_candidate_matching_published_release_blocks(self):
+        """Do not run the promotion check against the deployed release."""
+
+        versions = {
+            "candidate": "0.5.12-hw",
+            "release": "0.5.12-hw",
+            "live": "0.5.6-hw",
+        }
+        recovery = good_recovery()
+        recovery["health"]["version"] = "0.5.12-hw"
+        errors = PROMOTION.promotion_errors(versions, "pro_em50", recovery)
+        self.assertIn("candidate already matches published release", errors)
 
     def test_wrong_meter_type_blocks_promotion(self):
         errors = PROMOTION.promotion_errors(
@@ -88,9 +114,7 @@ class PromotionCheckTests(unittest.TestCase):
             "pro_em50",
             recovery,
         )
-        self.assertIn(
-            "live service version does not match LIVE_VERSION", errors
-        )
+        self.assertIn("runtime does not match RELEASE_VERSION", errors)
 
     def test_recovery_failure_is_preserved(self):
         recovery = good_recovery()
