@@ -232,7 +232,9 @@ class ApartmentRegistryTests(unittest.TestCase):
 
         self.assertIn(
             "no assignments",
-            apartment_command(self.registry, ["/apartments", "summary"], set()),
+            apartment_command(
+                self.registry, ["/apartments", "summary"], set()
+            ),
         )
         self.registry.assign("A", "1", "L1")
         restarted = ApartmentRegistry(self.path)
