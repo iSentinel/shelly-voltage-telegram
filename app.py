@@ -1648,6 +1648,42 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
+def compact_preview_text(monitor: Monitor) -> str:
+    """Show fresh measurements or explicit unknown status privately."""
+
+    with monitor.config_lock:
+        lang = monitor.language
+        snap = monitor.state.snapshot()
+        connection = str(snap["connectivity"])
+        if connection not in {"online", "offline", "starting", "recovering"}:
+            connection = "starting"
+        lines = [
+            tr(lang, "compact_preview_title", phases=monitor.phase_labels()),
+            "",
+            tr(lang, "status_" + connection),
+        ]
+        lines.extend(phase_line(monitor, p) for p in monitor.active_phases())
+        frequency = snap.get("frequency")
+        if connection == "online" and frequency is not None:
+            lines.append(tr(lang, "status_frequency", value=float(frequency)))
+        stamp = snap.get("last_success")
+        if stamp is not None:
+            lines.append(
+                tr(
+                    lang,
+                    "last_l1",
+                    phase=monitor.phase_label("L1"),
+                    stamp=format_time(float(stamp), monitor.cfg),
+                )
+            )
+        else:
+            lines.append(
+                tr(lang, "no_measurements", phase=monitor.phase_label("L1"))
+            )
+        lines.append(tr(lang, "compact_preview_note"))
+        return "\n".join(lines)
+
+
 def render_voltage_status(
     monitor: Monitor, include_event_context: bool
 ) -> str:
@@ -4805,9 +4841,22 @@ class Monitor:
             self.handle_updates_command(sender_id)
         elif command == "/apartments":
             self.handle_apartments_command(sender_id, parts)
+        elif command == "/preview":
+            self.send_compact_preview(sender_id)
         else:
             return False
         return True
+
+    def send_compact_preview(self, sender_id: str) -> None:
+        """Send an admin-only, silent preview without changing the channel."""
+
+        try:
+            message = compact_preview_text(self)
+            self.telegram.send(message, notify=False, chat_id=sender_id)
+        except Exception as exc:
+            logger.warning(
+                "Private status preview failed: {}", exc.__class__.__name__
+            )
 
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
