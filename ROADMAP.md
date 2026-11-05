@@ -1,3 +1,21 @@
+## 2026-11-05 recovery banner visibility window
+
+- The user supplied a real Ukrainian status example showing
+  `✅ Живлення відновлено · outage 5г 54хв` long after the outage
+  had closed. The recovery banner was stored in in-memory
+  `last_recovery_duration` and never expired until process restart.
+- Candidate fix: display the one-time recovery banner for a bounded
+  30-minute period after a confirmed restore, without altering
+  historical outage rows or changing notification policies.
+  Keep the exact power-recovery message immediately after an outage.
+- Regression tests verify that the banner appears shortly after
+  recovery but disappears from the general status after 30 minutes.
+  This code is not deployed to the production `0.5.12-hw`.
+- The user-provided text proves the message contains voltage,
+  daily range, restored state and a timestamp; independent channel
+  metadata, subscriber delivery and duplicate-message absence still
+  require a private administrator screenshot/confirmation.
+
 ## 2026-11-05 candidate promotion preflight version semantics
 
 - FIX IN SOURCE: the read-only `scripts/promotion-check.py` compared

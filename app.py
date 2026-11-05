@@ -1585,6 +1585,24 @@ def multiphase_status_text(
         return render_voltage_status(monitor, include_event_context)
 
 
+def recovery_banner_lines(monitor: Monitor) -> list[str]:
+    """Show one confirmed outage restoration only while it is recent."""
+
+    recovered_at = monitor.last_recovery_at
+    duration = monitor.last_recovery_duration
+    if duration is None or recovered_at is None:
+        return []
+    if not 0 <= time.time() - recovered_at < 30 * 60:
+        return []
+    return [
+        tr(
+            monitor.language,
+            "power_recovered",
+            duration=duration_text(duration, monitor.language),
+        )
+    ]
+
+
 def render_voltage_status(
     monitor: Monitor, include_event_context: bool
 ) -> str:
@@ -1602,14 +1620,7 @@ def render_voltage_status(
         return "\n".join(lines + ["", notice])
     ts = float(l1["last_success"] or time.time())
     lines.extend(primary_day_lines(monitor, ts))
-    if monitor.last_recovery_duration is not None:
-        lines.append(
-            tr(
-                lang,
-                "power_recovered",
-                duration=duration_text(monitor.last_recovery_duration, lang),
-            )
-        )
+    lines.extend(recovery_banner_lines(monitor))
     lines.extend(instability_lines(monitor))
     if include_event_context:
         lines.extend(voltage_episode_summary_lines(monitor))
@@ -1728,6 +1739,7 @@ class Monitor:
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
         self.last_recovery_duration: float | None = None
+        self.last_recovery_at: float | None = None
         self.maintenance_until = 0.0
         self.last_loop_tick = time.monotonic()
         self.telegram_failures = 0
@@ -2298,6 +2310,7 @@ class Monitor:
         self.storage.delete_meta("telegram_status_pinned_id")
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.last_recovery_duration = duration
+        self.last_recovery_at = time.time()
         self.last_telegram = 0.0
         self.last_sent_connectivity = None
         self.update_status()
