@@ -43,9 +43,7 @@ _TEXT = {
         "updates_manual_required": (
             "Для установки требуется подтверждение администратора на сервере."
         ),
-        "updates_check_failed": (
-            "Не удалось проверить опубликованный релиз GitHub."
-        ),
+        "updates_check_failed": ("Не удалось проверить опубликованный релиз GitHub."),
         "phase_unconfigured": "⚪ {phase}: не настроена",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -54,10 +52,7 @@ _TEXT = {
         "network_title": "⚡ Напряжение сети · {phases}",
         "no_measurements": "{phase}: нет корректных измерений.",
         "l1_today": "{phase} сегодня: {minimum}–{maximum} В, ср. {average} В",
-        "power_recovered": (
-            "✅ Питание восстановлено · перерыв связи "
-            "{duration}"
-        ),
+        "power_recovered": ("✅ Питание восстановлено · перерыв связи {duration}"),
         "last_l1": "🕐 Последние данные {phase}: {stamp}",
         "event_low": "🚨 Низкое напряжение сети",
         "event_warning_low": "⚠️ Пониженное напряжение",
@@ -91,9 +86,7 @@ _TEXT = {
         "settings_section_summary_time": "🕒 Время сводки",
         "settings_back": "⬅️ Назад",
         "settings_change_meter": "📟 Изменить модель",
-        "settings_reset_confirm": (
-            "⚠️ Сбросить runtime-настройки к значениям .env?"
-        ),
+        "settings_reset_confirm": ("⚠️ Сбросить runtime-настройки к значениям .env?"),
         "settings_reset_yes": "✅ Сбросить",
         "settings_cancel": "❌ Отмена",
         "settings_module": "📟 Модуль: {value}",
@@ -112,12 +105,9 @@ _TEXT = {
         "settings_summary": "📅 Сводка: {state} {time}",
         "settings_pin": "📌 Закрепление статуса: {state}",
         "settings_dwell": (
-            "⏳ Подтверждение: {dwell:g} с / восстановление "
-            "{recovery:g} с"
+            "⏳ Подтверждение: {dwell:g} с / восстановление {recovery:g} с"
         ),
-        "settings_instability": (
-            "⚡ Индикатор нестабильности: {state} · 4/15 мин"
-        ),
+        "settings_instability": ("⚡ Индикатор нестабильности: {state} · 4/15 мин"),
         "silent": "тихие",
         "audible": "со звуком",
         "minutes": "{value} мин",
@@ -167,9 +157,7 @@ _TEXT = {
             "Только администратор может менять maintenance mode."
         ),
         "maintenance_status": "🛠 Maintenance: {value}",
-        "maintenance_usage": (
-            "Использование: /maintenance 60 или /maintenance off"
-        ),
+        "maintenance_usage": ("Использование: /maintenance 60 или /maintenance off"),
         "summary_phase": (
             "{phase}: {minimum}–{maximum} V, avg {average} V; "
             "отключений {count}, {duration}"
@@ -209,23 +197,16 @@ _TEXT = {
         "audit_title": "🧾 Последние изменения настроек",
         "status_online": "🟢 Связь с Shelly установлена",
         "status_recovering": "🟡 Shelly восстанавливает соединение",
-        "status_offline": (
-            "🔴 Нет связи с Shelly · напряжение сейчас "
-            "неизвестно"
-        ),
+        "status_offline": ("🔴 Нет связи с Shelly · напряжение сейчас неизвестно"),
         "status_starting": "🟡 Ожидаем измерений Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
         "unit_voltage": "V",
         "unit_frequency": "Гц",
         "state_on": "вкл.",
         "state_off": "выкл.",
-        "backup_ok": (
-            "💾 Резервная копия: {stamp}, {size} КиБ · SQLite: "
-            "{integrity}"
-        ),
+        "backup_ok": ("💾 Резервная копия: {stamp}, {size} КиБ · SQLite: {integrity}"),
         "device_details": (
-            "{phase}: {model} · прошивка {firmware} · "
-            "работает {uptime} с · часы {skew}"
+            "{phase}: {model} · прошивка {firmware} · работает {uptime} с · часы {skew}"
         ),
         "device_offline": "{phase}: нет связи ({error})",
         "menu_events": "🕘 События",
@@ -284,12 +265,9 @@ _TEXT = {
         "updates_no": "ні",
         "updates_auto_disabled": "Автоматичне встановлення: вимкнено",
         "updates_manual_required": (
-            "Для встановлення потрібне підтвердження "
-            "адміністратора на сервері."
+            "Для встановлення потрібне підтвердження адміністратора на сервері."
         ),
-        "updates_check_failed": (
-            "Не вдалося перевірити опублікований реліз GitHub."
-        ),
+        "updates_check_failed": ("Не вдалося перевірити опублікований реліз GitHub."),
         "phase_unconfigured": "⚪ {phase}: не налаштована",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -297,14 +275,8 @@ _TEXT = {
         "phase_recovering": "🟡 {phase}: {voltage:.1f} В (відновлюється)",
         "network_title": "⚡ Напруга мережі · {phases}",
         "no_measurements": "{phase}: немає коректних вимірювань.",
-        "l1_today": (
-            "{phase} сьогодні: {minimum}–{maximum} В, сер. "
-            "{average} В"
-        ),
-        "power_recovered": (
-            "✅ Живлення відновлено · перерва зв'язку "
-            "{duration}"
-        ),
+        "l1_today": ("{phase} сьогодні: {minimum}–{maximum} В, сер. {average} В"),
+        "power_recovered": ("✅ Живлення відновлено · перерва зв'язку {duration}"),
         "last_l1": "🕐 Останні дані {phase}: {stamp}",
         "event_low": "🚨 Низька напруга мережі",
         "event_warning_low": "⚠️ Знижена напруга",
@@ -338,9 +310,7 @@ _TEXT = {
         "settings_section_summary_time": "🕒 Час зведення",
         "settings_back": "⬅️ Назад",
         "settings_change_meter": "📟 Змінити модель",
-        "settings_reset_confirm": (
-            "⚠️ Скинути поточні налаштування до значень .env?"
-        ),
+        "settings_reset_confirm": ("⚠️ Скинути поточні налаштування до значень .env?"),
         "settings_reset_yes": "✅ Скинути",
         "settings_cancel": "❌ Скасувати",
         "settings_module": "📟 Модуль: {value}",
@@ -359,12 +329,9 @@ _TEXT = {
         "settings_summary": "📅 Зведення: {state} {time}",
         "settings_pin": "📌 Закріплення статусу: {state}",
         "settings_dwell": (
-            "⏳ Підтвердження: {dwell:g} с / відновлення "
-            "{recovery:g} с"
+            "⏳ Підтвердження: {dwell:g} с / відновлення {recovery:g} с"
         ),
-        "settings_instability": (
-            "⚡ Індикатор нестабільності: {state} · 4/15 хв"
-        ),
+        "settings_instability": ("⚡ Індикатор нестабільності: {state} · 4/15 хв"),
         "silent": "тихі",
         "audible": "зі звуком",
         "minutes": "{value} хв",
@@ -425,16 +392,12 @@ _TEXT = {
         "audit_title": "🧾 Останні зміни налаштувань",
         "phase_sensor_offline": "⚠️ {phase}: датчик недоступний",
         "phase_sensor_recovered": (
-            "✅ {phase}: зв'язок із датчиком відновлено · "
-            "{duration}"
+            "✅ {phase}: зв'язок із датчиком відновлено · {duration}"
         ),
         "availability_offline": (
-            "⚠️ Немає зв'язку із Shelly. Останнє вимірювання "
-            "збережено."
+            "⚠️ Немає зв'язку із Shelly. Останнє вимірювання збережено."
         ),
-        "availability_recovered": (
-            "✅ Зв'язок із Shelly відновлено · {duration}"
-        ),
+        "availability_recovered": ("✅ Зв'язок із Shelly відновлено · {duration}"),
         "callback_today": "Сьогодні: {value}",
         "callback_outages": "Перерви зв'язку: {value}",
         "callback_updated": "Стан оновлено",
@@ -446,34 +409,24 @@ _TEXT = {
         "export_caption": "{phase} · {hours} год · {count} рядків",
         "command_error": "Помилка: {error}",
         "maintenance_admin_only": (
-            "Лише адміністратор може змінювати режим "
-            "обслуговування"
+            "Лише адміністратор може змінювати режим обслуговування"
         ),
         "maintenance_status": "🛠 Обслуговування: {value}",
-        "maintenance_usage": (
-            "Використання: /maintenance 60 або /maintenance "
-            "off"
-        ),
+        "maintenance_usage": ("Використання: /maintenance 60 або /maintenance off"),
         "summary_phase": (
             "{phase}: {minimum}–{maximum} В, сер. {average} "
             "В; перерв зв'язку: {count}, {duration}"
         ),
         "status_online": "🟢 Зв'язок із Shelly є",
         "status_recovering": "🟡 Shelly відновлює з'єднання",
-        "status_offline": (
-            "🔴 Немає зв'язку із Shelly · поточна напруга "
-            "невідома"
-        ),
+        "status_offline": ("🔴 Немає зв'язку із Shelly · поточна напруга невідома"),
         "status_starting": "🟡 Очікуємо вимірювань Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
         "unit_voltage": "В",
         "unit_frequency": "Гц",
         "state_on": "увімкн.",
         "state_off": "вимкн.",
-        "backup_ok": (
-            "💾 Резервна копія: {stamp}, {size} КіБ · SQLite: "
-            "{integrity}"
-        ),
+        "backup_ok": ("💾 Резервна копія: {stamp}, {size} КіБ · SQLite: {integrity}"),
         "device_details": (
             "{phase}: {model} · прошивка {firmware} · працює "
             "{uptime} с · годинник {skew}"
@@ -535,8 +488,7 @@ _TEXT = {
         "updates_no": "no",
         "updates_auto_disabled": "Automatic installation: disabled",
         "updates_manual_required": (
-            "Installation requires explicit administrator "
-            "approval on the host."
+            "Installation requires explicit administrator approval on the host."
         ),
         "updates_check_failed": "GitHub release check unavailable.",
         "phase_unconfigured": "⚪ {phase}: not configured",
@@ -581,9 +533,7 @@ _TEXT = {
         "settings_section_summary_time": "🕒 Summary time",
         "settings_back": "⬅️ Back",
         "settings_change_meter": "📟 Change model",
-        "settings_reset_confirm": (
-            "⚠️ Reset runtime settings to .env defaults?"
-        ),
+        "settings_reset_confirm": ("⚠️ Reset runtime settings to .env defaults?"),
         "settings_reset_yes": "✅ Reset",
         "settings_cancel": "❌ Cancel",
         "settings_module": "📟 Meter: {value}",
@@ -663,12 +613,10 @@ _TEXT = {
         "audit_title": "🧾 Recent settings changes",
         "phase_sensor_offline": "⚠️ {phase}: sensor unavailable",
         "phase_sensor_recovered": (
-            "✅ {phase}: sensor connection restored · "
-            "{duration}"
+            "✅ {phase}: sensor connection restored · {duration}"
         ),
         "availability_offline": (
-            "⚠️ Shelly is unreachable. Last valid reading is "
-            "preserved."
+            "⚠️ Shelly is unreachable. Last valid reading is preserved."
         ),
         "availability_recovered": "✅ Shelly connection restored · {duration}",
         "callback_today": "Today: {value}",
@@ -681,10 +629,7 @@ _TEXT = {
         "chart_caption": "{phase} · {hours} h · {count} points",
         "export_caption": "{phase} · {hours} h · {count} rows",
         "command_error": "Error: {error}",
-        "maintenance_admin_only": (
-            "Only an administrator can change maintenance "
-            "mode"
-        ),
+        "maintenance_admin_only": ("Only an administrator can change maintenance mode"),
         "maintenance_status": "🛠 Maintenance: {value}",
         "maintenance_usage": "Usage: /maintenance 60 or /maintenance off",
         "summary_phase": (
@@ -702,8 +647,7 @@ _TEXT = {
         "state_off": "off",
         "backup_ok": "💾 Backup: {stamp}, {size} KiB · SQLite: {integrity}",
         "device_details": (
-            "{phase}: {model} · firmware {firmware} · uptime "
-            "{uptime} s · clock {skew}"
+            "{phase}: {model} · firmware {firmware} · uptime {uptime} s · clock {skew}"
         ),
         "device_offline": "{phase}: unreachable ({error})",
         "menu_events": "🕘 Events",

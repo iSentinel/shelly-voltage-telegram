@@ -17,8 +17,7 @@ def template_fields(template: str) -> set[str]:
     """Collect field names without including format specifiers."""
 
     return {
-        name for _, name, _, _ in string.Formatter().parse(template)
-        if name is not None
+        name for _, name, _, _ in string.Formatter().parse(template) if name is not None
     }
 
 
@@ -63,9 +62,16 @@ class TelegramLocaleTests(unittest.TestCase):
         """Reject regression to the mixed-language user screenshot."""
 
         bad = (
-            "отключений", "outage ", "avg ", "Cooldown",
-            "Outage alerts", "Pin status", "Test loud",
-            "Test silent", "Maintenance:", "Dwell:",
+            "отключений",
+            "outage ",
+            "avg ",
+            "Cooldown",
+            "Outage alerts",
+            "Pin status",
+            "Test loud",
+            "Test silent",
+            "Maintenance:",
+            "Dwell:",
         )
         for key, value in I18N._TEXT["uk"].items():
             for word in bad:
@@ -95,8 +101,10 @@ class TelegramLocaleTests(unittest.TestCase):
         monitor.state.success(199.0, 50.0, 1.0, 1)
         monitor.storage.day_stats = Mock(
             return_value={
-                "count": 12, "min": 117.5,
-                "max": 251.5, "avg": 219.1,
+                "count": 12,
+                "min": 117.5,
+                "max": 251.5,
+                "avg": 219.1,
             }
         )
         message = APP.multiphase_status_text(monitor)
@@ -112,8 +120,7 @@ class TelegramLocaleTests(unittest.TestCase):
         monitor.state.success(225.9, 50.0, 1.0, 1)
         monitor.state.error("unreachable", 1)
         monitor.storage.day_stats = Mock(
-            return_value={"count": 1, "min": 225.9,
-                          "max": 225.9, "avg": 225.9}
+            return_value={"count": 1, "min": 225.9, "max": 225.9, "avg": 225.9}
         )
         message = APP.multiphase_status_text(monitor)
         self.assertIn("поточна напруга невідома", message)
@@ -131,9 +138,7 @@ class TelegramLocaleTests(unittest.TestCase):
                 {"state": "low", "phase": "L1", "at": now - 120},
                 {"state": "normal", "phase": "L1", "at": now - 60},
             ]
-            monitor.storage.set_meta(
-                "voltage_transition_history", json.dumps(changes)
-            )
+            monitor.storage.set_meta("voltage_transition_history", json.dumps(changes))
             monitor.storage.begin_outage(now - 800)
             monitor.storage.end_outage(now - 400)
             with patch.object(APP.time, "time", return_value=now):
