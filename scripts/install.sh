@@ -145,7 +145,7 @@ configure_project() {
 
 install_units() {
     local unit
-    for unit in shelly-voltage-compose.service shelly-voltage-backup.service shelly-voltage-backup.timer; do
+    for unit in shelly-voltage-compose.service shelly-voltage-backup.service shelly-voltage-backup.timer shelly-voltage-update-check.service shelly-voltage-update-check.timer shelly-voltage-updater-apply@.service; do
         run cp "$TARGET/systemd/$unit" "/etc/systemd/system/$unit"
     done
     run systemctl daemon-reload
