@@ -1,3 +1,42 @@
+## 2026-11-05 independent image attestation and QA checkpoint
+
+- PASS: Production release `v0.5.12-hw` has a public OCI image index
+  `sha256:e725d628db6869c39225c5ff5a123bbd94399414fd8be15e13df8cfd9ab2fa46`.
+  Cosign verified one signature with the expected GitHub Actions workflow
+  identity and OIDC issuer.
+- PASS: Both `linux/amd64` and `linux/arm64` image subjects match
+  their immutable manifest digests. Each platform contains digest-verified
+  SPDX 2.3 (122 packages) and SLSA provenance v1 attestations. Source
+  revision matches tag commit
+  `d5819ed9b110f887fc032c62dfadad70cff20b0f`.
+- EVIDENCE: The read-only registry verification report is stored locally
+  on production LXC 110 at
+  `/opt/shelly-voltage/validation/2026-11-05-oci-attestations.json`.
+  This validates published software artifacts, not the physical voltage
+  alarm or Telegram message delivery.
+- PASS: Natural outage #10 closed at 19:24:12 Europe/Kyiv. A read-only
+  recovery verification passed with online/ready service, new measurements,
+  SQLite integrity, zero open outages and no synthetic 0 V samples.
+- QA: In an isolated, network-disabled, read-only Docker test environment,
+  293/293 tests passed on the `0.5.13-hw` candidate after fixing metadata
+  scans of private `.env` backup files. PR #80 passed CI and was merged
+  as `92a538a1e21ae75c1c005914e6cdbc77a0bde366`.
+- SAFETY: Production remains at `0.5.12-hw`; no Telegram messages,
+  Shelly writes, auto-installation, or production restarts were performed.
+  The current `LIVE_VERSION=0.5.6-hw` names the latest fully accepted
+  physical voltage-transition checkpoint.
+- PASS: All 63 entries in the current deployed `FILES.SHA256`
+  manifest match the production source tree. An older separate
+  `SOURCE_SHA256SUMS` reports 20 mismatches; do not rewrite it
+  blindly. Reconcile its historical scope during controlled acceptance.
+- PASS: After a temporary Gateway regional executor loss, a fresh
+  read-only updater preflight completed successfully on the live system.
+  The public release check returned installed=latest=`0.5.12-hw`,
+  available=false and auto_install=false. The container remained healthy.
+- STILL PENDING: Physical `0.5.13-hw` acceptance, a clean isolated
+  15-minute recovery-status verification, administrator-confirmed
+  Telegram message receipt, and physical Pro 3EM / 3CT63 testing.
+
 ## 2026-11-05 Telegram channel access and message acceptance boundary
 
 - PASS: following natural Shelly recovery and outage #10 closure,
