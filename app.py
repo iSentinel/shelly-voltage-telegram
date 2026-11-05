@@ -65,6 +65,13 @@ RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
 RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
 STOP = threading.Event()
 
+MENU_ALLOWED_ACTIONS = frozenset(
+    (
+        "status", "settings", "today", "outages", "chart",
+        "help", "apartments", "updates", "events", "summary",
+    )
+)
+
 
 METER_MODELS = {
     "pro_em50": "Shelly Pro EM-50",
@@ -4647,19 +4654,7 @@ class Monitor:
         if not self.message_sender_allowed({"from": user}):
             return
         action = str(query.get("data", "")).removeprefix("menu:")
-        allowed = {
-            "status",
-            "settings",
-            "today",
-            "outages",
-            "chart",
-            "help",
-            "apartments",
-            "updates",
-            "events",
-            "summary",
-        }
-        if action not in allowed:
+        if action not in MENU_ALLOWED_ACTIONS:
             return
         self.telegram.answer_callback(str(query.get("id", "")))
         if action == "apartments":
