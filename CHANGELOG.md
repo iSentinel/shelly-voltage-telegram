@@ -1,3 +1,16 @@
+## 0.5.13-hw - apartment phase management candidate
+
+- Store apartment-to-phase assignments by building, with validated numbers,
+  atomic range assignments, relocation between phases and removal.
+- Add administrator-only private Telegram apartment listings and phase buttons.
+- Add optional entrance and floor metadata with idempotent SQLite migration,
+  location filters and aggregate phase summaries.
+- Keep apartment lists private and phase measurements read-only; a phase reading
+  cannot confirm electricity at an individual apartment.
+- Candidate only: release and production remain `0.5.12-hw`. Physical
+  voltage-threshold and stable-recovery acceptance is still pending.
+- Validate migration on a copy of production SQLite before any deployment.
+
 ## 0.5.12-hw - navigation and independent voltage phases
 
 - `/start` opens a localized six-action menu in the control chat.
