@@ -271,6 +271,11 @@ _TEXT = {
         "phase_cached": (
             "🟡 {phase}: {voltage:.1f} {unit} · сохранено (ожидаем опрос)"
         ),
+        "preview_layout_usage": "ℹ️ Выбор: /view compact или /view detailed",
+        "preview_layout_failed": "⚠️ Не удалось сохранить личный вид.",
+        "preview_layout_saved": "✅ Личный вид: {mode}",
+        "preview_layout_compact": "краткий",
+        "preview_layout_detailed": "подробный",
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -542,6 +547,11 @@ _TEXT = {
         "phase_cached": (
             "🟡 {phase}: {voltage:.1f} {unit} · збережено (очікуємо вимір)"
         ),
+        "preview_layout_usage": "ℹ️ Вибір: /view compact або /view detailed",
+        "preview_layout_failed": "⚠️ Не вдалося зберегти особистий вигляд.",
+        "preview_layout_saved": "✅ Особистий вигляд: {mode}",
+        "preview_layout_compact": "короткий",
+        "preview_layout_detailed": "докладний",
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -794,6 +804,11 @@ _TEXT = {
             "🟡 {phase}: {voltage:.1f} {unit} · "
             "cached (awaiting fresh reading)"
         ),
+        "preview_layout_usage": "ℹ️ Use: /view compact or /view detailed",
+        "preview_layout_failed": "⚠️ Could not save the private view.",
+        "preview_layout_saved": "✅ Private view: {mode}",
+        "preview_layout_compact": "compact",
+        "preview_layout_detailed": "detailed",
         "backup_missing": "💾 Backup: missing",
     },
 }

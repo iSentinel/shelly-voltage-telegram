@@ -1,3 +1,27 @@
+## 2026-11-06 opt-in per-administrator preview layout
+
+- **P2 source stage:** private admin commands `/view compact` and
+  `/view detailed` set the corresponding administrator's preview
+  layout. `/preview` displays that choice. New accounts default
+  to compact; the preference is stored in SQLite and persists
+  across application restarts.
+- **Public-channel isolation:** the command is accepted only from
+  an authenticated administrator's direct Telegram chat; the
+  channel's existing status format, 10-minute edit window,
+  notification cooldown and default pin=false are unchanged.
+- **Security:** invalid commands are read-only; another admin's
+  preference is stored under a separate key. A successful change
+  is recorded in the existing settings audit journal. All
+  private replies are silent and RU/UK/EN localized.
+- **Data quality:** detailed mode reuses the existing localized
+  full-status renderer. The outage-safe phase renderer continues
+  to hide stale voltage when Shelly is offline.
+- **Acceptance gate:** the feature is in source, not deployed in
+  production `0.5.12-hw`. No physical Shelly or Telegram channel
+  action is necessary to validate its software-only behavior.
+  GitHub CI, physical hardware testing and Owner Approval remain
+  separate gates before any future production promotion.
+
 ## 2026-11-06 read-only promotion check while Shelly is offline
 
 - **Observed via Gateway:** LXC 110 and the `0.5.12-hw` Docker
