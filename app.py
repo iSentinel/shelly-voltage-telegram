@@ -5037,6 +5037,8 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
+        if command == "/week" and len(parts) != 1:
+            return
         if command in {"/chart", "/export"}:
             self.handle_file_command(command, parts)
         elif command in {"/quality", "/history", "/outages"}:
