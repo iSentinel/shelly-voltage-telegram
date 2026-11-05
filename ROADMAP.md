@@ -1,3 +1,34 @@
+## 2026-11-05 new naturally triggered stable-recovery checkpoint
+
+- NATURAL PHYSICAL EVENT: On production Shelly Pro EM-50,
+  phase L1 fell below the configured 207 V warning threshold at
+  22:04:13 and again at 22:10:28 Europe/Kyiv, then recovered at
+  22:08:57 and 22:11:29. The one-hour minimum observed was
+  196 V; the 190 V critical threshold was not crossed.
+- PASS: a real active post-recovery stability timer began at
+  **22:11:29 Europe/Kyiv**. The existing read-only `capture-once`
+  recorded its own accepted baseline; it was preserved privately on
+  LXC 110 as
+  `/opt/shelly-voltage/validation/natural-baselines/stable-1793909489360.json`
+  (directory mode 0700, file mode 0600).
+- PASS: an intentional *early* `stable-verify` failed with exit code 2
+  because the full 15-minute interval had not elapsed, message ID
+  had not rotated, and recovery context was still active.
+  These are expected observations, not a release blocker regression.
+- PENDING: the later read-only verification must confirm uninterrupted
+  15-minute stability, an unchanged outage identity and audible
+  cooldown, a rotated status message ID, timer cleanup and fresh
+  measurements. A one-time check has been scheduled for after
+  the interval; this checkpoint is **not yet accepted**.
+- EVIDENCE: the earlier warning/recovery transitions and minimum
+  voltage are recorded at
+  `/opt/shelly-voltage/validation/2026-11-05-evening-natural-voltage-episodes.json`.
+  No Telegram receipt was independently proven and none of the
+  measurements proves subscriber-visible delivery.
+- SAFETY: no power manipulation, Shelly write RPC, Telegram message,
+  production deployment or restart was performed. Physical 3EM/3CT63
+  acceptance remains on hold until the user confirms installation.
+
 ## 2026-11-05 published release archive vs running container
 
 - PASS: the official `v0.5.12-hw` source archive was downloaded from
