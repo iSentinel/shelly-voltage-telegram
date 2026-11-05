@@ -65,8 +65,9 @@ def read_rows(path: Path, allowed: set[str]) -> list[tuple]:
     with path.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         if set(reader.fieldnames or ()) != COLUMNS:
-            raise ValueError("CSV columns must be building,apartment,phase,"
-                             "entrance,floor")
+            raise ValueError(
+                "CSV columns must be building,apartment,phase,entrance,floor"
+            )
         for number, row in enumerate(reader, 2):
             if len(records) >= MAX_ROWS:
                 raise ValueError("CSV exceeds the 1000-row limit")
@@ -110,13 +111,16 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parse_args(argv)
     try:
-        allowed = {valid_phase(x.strip()) for x in
-                   args.allowed_phases.split(",")}
+        allowed = {
+            valid_phase(x.strip()) for x in args.allowed_phases.split(",")
+        }
         rows = read_rows(args.csv, allowed)
         if args.apply:
             save_rows(args.db, rows)
-        print(f"PASS: {len(rows)} assignments "
-              f"{'applied' if args.apply else 'validated (dry-run)'}")
+        print(
+            f"PASS: {len(rows)} assignments "
+            f"{'applied' if args.apply else 'validated (dry-run)'}"
+        )
         return 0
     except (ValueError, OSError, sqlite3.Error, csv.Error) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
