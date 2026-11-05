@@ -108,9 +108,11 @@ class ApartmentRegistryTests(unittest.TestCase):
         self.registry.assign_range("A", "10", "15", "L2")
         self.assertEqual(self.registry.list_entries("L2")[1], 6)
         for first, last in (("50", "40"), ("1", "201"), ("0", "3")):
-            with self.subTest(first=first, last=last):
-                with self.assertRaises(ValueError):
-                    self.registry.assign_range("A", first, last, "L1")
+            with (
+                self.subTest(first=first, last=last),
+                self.assertRaises(ValueError),
+            ):
+                self.registry.assign_range("A", first, last, "L1")
         self.assertEqual(self.registry.list_entries()[1], 30)
 
     def test_listing_is_bounded(self):
