@@ -1,4 +1,4 @@
-"""Exercise interrupted updates without touching production Docker or SQLite."""
+"""Test interrupted updates on temporary state, without Docker access."""
 
 import gzip
 import hashlib
@@ -59,9 +59,14 @@ class InterruptedUpdateTests(unittest.TestCase):
         )
         return subprocess.run(
             [
-                "bash", "-c", command, "bash",
+                "bash",
+                "-c",
+                command,
+                "bash",
                 str(ROOT / "scripts" / "apply-update.sh"),
-                str(self.state), str(self.database), str(self.project),
+                str(self.state),
+                str(self.database),
+                str(self.project),
                 str(self.public),
             ],
             capture_output=True,
