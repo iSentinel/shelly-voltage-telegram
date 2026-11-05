@@ -65,11 +65,17 @@ RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
 RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
 STOP = threading.Event()
 
-MENU_ALLOWED_ACTIONS = frozenset(
-    (
-        "status", "settings", "today", "outages", "chart",
-        "help", "apartments", "updates", "events", "summary",
-    )
+MENU_ALLOWED_ACTIONS = (
+    "status",
+    "settings",
+    "today",
+    "outages",
+    "chart",
+    "help",
+    "apartments",
+    "updates",
+    "events",
+    "summary",
 )
 
 
