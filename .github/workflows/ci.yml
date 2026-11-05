@@ -25,7 +25,7 @@ jobs:
       - name: Code quality
         run: ./scripts/quality.sh
       - name: Compile Python
-        run: python -m compileall -q app.py advanced_features.py scripts tests
+        run: python -m compileall -q app.py advanced_features.py apartment_phases.py scripts tests
       - name: Unit tests
         run: |
           set -o pipefail

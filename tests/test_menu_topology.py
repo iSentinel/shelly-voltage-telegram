@@ -42,7 +42,7 @@ class MenuTopologyTests(unittest.TestCase):
             }
         }
 
-    def test_start_opens_six_action_menu(self):
+    def test_start_opens_seven_action_menu(self):
         self.monitor.send_command_response("/start")
         call = self.monitor.telegram.send.call_args
         rows = call.kwargs["reply_markup"]["inline_keyboard"]
@@ -58,6 +58,7 @@ class MenuTopologyTests(unittest.TestCase):
                     "outages",
                     "chart",
                     "help",
+                    "apartments",
                 )
             ],
         )
@@ -90,6 +91,22 @@ class MenuTopologyTests(unittest.TestCase):
         self.monitor.telegram.edit.assert_not_called()
         self.monitor.telegram.send.assert_not_called()
         self.monitor.telegram.answer_callback.assert_not_called()
+
+    def test_apartment_menu_is_admin_only_and_uses_private_chat(self):
+        """Apartment assignments must never appear in the shared menu."""
+
+        self.monitor.handle_callback(self.callback("apartments", user=8))
+        self.monitor.telegram.send.assert_not_called()
+        self.monitor.telegram.edit.assert_not_called()
+        self.monitor.handle_callback(self.callback("apartments", user=7))
+        self.monitor.telegram.send.assert_called_once()
+        self.assertEqual(
+            self.monitor.telegram.send.call_args.kwargs["chat_id"], "7"
+        )
+        self.assertIn(
+            "No assignments", self.monitor.telegram.send.call_args.args[0]
+        )
+        self.monitor.telegram.edit.assert_not_called()
 
     def test_non_admin_can_read_settings_without_write_buttons(self):
         self.monitor.handle_callback(self.callback("settings", user=8))
