@@ -1,3 +1,28 @@
+## 2026-11-05 disposable LXC acceptance preparation
+
+- PREPARED: dedicated QA container VMID 111, hostname
+  `shelly-updater-qa`, Debian 13, unprivileged, nested container support,
+  1 CPU, 1 GiB RAM, 6 GiB disk, and onboot disabled. No production secrets,
+  Telegram credentials, or Shelly configuration were copied.
+- BLOCKED: the Gateway executor lost the initial `pct start 111` job.
+  A later start attempt also failed at the Gateway tool level. The last
+  read-only `pct status 111` returned `stopped`; no Docker/reboot
+  acceptance was performed in that container. Do not assume a Proxmox
+  boot failure without additional host-side evidence.
+- DONE: PR #62 implements fail-closed recovery of interrupted updates using
+  a persisted journal, pre-start systemd recovery, and retained SQLite
+  rescue snapshots. Its 258 unit tests and Python 3.11/3.12/3.13 CI passed.
+- DONE: PR #63 fixes updater version selection: prefer a recorded deployed
+  version, otherwise the installed `RELEASE_VERSION`, rather than assuming
+  that a checked-out candidate `VERSION` is already installed. GitHub CI
+  passed on Python 3.11, 3.12 and 3.13.
+- NEXT: determine why the isolated LXC 111 did not start; install test-only
+  Docker dependencies and exercise signed update, rollback, boot recovery
+  and loss-of-power simulation without production credentials.
+- BLOCKED: production LXC 110 remains on `0.5.12-hw`, with no updater
+  timer or services installed. Do not deploy while Shelly is offline or
+  outage #10 remains unresolved.
+
 ## 2026-11-05 interrupted-upgrade boot recovery
 
 - IMPLEMENTED IN CODE (not deployed): write and flush a root-only
