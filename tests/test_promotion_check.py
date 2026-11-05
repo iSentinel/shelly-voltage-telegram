@@ -101,7 +101,8 @@ class PromotionCheckTests(unittest.TestCase):
             with (
                 patch.object(sys, "argv", cli_argv(root)),
                 patch.object(
-                    PROMOTION, "build_payload",
+                    PROMOTION,
+                    "build_payload",
                     side_effect=ValueError("PRIVATE_TOKEN"),
                 ),
                 patch.object(PROMOTION, "print_result") as report,
