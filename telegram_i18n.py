@@ -32,6 +32,7 @@ _TEXT = {
         "cmd_maintenance": "Режим обслуживания",
         "cmd_audit": "Журнал настроек",
         "cmd_device": "Состояние Shelly",
+        "cmd_updates": "Проверить GitHub Releases",
         "phase_unconfigured": "⚪ {phase}: не настроена",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -161,7 +162,7 @@ _TEXT = {
         "help": (
             "Команды: /voltage /status /today /minmax /history /outages "
             "/health /settings /chart /export /quality /summary "
-            "/maintenance /audit /device"
+            "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Сервис работает; {phases}\n{backup}",
         "no_current": "Нет актуальных данных измерений.",
@@ -216,6 +217,7 @@ _TEXT = {
         "cmd_maintenance": "Режим обслуговування",
         "cmd_audit": "Журнал налаштувань",
         "cmd_device": "Стан Shelly",
+        "cmd_updates": "Перевірити GitHub Releases",
         "phase_unconfigured": "⚪ {phase}: не налаштована",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -314,7 +316,7 @@ _TEXT = {
         "help": (
             "Команди: /voltage /status /today /minmax /history /outages "
             "/health /settings /chart /export /quality /summary "
-            "/maintenance /audit /device"
+            "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Сервіс працює; {phases}\n{backup}",
         "no_current": "Немає актуальних даних вимірювань.",
@@ -369,6 +371,7 @@ _TEXT = {
         "cmd_maintenance": "Maintenance mode",
         "cmd_audit": "Settings audit",
         "cmd_device": "Shelly health",
+        "cmd_updates": "Check GitHub releases",
         "phase_unconfigured": "⚪ {phase}: not configured",
         "phase_offline": "🔴 {phase}: unavailable",
         "phase_starting": "starting",
@@ -465,7 +468,7 @@ _TEXT = {
         "help": (
             "Commands: /voltage /status /today /minmax /history /outages "
             "/health /settings /chart /export /quality /summary "
-            "/maintenance /audit /device"
+            "/maintenance /audit /device /updates"
         ),
         "service_ok": "✅ Service is running; {phases}\n{backup}",
         "no_current": "No current measurement data.",
@@ -525,6 +528,7 @@ def command_descriptions(language: str) -> dict[str, str]:
         "maintenance",
         "audit",
         "device",
+        "updates",
     )
     return {name: tr(language, f"cmd_{name}") for name in names}
 
