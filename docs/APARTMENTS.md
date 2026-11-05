@@ -15,6 +15,7 @@ reject the private reply.
 /apartments
 /apartments list
 /apartments list L1
+/apartments summary
 /apartments add HouseA 12 L1
 /apartments add HouseA 13 L1
 /apartments range HouseA 20 40 L1
@@ -31,6 +32,9 @@ apartments to L2/L3 unless those phases are configured in the monitor.
 The `range` command accepts up to 200 apartment numbers in one transaction.
 Apartment numbers must be between 1 and 99999. Building identifiers accept
 1-32 Latin letters, digits, underscores and hyphens, without spaces.
+
+`summary` reports aggregate apartment counts by building and phase without
+listing apartment numbers. It is also administrator-only.
 
 `building`, `entrance` and `floor` return read-only filtered lists in the
 administrator's private chat. SQL queries use bound parameters and return at
