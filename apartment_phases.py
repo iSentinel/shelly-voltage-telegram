@@ -11,6 +11,16 @@ BUILDING_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,32}\Z")
 PHASES = {"L1", "L2", "L3"}
 MAX_APARTMENT = 99999
 MAX_LIST = 100
+APARTMENT_USAGE = (
+    "Usage: /apartments list [L1|L2|L3]; "
+    "/apartments add BUILDING NUMBER PHASE; "
+    "/apartments range BUILDING FIRST LAST PHASE; "
+    "/apartments place BUILDING NUMBER ENTRANCE FLOOR; "
+    "/apartments building BUILDING; "
+    "/apartments entrance BUILDING NUMBER; "
+    "/apartments floor BUILDING ENTRANCE FLOOR; "
+    "/apartments remove BUILDING NUMBER"
+)
 
 
 def valid_building(name: str) -> str:
@@ -277,18 +287,9 @@ def apartment_command(
 ) -> str:
     """Execute one validated administrator command with plain responses."""
 
-    usage = (
-        "Usage: /apartments list [L1|L2|L3]; "
-        "/apartments add BUILDING NUMBER PHASE; "
-        "/apartments range BUILDING FIRST LAST PHASE; "
-        "/apartments place BUILDING NUMBER ENTRANCE FLOOR; "
-        "/apartments building BUILDING; "
-        "/apartments entrance BUILDING NUMBER; "
-        "/apartments floor BUILDING ENTRANCE FLOOR; "
-        "/apartments remove BUILDING NUMBER"
-    )
+
     if len(parts) < 2:
-        return usage
+        return APARTMENT_USAGE
     action = parts[1].lower()
     if action == "list" and len(parts) in (2, 3):
         phase = valid_phase(parts[2]) if len(parts) == 3 else None
@@ -313,4 +314,4 @@ def apartment_command(
     if action == "remove" and len(parts) == 4:
         removed = registry.remove(parts[2], parts[3])
         return "Removed" if removed else "Assignment not found"
-    return usage
+    return APARTMENT_USAGE
