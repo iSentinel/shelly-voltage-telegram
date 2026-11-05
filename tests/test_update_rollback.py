@@ -105,12 +105,12 @@ class OfflineRollbackTests(unittest.TestCase):
         shell = "\n".join(
             (
                 'source "$1"',
-                'requirements() { :; }',
-                'preflight() { :; }',
-                'verify_image() { :; }',
+                "requirements() { :; }",
+                "preflight() { :; }",
+                "verify_image() { :; }",
                 'verify_source_archive() { echo "$1" > "$CAPTURE"; }',
                 'python3() { [[ "$2" != digest ]] || echo sha256:test; }',
-                'main --version 0.5.12-hw --dry-run',
+                "main --version 0.5.12-hw --dry-run",
             )
         )
         env = {**os.environ, "CAPTURE": str(capture)}
@@ -133,13 +133,13 @@ class OfflineRollbackTests(unittest.TestCase):
         shell = "\n".join(
             (
                 'source "$1"',
-                'CHANGED=true',
+                "CHANGED=true",
                 'recover_pending() { echo recovered >> "$CAPTURE"; }',
                 'start_stack() { echo restarted >> "$CAPTURE"; }',
-                'wait_healthy() { return 19; }',
-                'activate() { wait_healthy; }',
-                'runner() { trap rollback ERR INT TERM; activate; }',
-                'if [[ 1 -eq 1 ]]; then runner; fi',
+                "wait_healthy() { return 19; }",
+                "activate() { wait_healthy; }",
+                "runner() { trap rollback ERR INT TERM; activate; }",
+                "if [[ 1 -eq 1 ]]; then runner; fi",
             )
         )
         result = subprocess.run(
