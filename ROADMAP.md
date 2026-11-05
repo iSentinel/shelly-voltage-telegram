@@ -25,13 +25,14 @@
   Shelly writes, auto-installation, or production restarts were performed.
   The current `LIVE_VERSION=0.5.6-hw` names the latest fully accepted
   physical voltage-transition checkpoint.
-- FOLLOW-UP: The deployed snapshot's `SOURCE_SHA256SUMS` reports 20
-  mismatches against its current file tree. Do not rewrite the historical
-  checksum list to conceal drift; reconcile against the exact signed
-  release in a controlled deployment acceptance step.
-- BLOCKED: A separate read-only updater preflight could not be completed
-  because Gateway lost its regional executor (`EXECUTOR_LOST`).
-  Rerun only after SSH connectivity is healthy.
+- PASS: All 63 entries in the current deployed `FILES.SHA256`
+  manifest match the production source tree. An older separate
+  `SOURCE_SHA256SUMS` reports 20 mismatches; do not rewrite it
+  blindly. Reconcile its historical scope during controlled acceptance.
+- PASS: After a temporary Gateway regional executor loss, a fresh
+  read-only updater preflight completed successfully on the live system.
+  The public release check returned installed=latest=`0.5.12-hw`,
+  available=false and auto_install=false. The container remained healthy.
 - STILL PENDING: Physical `0.5.13-hw` acceptance, a clean isolated
   15-minute recovery-status verification, administrator-confirmed
   Telegram message receipt, and physical Pro 3EM / 3CT63 testing.
