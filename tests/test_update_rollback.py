@@ -68,12 +68,16 @@ class OfflineRollbackTests(unittest.TestCase):
         """Require compatible Cosign 3 before changing host state."""
 
         script = ROOT / "scripts" / "apply-update.sh"
-        for version, accepted in (("v3.0.6", True), ("devel", False), ("v2.5.0", False)):
+        for version, accepted in (
+            ("v3.0.6", True),
+            ("devel", False),
+            ("v2.5.0", False),
+        ):
             command = (
                 'source "$1"; '
                 'test_version="$2"; '
                 'cosign() { printf "GitVersion: %s\\n" "$test_version"; }; '
-                'check_cosign_compatibility'
+                "check_cosign_compatibility"
             )
             result = subprocess.run(
                 ["bash", "-c", command, "bash", str(script), version],
