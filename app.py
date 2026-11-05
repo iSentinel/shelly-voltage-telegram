@@ -4419,7 +4419,7 @@ class Monitor:
             ("status", "settings"),
             ("today", "outages"),
             ("chart", "help"),
-            ("apartments",),
+            ("apartments", "updates"),
         )
         return {
             "inline_keyboard": [
@@ -4455,6 +4455,7 @@ class Monitor:
             "chart",
             "help",
             "apartments",
+            "updates",
         }:
             return
         self.telegram.answer_callback(str(query.get("id", "")))
@@ -4462,6 +4463,8 @@ class Monitor:
             self.handle_apartments_command(
                 str(user.get("id", "")), ["/apartments", "list"]
             )
+        elif action == "updates":
+            self.handle_updates_command(str(user.get("id", "")))
         elif action == "settings":
             self.handle_settings_command(str(user.get("id", "")))
         elif action == "chart":
