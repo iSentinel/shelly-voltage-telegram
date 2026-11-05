@@ -95,6 +95,24 @@ class ApartmentRegistryTests(unittest.TestCase):
             )
         self.assertEqual(self.registry.list_entries()[1], 1)
 
+    def test_atomic_range_and_invalid_bounds(self):
+        """One range can add or move apartments without partial writes."""
+
+        result = apartment_command(
+            self.registry,
+            ["/apartments", "range", "A", "1", "30", "L1"],
+            {"L1"},
+        )
+        self.assertIn("Saved 30", result)
+        self.assertEqual(self.registry.list_entries()[1], 30)
+        self.registry.assign_range("A", "10", "15", "L2")
+        self.assertEqual(self.registry.list_entries("L2")[1], 6)
+        for first, last in (("50", "40"), ("1", "201"), ("0", "3")):
+            with self.subTest(first=first, last=last):
+                with self.assertRaises(ValueError):
+                    self.registry.assign_range("A", first, last, "L1")
+        self.assertEqual(self.registry.list_entries()[1], 30)
+
     def test_listing_is_bounded(self):
         """Return a bounded listing while preserving an accurate total."""
 
