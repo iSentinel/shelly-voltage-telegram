@@ -68,10 +68,12 @@ An invalid snapshot or marker fails closed and keeps the pending state for
 manual recovery. The earliest post-failure rescue database is preserved on
 repeated recovery attempts.
 
-This boot-recovery logic has isolated tests, but an actual power interruption
-and reboot of a disposable LXC are **not yet hardware-accepted**. Operator
-review is still necessary after a real host failure. The updater does not
-change electrical settings.
+Boot recovery was additionally tested through three real, controlled
+reboots of disposable LXC 111: an interrupted update was restored, a malformed
+pending marker blocked startup, and a corrupted backup checksum blocked
+restoration until corrected. These tests do **not** simulate uncontrolled
+host power loss or storage corruption. Operator review remains necessary
+after a real host failure. The updater does not change electrical settings.
 
 ## Commands
 
@@ -96,6 +98,30 @@ sudo systemctl list-timers shelly-voltage-update-check.timer
 The example version must already exist as a published signed Release; a
 candidate branch alone is not sufficient. All commands fail closed when
 the active device or voltage is unsafe.
+
+## Isolated positive acceptance (2026-11-05)
+
+On disposable LXC 111, the updater installed the published, Cosign-verified
+`v0.5.12-hw` image over a synthetic `0.5.11-hw` test fixture, completed
+the backup and post-install checks, and returned `UPDATE PASS`. The new
+application read a local synthetic `EM1.GetStatus` response of 230 V /
+50 Hz; `/health`, `/ready`, Docker health and SQLite writes passed.
+Telegram was disabled, and no live Shelly or production credentials were
+involved.
+
+After a real reboot, the pinned digest and deployed version were retained;
+the updated application was healthy again. The fixture's initial Compose
+configuration had omitted `env_file` and its unversioned SQLite lacked
+`phase`. Those test-only setup issues were corrected before successful
+acceptance. The QA stand was returned to its original image and database.
+Evidence remains privately stored on LXC 111 under
+`/root/qa-positive-acceptance-20261105/`.
+
+This establishes a *working signed update with a simulated sensor*. It
+does not establish Telegram notification delivery during a real outage,
+recovery of an uncontrolled power loss, or hardware acceptance of the
+unreleased candidate version. Production remains unchanged until the
+active Shelly outage is resolved and separately accepted.
 
 ## Acceptance before production
 

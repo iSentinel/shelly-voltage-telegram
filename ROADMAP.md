@@ -1,3 +1,39 @@
+## 2026-11-05 positive signed-update acceptance in isolated LXC 111
+
+- PASS: The full updater installed published, Cosign-verified
+  `v0.5.12-hw` over a disposable `0.5.11-hw` QA fixture using the real
+  GitHub Release, immutable GHCR digest and source archive SHA256.
+  Preflight, storage checks, restricted backup and post-update checks passed.
+  `apply-update.sh` returned `UPDATE PASS: 0.5.12-hw`.
+- PASS: The upgraded application (not a stub) polled an isolated synthetic
+  Shelly `EM1.GetStatus` endpoint at 230.0 V and 50.0 Hz. Telegram was
+  explicitly disabled. `/health` returned version `0.5.12-hw` and
+  `/ready` returned HTTP 200; new rows were written to test SQLite.
+  No production network, meter or Telegram credentials were used.
+- QA FIXTURE: initial attempts failed because a local test-only Compose
+  file omitted `env_file` and the synthetic SQLite lacked `phase`.
+  Correcting the fixture, not the product source, resolved startup.
+  LXC 110 production database schema version 3 already contains
+  `phase`; the standard product Compose already passes `.env`.
+- PASS: the test-only Compose healthcheck was adjusted to work with both
+  BusyBox and Python images. The upgraded signed image was Docker
+  `healthy` as well as HTTP ready.
+- PASS: after an actual reboot of LXC 111, systemd restarted that pinned
+  signed image and the synthetic Shelly RPC fixture. The digest, deployed
+  version metadata, healthy Docker state, HTTP readiness and SQLite
+  integrity persisted; no pending-update marker remained.
+- CLEANUP: the QA test saved an acceptance JSON and post-upgrade SQLite
+  snapshot in `/root/qa-positive-acceptance-20261105/` on LXC 111.
+  The original `shelly-qa-http:old` fixture and original test SQLite
+  (2 rows) were restored, the simulated RPC stopped, and update pinning
+  metadata removed. The final QA `/ready` and SQLite quick check passed.
+- LIMITATION: the signed image was tested against a simulated Shelly,
+  not a real voltage transition; Telegram delivery, uncontrolled host
+  power loss and promotion of candidate `0.5.13-hw` remain unverified.
+- PRODUCTION: Shelly is offline with natural outage #10 open.
+  LXC 110 stays on `0.5.12-hw`, without the updater/timer installed;
+  no production deployment is authorized until recovery acceptance.
+
 ## 2026-11-05 LXC 111 signed updater and reboot acceptance
 
 - PASS: Gateway reconfirmed that dedicated, unprivileged QA LXC 111
@@ -35,13 +71,12 @@
   interruption marker. They do not demonstrate recovery from an actual
   uncontrolled power loss, filesystem corruption, or an unresponsive
   Docker daemon.
-- PENDING: positive acceptance of a *fully healthy upgraded application*
-  in a disposable environment with simulated Shelly responses. A failure
-  followed by successful rollback is not proof that the new image runs
-  correctly when fully configured.
-- PENDING: validate failure handling for a checksum-corrupted snapshot and
-  backup restoration with the systemd unit in QA, plus public release
-  promotion rules and Telegram delivery verification.
+- COMPLETED in the later positive signed-update acceptance checkpoint:
+  the published image started successfully in QA, wrote synthetic
+  measurements, passed HTTP and Docker health checks, and survived reboot.
+- PASS: corrupted-snapshot recovery was also tested through systemd.
+  Still pending: public release promotion rules and Telegram delivery
+  verification.
 - PRODUCTION: LXC 110 still runs `0.5.12-hw` with natural outage #10 open,
   `/ready` HTTP 503 and no updater services installed. Do not install,
   reboot or promote the candidate while that condition persists.
