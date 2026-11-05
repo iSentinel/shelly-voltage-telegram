@@ -25,6 +25,12 @@
   running. The bad journal was retained for investigation. After deleting
   only this QA test marker and resetting the failed unit, the old fixture
   returned healthy/ready.
+- PASS: third real QA reboot with a checksum-corrupted SQLite backup.
+  The Compose service detected SHA256 mismatch, refused to start, left the
+  pending journal in place, and did not launch a container. After restoring
+  the correct checksum from the QA-only fixture, systemd recovered the prior
+  image, cleared the pending marker, and SQLite integrity plus /health and
+  /ready all passed.
 - LIMITATION: these were controlled LXC reboots with a prepared durable
   interruption marker. They do not demonstrate recovery from an actual
   uncontrolled power loss, filesystem corruption, or an unresponsive
