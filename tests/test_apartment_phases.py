@@ -56,9 +56,11 @@ class ApartmentRegistryTests(unittest.TestCase):
             ("A", "1", "L4"),
             ("../../etc", "1", "L1"),
         ):
-            with self.subTest(building=building, apartment=apartment):
-                with self.assertRaises(ValueError):
-                    self.registry.assign(building, apartment, phase)
+            with (
+                self.subTest(building=building, apartment=apartment),
+                self.assertRaises(ValueError),
+            ):
+                self.registry.assign(building, apartment, phase)
         self.assertEqual(self.registry.list_entries(), ([], 0))
 
     def test_repeated_initialization_preserves_existing_tables(self):
