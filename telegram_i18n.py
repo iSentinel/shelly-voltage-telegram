@@ -277,12 +277,10 @@ _TEXT = {
         "preview_layout_compact": "краткий",
         "preview_layout_detailed": "подробный",
         "weekly_private_usage": (
-            "ℹ️ Подписка: /week subscribe или /week "
-            "unsubscribe"
+            "ℹ️ Подписка: /week subscribe или /week unsubscribe"
         ),
         "weekly_private_enabled": (
-            "✅ Личный недельный отчёт включён · вс, "
-            "20:00"
+            "✅ Личный недельный отчёт включён · вс, 20:00"
         ),
         "weekly_private_disabled": "🔕 Личный недельный отчёт выключен",
         "weekly_private_failed": "⚠️ Не удалось сохранить подписку",
@@ -563,12 +561,10 @@ _TEXT = {
         "preview_layout_compact": "короткий",
         "preview_layout_detailed": "докладний",
         "weekly_private_usage": (
-            "ℹ️ Підписка: /week subscribe або /week "
-            "unsubscribe"
+            "ℹ️ Підписка: /week subscribe або /week unsubscribe"
         ),
         "weekly_private_enabled": (
-            "✅ Приватний тижневий звіт увімкнено · "
-            "нд, 20:00"
+            "✅ Приватний тижневий звіт увімкнено · нд, 20:00"
         ),
         "weekly_private_disabled": "🔕 Приватний тижневий звіт вимкнено",
         "weekly_private_failed": "⚠️ Не вдалося зберегти підписку",
@@ -830,12 +826,10 @@ _TEXT = {
         "preview_layout_compact": "compact",
         "preview_layout_detailed": "detailed",
         "weekly_private_usage": (
-            "ℹ️ Subscribe: /week subscribe or /week "
-            "unsubscribe"
+            "ℹ️ Subscribe: /week subscribe or /week unsubscribe"
         ),
         "weekly_private_enabled": (
-            "✅ Private weekly digest enabled · Sun, "
-            "20:00"
+            "✅ Private weekly digest enabled · Sun, 20:00"
         ),
         "weekly_private_disabled": "🔕 Private weekly digest disabled",
         "weekly_private_failed": "⚠️ Could not save subscription",

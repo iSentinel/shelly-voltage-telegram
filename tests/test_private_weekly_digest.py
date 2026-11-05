@@ -174,6 +174,22 @@ class PrivateWeeklyDigestTests(unittest.TestCase):
             self.monitor.storage.get_meta("telegram_weekly_private_enabled_7")
         )
 
+    def test_channel_weekly_options_are_silent(self):
+        """Weekly channel options must neither send nor subscribe."""
+
+        for command in (
+            "/week subscribe",
+            "/week unsubscribe",
+            "/week invalid",
+        ):
+            with self.subTest(command=command):
+                self.monitor.handle_update(update(7, command, "channel"))
+        self.monitor.telegram.send.assert_not_called()
+        self.monitor.telegram.edit.assert_not_called()
+        self.assertIsNone(
+            self.monitor.storage.get_meta("telegram_weekly_private_enabled_7")
+        )
+
     def test_invalid_command_does_not_change_storage(self):
         """Bad schedule options return usage without enabling any digest."""
 
@@ -189,8 +205,9 @@ class PrivateWeeklyDigestTests(unittest.TestCase):
         """A private /week request is separate from scheduled delivery."""
 
         self.monitor.handle_update(update(7, "/week"))
-        self.assertEqual(self.monitor.telegram.send.call_args.args[0],
-                         "weekly report")
+        self.assertEqual(
+            self.monitor.telegram.send.call_args.args[0], "weekly report"
+        )
         self.assertIsNone(
             self.monitor.storage.get_meta("telegram_weekly_private_enabled_7")
         )
