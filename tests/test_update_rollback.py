@@ -81,7 +81,15 @@ class OfflineRollbackTests(unittest.TestCase):
             "sync_public_version"
         )
         result = subprocess.run(
-            ["bash", "-c", shell, "bash", str(script), str(state), str(public)],
+            [
+                "bash",
+                "-c",
+                shell,
+                "bash",
+                str(script),
+                str(state),
+                str(public),
+            ],
             capture_output=True,
             text=True,
             check=False,
