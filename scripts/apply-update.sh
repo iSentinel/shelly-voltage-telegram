@@ -116,6 +116,7 @@ restore_snapshot_database() {
         chmod 0600 "$rescue"
     fi
     temp="$DB.recovery.$"
+    sha256sum -c "$backup.sha256" || return 1
     gzip -dc "$backup" > "$temp"
     python3 - "$temp" <<'PY'
 import sqlite3
