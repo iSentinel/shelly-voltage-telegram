@@ -211,6 +211,36 @@ class ApartmentRegistryTests(unittest.TestCase):
             with self.subTest(parts=parts), self.assertRaises(ValueError):
                 apartment_command(self.registry, parts, {"L1"})
 
+    def test_phase_summary_counts_without_apartment_numbers(self):
+        """Show phase counts without exposing apartment numbers."""
+
+        self.registry.assign("A", "12", "L1")
+        self.registry.assign("A", "13", "L1")
+        self.registry.assign("A", "14", "L2")
+        self.registry.assign("B", "25", "L3")
+        report = apartment_command(
+            self.registry, ["/apartments", "summary"], {"L1"}
+        )
+        self.assertIn("Apartment phase summary: 4", report)
+        self.assertIn("A L1: 2", report)
+        self.assertIn("A L2: 1", report)
+        self.assertIn("B L3: 1", report)
+        self.assertNotIn("#12", report)
+
+    def test_phase_summary_empty_and_restart_stable(self):
+        """An empty database reports no assignments after restart."""
+
+        self.assertIn(
+            "no assignments",
+            apartment_command(
+                self.registry, ["/apartments", "summary"], set()
+            ),
+        )
+        self.registry.assign("A", "1", "L1")
+        restarted = ApartmentRegistry(self.path)
+        restarted.initialize()
+        self.assertEqual(restarted.phase_summary(), [("A", "L1", 1)])
+
     def test_listing_is_bounded(self):
         """Return a bounded listing while preserving an accurate total."""
 
