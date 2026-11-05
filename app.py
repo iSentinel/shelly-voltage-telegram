@@ -1702,12 +1702,18 @@ def voltage_timeline_events(
             continue
         stamp_text = format_stamp(stamp, monitor.cfg.timezone)
         label = tr(monitor.language, "events_state_" + state)
-        rows.append((
-            stamp,
-            tr(monitor.language, "events_warning",
-               phase=monitor.phase_label(phase),
-               state=label, time=stamp_text),
-        ))
+        rows.append(
+            (
+                stamp,
+                tr(
+                    monitor.language,
+                    "events_warning",
+                    phase=monitor.phase_label(phase),
+                    state=label,
+                    time=stamp_text,
+                ),
+            )
+        )
     return rows
 
 
@@ -1725,17 +1731,29 @@ def connectivity_timeline_events(
         for start, end in outages:
             label = monitor.phase_label(phase)
             if since <= start <= now:
-                rows.append((
-                    start, tr(monitor.language, "events_connection",
-                              phase=label,
-                              time=format_stamp(start, monitor.cfg.timezone)),
-                ))
-            if end is not None and since <= end <= now:
-                rows.append((
-                    end, tr(monitor.language, "events_reconnected",
+                rows.append(
+                    (
+                        start,
+                        tr(
+                            monitor.language,
+                            "events_connection",
                             phase=label,
-                            time=format_stamp(end, monitor.cfg.timezone)),
-                ))
+                            time=format_stamp(start, monitor.cfg.timezone),
+                        ),
+                    )
+                )
+            if end is not None and since <= end <= now:
+                rows.append(
+                    (
+                        end,
+                        tr(
+                            monitor.language,
+                            "events_reconnected",
+                            phase=label,
+                            time=format_stamp(end, monitor.cfg.timezone),
+                        ),
+                    )
+                )
     return rows
 
 
@@ -3048,7 +3066,8 @@ class Monitor:
                 skew_text = "n/a" if skew is None else f"{float(skew):+.1f}s"
                 lines.append(
                     tr(
-                        self.language, "device_details",
+                        self.language,
+                        "device_details",
                         phase=self.phase_label(phase),
                         model=info.get("model"),
                         firmware=info.get("firmware"),
@@ -3059,7 +3078,8 @@ class Monitor:
             except Exception as exc:
                 lines.append(
                     tr(
-                        self.language, "device_offline",
+                        self.language,
+                        "device_offline",
                         phase=self.phase_label(phase),
                         error=type(exc).__name__,
                     )
@@ -4633,8 +4653,16 @@ class Monitor:
             return
         action = str(query.get("data", "")).removeprefix("menu:")
         allowed = {
-            "status", "settings", "today", "outages", "chart",
-            "help", "apartments", "updates", "events", "summary",
+            "status",
+            "settings",
+            "today",
+            "outages",
+            "chart",
+            "help",
+            "apartments",
+            "updates",
+            "events",
+            "summary",
         }
         if action not in allowed:
             return
