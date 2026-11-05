@@ -15,8 +15,8 @@ Release. It cannot start a host update. Other users receive no release details.
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
   activation, beginning after a short delay on boot.
 - `shelly-voltage-update-check.service` runs an unprivileged, read-only
-  release check and stores JSON in `/var/lib/shelly-voltage-updater/status.json`.
-- `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
+  release check and stores JSON in `/var/lib/shelly-voltage-update-check/status.json`.
+- The daily checker directory contains only nonsensitive version status. Root\n  snapshots and secret backups remain in a separate restricted directory.\n- `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
   service. It has no Install section, timer, or automatic trigger.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
   preserve a pinned image choice after a host reboot.
