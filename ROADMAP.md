@@ -1,3 +1,37 @@
+## 2026-11-05 current candidate isolated Docker acceptance
+
+- PASS: Candidate `0.5.13-hw` was built in disposable QA LXC 111
+  from GitHub main commit
+  `f802e3bb96491bc6dfbab406977103e087127d68`.
+  This was a local unsigned QA build, not a published release.
+- PASS: Nonroot UID 10001, read-only image filesystem, dropped Linux
+  capabilities, private internal Docker network and no host port mapping.
+  Telegram was disabled and no real Shelly endpoint, password or
+  production database was provided to the candidate container.
+- PASS: the app read a synthetic Shelly EM1 RPC at 230 V / 50 Hz,
+  reported candidate version 0.5.13-hw through /health, and returned
+  /ready true while the mock sensor was online. Test-only SQLite
+  was created and successfully checked with PRAGMA quick_check.
+- PASS: isolated synthetic RPC stop caused /ready false, connectivity
+  offline and exactly one open outage without inserting 0 V readings.
+  Restarting the mock RPC caused /ready true again, closed the same
+  outage, and resumed successful measurements. Final snapshot:
+  63 test measurements, one closed synthetic outage, zero open
+  outages and zero 0 V readings.
+- CLEANUP: acceptance evidence is stored privately on LXC 111 at
+  `/root/shelly-candidate-qa-20261105/acceptance.json`.
+  The candidate and mock containers, private test network, and
+  temporary candidate Docker image were removed. The original
+  `shelly-qa-http:old` remained healthy with no pending update.
+- SEPARATE HARDWARE RESULT: production Shelly naturally came back
+  online and outage #10 passed the read-only recovery baseline with
+  new fresh voltage readings. Production remains unchanged at
+  `0.5.12-hw`.
+- NOT YET ACCEPTED: release-signing and publication of candidate
+  0.5.13-hw, hardware acceptance of this candidate, uncontrolled
+  host power loss, and confirmation of user-visible Telegram delivery.
+  No automatic production upgrade is permitted.
+
 ## 2026-11-05 natural outage #10 recovery and host updater API acceptance
 
 - PASS: Gateway confirmed Shelly online and production `/ready` HTTP 200
