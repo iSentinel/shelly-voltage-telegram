@@ -6,7 +6,7 @@ import csv
 import sqlite3
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import closing, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 
@@ -146,7 +146,7 @@ class ApartmentCsvTests(unittest.TestCase):
     def test_sqlite_error_rolls_back_entire_csv_batch(self):
         """A database constraint error must undo earlier valid rows."""
 
-        with sqlite3.connect(self.db_path) as db:
+        with closing(sqlite3.connect(self.db_path)) as db, db:
             db.execute(
                 "CREATE TRIGGER reject_13 BEFORE INSERT "
                 "ON apartment_phases WHEN NEW.apartment=13 "
