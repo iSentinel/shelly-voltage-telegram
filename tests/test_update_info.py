@@ -25,9 +25,7 @@ class GitHubUpdateInfoTests(unittest.TestCase):
     def test_available_release_is_reported(self):
         """Show an available stable update but never advertise auto-install."""
 
-        with patch(
-            "urllib.request.urlopen", return_value=_Reply(release())
-        ):
+        with patch("urllib.request.urlopen", return_value=_Reply(release())):
             result = update_info.release_notice("0.5.12-hw")
         self.assertIn("Update available: yes", result)
         self.assertIn("Automatic installation: disabled", result)
@@ -61,9 +59,7 @@ class GitHubUpdateInfoTests(unittest.TestCase):
                     "urllib.request.urlopen", return_value=_Reply(release())
                 ),
             ):
-                result = update_info.release_notice(
-                    "0.5.12-hw", language
-                )
+                result = update_info.release_notice("0.5.12-hw", language)
                 self.assertIn(label, result)
 
     def test_refuse_prerelease_and_unsupported_tag(self):
@@ -75,9 +71,7 @@ class GitHubUpdateInfoTests(unittest.TestCase):
             {**release(), "tag_name": "latest"},
         ):
             with (
-                patch(
-                    "urllib.request.urlopen", return_value=_Reply(metadata)
-                ),
+                patch("urllib.request.urlopen", return_value=_Reply(metadata)),
                 self.assertRaises(ValueError),
             ):
                 update_info.release_notice("0.5.12-hw")
