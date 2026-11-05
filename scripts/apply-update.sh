@@ -110,11 +110,20 @@ snapshot() {
 }
 
 wait_healthy() {
-    local code
+    local expected="$IMAGE@$1" id identity code
     for _ in $(seq 1 25); do
-        code="$(curl -sS --max-time 3 -o /dev/null -w '%{http_code}' \
-            http://127.0.0.1:8080/health || true)"
-        [[ "$code" == 200 ]] && return 0
+        id="$(docker compose -f "$ROOT/compose.yaml" \
+            -f "$STATE/override.yaml" ps -q shelly-voltage 2>/dev/null || true)"
+        if [[ -n "$id" ]]; then
+            identity="$(docker inspect --format \
+                '{{.Config.Image}}|{{.State.Health.Status}}|{{.State.Running}}' \
+                "$id" 2>/dev/null || true)"
+            if [[ "$identity" == "$expected|healthy|true" ]]; then
+                code="$(curl -sS --max-time 3 -o /dev/null -w '%{http_code}' \
+                    http://127.0.0.1:8080/health || true)"
+                [[ "$code" == 200 ]] && return 0
+            fi
+        fi
         sleep 2
     done
     return 1
@@ -236,7 +245,7 @@ activate() {
     CHANGED=true
     mv -f "$tmp" "$STATE/override.yaml"
     start_stack
-    wait_healthy
+    wait_healthy "$digest"
     preflight
     python3 - "$STATE/deployed.json" "$VERSION" "$digest" <<'PY'
 import json
