@@ -1,3 +1,40 @@
+## 2026-11-05 outage #9 and v0.5.13-hw offline candidate audit
+
+- OBSERVED: natural voltage readings fell from approximately 222.6 V to
+  117.5 V on the physical Pro EM-50 immediately before monitoring
+  connectivity was lost; the final valid sample was 120.1 V at 11:56:49
+  Europe/Kyiv. These readings are device measurements, not synthetic faults.
+- OBSERVED: connectivity outage id 9 opened at approximately 11:57:31
+  Europe/Kyiv. No confirmed restoration had occurred at the last check;
+  `/ready` returned HTTP 503, while Docker health and SQLite integrity
+  remained healthy. No synthetic 0 V measurement was inserted.
+- DONE: private, event-specific read-only acceptance baseline saved on the
+  installation as `validation/0.5.12-hw-outage-9-baseline-20261105.json`.
+  Do not reuse a baseline from earlier outages.
+- NOT VERIFIED: whether Telegram delivered every critical warning. The
+  recorded measurements and notification timestamp are not direct proof of
+  Telegram message delivery; validate against the Telegram message history.
+- DONE: PR #54 prepared an unreleased software candidate `0.5.13-hw`, while
+  public release and production remain `0.5.12-hw` and the latest fully
+  hardware-accepted checkpoint remains `0.5.6-hw`.
+- DONE: PR #55 added a dry-run-first, atomic CSV apartment importer with
+  bounded rows, duplicate rejection, and isolated tests. Python 3.11/3.12/
+  3.13 CI passed.
+- PASS: on the code merged via PR #55, two independent reproducible
+  `0.5.13-hw` source archives had identical SHA256
+  `34cf20066fc6c23b35752a583e58d862883af0f640c01e36806771d4d5c0f2b2`.
+  The candidate Docker image built and passed an isolated module/version
+  import; these were local checks, not published release artifacts.
+- PASS: a private copy of the production SQLite accepted an example CSV
+  without changing the existing measurements, outages or metadata. The
+  live database and container were not modified for these tests.
+- BLOCKED: do not publish, install, or promote this candidate while the
+  current power-outage acceptance event is unresolved.
+- NEXT: after natural recovery, verify exact outage #9 closure, freshness,
+  voltage stabilization, and Telegram status rotation against its saved
+  baseline. Then perform a backed-up candidate deployment and rollback
+  acceptance with the live sensor online.
+
 ## 2026-11-05 apartment-to-phase development checkpoint
 
 - DONE: PR #48 introduced the idempotent SQLite apartment-to-phase registry,
