@@ -120,6 +120,33 @@ class GitHubUpdateInfoTests(unittest.TestCase):
         ):
             update_info.release_notice("0.5.12-hw")
 
+    def test_invalid_asset_names_do_not_crash_the_command(self):
+        """Reject missing filenames even when GitHub sends nested values."""
+
+        expected = "shelly-voltage-telegram-0.5.13-hw.tar.gz"
+        malformed = {"name": ["SHA256SUMS"]}
+        with (
+            patch(
+                "urllib.request.urlopen",
+                return_value=_Reply(
+                    {**release(), "assets": [{"name": expected}, malformed]}
+                ),
+            ),
+            self.assertRaisesRegex(ValueError, "source archive"),
+        ):
+            update_info.release_notice("0.5.12-hw")
+
+    def test_irrelevant_invalid_asset_name_is_ignored(self):
+        """An unrelated invalid asset does not hide valid release files."""
+
+        assets = [*release()["assets"], {"name": {"invalid": "name"}}]
+        with patch(
+            "urllib.request.urlopen",
+            return_value=_Reply({**release(), "assets": assets}),
+        ):
+            result = update_info.release_notice("0.5.12-hw")
+        self.assertIn("Update available: yes", result)
+
     def test_incomplete_release_cannot_be_advertised(self):
         """Require a source archive and checksum before offering an update."""
 

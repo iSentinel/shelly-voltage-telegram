@@ -1,3 +1,18 @@
+## 2026-11-05 malformed GitHub release asset hardening
+
+- IMPLEMENTED IN SOURCE (not deployed): GitHub Releases update notices now
+  ignore asset names that are not strings. Unexpected nested lists or
+  dictionaries cannot crash the administrator's read-only `/updates`
+  command; required source archive and SHA256SUMS are still mandatory.
+- PASS (isolated Gateway checkout): 282/282 unit tests and the pinned
+  Ruff/maintainability quality gate. Regression tests cover a malformed
+  required filename and an unrelated malformed optional asset.
+- PENDING: GitHub Actions acceptance and PR merge. No new stable release
+  is being published while the physical Shelly is offline.
+- HARDWARE WAIT: natural outage #10 remains open in LXC 110, which stays
+  on `0.5.12-hw` with automatic installation disabled and no updater
+  service or timer installed.
+
 ## 2026-11-05 defensive GitHub update response validation
 
 - DONE: PR #71 merged localized, administrator-only GitHub update
