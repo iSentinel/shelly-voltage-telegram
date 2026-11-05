@@ -93,6 +93,61 @@ class Pro3EMAcceptanceTests(unittest.TestCase):
             payload["samples"][0]["errors"],
         )
 
+    def test_unexpected_phase_is_rejected_and_not_exposed(self):
+        """Never accept or serialize a fourth phase."""
+
+        readings = good_readings()
+        readings["L4"] = (223.0, 50.0, 12.5)
+        payload = ACCEPT.run_acceptance(FakeClient([readings]), args())
+        self.assertEqual(payload["status"], "fail")
+        self.assertIn("unexpected phases: L4", payload["samples"][0]["errors"])
+        self.assertNotIn("L4", payload["samples"][0]["phases"])
+
+    def test_nonfinite_voltage_fails_with_valid_json(self):
+        """A corrupt RPC voltage must not produce JSON NaN."""
+
+        readings = good_readings()
+        readings["L2"] = (float("nan"), 50.0, 12.5)
+        payload = ACCEPT.run_acceptance(FakeClient([readings]), args())
+        self.assertEqual(payload["status"], "fail")
+        self.assertIsNone(payload["samples"][0]["phases"]["L2"]["voltage"])
+        ACCEPT.json.dumps(payload, allow_nan=False)
+
+    def test_nonfinite_frequency_fails_with_valid_json(self):
+        """Do not accept an infinite phase frequency."""
+
+        readings = good_readings()
+        readings["L3"] = (220.0, float("inf"), 12.5)
+        payload = ACCEPT.run_acceptance(FakeClient([readings]), args())
+        self.assertEqual(payload["status"], "fail")
+        self.assertIsNone(payload["samples"][0]["phases"]["L3"]["frequency"])
+        ACCEPT.json.dumps(payload, allow_nan=False)
+
+    def test_latency_must_be_nonnegative_and_finite(self):
+        """Reject invalid RPC timing for any phase."""
+
+        for latency in (-1.0, float("nan"), float("inf")):
+            with self.subTest(latency=str(latency)):
+                readings = good_readings()
+                readings["L2"] = (220.0, 50.0, latency)
+                payload = ACCEPT.run_acceptance(FakeClient([readings]), args())
+                self.assertEqual(payload["status"], "fail")
+                self.assertIn(
+                    "L2 RPC latency is invalid",
+                    payload["samples"][0]["errors"],
+                )
+                ACCEPT.json.dumps(payload, allow_nan=False)
+
+    def test_nonfinite_limits_rejected_before_hardware_read(self):
+        """Refuse unsafe acceptance ranges before network access."""
+
+        for value in (float("nan"), float("inf"), -float("inf")):
+            with (
+                self.subTest(value=str(value)),
+                self.assertRaisesRegex(ValueError, "finite"),
+            ):
+                ACCEPT.validate_args(args(max_voltage=value))
+
     def test_sleep_occurs_only_between_samples(self):
         client = FakeClient([good_readings(), good_readings()])
         with patch.object(ACCEPT.time, "sleep") as sleep:

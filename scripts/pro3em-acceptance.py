@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -72,30 +73,74 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--samples must be >= 1")
     if args.interval < 0 or args.timeout <= 0:
         raise ValueError("--interval must be >= 0 and --timeout must be > 0")
+    bounds = (
+        args.min_voltage,
+        args.max_voltage,
+        args.min_frequency,
+        args.max_frequency,
+    )
+    if not all(math.isfinite(value) for value in bounds):
+        raise ValueError("acceptance ranges must be finite")
     if args.min_voltage <= 0 or args.min_voltage >= args.max_voltage:
         raise ValueError("voltage range is invalid")
     if args.min_frequency <= 0 or args.min_frequency >= args.max_frequency:
         raise ValueError("frequency range is invalid")
 
 
+def finite_number(value: object) -> float | None:
+    """Convert numeric RPC data without permitting NaN or infinity."""
+
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def readable_number(value: object, decimals: int) -> str:
+    """Format a safe number without repeating arbitrary RPC input."""
+
+    number = finite_number(value)
+    return f"{number:.{decimals}f}" if number is not None else "invalid"
+
+
 def validate_readings(
     readings: dict[str, tuple[float, float, float]], args: argparse.Namespace
 ) -> list[str]:
-    """Return validation errors for one atomic three-phase reading."""
+    """Require one finite, consistent sample for exactly three phases."""
 
     errors = []
     missing = [phase for phase in PHASES if phase not in readings]
+    extra = sorted(phase for phase in readings if phase not in PHASES)
     if missing:
         errors.append("missing phases: " + ",".join(missing))
+    if extra:
+        errors.append("unexpected phases: " + ",".join(extra))
+    latencies = set()
     for phase in PHASES:
         if phase not in readings:
             continue
-        voltage, frequency, _rpc_ms = readings[phase]
-        if not args.min_voltage <= voltage <= args.max_voltage:
-            errors.append(f"{phase} voltage out of range: {voltage:.1f}")
-        if not args.min_frequency <= frequency <= args.max_frequency:
-            errors.append(f"{phase} frequency out of range: {frequency:.2f}")
-    latencies = {round(row[2], 6) for row in readings.values()}
+        voltage, frequency, rpc_ms = readings[phase]
+        numeric_voltage = finite_number(voltage)
+        numeric_frequency = finite_number(frequency)
+        numeric_latency = finite_number(rpc_ms)
+        if numeric_voltage is None or not (
+            args.min_voltage <= numeric_voltage <= args.max_voltage
+        ):
+            errors.append(
+                f"{phase} voltage out of range: {readable_number(voltage, 1)}"
+            )
+        if numeric_frequency is None or not (
+            args.min_frequency <= numeric_frequency <= args.max_frequency
+        ):
+            errors.append(
+                f"{phase} frequency out of range: "
+                f"{readable_number(frequency, 2)}"
+            )
+        if numeric_latency is None or numeric_latency < 0:
+            errors.append(f"{phase} RPC latency is invalid")
+        else:
+            latencies.add(round(numeric_latency, 6))
     if len(latencies) > 1:
         errors.append("phases did not come from one atomic RPC cycle")
     return errors
@@ -111,12 +156,18 @@ def sample_payload(
     errors = validate_readings(readings, args)
     phases = {
         phase: {
-            "voltage": row[0],
-            "frequency": row[1],
+            "voltage": finite_number(readings[phase][0]),
+            "frequency": finite_number(readings[phase][1]),
         }
-        for phase, row in readings.items()
+        for phase in PHASES
+        if phase in readings
     }
-    rpc_ms = max((row[2] for row in readings.values()), default=0.0)
+    valid_latencies = [
+        finite_number(readings[phase][2])
+        for phase in PHASES
+        if phase in readings
+    ]
+    rpc_ms = max((ms for ms in valid_latencies if ms is not None), default=0.0)
     return {
         "sample": number,
         "captured_at": captured_at,
