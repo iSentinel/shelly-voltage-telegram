@@ -16,6 +16,7 @@ PUBLIC_STATE="${SVT_PUBLIC_STATE:-/var/lib/shelly-voltage-update-check}"
 usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
+       apply-update.sh --recover  (systemd boot recovery only)
 Root-only, explicitly approved update of a published, signed GHCR image.
 Never runs automatically; refuse when Shelly is offline or an outage is open.
 Requires cosign, docker compose, Python 3 and flock.
@@ -140,6 +141,7 @@ mark_pending() {
     chmod 0600 "$temp"
     mv -f "$temp" "$PENDING_FILE"
     sync -f "$PENDING_FILE"
+    sync -f "$STATE"
 }
 
 recover_pending() {
@@ -176,7 +178,7 @@ restore_snapshot_database() {
     sha256sum -c "$backup.sha256" || return 1
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
-    if [[ -f "$DB" ]]; then
+    if [[ -f "$DB" && ! -e "$rescue" ]]; then
         python3 - "$DB" "$rescue" <<'PY'
 import sqlite3
 import sys
