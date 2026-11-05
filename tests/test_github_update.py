@@ -141,10 +141,15 @@ class ReleaseUpdaterTests(unittest.TestCase):
     def test_target_guard_refuses_downgrades(self):
         """Reject already installed, older or unpublished releases."""
 
-        with patch.object(updater, "published_release", return_value=self.latest):
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
             updater.guard_target(self.root, self.state, "0.5.13-hw")
             for target in ("0.5.12-hw", "0.5.11-hw"):
-                with self.subTest(target=target), self.assertRaises(ValueError):
+                with (
+                    self.subTest(target=target),
+                    self.assertRaises(ValueError),
+                ):
                     updater.guard_target(self.root, self.state, target)
 
     def test_preflight_rejects_low_voltage_and_recovery(self):
