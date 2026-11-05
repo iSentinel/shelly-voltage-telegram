@@ -210,8 +210,11 @@ class ApartmentRegistry:
 
 
 def format_apartment_entry(
-    building: str, apartment: int, phase: str,
-    entrance: int | None, floor: int | None
+    building: str,
+    apartment: int,
+    phase: str,
+    entrance: int | None,
+    floor: int | None,
 ) -> str:
     """Render an apartment with optional building-location details."""
 
