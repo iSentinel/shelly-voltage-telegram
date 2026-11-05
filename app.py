@@ -4892,20 +4892,20 @@ class Monitor:
             )
             self.telegram.send(
                 tr(self.language, "preview_layout_failed"),
-                notify=False, chat_id=sender_id,
+                notify=False,
+                chat_id=sender_id,
             )
             return
         self.send_compact_preview(
             sender_id,
             tr(
-                self.language, "preview_layout_saved",
+                self.language,
+                "preview_layout_saved",
                 mode=tr(self.language, "preview_layout_" + layout),
             ),
         )
 
-    def send_compact_preview(
-        self, sender_id: str, notice: str = ""
-    ) -> None:
+    def send_compact_preview(self, sender_id: str, notice: str = "") -> None:
         """Send the selected private status silently, never to the channel."""
 
         try:
