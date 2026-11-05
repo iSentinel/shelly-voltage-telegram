@@ -1,3 +1,25 @@
+## 2026-11-05 Pro 3EM delivery and offline QA
+
+- WAITING FOR USER INSTALLATION: Shelly Pro 3EM / Pro 3EM-3CT63 is
+  expected within approximately two weeks. The user will explicitly
+  report when it has arrived and is installed.
+- Do not claim physical acceptance or query the new meter until the user
+  confirms installation and availability. This does not block other
+  software work or Pro EM-50 production monitoring.
+- PREPARED IN SOFTWARE: The existing read-only three-phase acceptance CLI
+  now rejects unexpected phases, invalid or nonfinite voltage/frequency,
+  invalid RPC latency and nonfinite acceptance limits. Its JSON output
+  excludes nonfinite numbers so results remain machine-readable.
+- OFFLINE QA: Negative scenarios use simulated L1/L2/L3 readings,
+  not the real Pro 3EM device, and may pass before it arrives.
+- AFTER USER CONFIRMATION: Check `Shelly.GetDeviceInfo`,
+  `EM.GetStatus?id=0`, atomic L1/L2/L3 mapping, live readings,
+  dashboard/Telegram phase presentation, outage/recovery and export
+  integrity. Record private evidence before selecting `pro3em`
+  in production.
+- RELEASE GATE: Continue operating physical Pro EM-50 using the
+  published `0.5.12-hw`; do not enable automatic candidate installation.
+
 ## 2026-11-05 natural low-voltage threshold observation (partial hardware acceptance)
 
 - PASS on physical Shelly Pro EM-50 with production `0.5.12-hw`: after
