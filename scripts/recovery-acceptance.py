@@ -481,9 +481,7 @@ def stable_transition_continuity_errors(
         for stamp, state in transitions
     ):
         return ["captured recovery is missing from transition history"]
-    if any(
-        started + 2 < stamp <= now for stamp, _state in transitions
-    ):
+    if any(stamp > started for stamp, _state in transitions):
         return ["voltage changed again during the stability interval"]
     return []
 
