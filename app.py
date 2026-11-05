@@ -191,20 +191,34 @@ def telegram_policy_settings() -> dict[str, object]:
     """Load Telegram notification-policy settings."""
 
     return {
-        "persist_update_offset": env_bool("TELEGRAM_PERSIST_UPDATE_OFFSET", True),
-        "telegram_silent_default": env_bool("TELEGRAM_SILENT_BY_DEFAULT", True),
-        "telegram_language": os.getenv("TELEGRAM_LANGUAGE", "ru").strip().lower(),
-        "telegram_quiet_start_hour": int(os.getenv("TELEGRAM_QUIET_START_HOUR", "23")),
-        "telegram_quiet_end_hour": int(os.getenv("TELEGRAM_QUIET_END_HOUR", "7")),
+        "persist_update_offset": env_bool(
+            "TELEGRAM_PERSIST_UPDATE_OFFSET", True
+        ),
+        "telegram_silent_default": env_bool(
+            "TELEGRAM_SILENT_BY_DEFAULT", True
+        ),
+        "telegram_language": os.getenv("TELEGRAM_LANGUAGE", "ru")
+        .strip()
+        .lower(),
+        "telegram_quiet_start_hour": int(
+            os.getenv("TELEGRAM_QUIET_START_HOUR", "23")
+        ),
+        "telegram_quiet_end_hour": int(
+            os.getenv("TELEGRAM_QUIET_END_HOUR", "7")
+        ),
         "voltage_notification_cooldown_min": int(
             os.getenv("VOLTAGE_NOTIFICATION_COOLDOWN_MIN", "5")
         ),
         "voltage_status_edit_window_min": int(
             os.getenv("VOLTAGE_STATUS_EDIT_WINDOW_MIN", "10")
         ),
-        "low_voltage_alert_enabled": env_bool("LOW_VOLTAGE_ALERT_ENABLED", True),
+        "low_voltage_alert_enabled": env_bool(
+            "LOW_VOLTAGE_ALERT_ENABLED", True
+        ),
         "low_voltage_alert_v": float(os.getenv("LOW_VOLTAGE_ALERT_V", "180")),
-        "low_voltage_recovery_v": float(os.getenv("LOW_VOLTAGE_RECOVERY_V", "185")),
+        "low_voltage_recovery_v": float(
+            os.getenv("LOW_VOLTAGE_RECOVERY_V", "185")
+        ),
     }
 
 
@@ -215,9 +229,15 @@ def telegram_settings() -> dict[str, object]:
         "telegram_token": secret_setting(
             "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN_FILE"
         ),
-        "telegram_chat_id": secret_setting("TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID_FILE"),
-        "telegram_status_chat_id": os.getenv("TELEGRAM_STATUS_CHAT_ID", "").strip(),
-        "telegram_interval": float(os.getenv("TELEGRAM_UPDATE_INTERVAL_SEC", "60")),
+        "telegram_chat_id": secret_setting(
+            "TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID_FILE"
+        ),
+        "telegram_status_chat_id": os.getenv(
+            "TELEGRAM_STATUS_CHAT_ID", ""
+        ).strip(),
+        "telegram_interval": float(
+            os.getenv("TELEGRAM_UPDATE_INTERVAL_SEC", "60")
+        ),
         "telegram_min_edit_interval": float(
             os.getenv("TELEGRAM_MIN_EDIT_INTERVAL_SEC", "15")
         ),
@@ -237,10 +257,14 @@ def shelly_settings() -> dict[str, object]:
 
     return {
         "shelly_host": os.getenv("SHELLY_HOST", "").strip(),
-        "shelly_meter_type": os.getenv("SHELLY_METER_TYPE", "pro_em50").strip().lower(),
+        "shelly_meter_type": os.getenv("SHELLY_METER_TYPE", "pro_em50")
+        .strip()
+        .lower(),
         "em1_id": int(os.getenv("SHELLY_EM1_ID", "0")),
         "shelly_user": os.getenv("SHELLY_USERNAME", "admin"),
-        "shelly_password": secret_setting("SHELLY_PASSWORD", "SHELLY_PASSWORD_FILE"),
+        "shelly_password": secret_setting(
+            "SHELLY_PASSWORD", "SHELLY_PASSWORD_FILE"
+        ),
         "shelly_timeout": float(os.getenv("SHELLY_TIMEOUT_SEC", "4")),
         "phase_l2_host": os.getenv("PHASE_L2_HOST", "").strip(),
         "phase_l2_em1_id": int(os.getenv("PHASE_L2_EM1_ID", "0")),
@@ -264,19 +288,27 @@ def monitoring_core_settings(poll: float) -> dict[str, object]:
         "poll_interval": poll,
         "significant_change": float(os.getenv("SIGNIFICANT_CHANGE_V", "0.5")),
         "retention_days": int(os.getenv("RETENTION_DAYS", "90")),
-        "database_path": Path(os.getenv("DATABASE_PATH", "/data/voltage.sqlite3")),
+        "database_path": Path(
+            os.getenv("DATABASE_PATH", "/data/voltage.sqlite3")
+        ),
         "timezone": os.getenv("TIMEZONE", "Europe/Kyiv"),
         "health_host": os.getenv("HEALTH_HOST", "0.0.0.0"),
         "health_port": int(os.getenv("HEALTH_PORT", "8080")),
-        "stale_after": float(os.getenv("STALE_AFTER_SEC", str(max(45, poll * 3)))),
-        "offline_after_failures": int(os.getenv("SHELLY_OFFLINE_AFTER_FAILURES", "3")),
+        "stale_after": float(
+            os.getenv("STALE_AFTER_SEC", str(max(45, poll * 3)))
+        ),
+        "offline_after_failures": int(
+            os.getenv("SHELLY_OFFLINE_AFTER_FAILURES", "3")
+        ),
         "recovery_after_successes": int(
             os.getenv("SHELLY_RECOVERY_AFTER_SUCCESSES", "2")
         ),
         "offline_log_interval": float(
             os.getenv("SHELLY_OFFLINE_LOG_INTERVAL_SEC", "300")
         ),
-        "backup_dir": Path(os.getenv("BACKUP_DIR", "/var/backups/shelly-voltage")),
+        "backup_dir": Path(
+            os.getenv("BACKUP_DIR", "/var/backups/shelly-voltage")
+        ),
     }
 
 
@@ -286,13 +318,17 @@ def monitoring_alert_settings() -> dict[str, object]:
     return {
         "availability_alerts_enabled": env_bool("AVAILABILITY_ALERTS_ENABLED"),
         "alerts_enabled": env_bool("ALERTS_ENABLED"),
-        "voltage_instability_enabled": env_bool("VOLTAGE_INSTABILITY_ENABLED", True),
+        "voltage_instability_enabled": env_bool(
+            "VOLTAGE_INSTABILITY_ENABLED", True
+        ),
         "warning_low": float(os.getenv("WARNING_LOW_V", "207")),
         "warning_high": float(os.getenv("WARNING_HIGH_V", "253")),
         "critical_low": float(os.getenv("CRITICAL_LOW_V", "190")),
         "critical_high": float(os.getenv("CRITICAL_HIGH_V", "255")),
         "alert_dwell_sec": float(os.getenv("ALERT_DWELL_SEC", "15")),
-        "alert_recovery_dwell_sec": float(os.getenv("ALERT_RECOVERY_DWELL_SEC", "30")),
+        "alert_recovery_dwell_sec": float(
+            os.getenv("ALERT_RECOVERY_DWELL_SEC", "30")
+        ),
         "daily_summary_enabled": env_bool("DAILY_SUMMARY_ENABLED", True),
         "daily_summary_hour": int(os.getenv("DAILY_SUMMARY_HOUR", "22")),
         "daily_summary_minute": int(os.getenv("DAILY_SUMMARY_MINUTE", "55")),
@@ -351,11 +387,15 @@ def validate_telegram_config(cfg: Config) -> None:
     if any(hour < 0 or hour > 23 for hour in hours):
         raise ValueError("Telegram quiet hours must be between 0 and 23")
     if not 0 <= cfg.voltage_notification_cooldown_min <= 60:
-        raise ValueError("VOLTAGE_NOTIFICATION_COOLDOWN_MIN must be between 0 and 60")
+        raise ValueError(
+            "VOLTAGE_NOTIFICATION_COOLDOWN_MIN must be between 0 and 60"
+        )
     if cfg.voltage_status_edit_window_min not in {3, 5, 10}:
         raise ValueError("VOLTAGE_STATUS_EDIT_WINDOW_MIN must be 3, 5, or 10")
     if cfg.low_voltage_recovery_v <= cfg.low_voltage_alert_v:
-        raise ValueError("LOW_VOLTAGE_RECOVERY_V must exceed LOW_VOLTAGE_ALERT_V")
+        raise ValueError(
+            "LOW_VOLTAGE_RECOVERY_V must exceed LOW_VOLTAGE_ALERT_V"
+        )
 
 
 def validate_monitoring_config(cfg: Config) -> None:
@@ -366,7 +406,9 @@ def validate_monitoring_config(cfg: Config) -> None:
     if cfg.offline_after_failures < 1 or cfg.recovery_after_successes < 1:
         raise ValueError("connectivity hysteresis values must be >= 1")
     if cfg.offline_log_interval < cfg.poll_interval:
-        raise ValueError("SHELLY_OFFLINE_LOG_INTERVAL_SEC must be >= POLL_INTERVAL_SEC")
+        raise ValueError(
+            "SHELLY_OFFLINE_LOG_INTERVAL_SEC must be >= POLL_INTERVAL_SEC"
+        )
     if cfg.retention_days < 1:
         raise ValueError("RETENTION_DAYS must be >= 1")
     if cfg.alert_dwell_sec < 0 or cfg.alert_recovery_dwell_sec < 0:
@@ -467,10 +509,14 @@ class Storage:
         ).fetchone()
         if not table:
             return 0
-        row = db.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+        row = db.execute(
+            "SELECT value FROM meta WHERE key='schema_version'"
+        ).fetchone()
         return int(row[0]) if row else 0
 
-    def migrate_phase_schema(self, db: sqlite3.Connection, current: int) -> None:
+    def migrate_phase_schema(
+        self, db: sqlite3.Connection, current: int
+    ) -> None:
         """Add phase columns to legacy v1/v2 tables before creating indexes."""
 
         if current not in {1, 2}:
@@ -480,17 +526,21 @@ class Storage:
         }
         if "phase" not in measurement_cols:
             db.execute(
-                "ALTER TABLE measurements ADD COLUMN phase TEXT NOT NULL DEFAULT 'L1'"
+                "ALTER TABLE measurements ADD COLUMN phase TEXT NOT NULL "
+                "DEFAULT 'L1'"
             )
         has_outages = db.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='outages'"
         ).fetchone()
         if not has_outages:
             return
-        outage_cols = {row[1] for row in db.execute("PRAGMA table_info(outages)")}
+        outage_cols = {
+            row[1] for row in db.execute("PRAGMA table_info(outages)")
+        }
         if "phase" not in outage_cols:
             db.execute(
-                "ALTER TABLE outages ADD COLUMN phase TEXT NOT NULL DEFAULT 'L1'"
+                "ALTER TABLE outages ADD COLUMN phase TEXT NOT NULL "
+                "DEFAULT 'L1'"
             )
 
     def initialize(self) -> None:
@@ -542,7 +592,9 @@ class Storage:
         """Read one metadata value."""
 
         with closing(self.connect()) as db, db:
-            row = db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+            row = db.execute(
+                "SELECT value FROM meta WHERE key=?", (key,)
+            ).fetchone()
         return str(row[0]) if row else None
 
     def delete_meta(self, key: str) -> None:
@@ -610,7 +662,9 @@ class Storage:
             vacuumed = True
         return {"pages": pages, "free_pages": free, "vacuumed": vacuumed}
 
-    def day_stats(self, now: float, phase: str = "L1") -> dict[str, float | int | None]:
+    def day_stats(
+        self, now: float, phase: str = "L1"
+    ) -> dict[str, float | int | None]:
         """Return current-day voltage statistics."""
 
         current = datetime.fromtimestamp(now, self.zone)
@@ -740,7 +794,9 @@ class Storage:
             return None
         return max(0.0, float(row[1]) - float(row[0]))
 
-    def outage_stats(self, now: float, phase: str = "L1") -> dict[str, float | int]:
+    def outage_stats(
+        self, now: float, phase: str = "L1"
+    ) -> dict[str, float | int]:
         """Return outage count and overlap duration for the current day."""
 
         current = datetime.fromtimestamp(now, self.zone)
@@ -769,7 +825,9 @@ class Storage:
 
         cutoff = time.time() - retention_days * 86400
         with closing(self.connect()) as db, db:
-            cursor = db.execute("DELETE FROM measurements WHERE ts < ?", (cutoff,))
+            cursor = db.execute(
+                "DELETE FROM measurements WHERE ts < ?", (cutoff,)
+            )
             return int(cursor.rowcount)
 
     def integrity(self) -> str:
@@ -874,7 +932,9 @@ class RuntimeState:
                 if self.consecutive_successes >= recovery_after:
                     self.connectivity = "online"
                     if self.offline_since is not None:
-                        self.last_outage_duration = max(0.0, now - self.offline_since)
+                        self.last_outage_duration = max(
+                            0.0, now - self.offline_since
+                        )
                     self.offline_since = None
                 else:
                     self.connectivity = "recovering"
@@ -1019,7 +1079,9 @@ class RpcMeterClient(ShellyClient):
         voltage = payload.get("voltage")
         frequency = payload.get("freq")
         if voltage is None or frequency is None:
-            raise RuntimeError(f"{self.rpc_method} returned no voltage/frequency")
+            raise RuntimeError(
+                f"{self.rpc_method} returned no voltage/frequency"
+            )
         return float(voltage), float(frequency), rpc_ms
 
 
@@ -1076,7 +1138,9 @@ class Pro3EMClient(ShellyClient):
             raise RuntimeError("EM.GetStatus returned invalid status")
         faults = em_status_errors(payload)
         if faults:
-            raise RuntimeError("EM.GetStatus meter errors: " + ", ".join(faults))
+            raise RuntimeError(
+                "EM.GetStatus meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
         result = {}
         for phase, prefix in (("L1", "a"), ("L2", "b"), ("L3", "c")):
@@ -1109,7 +1173,9 @@ class Telegram:
         """Initialize Telegram API sessions and notification defaults."""
         self.cfg = cfg
         self.enabled = bool(cfg.telegram_token and cfg.telegram_chat_id)
-        self.status_chat_id = cfg.telegram_status_chat_id or cfg.telegram_chat_id
+        self.status_chat_id = (
+            cfg.telegram_status_chat_id or cfg.telegram_chat_id
+        )
         self.base = f"https://api.telegram.org/bot{cfg.telegram_token}"
         self.api_session = requests.Session()
         self.updates_session = requests.Session()
@@ -1122,7 +1188,11 @@ class Telegram:
     def _post(self, method: str, payload: dict) -> dict:
         """Perform one HTTP request using the appropriate session."""
 
-        session = self.updates_session if method == "getUpdates" else self.api_session
+        session = (
+            self.updates_session
+            if method == "getUpdates"
+            else self.api_session
+        )
         try:
             response = session.post(
                 f"{self.base}/{method}",
@@ -1223,7 +1293,9 @@ class Telegram:
             payload["reply_markup"] = reply_markup
         self.call("editMessageText", payload)
 
-    def clear_reply_markup(self, message_id: int, chat_id: str | None = None) -> None:
+    def clear_reply_markup(
+        self, message_id: int, chat_id: str | None = None
+    ) -> None:
         """Remove inline controls from one Telegram message."""
 
         self.call(
@@ -1243,7 +1315,9 @@ class Telegram:
             payload["text"] = text
         self.call("answerCallbackQuery", payload)
 
-    def send_file(self, method: str, field: str, path: Path, caption: str = "") -> int:
+    def send_file(
+        self, method: str, field: str, path: Path, caption: str = ""
+    ) -> int:
         """Upload one generated file to the private control chat."""
 
         data = {
@@ -1266,7 +1340,9 @@ class Telegram:
                 f"Telegram file upload failed: {type(exc).__name__}"
             ) from None
         if not payload.get("ok"):
-            raise RuntimeError(payload.get("description", "Telegram API error"))
+            raise RuntimeError(
+                payload.get("description", "Telegram API error")
+            )
         return int(payload["result"]["message_id"])
 
     def send_photo(self, path: Path, caption: str = "") -> int:
@@ -1321,7 +1397,9 @@ class Telegram:
     def get_chat(self, chat_id: str | None = None) -> dict:
         """Validate one configured Telegram destination."""
 
-        return self.call("getChat", {"chat_id": chat_id or self.cfg.telegram_chat_id})
+        return self.call(
+            "getChat", {"chat_id": chat_id or self.cfg.telegram_chat_id}
+        )
 
     def set_commands(self, language: str = "ru") -> None:
         """Register localized supported bot commands."""
@@ -1370,14 +1448,17 @@ def format_duration(seconds: float | None) -> str:
     return f"{secs}с"
 
 
-def offline_status_lines(snap: dict[str, object], ts: float, cfg: Config) -> list[str]:
+def offline_status_lines(
+    snap: dict[str, object], ts: float, cfg: Config
+) -> list[str]:
     """Render outage timing without presenting stale electrical values."""
 
     lines = []
     offline_since = snap.get("offline_since")
     if offline_since is not None:
         lines.append(
-            f"⏱ Недоступен: {format_duration(time.time() - float(offline_since))}"
+            "⏱ Недоступен: "
+            f"{format_duration(time.time() - float(offline_since))}"
         )
     lines.extend(["", f"🕐 Последние данные: {format_time(ts, cfg)}"])
     return lines
@@ -1433,13 +1514,17 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     if connectivity == "offline":
         return tr(lang, "phase_offline", phase=phase)
     if snap["voltage"] is None or connectivity == "starting":
-        key = "phase_starting" if connectivity == "starting" else "phase_no_data"
+        key = (
+            "phase_starting" if connectivity == "starting" else "phase_no_data"
+        )
         return f"🟡 {phase}: {tr(lang, key)}"
     voltage = float(snap["voltage"])
     if connectivity == "recovering":
         return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
     warning = voltage <= monitor.warning_low or voltage >= monitor.warning_high
-    critical = voltage <= monitor.critical_low or voltage >= monitor.critical_high
+    critical = (
+        voltage <= monitor.critical_low or voltage >= monitor.critical_high
+    )
     icon = "🔴" if critical else "🟡" if warning else "🟢"
     return f"{icon} {phase}: {voltage:.1f} {tr(lang, 'unit_voltage')}"
 
@@ -1492,7 +1577,11 @@ def instability_lines(monitor: Monitor) -> list[str]:
         return []
     snap = monitor.state.snapshot()
     sample_at = float(snap.get("last_success") or 0)
-    event_at = float(monitor.last_voltage_event[3]) if monitor.last_voltage_event else 0
+    event_at = (
+        float(monitor.last_voltage_event[3])
+        if monitor.last_voltage_event
+        else 0
+    )
     now = max(sample_at, event_at) or time.time()
     count = monitor.instability_transition_count(now)
     if count < 4:
@@ -1500,7 +1589,9 @@ def instability_lines(monitor: Monitor) -> list[str]:
     return ["", tr(monitor.language, "unstable", count=count)]
 
 
-def multiphase_status_text(monitor: Monitor, include_event_context: bool = True) -> str:
+def multiphase_status_text(
+    monitor: Monitor, include_event_context: bool = True
+) -> str:
     """Render a coherent status for the selected voltage phases."""
 
     with monitor.config_lock:
@@ -1525,12 +1616,16 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
-def render_voltage_status(monitor: Monitor, include_event_context: bool) -> str:
+def render_voltage_status(
+    monitor: Monitor, include_event_context: bool
+) -> str:
     """Render voltage and primary history under the configuration lock."""
 
     lang = monitor.language
     lines = voltage_event_lines(monitor) if include_event_context else []
-    lines.extend([tr(lang, "network_title", phases=monitor.phase_labels()), ""])
+    lines.extend(
+        [tr(lang, "network_title", phases=monitor.phase_labels()), ""]
+    )
     l1 = monitor.state.snapshot()
     connectivity = str(l1["connectivity"])
     status_key = "status_" + connectivity
@@ -1607,18 +1702,12 @@ def voltage_timeline_events(
             continue
         stamp_text = format_stamp(stamp, monitor.cfg.timezone)
         label = tr(monitor.language, "events_state_" + state)
-        rows.append(
-            (
-                stamp,
-                tr(
-                    monitor.language,
-                    "events_warning",
-                    phase=monitor.phase_label(phase),
-                    state=label,
-                    time=stamp_text,
-                ),
-            )
-        )
+        rows.append((
+            stamp,
+            tr(monitor.language, "events_warning",
+               phase=monitor.phase_label(phase),
+               state=label, time=stamp_text),
+        ))
     return rows
 
 
@@ -1636,29 +1725,17 @@ def connectivity_timeline_events(
         for start, end in outages:
             label = monitor.phase_label(phase)
             if since <= start <= now:
-                rows.append(
-                    (
-                        start,
-                        tr(
-                            monitor.language,
-                            "events_connection",
-                            phase=label,
-                            time=format_stamp(start, monitor.cfg.timezone),
-                        ),
-                    )
-                )
+                rows.append((
+                    start, tr(monitor.language, "events_connection",
+                              phase=label,
+                              time=format_stamp(start, monitor.cfg.timezone)),
+                ))
             if end is not None and since <= end <= now:
-                rows.append(
-                    (
-                        end,
-                        tr(
-                            monitor.language,
-                            "events_reconnected",
+                rows.append((
+                    end, tr(monitor.language, "events_reconnected",
                             phase=label,
-                            time=format_stamp(end, monitor.cfg.timezone),
-                        ),
-                    )
-                )
+                            time=format_stamp(end, monitor.cfg.timezone)),
+                ))
     return rows
 
 
@@ -1743,7 +1820,9 @@ class Monitor:
         self.alert_level = "normal"
         self.low_voltage_active = False
         self.low_voltage_candidate_since: float | None = None
-        self.last_voltage_event: tuple[str, float, float, float, str] | None = None
+        self.last_voltage_event: (
+            tuple[str, float, float, float, str] | None
+        ) = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
         self.last_recovery_duration: float | None = None
@@ -1843,7 +1922,9 @@ class Monitor:
             voltage, frequency, rpc_ms = client.read()
         except Exception as exc:
             return self.record_secondary_failure(phase, state, exc)
-        self.accept_phase_sample(phase, (voltage, frequency, rpc_ms), time.time())
+        self.accept_phase_sample(
+            phase, (voltage, frequency, rpc_ms), time.time()
+        )
         return True
 
     def record_secondary_failure(
@@ -1911,7 +1992,10 @@ class Monitor:
 
         if not self.low_voltage_alert_enabled:
             return
-        if voltage < self.low_voltage_alert_v and not self.phase_low_active[phase]:
+        if (
+            voltage < self.low_voltage_alert_v
+            and not self.phase_low_active[phase]
+        ):
             self.phase_low_candidates.setdefault(phase, now)
             if now - self.phase_low_candidates[phase] < self.alert_dwell:
                 return
@@ -1921,7 +2005,9 @@ class Monitor:
             self.phase_low_candidates.pop(phase, None)
             if self.phase_low_active[phase]:
                 self.phase_low_active[phase] = False
-                self.record_voltage_event("recovered", voltage, frequency, phase)
+                self.record_voltage_event(
+                    "recovered", voltage, frequency, phase
+                )
 
     def maybe_secondary_level(
         self, phase: str, voltage: float, frequency: float, now: float
@@ -2068,7 +2154,9 @@ class Monitor:
         for phase in ("L1", "L2", "L3"):
             sample = readings.get(phase)
             if sample is None:
-                self.record_phase_missing(phase, f"{phase} missing from EM.GetStatus")
+                self.record_phase_missing(
+                    phase, f"{phase} missing from EM.GetStatus"
+                )
             else:
                 self.accept_phase_sample(phase, sample, now)
         return bool(readings)
@@ -2089,7 +2177,9 @@ class Monitor:
         except Exception as exc:
             self.record_poll_failure(exc)
             return False
-        self.accept_phase_sample("L1", (voltage, frequency, rpc_ms), time.time())
+        self.accept_phase_sample(
+            "L1", (voltage, frequency, rpc_ms), time.time()
+        )
         return True
 
     def maybe_prune(self) -> None:
@@ -2117,7 +2207,10 @@ class Monitor:
             return True
         if voltage is None or self.last_sent_voltage is None:
             return voltage is not None
-        return abs(voltage - self.last_sent_voltage) >= self.cfg.significant_change
+        return (
+            abs(voltage - self.last_sent_voltage)
+            >= self.cfg.significant_change
+        )
 
     def status_keyboard(self) -> None:
         """Keep the public status message free of inline buttons."""
@@ -2133,7 +2226,9 @@ class Monitor:
                 if not self.phase_configured(phase):
                     continue
                 stats = self.storage.day_stats(time.time(), phase)
-                rows.append(f"{phase} {fmt(stats['min'])}–{fmt(stats['max'])}V")
+                rows.append(
+                    f"{phase} {fmt(stats['min'])}–{fmt(stats['max'])}V"
+                )
             return tr(self.language, "callback_today", value=" · ".join(rows))
         if action == "outages":
             rows = []
@@ -2145,14 +2240,18 @@ class Monitor:
                     f"{phase} {stats['count']}/"
                     f"{duration_text(float(stats['duration']), self.language)}"
                 )
-            return tr(self.language, "callback_outages", value=" · ".join(rows))
+            return tr(
+                self.language, "callback_outages", value=" · ".join(rows)
+            )
         return tr(self.language, "callback_updated")
 
     def handle_status_callback(self, query: dict) -> None:
         """Handle non-mutating buttons attached to the channel status."""
 
         callback_id = str(query.get("id", ""))
-        chat_id = str((query.get("message") or {}).get("chat", {}).get("id", ""))
+        chat_id = str(
+            (query.get("message") or {}).get("chat", {}).get("id", "")
+        )
         if chat_id != self.telegram.status_chat_id:
             self.telegram.answer_callback(callback_id)
             return
@@ -2160,7 +2259,9 @@ class Monitor:
         if action == "refresh":
             self.last_telegram = 0.0
             self.update_status()
-        self.telegram.answer_callback(callback_id, self.status_callback_text(action))
+        self.telegram.answer_callback(
+            callback_id, self.status_callback_text(action)
+        )
 
     def status_message_key(self) -> str:
         """Return the persisted key for the stable status destination."""
@@ -2184,7 +2285,9 @@ class Monitor:
                     text, reply_markup=markup, chat_id=target
                 )
                 self.storage.set_meta(key, str(message_id))
-                self.storage.delete_meta("voltage_status_edit_window_started_at")
+                self.storage.delete_meta(
+                    "voltage_status_edit_window_started_at"
+                )
             return True
         except Exception as exc:
             if stored and message_not_modified(exc):
@@ -2194,7 +2297,9 @@ class Monitor:
                 logger.warning("Telegram status update failed: {}", exc)
                 return False
         try:
-            message_id = self.telegram.send(text, reply_markup=markup, chat_id=target)
+            message_id = self.telegram.send(
+                text, reply_markup=markup, chat_id=target
+            )
             self.storage.set_meta(key, str(message_id))
             self.storage.delete_meta("voltage_status_edit_window_started_at")
             return True
@@ -2270,10 +2375,14 @@ class Monitor:
         if not current:
             return
         try:
-            self.telegram.clear_reply_markup(int(current), self.telegram.status_chat_id)
+            self.telegram.clear_reply_markup(
+                int(current), self.telegram.status_chat_id
+            )
         except Exception as exc:
             if not message_not_modified(exc):
-                logger.warning("Telegram status control cleanup failed: {}", exc)
+                logger.warning(
+                    "Telegram status control cleanup failed: {}", exc
+                )
 
     def rotate_status_after_recovery(self, duration: float) -> None:
         """Replace the stable status post after a confirmed power recovery."""
@@ -2346,11 +2455,16 @@ class Monitor:
     def restore_voltage_episode(self) -> None:
         """Create episode metadata when upgrading an active older event."""
 
-        if self.storage.get_meta("voltage_episode") or not self.last_voltage_event:
+        if (
+            self.storage.get_meta("voltage_episode")
+            or not self.last_voltage_event
+        ):
             return
         kind, voltage, _, happened_at, phase = self.last_voltage_event
         episode = new_episode(kind, voltage, happened_at, phase)
-        raw_start = self.storage.get_meta("voltage_status_edit_window_started_at")
+        raw_start = self.storage.get_meta(
+            "voltage_status_edit_window_started_at"
+        )
         if raw_start:
             with suppress(ValueError):
                 episode["start_at"] = float(raw_start)
@@ -2372,9 +2486,13 @@ class Monitor:
             self.status_edit_window_min * 60,
         )
         self.storage.set_meta("voltage_episode", json.dumps(episode))
-        history = load_history(self.storage.get_meta("voltage_transition_history"))
+        history = load_history(
+            self.storage.get_meta("voltage_transition_history")
+        )
         history = update_history(history, kind, phase, happened_at)
-        self.storage.set_meta("voltage_transition_history", json.dumps(history))
+        self.storage.set_meta(
+            "voltage_transition_history", json.dumps(history)
+        )
 
     def instability_transition_count(self, now: float | None = None) -> int:
         """Return recent transitions, or zero before storage is initialized."""
@@ -2398,7 +2516,9 @@ class Monitor:
             return None
         start = float(episode["start_at"])
         end = float(episode["finalized_at"])
-        stats = self.storage.range_stats(start, end, str(episode.get("phase", "L1")))
+        stats = self.storage.range_stats(
+            start, end, str(episode.get("phase", "L1"))
+        )
         zone = ZoneInfo(self.cfg.timezone)
         start_text = datetime.fromtimestamp(start, zone).strftime("%H:%M")
         end_text = datetime.fromtimestamp(end, zone).strftime("%H:%M")
@@ -2410,7 +2530,9 @@ class Monitor:
             "maximum": fmt(stats["max"]),
             "average": fmt(stats["avg"]),
             "transitions": len(episode.get("transitions") or []),
-            "abnormal": duration_text(abnormal_seconds(episode, end), self.language),
+            "abnormal": duration_text(
+                abnormal_seconds(episode, end), self.language
+            ),
         }
 
     def maybe_finalize_voltage_episode(self) -> None:
@@ -2419,7 +2541,9 @@ class Monitor:
         episode = load_json_object(self.storage.get_meta("voltage_episode"))
         if not episode or episode.get("finalized_at"):
             return
-        deadline = float(episode["start_at"]) + self.status_edit_window_min * 60
+        deadline = (
+            float(episode["start_at"]) + self.status_edit_window_min * 60
+        )
         if time.time() < deadline:
             return
         episode["finalized_at"] = deadline
@@ -2502,7 +2626,9 @@ class Monitor:
                 text, notify=False, chat_id=self.telegram.status_chat_id
             )
         except Exception as exc:
-            logger.warning("Telegram stable recovery replacement failed: {}", exc)
+            logger.warning(
+                "Telegram stable recovery replacement failed: {}", exc
+            )
             return
         self.storage.set_meta(key, str(new_id))
         self.clear_stable_recovery_context()
@@ -2605,9 +2731,13 @@ class Monitor:
             return False
         self.storage.set_meta(key, str(new_id))
         if notify:
-            self.storage.set_meta("last_voltage_notification_at", str(happened_at))
+            self.storage.set_meta(
+                "last_voltage_notification_at", str(happened_at)
+            )
         # Keep the original start through recovery and repeated transitions.
-        self.storage.set_meta("voltage_status_edit_window_started_at", str(happened_at))
+        self.storage.set_meta(
+            "voltage_status_edit_window_started_at", str(happened_at)
+        )
         self.delete_previous_voltage_status(old_id, new_id)
         self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
@@ -2628,7 +2758,9 @@ class Monitor:
         except Exception as exc:
             logger.warning("Telegram old status delete failed: {}", exc)
 
-    def delete_previous_voltage_status(self, old_id: str | None, new_id: int) -> None:
+    def delete_previous_voltage_status(
+        self, old_id: str | None, new_id: int
+    ) -> None:
         """Delete the previous shared status after the replacement exists."""
 
         if not old_id or str(new_id) == old_id:
@@ -2667,7 +2799,9 @@ class Monitor:
         notify = self.voltage_event_notify_allowed(kind, happened_at)
         self.replace_voltage_status(notify, happened_at)
 
-    def maybe_low_voltage_alert(self, voltage: float, frequency: float) -> None:
+    def maybe_low_voltage_alert(
+        self, voltage: float, frequency: float
+    ) -> None:
         """Show low-voltage and recovery transitions in the status header."""
 
         if not self.low_voltage_alert_enabled or not self.telegram.enabled:
@@ -2676,7 +2810,9 @@ class Monitor:
             return
         now = time.monotonic()
         if voltage < self.low_voltage_alert_v and not self.low_voltage_active:
-            self.low_voltage_candidate_since = self.low_voltage_candidate_since or now
+            self.low_voltage_candidate_since = (
+                self.low_voltage_candidate_since or now
+            )
             if now - self.low_voltage_candidate_since < self.alert_dwell:
                 return
             self.low_voltage_active = True
@@ -2733,7 +2869,9 @@ class Monitor:
     def set_maintenance(self, minutes: int) -> str:
         """Set or clear maintenance mode."""
 
-        self.maintenance_until = 0.0 if minutes <= 0 else time.time() + minutes * 60
+        self.maintenance_until = (
+            0.0 if minutes <= 0 else time.time() + minutes * 60
+        )
         self.storage.set_meta("maintenance_until", str(self.maintenance_until))
         if minutes <= 0:
             return tr(self.language, "state_off")
@@ -2786,8 +2924,12 @@ class Monitor:
         except sqlite3.Error:
             return self.outage_fallback_text(phase)
         if not rows:
-            return tr(self.language, "no_outages", phase=self.phase_label(phase))
-        lines = [tr(self.language, "outages_title", phase=self.phase_label(phase))]
+            return tr(
+                self.language, "no_outages", phase=self.phase_label(phase)
+            )
+        lines = [
+            tr(self.language, "outages_title", phase=self.phase_label(phase))
+        ]
         now = time.time()
         for start, end in rows:
             duration = (end or now) - start
@@ -2830,11 +2972,15 @@ class Monitor:
         lines = [tr(self.language, "summary_title")]
         for phase in self.active_phases():
             if not self.phase_configured(phase):
-                lines.append(tr(self.language, "summary_unconfigured", phase=phase))
+                lines.append(
+                    tr(self.language, "summary_unconfigured", phase=phase)
+                )
                 continue
             st = phase_stats(self.cfg.database_path, phase, since)
             outages = self.storage.outage_stats(time.time(), phase)
-            outage_duration = duration_text(float(outages["duration"]), self.language)
+            outage_duration = duration_text(
+                float(outages["duration"]), self.language
+            )
             lines.append(
                 tr(
                     self.language,
@@ -2892,7 +3038,9 @@ class Monitor:
         lines = [tr(self.language, "device_title")]
         for phase in self.active_phases():
             if not self.phase_configured(phase):
-                lines.append(tr(self.language, "device_unconfigured", phase=phase))
+                lines.append(
+                    tr(self.language, "device_unconfigured", phase=phase)
+                )
                 continue
             try:
                 info = self.phase_clients[phase].device_health()
@@ -2900,8 +3048,7 @@ class Monitor:
                 skew_text = "n/a" if skew is None else f"{float(skew):+.1f}s"
                 lines.append(
                     tr(
-                        self.language,
-                        "device_details",
+                        self.language, "device_details",
                         phase=self.phase_label(phase),
                         model=info.get("model"),
                         firmware=info.get("firmware"),
@@ -2912,8 +3059,7 @@ class Monitor:
             except Exception as exc:
                 lines.append(
                     tr(
-                        self.language,
-                        "device_offline",
+                        self.language, "device_offline",
                         phase=self.phase_label(phase),
                         error=type(exc).__name__,
                     )
@@ -2951,7 +3097,9 @@ class Monitor:
         return {
             "meter_type": self.cfg.shelly_meter_type,
             "language": self.cfg.telegram_language,
-            "instability_enabled": "1" if self.cfg.voltage_instability_enabled else "0",
+            "instability_enabled": "1"
+            if self.cfg.voltage_instability_enabled
+            else "0",
             "silent": "1" if self.cfg.telegram_silent_default else "0",
             "quiet_enabled": "1",
             "notify_cooldown": str(self.cfg.voltage_notification_cooldown_min),
@@ -2996,19 +3144,29 @@ class Monitor:
         """Apply Telegram delivery and display settings."""
 
         self.language = self.setting_value("language")
-        self.instability_enabled = self.setting_value("instability_enabled") == "1"
+        self.instability_enabled = (
+            self.setting_value("instability_enabled") == "1"
+        )
         self.telegram.silent_default = self.setting_value("silent") == "1"
-        self.telegram.quiet_enabled = self.setting_value("quiet_enabled") == "1"
+        self.telegram.quiet_enabled = (
+            self.setting_value("quiet_enabled") == "1"
+        )
         self.telegram.quiet_start_hour = int(self.setting_value("quiet_start"))
         self.telegram.quiet_end_hour = int(self.setting_value("quiet_end"))
-        self.notification_cooldown_min = int(self.setting_value("notify_cooldown"))
-        self.status_edit_window_min = int(self.setting_value("status_edit_window"))
+        self.notification_cooldown_min = int(
+            self.setting_value("notify_cooldown")
+        )
+        self.status_edit_window_min = int(
+            self.setting_value("status_edit_window")
+        )
         self.pin_status = self.setting_value("pin_status") == "1"
 
     def load_runtime_alert_settings(self) -> None:
         """Apply voltage thresholds, summaries, and alert timing settings."""
 
-        self.low_voltage_alert_enabled = self.setting_value("low_enabled") == "1"
+        self.low_voltage_alert_enabled = (
+            self.setting_value("low_enabled") == "1"
+        )
         self.low_voltage_alert_v = float(self.setting_value("low_v"))
         self.low_voltage_recovery_v = float(self.setting_value("recovery_v"))
         self.alerts_enabled = self.setting_value("alerts_enabled") == "1"
@@ -3130,7 +3288,9 @@ class Monitor:
         """Render phase, outage, summary, pin, and dwell setting lines."""
 
         lang = self.language
-        summary_time = f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        summary_time = (
+            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        )
         return [
             tr(
                 lang,
@@ -3275,7 +3435,9 @@ class Monitor:
         """Render outage, summary, and status schedule settings."""
 
         labels = self.settings_state_labels()
-        summary_time = f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        summary_time = (
+            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        )
         return "\n".join(
             [
                 tr(self.language, "settings_section_schedule"),
@@ -3373,7 +3535,11 @@ class Monitor:
     def settings_level_page_text(self, page: str) -> str:
         """Render low or high ordered voltage thresholds."""
 
-        key = "settings_section_low" if page == "low" else "settings_section_high"
+        key = (
+            "settings_section_low"
+            if page == "low"
+            else "settings_section_high"
+        )
         labels = self.settings_state_labels()
         return self.settings_title_value_text(
             key,
@@ -3416,7 +3582,9 @@ class Monitor:
         """Render daily summary state and schedule."""
 
         labels = self.settings_state_labels()
-        time_value = f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        time_value = (
+            f"{self.daily_summary_hour:02d}:{self.daily_summary_minute:02d}"
+        )
         return self.settings_title_value_text(
             "settings_section_summary_time",
             "settings_summary",
@@ -3589,7 +3757,11 @@ class Monitor:
 
         button = self.setting_button
         return [
-            [button(tr(self.language, "button_outage"), "availability_toggle")],
+            [
+                button(
+                    tr(self.language, "button_outage"), "availability_toggle"
+                )
+            ],
             [button(tr(self.language, "button_summary"), "daily_toggle")],
             [
                 button("Summary -1h", "dailyhour_dec"),
@@ -3690,7 +3862,9 @@ class Monitor:
             )
             for label, action, value in choices
         ]
-        rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+        rows = [
+            buttons[index : index + 2] for index in range(0, len(buttons), 2)
+        ]
         rows.append([self.settings_back_button("device")])
         return rows
 
@@ -3770,7 +3944,11 @@ class Monitor:
         )
         buttons = []
         for value in values:
-            label = "OFF" if value == 0 else tr(self.language, "minutes", value=value)
+            label = (
+                "OFF"
+                if value == 0
+                else tr(self.language, "minutes", value=value)
+            )
             buttons.append(
                 self.settings_action_button(
                     self.selected_choice(label, current == value),
@@ -3778,7 +3956,9 @@ class Monitor:
                     f"{prefix}_{value}",
                 )
             )
-        rows = [buttons[index : index + 2] for index in range(0, len(buttons), 2)]
+        rows = [
+            buttons[index : index + 2] for index in range(0, len(buttons), 2)
+        ]
         rows.append([self.settings_back_button("notifications")])
         return rows
 
@@ -3788,14 +3968,20 @@ class Monitor:
         action = self.settings_action_button
         return [
             [
-                action(tr(self.language, "button_test_loud"), "tests", "test_loud"),
+                action(
+                    tr(self.language, "button_test_loud"), "tests", "test_loud"
+                ),
                 action(
                     tr(self.language, "button_test_silent"),
                     "tests",
                     "test_silent",
                 ),
             ],
-            [action(tr(self.language, "button_test_edit"), "tests", "test_edit")],
+            [
+                action(
+                    tr(self.language, "button_test_edit"), "tests", "test_edit"
+                )
+            ],
             [self.settings_back_button("notifications")],
         ]
 
@@ -3916,7 +4102,11 @@ class Monitor:
                 )
             ],
             [nav("settings_section_summary_time", "summary_time")],
-            [action(tr(self.language, "button_pin"), "schedule", "pin_toggle")],
+            [
+                action(
+                    tr(self.language, "button_pin"), "schedule", "pin_toggle"
+                )
+            ],
             [self.settings_back_button("main")],
         ]
 
@@ -3974,7 +4164,9 @@ class Monitor:
             "cooldown": lambda: self.settings_choice_rows(
                 "cooldown", "cooldown", (0, 3, 5, 10)
             ),
-            "edit": lambda: self.settings_choice_rows("edit", "editwindow", (3, 5, 10)),
+            "edit": lambda: self.settings_choice_rows(
+                "edit", "editwindow", (3, 5, 10)
+            ),
             "tests": self.settings_test_rows,
             "voltage": self.settings_voltage_rows,
             "low": self.settings_low_rows,
@@ -4038,7 +4230,9 @@ class Monitor:
         values[key] = str((int(values[key]) + step) % 24)
         return True
 
-    def apply_toggle_or_language(self, action: str, values: dict[str, str]) -> bool:
+    def apply_toggle_or_language(
+        self, action: str, values: dict[str, str]
+    ) -> bool:
         """Apply one boolean toggle or language selection."""
 
         toggles = {
@@ -4096,7 +4290,9 @@ class Monitor:
             values["low_v"] = f"{max(95.0, candidate - 5):g}"
         return True
 
-    def apply_timing_setting(self, action: str, values: dict[str, str]) -> bool:
+    def apply_timing_setting(
+        self, action: str, values: dict[str, str]
+    ) -> bool:
         """Adjust daily-summary time and alert dwell values."""
 
         if action in {"dailyhour_dec", "dailyhour_inc"}:
@@ -4105,7 +4301,9 @@ class Monitor:
             return True
         if action in {"dailymin_dec", "dailymin_inc"}:
             step = -5 if action.endswith("dec") else 5
-            values["daily_minute"] = str((int(values["daily_minute"]) + step) % 60)
+            values["daily_minute"] = str(
+                (int(values["daily_minute"]) + step) % 60
+            )
             return True
         if action in {
             "dwell_dec",
@@ -4113,9 +4311,15 @@ class Monitor:
             "recdwell_dec",
             "recdwell_inc",
         }:
-            key = "recovery_dwell" if action.startswith("recdwell") else "alert_dwell"
+            key = (
+                "recovery_dwell"
+                if action.startswith("recdwell")
+                else "alert_dwell"
+            )
             step = -5.0 if action.endswith("dec") else 5.0
-            values[key] = f"{max(0.0, min(300.0, float(values[key]) + step)):g}"
+            values[key] = (
+                f"{max(0.0, min(300.0, float(values[key]) + step)):g}"
+            )
             return True
         return False
 
@@ -4155,15 +4359,21 @@ class Monitor:
             if original.get(name) == value:
                 continue
             try:
-                self.storage.audit_setting(user_id, name, original.get(name), value)
+                self.storage.audit_setting(
+                    user_id, name, original.get(name), value
+                )
             except sqlite3.Error as exc:
-                logger.warning("Settings audit write failed: {}", type(exc).__name__)
+                logger.warning(
+                    "Settings audit write failed: {}", type(exc).__name__
+                )
         self.load_runtime_settings()
 
     def update_setting(self, action: str, user_id: str = "system") -> None:
         """Apply one validated settings action and persist it."""
 
-        values = {name: self.setting_value(name) for name in self.setting_defaults()}
+        values = {
+            name: self.setting_value(name) for name in self.setting_defaults()
+        }
         original = values.copy()
         if action in {"maint_60", "maint_off"}:
             self.set_maintenance(60 if action == "maint_60" else 0)
@@ -4224,7 +4434,9 @@ class Monitor:
             page, setting = self.settings_callback_action(action)
             if setting is not None:
                 self.apply_settings_callback(setting, user_id)
-                self.telegram.answer_callback(callback_id, tr(self.language, "saved"))
+                self.telegram.answer_callback(
+                    callback_id, tr(self.language, "saved")
+                )
             else:
                 self.telegram.answer_callback(callback_id)
             self.telegram.edit(
@@ -4254,12 +4466,17 @@ class Monitor:
         """Validate one settings callback and return its execution context."""
 
         message = query.get("message") or {}
-        if str(message.get("chat", {}).get("id", "")) != self.cfg.telegram_chat_id:
+        if (
+            str(message.get("chat", {}).get("id", ""))
+            != self.cfg.telegram_chat_id
+        ):
             return None
         callback_id = str(query.get("id", ""))
         user_id = str((query.get("from") or {}).get("id", ""))
         if not self.is_admin(user_id):
-            self.telegram.answer_callback(callback_id, tr(self.language, "only_admin"))
+            self.telegram.answer_callback(
+                callback_id, tr(self.language, "only_admin")
+            )
             return None
         data = str(query.get("data", ""))
         if not data.startswith("cfg:"):
@@ -4354,9 +4571,13 @@ class Monitor:
     def handle_settings_command(self, sender_id: str) -> None:
         """Send settings and show edit controls only to an administrator."""
 
-        keyboard = self.settings_keyboard() if self.is_admin(sender_id) else None
+        keyboard = (
+            self.settings_keyboard() if self.is_admin(sender_id) else None
+        )
         try:
-            self.telegram.send(self.settings_page_text("main"), reply_markup=keyboard)
+            self.telegram.send(
+                self.settings_page_text("main"), reply_markup=keyboard
+            )
         except Exception as exc:
             logger.warning("Telegram settings response failed: {}", exc)
 
@@ -4403,22 +4624,17 @@ class Monitor:
 
         message = query.get("message") or {}
         user = query.get("from") or {}
-        if str(message.get("chat", {}).get("id", "")) != self.cfg.telegram_chat_id:
+        if (
+            str(message.get("chat", {}).get("id", ""))
+            != self.cfg.telegram_chat_id
+        ):
             return
         if not self.message_sender_allowed({"from": user}):
             return
         action = str(query.get("data", "")).removeprefix("menu:")
         allowed = {
-            "status",
-            "settings",
-            "today",
-            "outages",
-            "chart",
-            "help",
-            "apartments",
-            "updates",
-            "events",
-            "summary",
+            "status", "settings", "today", "outages", "chart",
+            "help", "apartments", "updates", "events", "summary",
         }
         if action not in allowed:
             return
@@ -4441,7 +4657,9 @@ class Monitor:
         """Allow repeated clicks when Telegram already has the same text."""
 
         try:
-            self.telegram.edit(message_id, text, reply_markup=self.main_menu_keyboard())
+            self.telegram.edit(
+                message_id, text, reply_markup=self.main_menu_keyboard()
+            )
         except Exception as exc:
             if not message_not_modified(exc):
                 raise
@@ -4515,7 +4733,9 @@ class Monitor:
         try:
             message = release_notice(VERSION, self.language)
         except (ValueError, OSError, KeyError) as exc:
-            logger.warning("GitHub release check failed: {}", exc.__class__.__name__)
+            logger.warning(
+                "GitHub release check failed: {}", exc.__class__.__name__
+            )
             message = tr(self.language, "updates_check_failed")
         try:
             self.telegram.send(message, notify=False, chat_id=sender_id)
@@ -4559,7 +4779,9 @@ class Monitor:
             parts.append(phase)
         registry = ApartmentRegistry(self.cfg.database_path)
         registry.initialize()
-        response = apartment_command(registry, parts, set(self.active_phases()))
+        response = apartment_command(
+            registry, parts, set(self.active_phases())
+        )
         self.telegram.answer_callback(str(query.get("id", "")))
         self.telegram.edit(
             int(message["message_id"]),
@@ -4568,7 +4790,9 @@ class Monitor:
             chat_id=user_id,
         )
 
-    def handle_apartments_command(self, sender_id: str, parts: list[str]) -> None:
+    def handle_apartments_command(
+        self, sender_id: str, parts: list[str]
+    ) -> None:
         """Manage apartment mappings in administrator direct messages."""
 
         if not sender_id or not self.is_admin(sender_id):
@@ -4614,7 +4838,9 @@ class Monitor:
             self.telegram.send(tr(self.language, "phase_invalid"))
             return
         if not self.phase_configured(phase):
-            self.telegram.send(tr(self.language, "phase_not_configured", phase=phase))
+            self.telegram.send(
+                tr(self.language, "phase_not_configured", phase=phase)
+            )
             return
         if command == "/quality":
             hours = max(1, min(int(parts[2]) if len(parts) > 2 else 24, 168))
@@ -4684,11 +4910,15 @@ class Monitor:
             return
         try:
             minutes = (
-                0 if len(parts) < 2 or parts[1].lower() == "off" else int(parts[1])
+                0
+                if len(parts) < 2 or parts[1].lower() == "off"
+                else int(parts[1])
             )
             value = self.set_maintenance(max(0, min(minutes, 1440)))
             self.storage.audit_setting(sender_id, "maintenance", None, value)
-            self.telegram.send(tr(self.language, "maintenance_status", value=value))
+            self.telegram.send(
+                tr(self.language, "maintenance_status", value=value)
+            )
         except ValueError:
             self.telegram.send(tr(self.language, "maintenance_usage"))
 
@@ -4746,17 +4976,22 @@ class Monitor:
     def history_text(self, phase: str = "L1") -> str:
         """Render localized recent measurements for one phase."""
 
-        lines = [tr(self.language, "history_title", phase=self.phase_label(phase))]
+        lines = [
+            tr(self.language, "history_title", phase=self.phase_label(phase))
+        ]
         for ts, voltage, frequency in self.storage.recent(12, phase):
             stamp = format_time(ts, self.cfg).split()[1]
             unit_v = tr(self.language, "unit_voltage")
             unit_f = tr(self.language, "unit_frequency")
-            lines.append(f"{stamp} — {voltage:.1f} {unit_v} / {frequency:.2f} {unit_f}")
+            lines.append(
+                f"{stamp} — {voltage:.1f} {unit_v} / {frequency:.2f} {unit_f}"
+            )
         return "\n".join(lines)
 
 
 OUTAGE_COUNT_HELP = (
-    "# HELP shelly_outages_total Confirmed connectivity outages after hysteresis."
+    "# HELP shelly_outages_total "
+    "Confirmed connectivity outages after hysteresis."
 )
 OUTAGE_DURATION_HELP = (
     "# HELP shelly_outage_duration_today_seconds "
@@ -5119,7 +5354,9 @@ def telegram_chat_rows(updates: list[dict]) -> list[dict[str, object]]:
             "chat_id": chat_id,
             "type": chat.get("type"),
             "name": (
-                chat.get("title") or chat.get("username") or chat.get("first_name")
+                chat.get("title")
+                or chat.get("username")
+                or chat.get("first_name")
             ),
             "text": msg.get("text"),
         }
