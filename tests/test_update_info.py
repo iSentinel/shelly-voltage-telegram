@@ -96,6 +96,17 @@ class GitHubUpdateInfoTests(unittest.TestCase):
             ):
                 update_info.release_notice("0.5.12-hw")
 
+    def test_invalid_json_is_rejected(self):
+        """Do not accept incomplete GitHub JSON as a stable release."""
+
+        response = _Reply(release())
+        response.payload = b'{"tag_name":'
+        with (
+            patch("urllib.request.urlopen", return_value=response),
+            self.assertRaises(ValueError),
+        ):
+            update_info.release_notice("0.5.12-hw")
+
     def test_unbounded_github_response_is_rejected(self):
         """Never read arbitrarily large release JSON into the bot."""
 
