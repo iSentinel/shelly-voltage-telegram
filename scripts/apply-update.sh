@@ -145,7 +145,8 @@ PY
 
 rollback() {
     local exit_code=$?
-    trap - ERR
+    [[ "$exit_code" -ne 0 ]] || exit_code=1
+    trap - ERR INT TERM
     if [[ "$CHANGED" == true && -n "$SNAPSHOT" ]]; then
         echo "ROLLBACK: restoring previous image selection" >&2
         if [[ -f "$SNAPSHOT/override.yaml" ]]; then
@@ -218,11 +219,13 @@ main() {
     docker pull "$IMAGE@$digest"
     preflight
     snapshot
-    trap rollback ERR
+    trap rollback ERR INT TERM
     activate "$digest"
-    trap - ERR
+    trap - ERR INT TERM
     sync_public_version || echo "WARN: version status update failed" >&2
     echo "UPDATE PASS: $VERSION"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
