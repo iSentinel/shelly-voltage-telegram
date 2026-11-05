@@ -25,8 +25,8 @@ def version_numbers(version: str) -> tuple[int, int, int]:
     return tuple(int(value) for value in match.groups())
 
 
-def release_notice(installed: str, language: str = "en") -> str:
-    """Describe the latest stable release without installing anything."""
+def published_release_tag() -> str:
+    """Read a bounded and complete stable GitHub release."""
 
     headers = {"User-Agent": "shelly-voltage-telegram/updates"}
     request = urllib.request.Request(RELEASE_URL, headers=headers)
@@ -43,7 +43,7 @@ def release_notice(installed: str, language: str = "en") -> str:
     if not tag.startswith("v"):
         raise ValueError("release tag has no stable version prefix")
     newest = tag.removeprefix("v")
-    available = version_numbers(newest) > version_numbers(installed)
+    version_numbers(newest)
     expected = {f"shelly-voltage-telegram-{newest}.tar.gz", "SHA256SUMS"}
     source_assets = release.get("assets")
     if not isinstance(source_assets, list):
@@ -55,6 +55,15 @@ def release_notice(installed: str, language: str = "en") -> str:
     }
     if not expected.issubset(assets):
         raise ValueError("the release has no verified source archive")
+    return tag
+
+
+def release_notice(installed: str, language: str = "en") -> str:
+    """Describe the latest stable release without installing anything."""
+
+    tag = published_release_tag()
+    newest = tag.removeprefix("v")
+    available = version_numbers(newest) > version_numbers(installed)
     answer = tr(language, "updates_yes" if available else "updates_no")
     lines = [
         tr(language, "updates_installed", version=installed),
