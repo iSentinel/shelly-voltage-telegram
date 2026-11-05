@@ -38,6 +38,23 @@ prereleases, downgrades, the already deployed version, and missing release
 assets. It checks the source archive SHA256 and verifies the pinned multiarch
 GHCR image's Cosign certificate identity and GitHub Actions OIDC issuer.
 
+## Release promotion policy
+
+A new signed stable image tag `vX.Y.Z-hw` is created only by a push of the
+corresponding Git tag. GitHub Actions must verify that the checkout points
+to the exact tagged commit, the tag matches `VERSION`, and
+`RELEASE_VERSION` matches `VERSION`. Ordinary `main` builds remain
+unversioned development images. Manual `workflow_dispatch` builds can
+publish only `manual-*` tags and cannot sign an arbitrary commit as a
+stable release. The same source version checks remain in the GitHub Source
+Release workflow.
+
+The policy is enforced by `scripts/image_release_policy.py`, including
+unit tests for mismatched tags, candidate versions, commit identities and
+invalid manual tags. Use `python3 scripts/image_release_policy.py --help`
+to see validation parameters. Do not create the actual release tag until
+the software candidate and live hardware acceptance gates are satisfied.
+
 ## Before any installation
 
 The installer checks available space on the Docker data filesystem, the
