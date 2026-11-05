@@ -225,13 +225,12 @@ class TelegramLocaleTests(unittest.TestCase):
 
         monitor = ukrainian_monitor()
         self.assertTrue(monitor.voltage_range_text().endswith(" В"))
-        self.assertEqual(
-            APP.localized_clock_skew("uk", None), "немає даних"
-        )
+        self.assertEqual(APP.localized_clock_skew("uk", None), "немає даних")
         self.assertEqual(APP.localized_clock_skew("uk", 1.25), "+1.2с")
-        self.assertIn("увімкн.", I18N.tr(
-            "uk", "settings_phases", l2="вимкн.", l3="вимкн."
-        ))
+        self.assertIn(
+            "увімкн.",
+            I18N.tr("uk", "settings_phases", l2="вимкн.", l3="вимкн."),
+        )
 
 
 
