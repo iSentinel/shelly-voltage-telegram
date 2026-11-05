@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 DynamicUser=yes
-StateDirectory=shelly-voltage-updater
+StateDirectory=shelly-voltage-update-check
 StateDirectoryMode=0750
 WorkingDirectory=/opt/shelly-voltage
 ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/github_update.py check
