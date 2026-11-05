@@ -168,14 +168,24 @@ class ApartmentRegistry:
                 raise ValueError("assign a phase to this apartment first")
 
     def list_locations(
-        self, phase: str | None = None
+        self,
+        phase: str | None = None,
+        building: str | None = None,
+        entrance: int | None = None,
+        floor: int | None = None,
     ) -> tuple[list[tuple], int]:
-        """List assignments with optional entrance and floor metadata."""
+        """Find apartments using bound SQL parameters only."""
 
-        if phase is not None:
-            phase = valid_phase(phase)
-        predicate = "WHERE phase=?" if phase else ""
-        params = (phase,) if phase else ()
+        filters = (
+            ("phase", valid_phase(phase) if phase else None),
+            ("building", valid_building(building) if building else None),
+            ("entrance", entrance),
+            ("floor", floor),
+        )
+        clauses = [f"{column}=?" for column, value in filters
+                   if value is not None]
+        params = tuple(value for _, value in filters if value is not None)
+        predicate = "WHERE " + " AND ".join(clauses) if clauses else ""
         with closing(self.connect()) as db:
             total = db.execute(
                 f"SELECT COUNT(*) FROM apartment_phases {predicate}", params
@@ -225,11 +235,15 @@ def format_apartment_entry(
 
 
 def format_apartment_list(
-    registry: ApartmentRegistry, phase: str | None
+    registry: ApartmentRegistry,
+    phase: str | None,
+    building: str | None = None,
+    entrance: int | None = None,
+    floor: int | None = None,
 ) -> str:
-    """Render a bounded phase-filtered apartment list."""
+    """Render a bounded, filtered apartment list."""
 
-    rows, total = registry.list_locations(phase)
+    rows, total = registry.list_locations(phase, building, entrance, floor)
     lines = [format_apartment_entry(*entry) for entry in rows]
     return (
         f"Apartments: {total}"
@@ -237,6 +251,26 @@ def format_apartment_list(
         + "\n"
         + ("\n".join(lines) if lines else "No assignments")
     )
+
+
+def apartment_location_query(
+    registry: ApartmentRegistry, parts: list[str]
+) -> str:
+    """List apartments by building, entrance or floor."""
+
+    action = parts[1].lower()
+    if action == "building" and len(parts) == 3:
+        return format_apartment_list(registry, None, parts[2])
+    if action == "entrance" and len(parts) == 4:
+        entrance = valid_location_number(parts[3], "entrance", 1, 100)
+        return format_apartment_list(registry, None, parts[2], entrance)
+    if action == "floor" and len(parts) == 5:
+        entrance = valid_location_number(parts[3], "entrance", 1, 100)
+        level = valid_location_number(parts[4], "floor", 0, 200)
+        return format_apartment_list(
+            registry, None, parts[2], entrance, level
+        )
+    raise ValueError("invalid apartment location filter")
 
 
 def apartment_command(
@@ -249,6 +283,9 @@ def apartment_command(
         "/apartments add BUILDING NUMBER PHASE; "
         "/apartments range BUILDING FIRST LAST PHASE; "
         "/apartments place BUILDING NUMBER ENTRANCE FLOOR; "
+        "/apartments building BUILDING; "
+        "/apartments entrance BUILDING NUMBER; "
+        "/apartments floor BUILDING ENTRANCE FLOOR; "
         "/apartments remove BUILDING NUMBER"
     )
     if len(parts) < 2:
@@ -257,6 +294,8 @@ def apartment_command(
     if action == "list" and len(parts) in (2, 3):
         phase = valid_phase(parts[2]) if len(parts) == 3 else None
         return format_apartment_list(registry, phase)
+    if action in {"building", "entrance", "floor"}:
+        return apartment_location_query(registry, parts)
     if action == "add" and len(parts) == 5:
         phase = valid_phase(parts[4])
         if phase not in allowed:
