@@ -69,6 +69,8 @@ def published_release(tag: str | None = None) -> dict:
 
     url = f"{API}/tags/{tag}" if tag else f"{API}/latest"
     release = request_json(url)
+    if not isinstance(release, dict):
+        raise ValueError("invalid GitHub release metadata")
     if release.get("draft") or release.get("prerelease"):
         raise ValueError("draft or prerelease is not eligible")
     actual = release.get("tag_name")
@@ -131,7 +133,7 @@ def check(root: Path, state: Path) -> dict:
         "installed": current,
         "latest": latest,
         "available": version_tuple(latest) > version_tuple(current),
-        "release_url": release["html_url"],
+        "release_url": f"https://github.com/{REPO}/releases/tag/v{latest}",
         "auto_install": False,
     }
 
