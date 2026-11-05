@@ -4,6 +4,56 @@ Date: 2026-11-02
 Checkpoint: `0.5.6-hw`
 Timezone: `Europe/Kyiv`
 
+## 2026-11-05 natural 15-minute recovery checkpoint
+
+**PASS with the deployed `0.5.12-hw` recovery verifier:** A read-only
+scheduled check of the real 22:11:29 Europe/Kyiv recovery completed at
+22:28:14. It observed 76 additional samples, unchanged outage ID 10,
+a cleared recovery timer/context, a changed fingerprint of the Telegram
+status-message ID, and no change to the audible-notification timestamp.
+SQLite integrity passed, with no open outages or synthetic 0 V rows.
+
+Private accepted evidence on LXC 110:
+
+```text
+/opt/shelly-voltage/validation/natural-baselines/stable-1793909489360.json
+/opt/shelly-voltage/validation/natural-baselines/stable-verify-20261105-2229.json
+```
+
+The recorded report belongs to the checker version that actually ran.
+It **does not retroactively pass** the later stricter continuity check
+merged in PR #91. In the new `main` candidate, `stable-verify`
+also requires the original `normal` event in the retained transition
+history, with no subsequent voltage transition during the interval.
+Missing, invalid or expired evidence returns FAIL rather than an
+unfounded PASS.
+
+For an upcoming *natural* recovery, capture its baseline during the
+active 15-minute stability timer, then inspect it after the interval:
+
+```bash
+python3 scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-baseline --output /root/stable-baseline-new.json
+
+python3 scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-verify --baseline /root/stable-baseline-new.json \
+  --output /root/stable-verify-new.json
+```
+
+Use **unique filenames**: output creation is exclusive, with no
+overwrites. Capture from an event actually in progress, not from
+an earlier outage or after the timer has disappeared. Verify before
+the retained one-hour transition-history evidence expires. Do not
+simulate outages, change voltage, or call Shelly control RPCs.
+
+This proves state changes recorded by the monitor, **not** independent
+delivery or visibility of any Telegram channel message. Visual
+administrator confirmation remains a separate release gate. The
+`0.5.13-hw` candidate still requires its own acceptance before
+production installation.
+
 ## 2026-11-05 natural low-voltage event — partial acceptance
 
 The production `0.5.12-hw` monitor recorded a real warning-level
