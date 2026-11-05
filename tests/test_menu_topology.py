@@ -134,6 +134,22 @@ class MenuTopologyTests(unittest.TestCase):
         self.monitor.handle_callback({"callback_query": query})
         self.monitor.telegram.edit.assert_not_called()
 
+    def test_updates_command_requires_admin_and_private_reply(self):
+        """Never send release details to a nonadministrator or group."""
+
+        with unittest.mock.patch.object(
+            APP, "release_notice", return_value="Latest stable: 0.5.13-hw"
+        ) as lookup:
+            self.monitor.handle_updates_command("8")
+            lookup.assert_not_called()
+            self.monitor.telegram.send.assert_not_called()
+            self.monitor.handle_updates_command("7")
+            lookup.assert_called_once()
+        self.monitor.telegram.send.assert_called_once()
+        call = self.monitor.telegram.send.call_args
+        self.assertEqual(call.kwargs["chat_id"], "7")
+        self.assertFalse(call.kwargs["notify"])
+
     def test_non_admin_can_read_settings_without_write_buttons(self):
         self.monitor.handle_callback(self.callback("settings", user=8))
         self.assertIsNone(
