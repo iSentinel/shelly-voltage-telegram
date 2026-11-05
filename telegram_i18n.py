@@ -263,6 +263,10 @@ _TEXT = {
             "Остальное время неизвестно. Нет связи не "
             "означает отсутствия питания."
         ),
+        "compact_preview_title": "⚡ Краткий статус · {phases}",
+        "compact_preview_note": (
+            "ℹ️ Предпросмотр только для администратора. Сообщение канала не изменено."
+        ),
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -526,6 +530,10 @@ _TEXT = {
             "невідома. Втрата зв'язку не доводить "
             "відсутність живлення."
         ),
+        "compact_preview_title": "⚡ Короткий статус · {phases}",
+        "compact_preview_note": (
+            "ℹ️ Попередній перегляд лише для адміністратора. Повідомлення в каналі не змінено."
+        ),
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -769,6 +777,10 @@ _TEXT = {
             "apart count as observed. Remaining time is "
             "unknown. Lost connection does not prove a "
             "power outage."
+        ),
+        "compact_preview_title": "⚡ Compact status · {phases}",
+        "compact_preview_note": (
+            "ℹ️ Admin preview only. The channel message has not changed."
         ),
         "backup_missing": "💾 Backup: missing",
     },
