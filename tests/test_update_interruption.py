@@ -80,6 +80,31 @@ class InterruptedUpdateTests(unittest.TestCase):
         with closing(sqlite3.connect(self.database)) as db:
             return db.execute("SELECT id FROM samples").fetchone()[0]
 
+    def test_pending_marker_is_written_before_image_selection(self):
+        """Journal a unique snapshot before replacing the Compose image."""
+
+        (self.state / "pending-update").unlink()
+        command = (
+            'source "$1"; STATE="$2"; '
+            'PENDING_FILE="$STATE/pending-update"; '
+            'SNAPSHOT="$STATE/snapshots/$3"; mark_pending'
+        )
+        result = subprocess.run(
+            [
+                "bash", "-c", command, "bash",
+                str(ROOT / "scripts" / "apply-update.sh"),
+                str(self.state), SNAPSHOT_NAME,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            (self.state / "pending-update").read_text().strip(),
+            SNAPSHOT_NAME,
+        )
+
     def test_interrupted_candidate_restores_old_image_and_data(self):
         """Roll back and preserve a rescue copy of the newer data."""
 
