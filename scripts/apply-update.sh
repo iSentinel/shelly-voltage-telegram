@@ -34,6 +34,20 @@ parse_args() {
     }
 }
 
+check_cosign_compatibility() {
+    local version major
+    version="$(cosign version 2>/dev/null | awk '/^GitVersion:/ {print $2}')"
+    if [[ ! "$version" =~ ^v?([0-9]+)\. ]]; then
+        echo "FAIL: unsupported Cosign version ($version); require v3+" >&2
+        return 1
+    fi
+    major="${BASH_REMATCH[1]}"
+    if (( major < 3 )); then
+        echo "FAIL: Cosign v3+ required for OCI signature verification" >&2
+        return 1
+    fi
+}
+
 requirements() {
     [[ $EUID -eq 0 ]] || { echo "FAIL: root required" >&2; exit 2; }
     for name in python3 cosign docker flock curl tar sha256sum gzip; do
@@ -42,6 +56,7 @@ requirements() {
         }
     done
     docker compose version >/dev/null
+    check_cosign_compatibility
     mkdir -p "$STATE/snapshots"
     chmod 0700 "$STATE" "$STATE/snapshots"
     exec 9>/run/lock/shelly-voltage-updater.lock
