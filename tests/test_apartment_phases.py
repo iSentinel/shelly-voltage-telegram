@@ -79,9 +79,10 @@ class ApartmentRegistryTests(unittest.TestCase):
             self.registry, ["/apartments", "add", "A", "3", "L"], {"L1"}
         )
         self.assertIn("Saved", response)
-        self.assertIn("A #3: L1", apartment_command(
-            self.registry, ["/apartments", "list"], {"L1"}
-        ))
+        self.assertIn(
+            "A #3: L1",
+            apartment_command(self.registry, ["/apartments", "list"], {"L1"}),
+        )
         with self.assertRaises(ValueError):
             apartment_command(
                 self.registry, ["/apartments", "add", "A", "4", "L2"], {"L1"}
