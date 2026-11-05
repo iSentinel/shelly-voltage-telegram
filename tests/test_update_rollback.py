@@ -2,6 +2,7 @@
 
 import gzip
 import hashlib
+import os
 import sqlite3
 import subprocess
 import tempfile
@@ -65,7 +66,7 @@ class OfflineRollbackTests(unittest.TestCase):
         )
 
     def test_recovery_clears_public_version_without_deployment(self):
-        """Restoring the original image must remove stale version metadata."""
+        """Restoring the original image clears stale version metadata."""
 
         state = self.root / "private"
         public = self.root / "public"
@@ -75,24 +76,17 @@ class OfflineRollbackTests(unittest.TestCase):
             '{"version":"0.5.13-hw"}', encoding="utf-8"
         )
         script = ROOT / "scripts" / "apply-update.sh"
-        shell = (
-            'source "$1"; '
-            'STATE="$2"; PUBLIC_STATE="$3"; '
-            "sync_public_version"
-        )
+        environment = {
+            **os.environ,
+            "SVT_UPDATE_STATE": str(state),
+            "SVT_PUBLIC_STATE": str(public),
+        }
         result = subprocess.run(
-            [
-                "bash",
-                "-c",
-                shell,
-                "bash",
-                str(script),
-                str(state),
-                str(public),
-            ],
+            ["bash", "-c", 'source "$1"; sync_public_version', "bash", str(script)],
             capture_output=True,
             text=True,
             check=False,
+            env=environment,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((public / "deployed.json").exists())
