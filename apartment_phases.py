@@ -13,6 +13,7 @@ MAX_APARTMENT = 99999
 MAX_LIST = 100
 APARTMENT_USAGE = (
     "Usage: /apartments list [L1|L2|L3]; "
+    "/apartments summary; "
     "/apartments add BUILDING NUMBER PHASE; "
     "/apartments range BUILDING FIRST LAST PHASE; "
     "/apartments place BUILDING NUMBER ENTRANCE FLOOR; "
@@ -209,6 +210,15 @@ class ApartmentRegistry:
             ).fetchall()
         return rows, total
 
+    def phase_summary(self) -> list[tuple[str, str, int]]:
+        """Count assignments by building and phase without exposing flats."""
+
+        with closing(self.connect()) as db:
+            return db.execute(
+                "SELECT building,phase,COUNT(*) FROM apartment_phases "
+                "GROUP BY building,phase ORDER BY building,phase"
+            ).fetchall()
+
     def list_entries(
         self, phase: str | None = None
     ) -> tuple[list[tuple[str, int, str]], int]:
@@ -282,6 +292,17 @@ def apartment_location_query(
     raise ValueError("invalid apartment location filter")
 
 
+def format_phase_summary(registry: ApartmentRegistry) -> str:
+    """Render aggregate phase counts for administrator review."""
+
+    rows = registry.phase_summary()
+    if not rows:
+        return "Apartment phase summary: no assignments"
+    total = sum(count for _, _, count in rows)
+    lines = [f"{building} {phase}: {count}" for building, phase, count in rows]
+    return f"Apartment phase summary: {total}\n" + "\n".join(lines)
+
+
 def apartment_command(
     registry: ApartmentRegistry, parts: list[str], allowed: set[str]
 ) -> str:
@@ -290,6 +311,8 @@ def apartment_command(
     if len(parts) < 2:
         return APARTMENT_USAGE
     action = parts[1].lower()
+    if action == "summary" and len(parts) == 2:
+        return format_phase_summary(registry)
     if action == "list" and len(parts) in (2, 3):
         phase = valid_phase(parts[2]) if len(parts) == 3 else None
         return format_apartment_list(registry, phase)
