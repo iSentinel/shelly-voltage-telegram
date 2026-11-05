@@ -43,6 +43,19 @@ def valid_phase(value: str) -> str:
     return phase
 
 
+def valid_location_number(
+    value: str, name: str, minimum: int, maximum: int
+) -> int:
+    """Validate one entrance or floor number."""
+
+    if not value.isdecimal():
+        raise ValueError(f"{name} must be a whole number")
+    number = int(value)
+    if not minimum <= number <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return number
+
+
 class ApartmentRegistry:
     """Manage phase assignments in a separate SQLite table."""
 
@@ -72,6 +85,19 @@ class ApartmentRegistry:
                 "CREATE INDEX IF NOT EXISTS idx_apartment_phases_phase "
                 "ON apartment_phases(phase, building, apartment)"
             )
+            existing = {
+                row[1]
+                for row in db.execute("PRAGMA table_info(apartment_phases)")
+            }
+            for name, constraint in (
+                ("entrance", "BETWEEN 1 AND 100"),
+                ("floor", "BETWEEN 0 AND 200"),
+            ):
+                if name not in existing:
+                    db.execute(
+                        f"ALTER TABLE apartment_phases ADD COLUMN {name} "
+                        f"INTEGER CHECK({name} {constraint})"
+                    )
 
     def assign(self, building: str, apartment: str, phase: str) -> None:
         """Add or move one apartment atomically."""
@@ -123,6 +149,45 @@ class ApartmentRegistry:
             )
             return result.rowcount > 0
 
+    def set_location(
+        self, building: str, apartment: str, entrance: str, floor: str
+    ) -> None:
+        """Record an entrance and floor for an assigned apartment."""
+
+        building = valid_building(building)
+        number = valid_apartment(apartment)
+        entry = valid_location_number(entrance, "entrance", 1, 100)
+        level = valid_location_number(floor, "floor", 0, 200)
+        with closing(self.connect()) as db, db:
+            result = db.execute(
+                "UPDATE apartment_phases SET entrance=?, floor=? "
+                "WHERE building=? AND apartment=?",
+                (entry, level, building, number),
+            )
+            if result.rowcount == 0:
+                raise ValueError("assign a phase to this apartment first")
+
+    def list_locations(
+        self, phase: str | None = None
+    ) -> tuple[list[tuple], int]:
+        """List assignments with optional entrance and floor metadata."""
+
+        if phase is not None:
+            phase = valid_phase(phase)
+        predicate = "WHERE phase=?" if phase else ""
+        params = (phase,) if phase else ()
+        with closing(self.connect()) as db:
+            total = db.execute(
+                f"SELECT COUNT(*) FROM apartment_phases {predicate}", params
+            ).fetchone()[0]
+            rows = db.execute(
+                "SELECT building,apartment,phase,entrance,floor "
+                f"FROM apartment_phases {predicate} "
+                "ORDER BY building,apartment LIMIT ?",
+                (*params, MAX_LIST),
+            ).fetchall()
+        return rows, total
+
     def list_entries(
         self, phase: str | None = None
     ) -> tuple[list[tuple[str, int, str]], int]:
@@ -144,16 +209,25 @@ class ApartmentRegistry:
         return rows, total
 
 
+def format_apartment_entry(
+    building: str, apartment: int, phase: str,
+    entrance: int | None, floor: int | None
+) -> str:
+    """Render an apartment with optional building-location details."""
+
+    label = f"{building} #{apartment}: {phase}"
+    if entrance is not None and floor is not None:
+        label += f" (entrance {entrance}, floor {floor})"
+    return label
+
+
 def format_apartment_list(
     registry: ApartmentRegistry, phase: str | None
 ) -> str:
     """Render a bounded phase-filtered apartment list."""
 
-    rows, total = registry.list_entries(phase)
-    lines = [
-        f"{building} #{number}: {phase_name}"
-        for building, number, phase_name in rows
-    ]
+    rows, total = registry.list_locations(phase)
+    lines = [format_apartment_entry(*entry) for entry in rows]
     return (
         f"Apartments: {total}"
         + (" (first 100)" if total > MAX_LIST else "")
@@ -171,6 +245,7 @@ def apartment_command(
         "Usage: /apartments list [L1|L2|L3]; "
         "/apartments add BUILDING NUMBER PHASE; "
         "/apartments range BUILDING FIRST LAST PHASE; "
+        "/apartments place BUILDING NUMBER ENTRANCE FLOOR; "
         "/apartments remove BUILDING NUMBER"
     )
     if len(parts) < 2:
@@ -191,6 +266,9 @@ def apartment_command(
             raise ValueError("phase is not configured on this monitor")
         count = registry.assign_range(parts[2], parts[3], parts[4], phase)
         return f"Saved {count} apartments in {parts[2]} on {phase}"
+    if action == "place" and len(parts) == 6:
+        registry.set_location(parts[2], parts[3], parts[4], parts[5])
+        return f"Location saved: {parts[2]} #{int(parts[3])}"
     if action == "remove" and len(parts) == 4:
         removed = registry.remove(parts[2], parts[3])
         return "Removed" if removed else "Assignment not found"
