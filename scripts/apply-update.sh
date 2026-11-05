@@ -11,6 +11,7 @@ DRY_RUN=false
 SNAPSHOT=""
 CHANGED=false
 PENDING_FILE="$STATE/pending-update"
+WORKSPACE=""
 PUBLIC_STATE="${SVT_PUBLIC_STATE:-/var/lib/shelly-voltage-update-check}"
 
 usage() {
@@ -283,10 +284,9 @@ main() {
     digest="$(python3 "$ROOT/scripts/github_update.py" digest \
         --version "$VERSION")"
     verify_image "$digest"
-    local workspace
-    workspace="$(mktemp -d)"
-    trap 'rm -rf "$workspace"' EXIT
-    verify_source_archive "$workspace"
+    WORKSPACE="$(mktemp -d)"
+    trap 'rm -rf -- "$WORKSPACE"' EXIT
+    verify_source_archive "$WORKSPACE"
     if [[ "$DRY_RUN" == true ]]; then
         echo "DRY-RUN PASS: signed $IMAGE@$digest, no changes"
         return
