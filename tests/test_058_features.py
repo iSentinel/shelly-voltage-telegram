@@ -159,7 +159,8 @@ class TranslationHelperTests(unittest.TestCase):
         for language in APP.LANGUAGES:
             with self.subTest(language=language):
                 descriptions = APP.command_descriptions(language)
-                self.assertEqual(len(descriptions), 18)
+                self.assertEqual(len(descriptions), 19)
+                self.assertTrue(descriptions["events"])
                 self.assertTrue(descriptions["settings"])
                 self.assertTrue(descriptions["updates"])
 
