@@ -1526,14 +1526,14 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     connectivity = str(snap["connectivity"])
     if connectivity == "offline":
         return tr(lang, "phase_offline", phase=phase)
-    if snap["voltage"] is None or connectivity == "starting":
-        key = (
-            "phase_starting" if connectivity == "starting" else "phase_no_data"
-        )
-        return f"🟡 {phase}: {tr(lang, key)}"
+    if snap["voltage"] is None:
+        return f"🟡 {phase}: {tr(lang, 'phase_no_data')}"
     voltage = float(snap["voltage"])
     if connectivity == "recovering":
         return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
+    if connectivity == "starting":
+        unit = tr(lang, "unit_voltage")
+        return f"🟡 {phase}: {voltage:.1f} {unit}"
     warning = voltage <= monitor.warning_low or voltage >= monitor.warning_high
     critical = (
         voltage <= monitor.critical_low or voltage >= monitor.critical_high
@@ -1549,7 +1549,12 @@ def voltage_event_lines(monitor: Monitor) -> list[str]:
     if event is None or not monitor.phase_configured(event[4]):
         return []
     kind, voltage, frequency, happened_at, phase = event
-    if kind == "recovered" and time.time() - happened_at >= 1800:
+    last_success = monitor.state.snapshot().get("last_success")
+    if (
+        kind == "recovered"
+        and last_success is not None
+        and float(last_success) - happened_at >= 1800
+    ):
         return []
     title = tr(monitor.language, f"event_{kind}")
     if phase != "L1":
