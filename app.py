@@ -3690,7 +3690,6 @@ class Monitor:
     def notification_policy_rows(self) -> list[list[dict[str, str]]]:
         """Build quiet-hours, cooldown, and edit-window controls."""
 
-        b = self.setting_button
         tb = self.translated_button
         return [
             [tb("button_silent", "silent_toggle")],
