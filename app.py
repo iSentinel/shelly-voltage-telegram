@@ -1515,6 +1515,18 @@ def status_text(
     return "\n".join(lines)
 
 
+def localized_clock_skew(language: str, seconds: object) -> str:
+    """Render a device time difference in the selected language."""
+
+    if seconds is None:
+        return tr(language, "device_unknown")
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError, OverflowError):
+        return tr(language, "device_unknown")
+    return f"{value:+.1f}{tr(language, 'unit_seconds')}"
+
+
 def phase_line(monitor: Monitor, phase: str) -> str:
     """Render one localized phase line."""
 
@@ -3077,7 +3089,7 @@ class Monitor:
             try:
                 info = self.phase_clients[phase].device_health()
                 skew = info.get("time_skew_sec")
-                skew_text = "n/a" if skew is None else f"{float(skew):+.1f}s"
+                skew_text = localized_clock_skew(self.language, skew)
                 lines.append(
                     tr(
                         self.language,
@@ -3380,9 +3392,10 @@ class Monitor:
     def voltage_range_text(self) -> str:
         """Return the ordered warning and critical voltage range."""
 
+        unit = tr(self.language, "unit_voltage")
         return (
             f"{self.critical_low:g}/{self.warning_low:g}–"
-            f"{self.warning_high:g}/{self.critical_high:g} V"
+            f"{self.warning_high:g}/{self.critical_high:g} {unit}"
         )
 
     def settings_device_text(self) -> str:
