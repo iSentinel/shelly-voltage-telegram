@@ -64,6 +64,8 @@ The importer validates the entire file before writing anything. By default
 it is a **dry-run**, which leaves the SQLite database unchanged. An explicit
 `--apply` performs one transaction after validation. Duplicate apartments,
 unknown phases, incomplete locations and more than 1000 rows are rejected.
+Files larger than 256 KiB, duplicate CSV header names and symbolic links
+to either input CSV or SQLite database are also rejected.
 Blank entrance and floor values preserve existing location details.
 
 ```bash
