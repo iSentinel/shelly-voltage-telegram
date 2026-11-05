@@ -4,6 +4,34 @@ Date: 2026-11-02
 Checkpoint: `0.5.6-hw`
 Timezone: `Europe/Kyiv`
 
+## 2026-11-05 natural low-voltage event — partial acceptance
+
+The production `0.5.12-hw` monitor recorded a real warning-level
+voltage drop after natural power restoration, without simulated
+electrical failures:
+
+- Configured low warning: **207 V**; critical low: **190 V**.
+- Measured minimum: **200.0 V**; 18 samples below the warning threshold.
+- Persisted phase L1 `low` transition: **19:31:47 Europe/Kyiv**.
+- Persisted `normal` transition: **19:34:49 Europe/Kyiv**.
+- Persisted low state: **182.4 seconds**.
+- Last audible-notification timestamp matched the `low` transition.
+- Production remained healthy/ready; SQLite integrity passed,
+  no outage remained open, and no synthetic 0 V samples were stored.
+
+Evidence is kept privately on LXC 110 as
+`validation/2026-11-05-natural-voltage-transition.json`.
+The report stores threshold/timing evidence, not Telegram identifiers
+or device credentials.
+
+**Acceptance boundary:** warning-level detection and recovery on
+`0.5.12-hw` are physically observed. This does **not** establish
+subscriber-visible Telegram delivery, reuse of the same message for
+warning/recovery, the full 15-minute stable-status rotation, critical
+voltage behavior, or production approval for the `0.5.13-hw` candidate.
+The last full electrical-transition checkpoint remains `0.5.6-hw`
+until the other mandatory checks pass.
+
 ## Device identity
 
 Validated against a physical Shelly Pro EM-50:
