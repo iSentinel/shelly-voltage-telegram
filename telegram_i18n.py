@@ -33,6 +33,18 @@ _TEXT = {
         "cmd_audit": "Журнал настроек",
         "cmd_device": "Состояние Shelly",
         "cmd_updates": "Проверить GitHub Releases",
+        "updates_installed": "Установленная версия: {version}",
+        "updates_latest": "Последний стабильный релиз GitHub: {version}",
+        "updates_available": "Обновление доступно: {answer}",
+        "updates_yes": "да",
+        "updates_no": "нет",
+        "updates_auto_disabled": "Автоматическая установка: выключена",
+        "updates_manual_required": (
+            "Для установки требуется подтверждение администратора на сервере."
+        ),
+        "updates_check_failed": (
+            "Не удалось проверить опубликованный релиз GitHub."
+        ),
         "phase_unconfigured": "⚪ {phase}: не настроена",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -218,6 +230,19 @@ _TEXT = {
         "cmd_audit": "Журнал налаштувань",
         "cmd_device": "Стан Shelly",
         "cmd_updates": "Перевірити GitHub Releases",
+        "updates_installed": "Встановлена версія: {version}",
+        "updates_latest": "Останній стабільний реліз GitHub: {version}",
+        "updates_available": "Оновлення доступне: {answer}",
+        "updates_yes": "так",
+        "updates_no": "ні",
+        "updates_auto_disabled": "Автоматичне встановлення: вимкнено",
+        "updates_manual_required": (
+            "Для встановлення потрібне підтвердження "
+            "адміністратора на сервері."
+        ),
+        "updates_check_failed": (
+            "Не вдалося перевірити опублікований реліз GitHub."
+        ),
         "phase_unconfigured": "⚪ {phase}: не налаштована",
         "phase_offline": "🔴 {phase}: недоступна",
         "phase_starting": "запуск",
@@ -372,6 +397,17 @@ _TEXT = {
         "cmd_audit": "Settings audit",
         "cmd_device": "Shelly health",
         "cmd_updates": "Check GitHub releases",
+        "updates_installed": "Installed: {version}",
+        "updates_latest": "Latest stable GitHub release: {version}",
+        "updates_available": "Update available: {answer}",
+        "updates_yes": "yes",
+        "updates_no": "no",
+        "updates_auto_disabled": "Automatic installation: disabled",
+        "updates_manual_required": (
+            "Installation requires explicit administrator "
+            "approval on the host."
+        ),
+        "updates_check_failed": "GitHub release check unavailable.",
         "phase_unconfigured": "⚪ {phase}: not configured",
         "phase_offline": "🔴 {phase}: unavailable",
         "phase_starting": "starting",

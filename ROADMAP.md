@@ -1,3 +1,22 @@
+## 2026-11-05 private and localized update-check follow-up
+
+- IMPLEMENTED IN SOURCE (not deployed): administrator-only `/updates`
+  and the Telegram Updates menu now use the configured Russian, Ukrainian
+  or English language instead of English-only messages.
+- IMPLEMENTED IN SOURCE (not deployed): only published stable GitHub
+  Releases containing both the matching source archive and SHA256SUMS are
+  eligible for an availability notice; incomplete release assets are
+  rejected. The displayed URL uses the validated tag on the canonical
+  project GitHub Releases page.
+- IMPLEMENTED IN SOURCE (not deployed): network or metadata errors produce
+  a short private localized message, without exposing internal details
+  into the shared Telegram control chat.
+- TESTING: full CI and isolated quality acceptance are required before
+  merge. No production Docker update, timer installation or Telegram
+  delivery is authorized during natural outage #10.
+- NEXT HARDWARE STEP: after natural recovery, verify actual private
+  Telegram delivery and close the outage #10 hardware acceptance baseline.
+
 ## 2026-11-05 final read-only updater and Git tag acceptance
 
 - PASS: a real Github Releases API request from the isolated LXC 111

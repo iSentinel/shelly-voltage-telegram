@@ -168,6 +168,20 @@ class MenuTopologyTests(unittest.TestCase):
         self.assertEqual(call.kwargs["chat_id"], "7")
         self.assertFalse(call.kwargs["notify"])
 
+    def test_updates_error_is_private_and_contains_no_network_details(self):
+        """Keep GitHub request errors out of public Telegram messages."""
+
+        with unittest.mock.patch.object(
+            APP, "release_notice", side_effect=OSError("private-url-error")
+        ) as lookup:
+            self.monitor.handle_updates_command("7")
+            lookup.assert_called_once()
+        self.monitor.telegram.send.assert_called_once()
+        call = self.monitor.telegram.send.call_args
+        self.assertEqual(call.kwargs["chat_id"], "7")
+        self.assertNotIn("private-url-error", call.args[0])
+        self.assertIn("GitHub", call.args[0])
+
     def test_non_admin_can_read_settings_without_write_buttons(self):
         self.monitor.handle_callback(self.callback("settings", user=8))
         self.assertIsNone(

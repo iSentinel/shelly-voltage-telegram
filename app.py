@@ -4524,9 +4524,12 @@ class Monitor:
         if not sender_id or not self.is_admin(sender_id):
             return
         try:
-            message = release_notice(VERSION)
+            message = release_notice(VERSION, self.language)
         except (ValueError, OSError, KeyError) as exc:
-            message = f"GitHub release check unavailable: {exc}"
+            logger.warning(
+                "GitHub release check failed: {}", exc.__class__.__name__
+            )
+            message = tr(self.language, "updates_check_failed")
         try:
             self.telegram.send(message, notify=False, chat_id=sender_id)
         except Exception as exc:
