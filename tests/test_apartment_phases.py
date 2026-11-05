@@ -124,9 +124,7 @@ class ApartmentRegistryTests(unittest.TestCase):
         self.registry.set_location("HouseA", "12", "2", "5")
         restarted = ApartmentRegistry(self.path)
         restarted.initialize()
-        self.assertEqual(
-            restarted.list_entries(), ([("HouseA", 12, "L1")], 1)
-        )
+        self.assertEqual(restarted.list_entries(), ([("HouseA", 12, "L1")], 1))
         response = apartment_command(
             restarted, ["/apartments", "list"], {"L1"}
         )
@@ -142,8 +140,11 @@ class ApartmentRegistryTests(unittest.TestCase):
 
         self.registry.assign("A", "4", "L1")
         for entrance, floor in (
-            ("0", "2"), ("101", "2"), ("1", "201"),
-            ("-1", "2"), ("x", "2"),
+            ("0", "2"),
+            ("101", "2"),
+            ("1", "201"),
+            ("-1", "2"),
+            ("x", "2"),
         ):
             with (
                 self.subTest(entrance=entrance, floor=floor),
@@ -152,10 +153,10 @@ class ApartmentRegistryTests(unittest.TestCase):
                 self.registry.set_location("A", "4", entrance, floor)
         with self.assertRaises(ValueError):
             self.registry.set_location("A", "999", "1", "2")
+        self.assertEqual(self.registry.list_entries(), ([("A", 4, "L1")], 1))
         self.assertEqual(
-            self.registry.list_entries(), ([("A", 4, "L1")], 1)
+            self.registry.list_locations()[0][0][3:], (None, None)
         )
-        self.assertEqual(self.registry.list_locations()[0][0][3:], (None, None))
 
     def test_place_command_and_ground_floor(self):
         """Location commands accept ground floor and preserve other data."""
