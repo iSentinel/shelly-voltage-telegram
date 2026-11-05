@@ -212,7 +212,7 @@ class ApartmentRegistryTests(unittest.TestCase):
                 apartment_command(self.registry, parts, {"L1"})
 
     def test_phase_summary_counts_without_apartment_numbers(self):
-        """Show counts per building and phase without exposing apartment IDs."""
+        """Show phase counts without exposing apartment numbers."""
 
         self.registry.assign("A", "12", "L1")
         self.registry.assign("A", "13", "L1")
