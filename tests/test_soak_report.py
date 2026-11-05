@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from contextlib import closing
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
@@ -142,6 +143,39 @@ class SoakReportTests(unittest.TestCase):
             self.assertNotIn("should-not-leak", json.dumps(report))
             self.assertIn(
                 "not a complete", report["voltage_transition_interpretation"]
+            )
+
+    def test_transition_order_survives_daylight_saving_change(self):
+        """Sort by real time, even when local clocks move backward."""
+
+        before = datetime(
+            2026, 10, 25, 3, 55, tzinfo=timezone(timedelta(hours=3))
+        ).timestamp()
+        after = datetime(
+            2026, 10, 25, 3, 5, tzinfo=timezone(timedelta(hours=2))
+        ).timestamp()
+        self.assertLess(before, after)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clock.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE meta(key TEXT,value TEXT)")
+                history = [
+                    {"at": after, "state": "normal", "phase": "L1"},
+                    {"at": before, "state": "low", "phase": "L1"},
+                ]
+                db.execute(
+                    "INSERT INTO meta VALUES(?,?)",
+                    ("voltage_transition_history", json.dumps(history)),
+                )
+            report = SOAK.voltage_transitions(
+                path, before - 60, after + 60, ZoneInfo("Europe/Kyiv")
+            )
+            self.assertEqual(
+                [
+                    item["state"]
+                    for item in report["voltage_transition_events"]
+                ],
+                ["low", "normal"],
             )
 
     def test_invalid_voltage_history_is_reported(self):
