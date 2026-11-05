@@ -49,6 +49,35 @@ duplicates. `list` shows up to 100 assignments and reports the total.
 `remove` is safe to repeat. All commands require a configured Telegram
 administrator ID. A regular user never receives the apartment list.
 
+
+## CSV import (administrator CLI)
+
+Import a five-column UTF-8 CSV with this exact header:
+
+```csv
+building,apartment,phase,entrance,floor
+HouseA,12,L1,2,5
+HouseA,13,L1,,
+```
+
+The importer validates the entire file before writing anything. By default
+it is a **dry-run**, which leaves the SQLite database unchanged. An explicit
+`--apply` performs one transaction after validation. Duplicate apartments,
+unknown phases, incomplete locations and more than 1000 rows are rejected.
+Blank entrance and floor values preserve existing location details.
+
+```bash
+python3 scripts/import_apartments.py --help
+python3 scripts/import_apartments.py \
+  --csv /tmp/apartments.csv --db /path/to/voltage.sqlite3
+python3 scripts/import_apartments.py \
+  --csv /tmp/apartments.csv --db /path/to/voltage.sqlite3 --apply
+```
+
+Run `--apply` only after backing up the database. For a three-phase meter,
+use `--allowed-phases L1,L2,L3` only if all three phases are actually
+configured. The CLI does not contact Shelly or Telegram.
+
 ## Storage and safety
 
 Mappings are held in the existing SQLite database in a separate
