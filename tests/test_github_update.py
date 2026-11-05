@@ -34,7 +34,10 @@ class ReleaseUpdaterTests(unittest.TestCase):
             "tag_name": "v0.5.13-hw",
             "draft": False,
             "prerelease": False,
-            "html_url": "https://github.com/iSentinel/shelly-voltage-telegram/releases/tag/v0.5.13-hw",
+            "html_url": (
+                "https://github.com/iSentinel/shelly-voltage-telegram/"
+                "releases/tag/v0.5.13-hw"
+            ),
             "assets": [{"name": "shelly-voltage-telegram-0.5.13-hw.tar.gz"}],
         }
 
@@ -49,7 +52,9 @@ class ReleaseUpdaterTests(unittest.TestCase):
     def test_daily_check_does_not_install(self):
         """Report a published update without changing the installation."""
 
-        with patch.object(updater, "published_release", return_value=self.latest):
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
             status = updater.check(self.root, self.state)
         self.assertTrue(status["available"])
         self.assertFalse(status["auto_install"])
@@ -63,19 +68,31 @@ class ReleaseUpdaterTests(unittest.TestCase):
         (self.state / "deployed.json").write_text(
             json.dumps({"version": "0.5.13-hw", "digest": "sha256:abc"})
         )
-        with patch.object(updater, "published_release", return_value=self.latest):
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
             self.assertFalse(updater.check(self.root, self.state)["available"])
 
     def test_refuse_unpublished_or_prerelease(self):
         """A draft or unlisted archive cannot become an update."""
 
-        with patch.object(updater, "request_json", return_value={
-            **self.latest, "prerelease": True
-        }), self.assertRaises(ValueError):
+        with (
+            patch.object(
+                updater,
+                "request_json",
+                return_value={**self.latest, "prerelease": True},
+            ),
+            self.assertRaises(ValueError),
+        ):
             updater.published_release()
-        with patch.object(updater, "request_json", return_value={
-            **self.latest, "assets": []
-        }), self.assertRaises(ValueError):
+        with (
+            patch.object(
+                updater,
+                "request_json",
+                return_value={**self.latest, "assets": []},
+            ),
+            self.assertRaises(ValueError),
+        ):
             updater.published_release()
 
     def test_preflight_online_and_no_outages(self):
@@ -122,7 +139,9 @@ class ReleaseUpdaterTests(unittest.TestCase):
         file = self.state / "status.json"
         updater.atomic_json(file, {"installed": "0.5.12-hw"})
         updater.atomic_json(file, {"installed": "0.5.13-hw"})
-        self.assertEqual(json.loads(file.read_text())["installed"], "0.5.13-hw")
+        self.assertEqual(
+            json.loads(file.read_text())["installed"], "0.5.13-hw"
+        )
 
 
 class _JsonReply:
