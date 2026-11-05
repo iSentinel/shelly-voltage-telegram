@@ -1,3 +1,12 @@
+## Planned: apartment-to-phase mapping (Telegram)
+
+- FUTURE: administrator-managed buildings and apartment numbers mapped to a monitored phase (`L` for single-phase devices; `L1`/`L2`/`L3` for supported three-phase configurations).
+- FUTURE: add, remove, move and bulk-import apartment numbers; validate duplicates and phase assignments; persist mappings in SQLite with migration, backup and restore coverage.
+- FUTURE: compact `/settings` management, read-only phase lists and optional per-phase apartment counts in Telegram, with RU/UA/EN localization.
+- FUTURE: opt-in phase-scoped incident notifications with recipient authorization and privacy safeguards; do not publish apartment lists to public chats by default.
+- SAFETY: mapping is administrative metadata only. A phase voltage reading does not establish power availability for an individual apartment or detect apartment-level breaker trips. Do not infer per-apartment electrical status without dedicated sensors.
+- ACCEPTANCE: unit and migration tests, invalid-input tests, restart persistence, non-regression of the active Pro EM-50 monitor, and future physical Pro 3EM phase-label verification. No production deployment in this planning stage.
+
 ## 2026-11-04 natural restoration evidence (partial hardware acceptance)
 
 - PASS: a naturally occurring Pro EM-50 availability outage was recorded
