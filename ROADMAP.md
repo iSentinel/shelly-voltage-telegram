@@ -1,3 +1,41 @@
+## 2026-11-05 offline software checkpoint after PR #72-75
+
+- CURRENT PHYSICAL STATE: Shelly Pro EM-50 is offline during natural
+  outage #10. LXC 110 reports `/ready` HTTP 503, 18,850 historical
+  samples, zero fabricated 0 V measurements, one open outage and
+  SQLite `PRAGMA quick_check=ok`. The production bot stays at
+  `0.5.12-hw`, Docker healthy with zero restarts, no updater/timer.
+- PASS: an isolated source checkout of latest `main` ran the updater
+  electrical preflight against the read-only live SQLite. It rejected
+  installation with HTTP 503. Nothing was installed, promoted or
+  restarted in production.
+- DONE: PR #72 bounded GitHub Releases response size to 128 KiB and
+  rejected malformed API data, noncanonical release tags and missing
+  assets; 280 Python unit tests passed.
+- DONE: PR #73 rejected non-string GitHub release asset filenames without
+  crashing private `/updates` messages; 282 tests passed.
+- DONE: PR #74 enabled administrator-allowlisted direct Telegram
+  `/apartments` and `/updates` commands. Sender ID must match a
+  private chat ID, and unrelated commands remain blocked; 285 tests.
+- DONE: PR #75 hardened the **existing**, nonduplicated apartment CSV
+  importer against files over 256 KiB, ambiguous headers, and symlinks.
+  Verified atomic SQLite rollback on second-row failure; 288 tests.
+- PASS: final PR #75 GitHub Actions passed on Python 3.11, 3.12 and 3.13,
+  including the strict ResourceWarning gate. Test fixtures now explicitly
+  close SQLite connections. Quality uses pinned Ruff 0.14.2, PEP8
+  formatting and a 40-line function limit.
+- QA LXC 111: disposable HTTP monitor remains healthy with no pending
+  updater journal. Earlier published signed-image install, rollback,
+  reboot recovery and read-only daily checks were accepted in QA.
+- HARDWARE NEXT: after **natural** Shelly reconnection, compare live
+  outage #10 closure to
+  `validation/0.5.12-hw-outage-10-baseline-20261105.json`,
+  confirm fresh stable voltage readings and private Telegram delivery.
+  Do not simulate voltage failures, clear the pending event manually,
+  deploy unreleased `0.5.13-hw`, or enable automatic installation.
+- LIMITS: real Telegram delivery, uncontrolled host power-loss recovery
+  and candidate `0.5.13-hw` physical acceptance are not yet verified.
+
 ## 2026-11-05 existing apartment CSV importer safety audit
 
 - REUSED: existing `scripts/import_apartments.py` CSV implementation and
