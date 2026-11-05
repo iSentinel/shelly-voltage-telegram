@@ -116,8 +116,7 @@ class ApartmentCsvTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("256 KiB", message)
         self.csv_file.write_text(
-            "building,apartment,phase,entrance,floor,building\n"
-            "A,12,L1,,,A\n",
+            "building,apartment,phase,entrance,floor,building\nA,12,L1,,,A\n",
             encoding="utf-8",
         )
         code, message = self.execute("--apply")
@@ -153,9 +152,7 @@ class ApartmentCsvTests(unittest.TestCase):
                 "ON apartment_phases WHEN NEW.apartment=13 "
                 "BEGIN SELECT RAISE(ABORT, 'blocked'); END"
             )
-        self.write_csv(
-            [("A", "12", "L1", "", ""), ("A", "13", "L1", "", "")]
-        )
+        self.write_csv([("A", "12", "L1", "", ""), ("A", "13", "L1", "", "")])
         code, message = self.execute("--apply")
         self.assertEqual(code, 1)
         self.assertIn("blocked", message)
