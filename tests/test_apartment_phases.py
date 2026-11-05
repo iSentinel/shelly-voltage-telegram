@@ -173,6 +173,44 @@ class ApartmentRegistryTests(unittest.TestCase):
             apartment_command(self.registry, ["/apartments", "list"], {"L1"}),
         )
 
+    def test_building_entrance_and_floor_filters(self):
+        """Query only apartments in the selected physical location."""
+
+        for house, number, entry, level in (
+            ("A", "1", "1", "2"),
+            ("A", "2", "1", "4"),
+            ("A", "3", "2", "2"),
+            ("B", "1", "1", "2"),
+        ):
+            self.registry.assign(house, number, "L1")
+            self.registry.set_location(house, number, entry, level)
+        queries = (
+            (["/apartments", "building", "A"], 3),
+            (["/apartments", "entrance", "A", "1"], 2),
+            (["/apartments", "floor", "A", "1", "2"], 1),
+        )
+        for parts, expected in queries:
+            with self.subTest(parts=parts):
+                result = apartment_command(self.registry, parts, {"L1"})
+                self.assertTrue(result.startswith(f"Apartments: {expected}"))
+        result = apartment_command(
+            self.registry, ["/apartments", "floor", "A", "1", "2"], {"L1"}
+        )
+        self.assertIn("A #1: L1", result)
+        self.assertNotIn("A #2:", result)
+        self.assertNotIn("B #1:", result)
+
+    def test_invalid_location_filter_is_rejected(self):
+        """Reject malformed selectors before querying any assignments."""
+
+        for parts in (
+            ["/apartments", "entrance", "A", "0"],
+            ["/apartments", "floor", "A", "1", "201"],
+            ["/apartments", "building", "../secret"],
+        ):
+            with self.subTest(parts=parts), self.assertRaises(ValueError):
+                apartment_command(self.registry, parts, {"L1"})
+
     def test_listing_is_bounded(self):
         """Return a bounded listing while preserving an accurate total."""
 
