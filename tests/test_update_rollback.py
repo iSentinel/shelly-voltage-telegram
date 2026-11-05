@@ -97,6 +97,34 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((public / "deployed.json").exists())
 
+    def test_dry_run_cleans_workspace_and_exits_successfully(self):
+        """A successful dry-run must not fail in its EXIT trap."""
+
+        capture = self.root / "workspace_path"
+        script = ROOT / "scripts" / "apply-update.sh"
+        shell = "\n".join(
+            (
+                'source "$1"',
+                'requirements() { :; }',
+                'preflight() { :; }',
+                'verify_image() { :; }',
+                'verify_source_archive() { echo "$1" > "$CAPTURE"; }',
+                'python3() { [[ "$2" != digest ]] || echo sha256:test; }',
+                'main --version 0.5.12-hw --dry-run',
+            )
+        )
+        env = {**os.environ, "CAPTURE": str(capture)}
+        result = subprocess.run(
+            ["bash", "-c", shell, "bash", str(script)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("DRY-RUN PASS", result.stdout)
+        self.assertFalse(Path(capture.read_text().strip()).exists())
+
     def test_cosign_version_gate(self):
         """Require compatible Cosign 3 before changing host state."""
 
