@@ -16,6 +16,11 @@ source archive and `SHA256SUMS` is advertised; the message links to the
 canonical project release page. If the GitHub check fails, a short localized
 error is sent privately without exposing request details.
 
+GitHub API responses are bounded to 128 KiB and validated before showing
+availability in Telegram. Malformed JSON, missing release assets, unsupported
+tags or unexpected metadata types fail closed with a private localized error.
+This check never sends Docker commands.
+
 ## Host services
 
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
