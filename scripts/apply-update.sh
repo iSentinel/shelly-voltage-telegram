@@ -11,6 +11,7 @@ DRY_RUN=false
 SNAPSHOT=""
 CHANGED=false
 PENDING_FILE="$STATE/pending-update"
+PUBLIC_STATE="${SVT_PUBLIC_STATE:-/var/lib/shelly-voltage-update-check}"
 
 usage() {
     cat <<'EOF'
@@ -123,10 +124,9 @@ start_stack() {
 }
 
 sync_public_version() {
-    local public_state="/var/lib/shelly-voltage-update-check"
-    mkdir -p "$public_state"
+    mkdir -p "$PUBLIC_STATE"
     if [[ -f "$STATE/deployed.json" ]]; then
-        install -m 0644 "$STATE/deployed.json" "$public_state/deployed.json"
+        install -m 0644 "$STATE/deployed.json" "$PUBLIC_STATE/deployed.json"
     else
         rm -f "$public_state/deployed.json"
     fi
@@ -153,6 +153,7 @@ recover_pending() {
     SNAPSHOT="$STATE/snapshots/$token"
     [[ -d "$SNAPSHOT" ]] || return 1
     echo "RECOVERY: interrupted update $token" >&2
+    docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     if [[ -f "$SNAPSHOT/override.yaml" ]]; then
         cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
     else
