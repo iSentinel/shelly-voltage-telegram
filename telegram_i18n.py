@@ -197,6 +197,7 @@ _TEXT = {
         "menu_outages": "🔌 Відключення",
         "menu_chart": "📉 Графік",
         "menu_help": "ℹ️ Довідка",
+        "menu_apartments": "🏢 Квартири та фази",
         "cmd_help": "Показати команди",
         "cmd_voltage": "Поточна напруга",
         "cmd_outages": "Відключення за сьогодні",
