@@ -105,6 +105,16 @@ start_stack() {
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
+sync_public_version() {
+    local public_state="/var/lib/shelly-voltage-update-check"
+    mkdir -p "$public_state"
+    if [[ -f "$STATE/deployed.json" ]]; then
+        install -m 0644 "$STATE/deployed.json" "$public_state/deployed.json"
+    else
+        rm -f "$public_state/deployed.json"
+    fi
+}
+
 restore_snapshot_database() {
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
@@ -152,6 +162,7 @@ rollback() {
             echo "FAIL: database rescue restore failed" >&2
         }
         start_stack || echo "FAIL: manual intervention required" >&2
+        sync_public_version || echo "WARN: version status update failed" >&2
     fi
     echo "FAIL: update aborted (exit $exit_code)" >&2
     exit "$exit_code"
@@ -210,6 +221,7 @@ main() {
     trap rollback ERR
     activate "$digest"
     trap - ERR
+    sync_public_version || echo "WARN: version status update failed" >&2
     echo "UPDATE PASS: $VERSION"
 }
 
