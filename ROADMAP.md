@@ -1,3 +1,33 @@
+## 2026-11-05 apartment-to-phase development checkpoint
+
+- DONE: PR #48 introduced the idempotent SQLite apartment-to-phase registry,
+  administrator-only Telegram commands, atomic 1–200 apartment range assignment,
+  private responses, validation and Docker/release packaging.
+- DONE: PR #49 added private administrator phase-selector buttons. Apartment
+  lists remain restricted to an authorized administrator's private chat.
+- DONE: PR #50 added safe, nullable SQLite migration fields for entrance and
+  floor; `/apartments place BUILDING NUMBER ENTRANCE FLOOR` requires an existing
+  apartment assignment, preserving the assigned phase.
+- DONE: PR #51 implemented read-only building, entrance and floor filters with
+  bound SQL parameters and bounded output.
+- DONE: PR #52 added `/apartments summary` with aggregate counts by building
+  and phase, without including apartment numbers.
+- PASS: on the PR #52 source, 227/227 Python tests, the pinned Ruff and
+  maintainability gate, and Python 3.11/3.12/3.13 GitHub CI.
+- Production intentionally remains at public `0.5.12-hw`; these additions
+  have been merged to GitHub `main`, not deployed or hardware-accepted.
+  No live SQLite migration or Telegram command change was performed.
+- NEXT: plan a versioned candidate release and non-production migration smoke
+  on a copied SQLite backup, then conduct controlled deployment acceptance
+  without inducing an electrical event.
+- NEXT: extend private Telegram management with optional structured CSV import
+  and safely gated phase-group notifications, including explicit recipient
+  authorization and no apartment lists in public status channels.
+- SAFETY: a phase assignment is administrative metadata, never a measurement
+  proving that an individual apartment has electricity.
+- PENDING: full physical low-voltage/recovery acceptance for the software
+  version following the hardware-accepted `0.5.6-hw` checkpoint.
+
 ## 2026-11-04 natural restoration evidence (partial hardware acceptance)
 
 - PASS: a naturally occurring Pro EM-50 availability outage was recorded
