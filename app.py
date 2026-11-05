@@ -1546,8 +1546,13 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     if connectivity == "recovering":
         return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
     if connectivity == "starting":
-        unit = tr(lang, "unit_voltage")
-        return f"🟡 {phase}: {voltage:.1f} {unit}"
+        return tr(
+            lang,
+            "phase_cached",
+            phase=phase,
+            voltage=voltage,
+            unit=tr(lang, "unit_voltage"),
+        )
     warning = voltage <= monitor.warning_low or voltage >= monitor.warning_high
     critical = (
         voltage <= monitor.critical_low or voltage >= monitor.critical_high

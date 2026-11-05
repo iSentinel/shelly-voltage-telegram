@@ -1,3 +1,24 @@
+## 2026-11-06 cached-voltage labeling during power interruptions
+
+- **Software guard:** `RuntimeState.restore()` intentionally preserves
+  the latest persisted voltage without claiming a live Shelly
+  connection. Previously `phase_line()` displayed that number
+  unqualified in the `starting` state.
+- **Fix:** restored, as-yet-unconfirmed phase voltage now carries a
+  localized `сохранено / збережено / cached` explanation. A fresh
+  successful Shelly poll removes the cached label; an offline phase
+  still conceals the old value entirely.
+- **No fabricated data:** status timestamps continue to identify
+  last validated measurements, not imagined 0 V events. No Shelly
+  writes, Telegram sends, DB mutations, or production restart.
+- **QA:** 358/358 isolated tests PASS, Ruff 0.14.2 PASS, project
+  function-size and PEP8 quality gate PASS. New regressions cover
+  RU/UK/EN, successful poll transition, actual offline status, and
+  the private compact preview.
+- **Deployment gate:** this behavior is in the undeployed candidate
+  until physical Pro EM-50 acceptance and a verified rollback route.
+  Production remains `0.5.12-hw` while power is unavailable.
+
 ## 2026-11-06 private compact-status preview
 
 - **P2 source stage:** `/preview` is an administrator-only Telegram
