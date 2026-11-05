@@ -119,6 +119,7 @@ restore_snapshot_database() {
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
     [[ -n "$backup" ]] || return 1
+    sha256sum -c "$backup.sha256" || return 1
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
     if [[ -f "$DB" ]]; then
@@ -126,7 +127,6 @@ restore_snapshot_database() {
         chmod 0600 "$rescue"
     fi
     temp="$DB.recovery.$"
-    sha256sum -c "$backup.sha256" || return 1
     gzip -dc "$backup" > "$temp"
     python3 - "$temp" <<'PY'
 import sqlite3
