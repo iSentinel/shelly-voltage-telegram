@@ -10,6 +10,12 @@ An authorized administrator sends `/updates` in the configured control chat.
 The bot privately reports its installed version and the latest stable GitHub
 Release. It cannot start a host update. Other users receive no release details.
 
+The administrator's private `/updates` reply is localized in Russian,
+Ukrainian or English. Only a published stable release containing both the
+source archive and `SHA256SUMS` is advertised; the message links to the
+canonical project release page. If the GitHub check fails, a short localized
+error is sent privately without exposing request details.
+
 ## Host services
 
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
