@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import html
+import math
 import sqlite3
 import struct
 import zlib
@@ -62,6 +63,87 @@ def quality_stats(
         100.0 * (result["below_warning"] + result["above_warning"]) / denom
     )
     return result
+
+
+def weekly_time_categories(
+    path: Path, phase: str, since: float, until: float,
+    low: float, high: float
+) -> dict[str, float]:
+    """Count observed threshold time without filling long sample gaps."""
+
+    observed = below = above = 0.0
+    previous: tuple[float, float] | None = None
+    with closing(connect_ro(path)) as db:
+        rows = db.execute(
+            "SELECT ts,voltage FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<=? ORDER BY ts",
+            (phase, since, until),
+        )
+        for stamp, voltage in rows:
+            try:
+                point = (float(stamp), float(voltage))
+            except (TypeError, ValueError, OverflowError):
+                previous = None
+                continue
+            if not all(math.isfinite(v) for v in point):
+                previous = None
+                continue
+            if previous:
+                gap = point[0] - previous[0]
+                if 0 < gap <= 30:
+                    observed += gap
+                    below += gap if previous[1] <= low else 0.0
+                    above += gap if previous[1] >= high else 0.0
+            previous = point
+    return {
+        "observed": observed,
+        "unknown": max(0.0, until - since - observed),
+        "below": below,
+        "above": above,
+    }
+
+
+def weekly_quality_stats(
+    path: Path, phase: str, since: float, until: float,
+    low: float, high: float
+) -> dict[str, float | int | None]:
+    """Summarize one phase and exclude gaps from time estimates."""
+
+    with closing(connect_ro(path)) as db:
+        row = db.execute(
+            "SELECT COUNT(*),MIN(voltage),MAX(voltage),AVG(voltage) "
+            "FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<=?",
+            (phase, since, until),
+        ).fetchone()
+    coverage = weekly_time_categories(path, phase, since, until, low, high)
+    return {
+        "count": int(row[0]), "min": row[1], "max": row[2],
+        "avg": row[3], **coverage,
+    }
+
+
+def weekly_connection_stats(
+    path: Path, phase: str, since: float, until: float
+) -> dict[str, float | int]:
+    """Count overlapping lost-connection periods in a chosen week."""
+
+    with closing(connect_ro(path)) as db:
+        rows = db.execute(
+            "SELECT started_at,ended_at FROM outages "
+            "WHERE phase=? AND started_at<? "
+            "AND (ended_at IS NULL OR ended_at>?)",
+            (phase, until, since),
+        ).fetchall()
+    total = 0.0
+    count = 0
+    for start, end in rows:
+        lower = max(since, float(start))
+        upper = until if end is None else min(until, float(end))
+        if upper > lower:
+            total += upper - lower
+            count += 1
+    return {"count": count, "duration": total}
 
 
 def outage_history(
