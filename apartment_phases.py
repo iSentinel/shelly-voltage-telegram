@@ -147,6 +147,24 @@ class ApartmentRegistry:
             )
         return len(entries)
 
+    def import_entries(
+        self, entries: list[tuple[str, int, str, int | None, int | None]]
+    ) -> int:
+        """Save a fully validated batch in one SQLite transaction."""
+
+        with closing(self.connect()) as db, db:
+            db.executemany(
+                "INSERT INTO apartment_phases"
+                "(building,apartment,phase,entrance,floor) "
+                "VALUES(?,?,?,?,?) "
+                "ON CONFLICT(building,apartment) DO UPDATE SET "
+                "phase=excluded.phase, "
+                "entrance=COALESCE(excluded.entrance,apartment_phases.entrance), "
+                "floor=COALESCE(excluded.floor,apartment_phases.floor)",
+                entries,
+            )
+        return len(entries)
+
     def remove(self, building: str, apartment: str) -> bool:
         """Remove one assignment and report whether it existed."""
 
