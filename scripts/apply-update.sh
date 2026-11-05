@@ -36,7 +36,7 @@ parse_args() {
 
 requirements() {
     [[ $EUID -eq 0 ]] || { echo "FAIL: root required" >&2; exit 2; }
-    for name in python3 cosign docker flock curl tar; do
+    for name in python3 cosign docker flock curl tar sha256sum gzip; do
         command -v "$name" >/dev/null || {
             echo "FAIL: missing $name" >&2; exit 2;
         }
@@ -58,6 +58,20 @@ verify_image() {
         --certificate-identity "https://github.com/iSentinel/shelly-voltage-telegram/.github/workflows/image.yml@refs/tags/v$VERSION" \
         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
         "$target" >/dev/null
+}
+
+verify_source_archive() {
+    local dir="$1" archive="shelly-voltage-telegram-$VERSION.tar.gz"
+    local base="https://github.com/iSentinel/shelly-voltage-telegram/releases/download/v$VERSION"
+    curl -fsSL --retry 2 --max-time 75 "$base/$archive" -o "$dir/$archive"
+    curl -fsSL --retry 2 --max-time 30 "$base/SHA256SUMS" -o "$dir/SHA256SUMS"
+    awk -v file="$archive" '$2 == file {print $1 "  " $2}' \
+        "$dir/SHA256SUMS" > "$dir/SELECTED.SHA256"
+    [[ $(wc -l < "$dir/SELECTED.SHA256") -eq 1 ]] || {
+        echo "FAIL: release archive checksum missing or repeated" >&2
+        return 1
+    }
+    (cd "$dir" && sha256sum -c SELECTED.SHA256)
 }
 
 snapshot() {
@@ -91,6 +105,33 @@ start_stack() {
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
+restore_snapshot_database() {
+    local backup rescue temp
+    backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
+    [[ -n "$backup" ]] || return 1
+    docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
+    rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
+    if [[ -f "$DB" ]]; then
+        cp -a "$DB" "$rescue"
+        chmod 0600 "$rescue"
+    fi
+    temp="$DB.recovery.$"
+    gzip -dc "$backup" > "$temp"
+    python3 - "$temp" <<'PY'
+import sqlite3
+import sys
+from contextlib import closing
+
+with closing(sqlite3.connect(sys.argv[1])) as db:
+    if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+        raise SystemExit("invalid rollback database")
+PY
+    chown --reference="$DB" "$temp"
+    chmod --reference="$DB" "$temp"
+    rm -f "$DB-wal" "$DB-shm"
+    mv -f "$temp" "$DB"
+}
+
 rollback() {
     local exit_code=$?
     trap - ERR
@@ -106,6 +147,9 @@ rollback() {
         else
             rm -f "$STATE/deployed.json"
         fi
+        restore_snapshot_database || {
+            echo "FAIL: database rescue restore failed" >&2
+        }
         start_stack || echo "FAIL: manual intervention required" >&2
     fi
     echo "FAIL: update aborted (exit $exit_code)" >&2
@@ -149,6 +193,10 @@ main() {
     digest="$(python3 "$ROOT/scripts/github_update.py" digest \
         --version "$VERSION")"
     verify_image "$digest"
+    local workspace
+    workspace="$(mktemp -d)"
+    trap 'rm -rf "$workspace"' EXIT
+    verify_source_archive "$workspace"
     if [[ "$DRY_RUN" == true ]]; then
         echo "DRY-RUN PASS: signed $IMAGE@$digest, no changes"
         return
