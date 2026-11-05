@@ -37,11 +37,12 @@ parse_args() {
 check_cosign_compatibility() {
     local version major
     version="$(cosign version 2>/dev/null | awk '/^GitVersion:/ {print $2}')"
-    if [[ ! "$version" =~ ^v?([0-9]+)\. ]]; then
+    if [[ "$version" =~ ^v?([0-9]+)\. ]]; then
+        major="${BASH_REMATCH[1]}"
+    else
         echo "FAIL: unsupported Cosign version ($version); require v3+" >&2
         return 1
     fi
-    major="${BASH_REMATCH[1]}"
     if (( major < 3 )); then
         echo "FAIL: Cosign v3+ required for OCI signature verification" >&2
         return 1
