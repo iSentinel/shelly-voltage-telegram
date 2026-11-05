@@ -7,9 +7,9 @@ import sqlite3
 import tempfile
 import time
 import unittest
-from types import SimpleNamespace
 from contextlib import closing
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts import github_update as updater
