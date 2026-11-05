@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.error
 import urllib.request
-import json
 
 RELEASE_URL = (
     "https://api.github.com/repos/iSentinel/"
