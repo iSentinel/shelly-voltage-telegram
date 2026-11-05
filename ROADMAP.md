@@ -1,3 +1,30 @@
+## 2026-11-05 published release archive vs running container
+
+- PASS: the official `v0.5.12-hw` source archive was downloaded from
+  GitHub Releases into temporary storage, and its SHA256 matched the
+  published checksum
+  `b716d59efff5858a2b7dfef1b8ee9bf47dfd1b744920fd77b560a037f2feef44`.
+- PASS: of 64 regular files in the public archive, 57 match the
+  production host tree exactly; none are missing. The seven differing
+  files are `FILES.SHA256`, `README.md`, `README_EN.md`,
+  `README_RU.md`, `README_UA.md`, `RELEASE_STATUS.md` and
+  `ROADMAP.md` (deployment documentation/checksums).
+- PASS: all six code/runtime files inside the **running** Docker
+  container exactly match the official archive by SHA256:
+  `app.py`, `advanced_features.py`, `telegram_i18n.py`,
+  `notification_features.py`, `VERSION` and
+  `requirements.txt`. This is stronger than comparing only host files.
+- The separate `SOURCE_SHA256SUMS` on the deployment host is
+  not a member of the public release archive; its historical
+  mismatches must not be mistaken for running-code drift.
+  Do not regenerate or rewrite existing manifests simply to hide
+  differences.
+- EVIDENCE: private read-only verification report on LXC 110:
+  `/opt/shelly-voltage/validation/2026-11-05-release-runtime-parity.json`.
+- SAFETY: verification used only local/archive reads and
+  `docker exec sha256sum`. Production `0.5.12-hw` was not
+  updated, restarted, or reconfigured.
+
 ## 2026-11-05 Pro 3EM delivery and offline QA
 
 - WAITING FOR USER INSTALLATION: Shelly Pro 3EM / Pro 3EM-3CT63 is
