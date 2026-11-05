@@ -1,6 +1,9 @@
 # Telegram UX v2: compact power-status dashboard
 
-Status: **design and acceptance proposal**, not implemented or deployed.
+Status: **P1 source implemented, not deployed**. PR #96 introduced the
+localized compact status and read-only `/events` timeline. The final
+RU/UK language audit is being validated separately. P2/P3 items remain
+proposals pending testing and explicit release approval.
 This document is independent of the firmware's physical release gate.
 
 ## Goals
