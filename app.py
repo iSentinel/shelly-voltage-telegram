@@ -2873,7 +2873,9 @@ class Monitor:
             0.0 if minutes <= 0 else time.time() + minutes * 60
         )
         self.storage.set_meta("maintenance_until", str(self.maintenance_until))
-        return "OFF" if minutes <= 0 else f"{minutes} мин"
+        if minutes <= 0:
+            return tr(self.language, "state_off")
+        return tr(self.language, "minutes", value=minutes)
 
     def quality_text(self, phase: str = "L1", hours: int = 24) -> str:
         """Render localized voltage-quality statistics."""
@@ -3677,8 +3679,14 @@ class Monitor:
         return [
             [tb("button_silent", "silent_toggle")],
             [tb("button_quiet", "quiet_toggle")],
-            [b("🔔 Cooldown OFF", "cooldown_0"), b("3 min", "cooldown_3")],
-            [b("5 min", "cooldown_5"), b("10 min", "cooldown_10")],
+            [
+                tb("button_cooldown_off", "cooldown_0"),
+                tb("button_cooldown_min", "cooldown_3", value=3),
+            ],
+            [
+                tb("button_cooldown_min", "cooldown_5", value=5),
+                tb("button_cooldown_min", "cooldown_10", value=10),
+            ],
             [
                 tb("button_edit", "editwindow_3", value=3),
                 tb("button_edit", "editwindow_5", value=5),
