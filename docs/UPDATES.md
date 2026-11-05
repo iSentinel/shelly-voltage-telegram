@@ -6,9 +6,10 @@ systemd, SSH credentials, or root privileges.
 
 ## Telegram interface
 
-An authorized administrator sends `/updates` in the configured control chat.
-The bot privately reports its installed version and the latest stable GitHub
-Release. It cannot start a host update. Other users receive no release details.
+An authorized administrator can send `/updates` directly to the bot in a
+private chat, or use the configured control chat. The bot replies privately
+with its installed version and the latest stable GitHub Release. It cannot
+start a host update. Other users receive no release details.
 
 The administrator's private `/updates` reply is localized in Russian,
 Ukrainian or English. Only a published stable release containing both the
