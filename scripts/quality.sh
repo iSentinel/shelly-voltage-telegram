@@ -43,7 +43,7 @@ fi
 
 cd "$ROOT"
 ruff format --line-length 79 --check app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py scripts tests
-ruff check --line-length 79 --select E,F,I,UP,SIM app.py advanced_features.py telegram_i18n.py notification_features.py scripts tests
+ruff check --line-length 79 --select E,F,I,UP,SIM app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py scripts tests
 "$PYTHON_BIN" scripts/check-quality.py
 
 echo "QUALITY GATE: PASS"
