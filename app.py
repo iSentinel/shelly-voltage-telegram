@@ -31,6 +31,8 @@ from advanced_features import (
     outage_history,
     phase_stats,
     quality_stats,
+    weekly_connection_stats,
+    weekly_quality_stats,
 )
 from apartment_phases import ApartmentRegistry, apartment_command
 from notification_features import (
@@ -1703,6 +1705,42 @@ def primary_day_lines(monitor: Monitor, ts: float) -> list[str]:
     ]
 
 
+def weekly_phase_lines(
+    monitor: Monitor, phase: str, since: float, now: float
+) -> list[str]:
+    """Render seven-day quality with measured and unknown time separate."""
+
+    data = weekly_quality_stats(
+        monitor.cfg.database_path, phase, since, now,
+        monitor.warning_low, monitor.warning_high
+    )
+    outages = weekly_connection_stats(
+        monitor.cfg.database_path, phase, since, now
+    )
+    lang = monitor.language
+    return [
+        tr(
+            lang, "weekly_phase", phase=monitor.phase_label(phase),
+            minimum=fmt(data["min"]), maximum=fmt(data["max"]),
+            average=fmt(data["avg"]), count=data["count"],
+        ),
+        tr(
+            lang, "weekly_coverage",
+            observed=duration_text(data["observed"], lang),
+            unknown=duration_text(data["unknown"], lang),
+        ),
+        tr(
+            lang, "weekly_threshold",
+            below=duration_text(data["below"], lang),
+            above=duration_text(data["above"], lang),
+        ),
+        tr(
+            lang, "weekly_connection", count=outages["count"],
+            duration=duration_text(outages["duration"], lang),
+        ),
+    ]
+
+
 def voltage_timeline_events(
     monitor: Monitor, since: float, now: float
 ) -> list[tuple[float, str]]:
@@ -3038,6 +3076,22 @@ class Monitor:
                 )
             )
         lines.append(tr(self.language, "outage_interpretation"))
+        return "\n".join(lines)
+
+    def weekly_summary_text(self) -> str:
+        """Render a read-only quality digest for the previous seven days."""
+
+        now = time.time()
+        since = now - 7 * 86400
+        lines = [tr(self.language, "weekly_title")]
+        for phase in self.active_phases():
+            if not self.phase_configured(phase):
+                lines.append(
+                    tr(self.language, "summary_unconfigured", phase=phase)
+                )
+                continue
+            lines.extend(weekly_phase_lines(self, phase, since, now))
+        lines.append(tr(self.language, "weekly_notice"))
         return "\n".join(lines)
 
     def event_timeline_text(self) -> str:
@@ -4980,6 +5034,7 @@ class Monitor:
             "/quality": self.quality_text,
             "/summary": self.daily_summary_text,
             "/events": self.event_timeline_text,
+            "/week": self.weekly_summary_text,
             "/audit": self.audit_text,
             "/device": self.device_health_text,
         }
