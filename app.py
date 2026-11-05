@@ -4848,15 +4848,72 @@ class Monitor:
             self.handle_apartments_command(sender_id, parts)
         elif command == "/preview":
             self.send_compact_preview(sender_id)
+        elif command == "/view":
+            self.change_private_preview_layout(sender_id, parts)
         else:
             return False
         return True
 
-    def send_compact_preview(self, sender_id: str) -> None:
-        """Send an admin-only, silent preview without changing the channel."""
+    def private_preview_layout(self, sender_id: str) -> str:
+        """Read one administrator's saved view without changing the channel."""
+
+        if not self.storage.path.is_file():
+            return "compact"
+        try:
+            value = self.storage.get_meta(
+                f"telegram_private_preview_layout_{sender_id}"
+            )
+        except sqlite3.Error:
+            return "compact"
+        return value if value in {"compact", "detailed"} else "compact"
+
+    def change_private_preview_layout(
+        self, sender_id: str, parts: list[str]
+    ) -> None:
+        """Persist a validated private-chat view for this administrator."""
+
+        layout = parts[1].lower() if len(parts) == 2 else ""
+        if layout not in {"compact", "detailed"}:
+            message = tr(self.language, "preview_layout_usage")
+            self.telegram.send(message, notify=False, chat_id=sender_id)
+            return
+        try:
+            with self.config_lock:
+                old = self.private_preview_layout(sender_id)
+                if old != layout:
+                    key = f"telegram_private_preview_layout_{sender_id}"
+                    self.storage.set_meta(key, layout)
+                    self.storage.audit_setting(
+                        sender_id, "private_preview_layout", old, layout
+                    )
+        except sqlite3.Error as exc:
+            logger.warning(
+                "Private preview preference failed: {}", type(exc).__name__
+            )
+            self.telegram.send(
+                tr(self.language, "preview_layout_failed"),
+                notify=False, chat_id=sender_id,
+            )
+            return
+        self.send_compact_preview(
+            sender_id,
+            tr(self.language, "preview_layout_saved", mode=layout),
+        )
+
+    def send_compact_preview(
+        self, sender_id: str, notice: str = ""
+    ) -> None:
+        """Send the selected private status silently, never to the channel."""
 
         try:
-            message = compact_preview_text(self)
+            layout = self.private_preview_layout(sender_id)
+            message = (
+                self.full_status_text()
+                if layout == "detailed"
+                else compact_preview_text(self)
+            )
+            if notice:
+                message = notice + "\n\n" + message
             self.telegram.send(message, notify=False, chat_id=sender_id)
         except Exception as exc:
             logger.warning(
