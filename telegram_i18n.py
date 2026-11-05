@@ -244,11 +244,25 @@ _TEXT = {
         "button_cooldown_min": "{value} мин",
         "cmd_week": "Статистика за 7 дней",
         "weekly_title": "📅 Качество электросети · 7 дней",
-        "weekly_phase": "{phase}: {minimum}–{maximum} V, ср. {average} V · измерений {count}",
-        "weekly_coverage": "✅ Измеренные интервалы: {observed} · без данных: {unknown}",
-        "weekly_threshold": "⚠️ Оценка времени ниже порога: {below}; выше: {above}",
-        "weekly_connection": "🔌 Потерь связи: {count} · длительность {duration}",
-        "weekly_notice": "ℹ️ Только интервалы между измерениями до 30 с учитываются как наблюдаемые. Остальное время неизвестно. Нет связи не означает отсутствия питания.",
+        "weekly_phase": (
+            "{phase}: {minimum}–{maximum} V, ср. "
+            "{average} V · измерений {count}"
+        ),
+        "weekly_coverage": (
+            "✅ Измеренные интервалы: {observed} · без данных: {unknown}"
+        ),
+        "weekly_threshold": (
+            "⚠️ Оценка времени ниже порога: {below}; выше: {above}"
+        ),
+        "weekly_connection": (
+            "🔌 Потерь связи: {count} · длительность {duration}"
+        ),
+        "weekly_notice": (
+            "ℹ️ Только интервалы между измерениями до "
+            "30 с учитываются как наблюдаемые. "
+            "Остальное время неизвестно. Нет связи не "
+            "означает отсутствия питания."
+        ),
         "backup_missing": "💾 Резервная копия: отсутствует",
     },
     "uk": {
@@ -493,11 +507,25 @@ _TEXT = {
         "button_cooldown_min": "{value} хв",
         "cmd_week": "Статистика за 7 днів",
         "weekly_title": "📅 Якість електромережі · 7 днів",
-        "weekly_phase": "{phase}: {minimum}–{maximum} В, сер. {average} В · вимірювань {count}",
-        "weekly_coverage": "✅ Виміряні інтервали: {observed} · без даних: {unknown}",
-        "weekly_threshold": "⚠️ Оцінка часу нижче порога: {below}; вище: {above}",
-        "weekly_connection": "🔌 Втрат зв'язку: {count} · тривалість {duration}",
-        "weekly_notice": "ℹ️ Лише проміжки між вимірами до 30 с враховуються як спостережені. Решта часу невідома. Втрата зв'язку не доводить відсутність живлення.",
+        "weekly_phase": (
+            "{phase}: {minimum}–{maximum} В, сер. "
+            "{average} В · вимірювань {count}"
+        ),
+        "weekly_coverage": (
+            "✅ Виміряні інтервали: {observed} · без даних: {unknown}"
+        ),
+        "weekly_threshold": (
+            "⚠️ Оцінка часу нижче порога: {below}; вище: {above}"
+        ),
+        "weekly_connection": (
+            "🔌 Втрат зв'язку: {count} · тривалість {duration}"
+        ),
+        "weekly_notice": (
+            "ℹ️ Лише проміжки між вимірами до 30 с "
+            "враховуються як спостережені. Решта часу "
+            "невідома. Втрата зв'язку не доводить "
+            "відсутність живлення."
+        ),
         "backup_missing": "💾 Резервна копія: відсутня",
     },
     "en": {
@@ -724,11 +752,24 @@ _TEXT = {
         "button_cooldown_min": "{value} min",
         "cmd_week": "Seven-day quality report",
         "weekly_title": "📅 Grid quality · past 7 days",
-        "weekly_phase": "{phase}: {minimum}–{maximum} V, avg {average} V · samples {count}",
-        "weekly_coverage": "✅ Measured intervals: {observed} · unknown: {unknown}",
-        "weekly_threshold": "⚠️ Estimated time below threshold: {below}; above: {above}",
-        "weekly_connection": "🔌 Connection losses: {count} · duration {duration}",
-        "weekly_notice": "ℹ️ Only consecutive samples up to 30 s apart count as observed. Remaining time is unknown. Lost connection does not prove a power outage.",
+        "weekly_phase": (
+            "{phase}: {minimum}–{maximum} V, avg {average} V · samples {count}"
+        ),
+        "weekly_coverage": (
+            "✅ Measured intervals: {observed} · unknown: {unknown}"
+        ),
+        "weekly_threshold": (
+            "⚠️ Estimated time below threshold: {below}; above: {above}"
+        ),
+        "weekly_connection": (
+            "🔌 Connection losses: {count} · duration {duration}"
+        ),
+        "weekly_notice": (
+            "ℹ️ Only consecutive samples up to 30 s "
+            "apart count as observed. Remaining time is "
+            "unknown. Lost connection does not prove a "
+            "power outage."
+        ),
         "backup_missing": "💾 Backup: missing",
     },
 }
