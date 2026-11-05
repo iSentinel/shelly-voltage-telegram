@@ -55,8 +55,7 @@ _TEXT = {
         "no_measurements": "{phase}: нет корректных измерений.",
         "l1_today": "{phase} сегодня: {minimum}–{maximum} В, ср. {average} В",
         "power_recovered": (
-            "✅ Питание восстановлено · перерыв связи "
-            "{duration}"
+            "✅ Питание восстановлено · перерыв связи {duration}"
         ),
         "last_l1": "🕐 Последние данные {phase}: {stamp}",
         "event_low": "🚨 Низкое напряжение сети",
@@ -112,8 +111,7 @@ _TEXT = {
         "settings_summary": "📅 Сводка: {state} {time}",
         "settings_pin": "📌 Закрепление статуса: {state}",
         "settings_dwell": (
-            "⏳ Подтверждение: {dwell:g} с / восстановление "
-            "{recovery:g} с"
+            "⏳ Подтверждение: {dwell:g} с / восстановление {recovery:g} с"
         ),
         "settings_instability": (
             "⚡ Индикатор нестабильности: {state} · 4/15 мин"
@@ -210,8 +208,7 @@ _TEXT = {
         "status_online": "🟢 Связь с Shelly установлена",
         "status_recovering": "🟡 Shelly восстанавливает соединение",
         "status_offline": (
-            "🔴 Нет связи с Shelly · напряжение сейчас "
-            "неизвестно"
+            "🔴 Нет связи с Shelly · напряжение сейчас неизвестно"
         ),
         "status_starting": "🟡 Ожидаем измерений Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
@@ -220,8 +217,7 @@ _TEXT = {
         "state_on": "вкл.",
         "state_off": "выкл.",
         "backup_ok": (
-            "💾 Резервная копия: {stamp}, {size} КиБ · SQLite: "
-            "{integrity}"
+            "💾 Резервная копия: {stamp}, {size} КиБ · SQLite: {integrity}"
         ),
         "device_details": (
             "{phase}: {model} · прошивка {firmware} · "
@@ -298,12 +294,10 @@ _TEXT = {
         "network_title": "⚡ Напруга мережі · {phases}",
         "no_measurements": "{phase}: немає коректних вимірювань.",
         "l1_today": (
-            "{phase} сьогодні: {minimum}–{maximum} В, сер. "
-            "{average} В"
+            "{phase} сьогодні: {minimum}–{maximum} В, сер. {average} В"
         ),
         "power_recovered": (
-            "✅ Живлення відновлено · перерва зв'язку "
-            "{duration}"
+            "✅ Живлення відновлено · перерва зв'язку {duration}"
         ),
         "last_l1": "🕐 Останні дані {phase}: {stamp}",
         "event_low": "🚨 Низька напруга мережі",
@@ -359,8 +353,7 @@ _TEXT = {
         "settings_summary": "📅 Зведення: {state} {time}",
         "settings_pin": "📌 Закріплення статусу: {state}",
         "settings_dwell": (
-            "⏳ Підтвердження: {dwell:g} с / відновлення "
-            "{recovery:g} с"
+            "⏳ Підтвердження: {dwell:g} с / відновлення {recovery:g} с"
         ),
         "settings_instability": (
             "⚡ Індикатор нестабільності: {state} · 4/15 хв"
@@ -425,12 +418,10 @@ _TEXT = {
         "audit_title": "🧾 Останні зміни налаштувань",
         "phase_sensor_offline": "⚠️ {phase}: датчик недоступний",
         "phase_sensor_recovered": (
-            "✅ {phase}: зв'язок із датчиком відновлено · "
-            "{duration}"
+            "✅ {phase}: зв'язок із датчиком відновлено · {duration}"
         ),
         "availability_offline": (
-            "⚠️ Немає зв'язку із Shelly. Останнє вимірювання "
-            "збережено."
+            "⚠️ Немає зв'язку із Shelly. Останнє вимірювання збережено."
         ),
         "availability_recovered": (
             "✅ Зв'язок із Shelly відновлено · {duration}"
@@ -446,13 +437,11 @@ _TEXT = {
         "export_caption": "{phase} · {hours} год · {count} рядків",
         "command_error": "Помилка: {error}",
         "maintenance_admin_only": (
-            "Лише адміністратор може змінювати режим "
-            "обслуговування"
+            "Лише адміністратор може змінювати режим обслуговування"
         ),
         "maintenance_status": "🛠 Обслуговування: {value}",
         "maintenance_usage": (
-            "Використання: /maintenance 60 або /maintenance "
-            "off"
+            "Використання: /maintenance 60 або /maintenance off"
         ),
         "summary_phase": (
             "{phase}: {minimum}–{maximum} В, сер. {average} "
@@ -461,8 +450,7 @@ _TEXT = {
         "status_online": "🟢 Зв'язок із Shelly є",
         "status_recovering": "🟡 Shelly відновлює з'єднання",
         "status_offline": (
-            "🔴 Немає зв'язку із Shelly · поточна напруга "
-            "невідома"
+            "🔴 Немає зв'язку із Shelly · поточна напруга невідома"
         ),
         "status_starting": "🟡 Очікуємо вимірювань Shelly",
         "status_frequency": "〰️ Частота: {value:.2f} Гц",
@@ -471,8 +459,7 @@ _TEXT = {
         "state_on": "увімкн.",
         "state_off": "вимкн.",
         "backup_ok": (
-            "💾 Резервна копія: {stamp}, {size} КіБ · SQLite: "
-            "{integrity}"
+            "💾 Резервна копія: {stamp}, {size} КіБ · SQLite: {integrity}"
         ),
         "device_details": (
             "{phase}: {model} · прошивка {firmware} · працює "
@@ -663,12 +650,10 @@ _TEXT = {
         "audit_title": "🧾 Recent settings changes",
         "phase_sensor_offline": "⚠️ {phase}: sensor unavailable",
         "phase_sensor_recovered": (
-            "✅ {phase}: sensor connection restored · "
-            "{duration}"
+            "✅ {phase}: sensor connection restored · {duration}"
         ),
         "availability_offline": (
-            "⚠️ Shelly is unreachable. Last valid reading is "
-            "preserved."
+            "⚠️ Shelly is unreachable. Last valid reading is preserved."
         ),
         "availability_recovered": "✅ Shelly connection restored · {duration}",
         "callback_today": "Today: {value}",
@@ -682,8 +667,7 @@ _TEXT = {
         "export_caption": "{phase} · {hours} h · {count} rows",
         "command_error": "Error: {error}",
         "maintenance_admin_only": (
-            "Only an administrator can change maintenance "
-            "mode"
+            "Only an administrator can change maintenance mode"
         ),
         "maintenance_status": "🛠 Maintenance: {value}",
         "maintenance_usage": "Usage: /maintenance 60 or /maintenance off",
