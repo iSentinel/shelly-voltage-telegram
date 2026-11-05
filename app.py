@@ -22,7 +22,6 @@ import requests
 from loguru import logger
 from requests.auth import HTTPDigestAuth
 
-from apartment_phases import ApartmentRegistry, apartment_command
 from advanced_features import (
     backup_health,
     chart_png,
@@ -33,6 +32,7 @@ from advanced_features import (
     phase_stats,
     quality_stats,
 )
+from apartment_phases import ApartmentRegistry, apartment_command
 from notification_features import (
     abnormal_seconds,
     instability_count,
