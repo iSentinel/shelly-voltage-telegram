@@ -1602,7 +1602,12 @@ def render_voltage_status(
         return "\n".join(lines + ["", notice])
     ts = float(l1["last_success"] or time.time())
     lines.extend(primary_day_lines(monitor, ts))
-    if monitor.last_recovery_duration is not None:
+    recovered_at = monitor.last_recovery_at
+    if (
+        monitor.last_recovery_duration is not None
+        and recovered_at is not None
+        and 0 <= time.time() - recovered_at < 30 * 60
+    ):
         lines.append(
             tr(
                 lang,
@@ -1728,6 +1733,7 @@ class Monitor:
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
         self.last_recovery_duration: float | None = None
+        self.last_recovery_at: float | None = None
         self.maintenance_until = 0.0
         self.last_loop_tick = time.monotonic()
         self.telegram_failures = 0
@@ -2298,6 +2304,7 @@ class Monitor:
         self.storage.delete_meta("telegram_status_pinned_id")
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.last_recovery_duration = duration
+        self.last_recovery_at = time.time()
         self.last_telegram = 0.0
         self.last_sent_connectivity = None
         self.update_status()
