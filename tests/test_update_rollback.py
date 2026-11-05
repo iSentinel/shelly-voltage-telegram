@@ -64,6 +64,31 @@ class OfflineRollbackTests(unittest.TestCase):
             check=False,
         )
 
+    def test_recovery_clears_public_version_without_deployment(self):
+        """Restoring the original image must remove stale version metadata."""
+
+        state = self.root / "private"
+        public = self.root / "public"
+        state.mkdir()
+        public.mkdir()
+        (public / "deployed.json").write_text(
+            '{"version":"0.5.13-hw"}', encoding="utf-8"
+        )
+        script = ROOT / "scripts" / "apply-update.sh"
+        shell = (
+            'source "$1"; '
+            'STATE="$2"; PUBLIC_STATE="$3"; '
+            "sync_public_version"
+        )
+        result = subprocess.run(
+            ["bash", "-c", shell, "bash", str(script), str(state), str(public)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((public / "deployed.json").exists())
+
     def test_cosign_version_gate(self):
         """Require compatible Cosign 3 before changing host state."""
 
