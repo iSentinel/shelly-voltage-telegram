@@ -182,6 +182,64 @@ class MenuTopologyTests(unittest.TestCase):
         self.assertNotIn("private-url-error", call.args[0])
         self.assertIn("GitHub", call.args[0])
 
+    def test_admin_can_check_updates_from_direct_message(self):
+        """An administrator can request release info without using a group."""
+
+        msg = {
+            "chat": {"id": 7, "type": "private"},
+            "from": {"id": 7},
+            "text": "/updates",
+        }
+        with unittest.mock.patch.object(
+            APP, "release_notice", return_value="Stable: 0.5.12-hw"
+        ) as lookup:
+            self.monitor.handle_update({"message": msg})
+            lookup.assert_called_once()
+        self.monitor.telegram.send.assert_called_once()
+        self.assertEqual(
+            self.monitor.telegram.send.call_args.kwargs["chat_id"], "7"
+        )
+
+    def test_admin_can_change_apartments_only_in_own_direct_chat(self):
+        """Reject forged IDs and nonadmin direct messages."""
+
+        msg = {
+            "chat": {"id": 7, "type": "private"},
+            "from": {"id": 7},
+            "text": "/apartments add A 12 L1",
+        }
+        self.monitor.handle_update({"message": msg})
+        self.assertIn("Saved", self.monitor.telegram.send.call_args.args[0])
+        self.monitor.telegram.send.reset_mock()
+        for chat_id, sender_id in ((8, 7), (8, 8), (123, 8)):
+            with self.subTest(chat=chat_id, user=sender_id):
+                msg["chat"]["id"] = chat_id
+                msg["from"]["id"] = sender_id
+                msg["text"] = "/apartments remove A 12"
+                self.monitor.handle_update({"message": msg})
+        self.monitor.telegram.send.assert_not_called()
+        msg["chat"]["id"] = 7
+        msg["from"]["id"] = 7
+        msg["text"] = "/apartments list"
+        self.monitor.handle_update({"message": msg})
+        self.assertIn("A #12: L1", self.monitor.telegram.send.call_args.args[0])
+
+    def test_unrelated_private_commands_are_not_enabled(self):
+        """Private access must not expose other group-only commands."""
+
+        for command in ("/settings", "/maintenance", "/status", "/start"):
+            with self.subTest(command=command):
+                self.monitor.handle_update(
+                    {
+                        "message": {
+                            "chat": {"id": 7, "type": "private"},
+                            "from": {"id": 7},
+                            "text": command,
+                        }
+                    }
+                )
+        self.monitor.telegram.send.assert_not_called()
+
     def test_non_admin_can_read_settings_without_write_buttons(self):
         self.monitor.handle_callback(self.callback("settings", user=8))
         self.assertIsNone(
