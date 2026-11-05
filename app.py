@@ -4491,7 +4491,7 @@ class Monitor:
             return multiphase_status_text(self) + "\n\n" + self.settings_text()
 
     def handle_private_admin_message(self, msg: dict) -> bool:
-        """Allow sensitive commands directly from an authorized administrator."""
+        """Allow administrator-only commands in a direct chat."""
 
         chat = msg.get("chat") or {}
         sender_id = str((msg.get("from") or {}).get("id", ""))
