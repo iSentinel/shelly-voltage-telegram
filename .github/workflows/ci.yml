@@ -22,8 +22,6 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Install quality tools
         run: python -m pip install ruff==0.14.2
-      - name: Diagnostic Ruff formatting (temporary)
-        run: ruff format --line-length 79 --diff tests/test_update_rollback.py || true
       - name: Code quality
         run: ./scripts/quality.sh
       - name: Compile Python
