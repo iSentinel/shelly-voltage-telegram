@@ -160,6 +160,21 @@ recovery of an uncontrolled power loss, or hardware acceptance of the
 unreleased candidate version. Production remains unchanged until the
 active Shelly outage is resolved and separately accepted.
 
+## Candidate Docker QA without publishing a release
+
+The `0.5.13-hw` source candidate was separately built and exercised
+in LXC 111 on 2026-11-05 with a private mock Shelly EM1 endpoint.
+The candidate responded healthy/ready, wrote 230 V / 50 Hz test samples,
+opened one synthetic outage after the mock endpoint disconnected,
+then closed it after reconnection, with zero synthetic 0 V measurements.
+The disposable candidate image and test containers were removed;
+the original QA monitor remained healthy.
+
+This does **not** authorize a production update: candidate image
+signing/publication, live hardware acceptance under that version and
+independent Telegram delivery verification remain outstanding.
+Production stays on published `0.5.12-hw` until those gates pass.
+
 ## Acceptance before production
 
 Validate source archive and Cosign verification on a pinned digest, unit
