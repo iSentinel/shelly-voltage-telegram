@@ -1,3 +1,32 @@
+## 2026-11-06 optional weekly private digest
+
+- **Candidate source only:** admins may explicitly opt in from a
+  one-to-one Telegram chat with `/week subscribe`, and opt out
+  with `/week unsubscribe`. Plain `/week` returns an on-demand
+  read-only report without subscribing. No one is subscribed
+  by default. All confirmations are localized RU/UK/EN.
+- **Schedule:** Sunday at/after 20:00 in `TIMEZONE`
+  (currently `Europe/Kyiv`). A private digest goes only to
+  the opted-in administrator's chat and is sent silently,
+  not to the public channel. The weekly report continues
+  to distinguish observed data from unknown periods.
+- **Deduplication and reliability:** a per-user ISO-year/week
+  SQLite marker is written after a successful Telegram API
+  send. The scheduler suppresses subsequent sends that week,
+  including after restart. Failed sends are rate-limited to
+  at most one retry attempt per hour per running process.
+  A crash after remote acceptance but before saving the marker
+  may require a duplicate; this is a documented delivery
+  limitation rather than a claim of exactly-once semantics.
+- **Security:** only explicitly authorized administrators can
+  opt in. Each preference is independently stored and audited;
+  channel or unauthorized user commands cannot change it.
+- **Release boundary:** this is not deployed on `0.5.12-hw`,
+  does not affect the existing daily report, public channel
+  status, recovery/edit window, pin policy, or Shelly power.
+  CI, isolated tests, natural hardware acceptance and Owner
+  Approval remain requirements before any deployment.
+
 ## 2026-11-06 opt-in per-administrator preview layout
 
 - **P2 source stage:** private admin commands `/view compact` and

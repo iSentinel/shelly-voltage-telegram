@@ -1437,6 +1437,18 @@ class Telegram:
         return self.call("getUpdates", payload)
 
 
+def private_weekly_due_key(local_time: datetime) -> str | None:
+    """Return the ISO week only on Sunday at or after 20:00 local."""
+
+    if local_time.weekday() != 6 or (local_time.hour, local_time.minute) < (
+        20,
+        0,
+    ):
+        return None
+    week = local_time.isocalendar()
+    return f"{week.year}-W{week.week:02d}"
+
+
 def format_time(ts: float, cfg: Config) -> str:
     """Format local timestamp."""
 
@@ -1968,6 +1980,7 @@ class Monitor:
         ) = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
+        self.weekly_digest_attempts: dict[str, float] = {}
         self.last_recovery_duration: float | None = None
         self.last_recovery_at: float | None = None
         self.maintenance_until = 0.0
@@ -3190,6 +3203,44 @@ class Monitor:
         )
         self.last_summary_day = day
         self.storage.set_meta("daily_summary_day", day)
+
+    def maybe_weekly_private_reports(
+        self, local_time: datetime | None = None
+    ) -> None:
+        """Send due opt-in reports only to authorized private chats."""
+
+        if not self.telegram.enabled:
+            return
+        local = local_time or datetime.now(ZoneInfo(self.cfg.timezone))
+        week_key = private_weekly_due_key(local)
+        if week_key is None:
+            return
+        for admin_id in self.cfg.telegram_admin_user_ids:
+            user_id = str(admin_id)
+            try:
+                self.send_due_private_weekly(user_id, week_key)
+            except Exception as exc:
+                logger.warning(
+                    "Private weekly report failed: {}", type(exc).__name__
+                )
+
+    def send_due_private_weekly(self, user_id: str, week_key: str) -> None:
+        """Send at most one successful weekly digest per administrator."""
+
+        enabled = f"telegram_weekly_private_enabled_{user_id}"
+        delivered = f"telegram_weekly_private_sent_{user_id}"
+        if self.storage.get_meta(enabled) != "1":
+            return
+        if self.storage.get_meta(delivered) == week_key:
+            return
+        now = time.monotonic()
+        if now - self.weekly_digest_attempts.get(user_id, -3600) < 3600:
+            return
+        self.weekly_digest_attempts[user_id] = now
+        self.telegram.send(
+            self.weekly_summary_text(), notify=False, chat_id=user_id
+        )
+        self.storage.set_meta(delivered, week_key)
 
     def device_health_text(self) -> str:
         """Render read-only device health for configured phases."""
@@ -4671,6 +4722,7 @@ class Monitor:
             self.update_status()
             try:
                 self.maybe_daily_summary()
+                self.maybe_weekly_private_reports()
                 self.maybe_database_maintenance()
             except Exception as exc:
                 logger.warning("Periodic maintenance failed: {}", exc)
@@ -4850,9 +4902,54 @@ class Monitor:
             self.send_compact_preview(sender_id)
         elif command == "/view":
             self.change_private_preview_layout(sender_id, parts)
+        elif command == "/week":
+            self.handle_private_weekly(sender_id, parts)
         else:
             return False
         return True
+
+    def handle_private_weekly(self, sender_id: str, parts: list[str]) -> None:
+        """Serve manual reports and explicit weekly private subscriptions."""
+
+        action = parts[1].lower() if len(parts) == 2 else ""
+        if len(parts) == 1:
+            message = self.weekly_summary_text()
+        elif action not in {"subscribe", "unsubscribe"}:
+            message = tr(self.language, "weekly_private_usage")
+        else:
+            try:
+                self.save_private_weekly_preference(
+                    sender_id, action == "subscribe"
+                )
+                key = (
+                    "weekly_private_enabled"
+                    if action == "subscribe"
+                    else "weekly_private_disabled"
+                )
+                message = tr(self.language, key)
+            except sqlite3.Error as exc:
+                logger.warning(
+                    "Weekly private preference failed: {}",
+                    type(exc).__name__,
+                )
+                message = tr(self.language, "weekly_private_failed")
+        self.telegram.send(message, notify=False, chat_id=sender_id)
+
+    def save_private_weekly_preference(
+        self, sender_id: str, enabled: bool
+    ) -> None:
+        """Persist one opt-in with an audit record, never global settings."""
+
+        key = f"telegram_weekly_private_enabled_{sender_id}"
+        value = "1" if enabled else "0"
+        with self.config_lock:
+            old = self.storage.get_meta(key) or "0"
+            if value == old:
+                return
+            self.storage.set_meta(key, value)
+            self.storage.audit_setting(
+                sender_id, "private_weekly_digest", old, value
+            )
 
     def private_preview_layout(self, sender_id: str) -> str:
         """Read one administrator's saved view without changing the channel."""
@@ -4940,6 +5037,8 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
+        if command == "/week" and len(parts) != 1:
+            return
         if command in {"/chart", "/export"}:
             self.handle_file_command(command, parts)
         elif command in {"/quality", "/history", "/outages"}:
