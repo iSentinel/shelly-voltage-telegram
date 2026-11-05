@@ -4897,7 +4897,10 @@ class Monitor:
             return
         self.send_compact_preview(
             sender_id,
-            tr(self.language, "preview_layout_saved", mode=layout),
+            tr(
+                self.language, "preview_layout_saved",
+                mode=tr(self.language, "preview_layout_" + layout),
+            ),
         )
 
     def send_compact_preview(
