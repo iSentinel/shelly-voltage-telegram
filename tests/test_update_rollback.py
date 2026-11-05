@@ -71,7 +71,8 @@ class OfflineRollbackTests(unittest.TestCase):
         for version, accepted in (("v3.0.6", True), ("devel", False), ("v2.5.0", False)):
             command = (
                 'source "$1"; '
-                'cosign() { printf "GitVersion: %s\\n" "$2"; }; '
+                'test_version="$2"; '
+                'cosign() { printf "GitVersion: %s\\n" "$test_version"; }; '
                 'check_cosign_compatibility'
             )
             result = subprocess.run(
