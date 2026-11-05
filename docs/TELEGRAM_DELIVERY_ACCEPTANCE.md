@@ -20,6 +20,23 @@ Following the natural restoration of Shelly after outage #10:
   `getMessage(chat_id, message_id)` endpoint for retrieving arbitrary
   channel history.
 
+## Optional read-only voltage transition evidence
+
+The current source provides a safe way to inspect stored electrical
+state changes without sending Telegram messages:
+
+```bash
+python3 scripts/soak-report.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  --hours 3 --json
+```
+
+Review `voltage_transition_events` and
+`voltage_transition_history_status`. These represent the limited
+retained monitor history, **not** proof of Telegram delivery, message
+editing or subscriber visibility. No channel ID, bot token or
+subscriber information is required to run the report.
+
 ## Final manual visibility check
 
 The authorized channel administrator should open the target Telegram
