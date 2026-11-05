@@ -27,7 +27,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
+Software candidate: `0.5.13-hw`; public release and production: `0.5.12-hw`.
 
 ## Overview
 
@@ -44,7 +44,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.12-hw**
+- Current software candidate: **0.5.13-hw**
 - Current release: **0.5.12-hw**
 - Production deployment: **0.5.12-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
