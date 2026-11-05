@@ -41,7 +41,7 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn("sbom: true", text)
         self.assertIn("provenance: mode=max", text)
 
-    def test_image_dispatch_supports_exact_ref_and_tag(self):
+    def test_image_dispatch_restricts_manual_tag_namespace(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
         self.assertIn(
             'description: "Existing branch, tag or commit to build"', text
@@ -50,7 +50,9 @@ class WorkflowSecurityTests(unittest.TestCase):
             "ref: ${{ github.event_name == 'workflow_dispatch'", text
         )
         self.assertIn("type=raw,value=${{ inputs.image_tag }}", text)
-        self.assertIn("explicit image tag must start with v", text)
+        self.assertIn("manual builds may only publish manual-* tags", text)
+        self.assertIn("scripts/image_release_policy.py", text)
+        self.assertIn("fetch-depth: 0", text)
 
     def test_image_dispatch_uses_checked_out_source_metadata(self):
         text = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
@@ -88,7 +90,12 @@ class WorkflowSecurityTests(unittest.TestCase):
         self.assertIn(
             'cosign sign --yes "${image_name}@${IMAGE_DIGEST}"', text
         )
-        self.assertIn("startsWith(inputs.image_tag, 'v')", text)
+        self.assertIn(
+            "github.event_name == 'push' && "
+            "startsWith(github.ref, 'refs/tags/v')",
+            text,
+        )
+        self.assertNotIn("startsWith(inputs.image_tag, 'v')", text)
 
     def test_release_requires_public_version_promotion(self):
         """Final publication must explicitly promote RELEASE_VERSION."""

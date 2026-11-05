@@ -1,3 +1,26 @@
+## 2026-11-05 daily release check and secure image promotion QA
+
+- PASS: In isolated LXC 111, `shelly-voltage-update-check.service`
+  completed as an unprivileged DynamicUser oneshot. Its status JSON reported
+  installed QA `0.5.11-hw`, latest public `0.5.12-hw`, available=true and
+  auto_install=false. The QA Docker container ID, start time and restart
+  count were unchanged. The configured 24-hour timer was started and
+  inspected, then disabled again in the QA LXC.
+- NOT YET OBSERVED: an entire 24-hour real-time timer interval. The
+  `OnUnitActiveSec=24h` configuration and an immediate systemd service
+  execution were verified, not a complete calendar-day soak.
+- IMPLEMENTED FOR CI: `image.yml` now invokes
+  `scripts/image_release_policy.py` before publishing an image. Stable
+  signed tags `vX.Y.Z-hw` require a matching tag push, matching
+  `VERSION` and `RELEASE_VERSION`, and an exact checkout of that tag's
+  commit. Manual builds use `manual-*` tags only and cannot promote an
+  arbitrary commit as a signed stable release.
+- PASS: release-promotion policy regression tests, complete 274/274
+  Python tests, pinned Ruff and maintainability quality gate.
+- PRODUCTION: no GitHub update check timer or updater has been installed
+  in LXC 110. The physical Shelly remains offline with natural outage #10
+  open. No release was tagged, published or installed.
+
 ## 2026-11-05 positive signed-update acceptance in isolated LXC 111
 
 - PASS: The full updater installed published, Cosign-verified
