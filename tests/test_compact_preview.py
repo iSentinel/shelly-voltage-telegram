@@ -60,7 +60,7 @@ class CompactPreviewTests(unittest.TestCase):
         """Display current values only when the meter is connected."""
 
         monitor = make_monitor()
-        monitor.state.restore(time.time(), 225.9, 50.0)
+        monitor.state.success(225.9, 50.0, 1.0, 1)
         message = APP.compact_preview_text(monitor)
         self.assertIn("Короткий статус", message)
         self.assertIn("L: 225.9 В", message)
@@ -103,6 +103,19 @@ class CompactPreviewTests(unittest.TestCase):
         monitor.handle_update(private_update(7, "channel"))
         monitor.telegram.send.assert_not_called()
         monitor.telegram.edit.assert_not_called()
+
+    def test_unknown_channel_command_does_not_publish_offline_warning(self):
+        """Invalid commands must remain silent when Shelly is offline."""
+
+        monitor = make_monitor()
+        monitor.handle_update({
+            "message": {
+                "chat": {"type": "channel", "id": 123},
+                "from": {"id": 7},
+                "text": "/unsupported",
+            }
+        })
+        monitor.telegram.send.assert_not_called()
 
     def test_preview_uses_all_selected_languages(self):
         """No translation should silently fall back to Russian."""
