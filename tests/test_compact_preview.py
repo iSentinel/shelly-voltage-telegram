@@ -108,13 +108,15 @@ class CompactPreviewTests(unittest.TestCase):
         """Invalid commands must remain silent when Shelly is offline."""
 
         monitor = make_monitor()
-        monitor.handle_update({
-            "message": {
-                "chat": {"type": "channel", "id": 123},
-                "from": {"id": 7},
-                "text": "/unsupported",
+        monitor.handle_update(
+            {
+                "message": {
+                    "chat": {"type": "channel", "id": 123},
+                    "from": {"id": 7},
+                    "text": "/unsupported",
+                }
             }
-        })
+        )
         monitor.telegram.send.assert_not_called()
 
     def test_preview_uses_all_selected_languages(self):
