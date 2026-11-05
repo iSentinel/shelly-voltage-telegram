@@ -1,3 +1,32 @@
+## 2026-11-06 automated read-only backup acceptance
+
+- **Source stage:** added `scripts/verify-backups.py`, an opt-in CLI
+  verifying SHA256 sidecars, bounded gzip extraction into disposable
+  temporary files, SQLite `PRAGMA quick_check`, and retained
+  measurement counts. It never touches the production database,
+  changes the backup archives, restarts Docker, or contacts Shelly
+  and Telegram. It exits 0 only if all requested copies pass,
+  or 2 for any missing/invalid backup.
+- **QA:** the isolated network-disabled container passed
+  394/394 unit tests, Ruff and the project 40-line/function
+  quality gate. Eleven new tests cover checksum mismatch,
+  missing sidecar, bad gzip, broken SQLite, size limit,
+  insufficient retention, success and operator `--help`.
+- **Real restore evidence:** three latest daily
+  `/var/backups/shelly-voltage` archives passed checksum,
+  gzip and SQLite restore verification when mounted read-only
+  into an isolated no-network container. Restored snapshots had
+  17,414 / 14,501 / 12,709 measurements respectively.
+- **Ops:** `shelly-voltage-backup.timer` was enabled and active,
+  its previous service Result=success, and SQLite production
+  `quick_check=ok`. Backup verification itself remains manual;
+  no additional automated verification schedule has been enabled.
+- **Release boundary:** live version remains `0.5.12-hw`,
+  Shelly remains offline with `/ready=503`. A successful
+  backup check is not a substitute for natural Pro EM-50
+  hardware/Telegram acceptance and a verified rollback.
+  The candidate must not auto-promote.
+
 ## 2026-11-06 Telegram administrator documentation checkpoint
 
 - PR #103 merged source-only opt-in weekly digest delivery, with

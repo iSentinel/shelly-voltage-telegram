@@ -157,6 +157,7 @@ Troubleshooting: [Shelly online in the app, but offline in Telegram](docs/SHELLY
 - 🇷🇺 [Русская документация](README_RU.md)
 - 🇺🇦 [Українська документація](README_UA.md)
 - 🔐 [Telegram administrator guide](docs/TELEGRAM_ADMIN_GUIDE.md)
+- 💾 [Read-only backup validation](docs/BACKUP_VALIDATION.md)
 - 🧭 [Roadmap](ROADMAP.md)
 - 🧪 [Hardware validation](HARDWARE_VALIDATION.md)
 - 📝 [Changelog](CHANGELOG.md)
