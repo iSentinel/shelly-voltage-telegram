@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -25,6 +26,7 @@ REQUEST_TIMEOUT = 12
 SAFE_VOLTAGE_MIN = 207.0
 SAFE_VOLTAGE_MAX = 253.0
 MAX_SAMPLE_AGE = 120
+MIN_UPDATE_SPACE_BYTES = 768 * 1024 * 1024
 
 
 def version_tuple(text: str) -> tuple[int, int, int]:
@@ -199,12 +201,39 @@ def preflight(database: Path, ready_url: str) -> None:
         verify_voltage_sample(db)
 
 
+def storage_preflight(
+    database: Path, state: Path, docker_root: Path
+) -> None:
+    """Require space for the image, backup and recovery snapshot."""
+
+    if not database.is_file():
+        raise ValueError("SQLite database is missing")
+    required = max(
+        MIN_UPDATE_SPACE_BYTES,
+        database.stat().st_size * 3 + 256 * 1024 * 1024,
+    )
+    for name, directory in (
+        ("backup", state),
+        ("Docker", docker_root),
+        ("temporary files", Path(tempfile.gettempdir())),
+    ):
+        if not directory.is_dir():
+            raise ValueError(f"{name} filesystem is unavailable")
+        free = shutil.disk_usage(directory).free
+        if free < required:
+            raise ValueError(
+                f"insufficient {name} disk space: "
+                f"{free // 1048576} MiB free, "
+                f"{required // 1048576} MiB required"
+            )
+
+
 def parser() -> argparse.ArgumentParser:
     """Define the minimal, non-interactive updater CLI."""
 
     command = argparse.ArgumentParser(description=__doc__)
     command.add_argument(
-        "action", choices=("check", "preflight", "digest", "guard")
+        "action", choices=("check", "preflight", "digest", "guard", "storage")
     )
     command.add_argument(
         "--root", type=Path, default=Path("/opt/shelly-voltage")
@@ -215,6 +244,7 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("/var/lib/shelly-voltage/voltage.sqlite3"),
     )
+    command.add_argument("--docker-root", type=Path)
     command.add_argument("--version", default="")
     return command
 
@@ -231,6 +261,11 @@ def main() -> int:
         elif args.action == "preflight":
             preflight(args.database, "http://127.0.0.1:8080/ready")
             print("PREFLIGHT PASS")
+        elif args.action == "storage":
+            if args.docker_root is None:
+                raise ValueError("--docker-root is required for storage")
+            storage_preflight(args.database, args.state, args.docker_root)
+            print("STORAGE PASS")
         elif args.action == "guard":
             guard_target(args.root, args.state, args.version)
             print("TARGET PASS")
