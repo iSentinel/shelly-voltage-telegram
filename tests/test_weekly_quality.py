@@ -8,8 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import advanced_features as QUALITY
 from test_app import APP, config
+
+import advanced_features as QUALITY
 
 
 def make_database(path: Path) -> None:
@@ -38,9 +39,7 @@ class WeeklyQualityTests(unittest.TestCase):
                     "INSERT INTO measurements VALUES(?,?,50,'L1')",
                     [(100, 200), (110, 230), (140, 260), (220, 225)],
                 )
-            result = QUALITY.weekly_quality_stats(
-                path, "L1", 0, 300, 207, 253
-            )
+            result = QUALITY.weekly_quality_stats(path, "L1", 0, 300, 207, 253)
             self.assertEqual(result["count"], 4)
             self.assertEqual(result["min"], 200)
             self.assertEqual(result["max"], 260)
@@ -55,9 +54,7 @@ class WeeklyQualityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "empty.sqlite3"
             make_database(path)
-            result = QUALITY.weekly_quality_stats(
-                path, "L1", 0, 300, 207, 253
-            )
+            result = QUALITY.weekly_quality_stats(path, "L1", 0, 300, 207, 253)
             self.assertEqual(result["count"], 0)
             self.assertIsNone(result["min"])
             self.assertIsNone(result["avg"])
@@ -71,12 +68,8 @@ class WeeklyQualityTests(unittest.TestCase):
             path = Path(directory) / "phases.sqlite3"
             make_database(path)
             with sqlite3.connect(path) as db:
-                db.execute(
-                    "INSERT INTO measurements VALUES(100,240,50,'L2')"
-                )
-            result = QUALITY.weekly_quality_stats(
-                path, "L1", 0, 300, 207, 253
-            )
+                db.execute("INSERT INTO measurements VALUES(100,240,50,'L2')")
+            result = QUALITY.weekly_quality_stats(path, "L1", 0, 300, 207, 253)
             self.assertEqual(result["count"], 0)
             self.assertEqual(result["unknown"], 300)
 
@@ -91,9 +84,7 @@ class WeeklyQualityTests(unittest.TestCase):
                     "INSERT INTO outages VALUES(?,?,'L1')",
                     [(-20, 20), (100, None), (400, 450)],
                 )
-            result = QUALITY.weekly_connection_stats(
-                path, "L1", 0, 300
-            )
+            result = QUALITY.weekly_connection_stats(path, "L1", 0, 300)
             self.assertEqual(result["count"], 2)
             self.assertEqual(result["duration"], 220)
             other = QUALITY.weekly_connection_stats(path, "L2", 0, 300)
