@@ -16,10 +16,16 @@ Release. It cannot start a host update. Other users receive no release details.
   activation, beginning after a short delay on boot.
 - `shelly-voltage-update-check.service` runs an unprivileged, read-only
   release check and stores JSON in `/var/lib/shelly-voltage-update-check/status.json`.
-- The daily checker directory contains only nonsensitive version status. Root\n  snapshots and secret backups remain in a separate restricted directory.\n- `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
+- The daily checker directory contains only nonsensitive version status. Root
+  snapshots and secret backups remain in a separate restricted directory.
+- `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
   service. It has no Install section, timer, or automatic trigger.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
   preserve a pinned image choice after a host reboot.
+- On every Compose service start, `ExecStartPre` calls the root-only
+  `apply-update.sh --recover` mode. A private pending-update marker triggers
+  restoration of the previous image selection and SQLite snapshot *before*
+  allowing the service to start.
 
 **Cosign v3 or newer is required.** Debian Trixie's Cosign 2.5.0 reports
 `no signatures found` for the project's published OCI signatures, while
@@ -48,9 +54,18 @@ update restores the previous image choice and the backed-up database, keeping
 a separate rescue copy of the post-failure database. Inspect the rescue
 copy before discarding any measurements created during the upgrade window.
 
-A power loss or host crash during an upgrade still requires operator review.
-Do not claim a fully automatic crash-safe rollback until that scenario has
-been independently accepted. The updater does not change electrical settings.
+The updater writes a durable pending-update marker before selecting the
+new image. The marker is cleared only after the replacement passes health,
+readiness and electrical checks. If the host restarts mid-upgrade, systemd
+restores the original image and SQLite before launching the Compose stack.
+An invalid snapshot or marker fails closed and keeps the pending state for
+manual recovery. The earliest post-failure rescue database is preserved on
+repeated recovery attempts.
+
+This boot-recovery logic has isolated tests, but an actual power interruption
+and reboot of a disposable LXC are **not yet hardware-accepted**. Operator
+review is still necessary after a real host failure. The updater does not
+change electrical settings.
 
 ## Commands
 
@@ -61,6 +76,9 @@ separate hardware acceptance and explicit approval.
 ```bash
 python3 scripts/github_update.py --help
 bash scripts/apply-update.sh --help
+# Recovery is invoked automatically by systemd before starting Compose.
+# On the disposable test LXC only:
+sudo bash scripts/apply-update.sh --recover
 python3 scripts/github_update.py check --root /opt/shelly-voltage
 python3 scripts/github_update.py preflight
 sudo bash scripts/apply-update.sh --version 0.5.13-hw --dry-run
