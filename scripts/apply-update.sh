@@ -126,7 +126,7 @@ restore_snapshot_database() {
         cp -a "$DB" "$rescue"
         chmod 0600 "$rescue"
     fi
-    temp="$DB.recovery.$"
+    temp="${DB}.recovery.$"
     gzip -dc "$backup" > "$temp"
     python3 - "$temp" <<'PY'
 import sqlite3
