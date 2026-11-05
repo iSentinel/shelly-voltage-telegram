@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sqlite3
 import sys
 import tempfile
@@ -10,6 +11,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "soak-report.py"
 SPEC = importlib.util.spec_from_file_location("svt_soak_report", SCRIPT)
@@ -61,6 +63,9 @@ class SoakReportTests(unittest.TestCase):
             self.assertEqual(report["last_sample_age_seconds"], 90.0)
             self.assertEqual(report["confirmed_outages"], 0)
             self.assertEqual(report["confirmed_outage_seconds"], 0.0)
+            self.assertEqual(
+                report["voltage_transition_history_status"], "absent"
+            )
 
     def test_schema_v2_separates_gaps_from_confirmed_outages(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -98,6 +103,63 @@ class SoakReportTests(unittest.TestCase):
             )
             self.assertIn("hysteresis", report["confirmed_outage_semantics"])
             self.assertIn("not exact", report["confirmed_outage_semantics"])
+
+    def test_voltage_history_is_windowed_and_sanitized(self):
+        """Include only safe, recognized voltage-state transitions."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "history.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE meta(key TEXT,value TEXT)")
+                items = [
+                    {"at": 1600, "phase": "L1", "state": "normal"},
+                    {"at": 1800, "phase": "L1", "state": "low",
+                     "device_secret": "should-not-leak"},
+                    {"at": 1850, "phase": "L1", "state": "normal"},
+                    {"at": 1880, "phase": "private", "state": "low"},
+                    {"at": "NaN", "phase": "L1", "state": "high"},
+                ]
+                db.execute(
+                    "INSERT INTO meta VALUES(?,?)",
+                    ("voltage_transition_history", json.dumps(items)),
+                )
+            report = SOAK.voltage_transitions(
+                path, 1700, 2000, ZoneInfo("Europe/Kyiv")
+            )
+            self.assertEqual(
+                report["voltage_transition_history_status"], "ok"
+            )
+            self.assertEqual(report["voltage_transition_count"], 2)
+            self.assertEqual(
+                [
+                    entry["state"]
+                    for entry in report["voltage_transition_events"]
+                ],
+                ["low", "normal"],
+            )
+            self.assertNotIn("should-not-leak", json.dumps(report))
+            self.assertIn(
+                "not a complete", report["voltage_transition_interpretation"]
+            )
+
+    def test_invalid_voltage_history_is_reported(self):
+        """Invalid saved history is distinct from no saved history."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("CREATE TABLE meta(key TEXT,value TEXT)")
+                db.execute(
+                    "INSERT INTO meta VALUES(?,?)",
+                    ("voltage_transition_history", "{not valid JSON"),
+                )
+            report = SOAK.voltage_transitions(
+                path, 1700, 2000, ZoneInfo("Europe/Kyiv")
+            )
+            self.assertEqual(
+                report["voltage_transition_history_status"], "invalid"
+            )
+            self.assertEqual(report["voltage_transition_count"], 0)
 
     def test_missing_database_is_not_created(self):
         """A typo in --db must fail closed without creating an empty DB."""
