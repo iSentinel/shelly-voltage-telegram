@@ -21,6 +21,12 @@ Release. It cannot start a host update. Other users receive no release details.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
   preserve a pinned image choice after a host reboot.
 
+**Cosign v3 or newer is required.** Debian Trixie's Cosign 2.5.0 reports
+`no signatures found` for the project's published OCI signatures, while
+Cosign 3.0.6 successfully verifies the same digest. The manual updater
+refuses unknown or older Cosign versions before any container changes.
+Install a trusted, verified v3+ binary in the test LXC for acceptance.
+
 Only published stable GitHub Releases are eligible. The updater rejects
 prereleases, downgrades, the already deployed version, and missing release
 assets. It checks the source archive SHA256 and verifies the pinned multiarch
