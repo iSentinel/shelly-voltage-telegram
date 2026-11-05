@@ -85,6 +85,19 @@ and remain compatible with RU/UA/EN.
 
 ## Implementation order
 
+### Optional admin-only preview
+
+Candidate-only `/preview` returns a compact status in the authorized
+administrator's private chat. It never publishes, edits or pins a
+message in the channel, and it does not change the default display.
+When Shelly is unavailable, current voltage is unknown; only the
+timestamp of the last valid sample is shown.
+
+The setting to permanently choose compact or detailed layout has
+**not** been enabled. Physical approval of the release and a
+rollback plan are prerequisites to making this preview available
+in the running Telegram bot.
+
 1. **P1** — A safe text renderer with RU/UA/EN and tests for online,
    warning, offline, recovering, missing data and fresh timestamps.
    Make compact mode optional at first; keep the existing default until
