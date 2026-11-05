@@ -1,3 +1,30 @@
+## 2026-11-05 official Shelly EM.GetStatus error handling
+
+- BUG CONFIRMED against Shelly Gen2 EM status documentation:
+  https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/EM/ .
+  The three-phase meter reports global faults in `errors`
+  (`power_meter_failure`, `phase_sequence`, `ct_type_not_set`);
+  individual phase errors appear in `a_errors`, `b_errors`,
+  `c_errors`, and optional neutral faults in `n_errors`.
+  The undocumented `total_errors` name cannot replace these fields.
+- FIX IN UNDEPLOYED CANDIDATE: `Pro3EMClient.read_phases()` rejects
+  nonempty global or per-phase fault arrays, as well as malformed
+  error fields, before accepting any voltage/frequency sample.
+  The legacy `total_errors` alias is also checked defensively.
+  Recognized faults produce concise diagnostic codes; unexpected
+  remote strings are redacted rather than echoed to logs.
+- SAFETY: a shared meter fault rejects the entire three-phase polling
+  cycle. No invented voltage readings are stored when the RPC reports
+  `power_meter_failure`, even if numeric phase values are present.
+  Empty error arrays remain valid; alarm `a_flags` and analogous
+  phase flags are distinct from meter errors.
+- QA: synthetic regression tests cover global, phase, neutral, malformed,
+  unknown and legacy error fields, plus the no-fabricated-reading
+  monitor path. This is software-only validation; the Pro 3EM/3CT63
+  physical acceptance waits until the user reports device installation.
+- PRODUCTION: `0.5.12-hw` continues monitoring Pro EM-50 without
+  restart, version promotion, meter selection change or control RPC.
+
 ## 2026-11-05 new naturally triggered stable-recovery checkpoint
 
 - NATURAL PHYSICAL EVENT: On production Shelly Pro EM-50,
