@@ -144,6 +144,24 @@ class ApartmentRegistry:
         return rows, total
 
 
+def format_apartment_list(
+    registry: ApartmentRegistry, phase: str | None
+) -> str:
+    """Render a bounded phase-filtered apartment list."""
+
+    rows, total = registry.list_entries(phase)
+    lines = [
+        f"{building} #{number}: {phase_name}"
+        for building, number, phase_name in rows
+    ]
+    return (
+        f"Apartments: {total}"
+        + (" (first 100)" if total > MAX_LIST else "")
+        + "\n"
+        + ("\n".join(lines) if lines else "No assignments")
+    )
+
+
 def apartment_command(
     registry: ApartmentRegistry, parts: list[str], allowed: set[str]
 ) -> str:
@@ -160,17 +178,7 @@ def apartment_command(
     action = parts[1].lower()
     if action == "list" and len(parts) in (2, 3):
         phase = valid_phase(parts[2]) if len(parts) == 3 else None
-        rows, total = registry.list_entries(phase)
-        lines = [
-            f"{building} #{number}: {phase_name}"
-            for building, number, phase_name in rows
-        ]
-        return (
-            f"Apartments: {total}"
-            + (" (first 100)" if total > MAX_LIST else "")
-            + "\n"
-            + ("\n".join(lines) if lines else "No assignments")
-        )
+        return format_apartment_list(registry, phase)
     if action == "add" and len(parts) == 5:
         phase = valid_phase(parts[4])
         if phase not in allowed:
