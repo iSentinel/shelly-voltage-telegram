@@ -2617,6 +2617,57 @@ class AdvancedFeatureTests(unittest.TestCase):
         self.assertEqual(recovered["live_voltage"], 231.5)
         self.assertFalse(recovered["sample_is_stale"])
 
+    def test_monitoring_http_responses_disable_caching(self):
+        """Never let proxies reuse stale monitoring values."""
+
+        for content_type in (
+            "application/json",
+            "text/plain",
+            "text/html; charset=utf-8",
+        ):
+            with self.subTest(content_type=content_type):
+                handler = Mock()
+                APP.HealthHandler.reply(handler, 200, "OK", content_type)
+                headers = {
+                    call.args[0]: call.args[1]
+                    for call in handler.send_header.call_args_list
+                }
+                self.assertEqual(
+                    headers["Cache-Control"], "no-store, max-age=0"
+                )
+                self.assertEqual(headers["Pragma"], "no-cache")
+                self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+                self.assertEqual(headers["X-Frame-Options"], "DENY")
+                self.assertEqual(headers["Content-Length"], "2")
+                handler.wfile.write.assert_called_once_with(b"OK")
+
+    def test_local_dashboard_has_restrictive_content_policy(self):
+        """Keep the local dashboard script-free and unframeable."""
+
+        handler = Mock()
+        APP.HealthHandler.reply(
+            handler, 200, "<p>Local</p>", "text/html; charset=utf-8"
+        )
+        headers = {
+            call.args[0]: call.args[1]
+            for call in handler.send_header.call_args_list
+        }
+        policy = headers["Content-Security-Policy"]
+        self.assertIn("default-src 'none'", policy)
+        self.assertIn("style-src 'unsafe-inline'", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertNotIn("script-src 'unsafe-inline'", policy)
+        handler.send_response.assert_called_once_with(200)
+
+    def test_json_monitoring_has_no_html_content_policy(self):
+        """Do not add HTML-only security policy to data endpoints."""
+
+        handler = Mock()
+        APP.HealthHandler.reply(handler, 503, "{}", "application/json")
+        names = [call.args[0] for call in handler.send_header.call_args_list]
+        self.assertNotIn("Content-Security-Policy", names)
+        handler.send_response.assert_called_once_with(503)
+
     def test_dashboard_hides_stale_voltage_while_offline(self):
         monitor = APP.Monitor(config(recovery_after_successes=2))
         monitor.state.restore(APP.time.time(), 230.0, 50.0)
