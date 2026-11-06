@@ -25,6 +25,35 @@ from manual_dtek_forecast import (  # noqa: E402
 )
 
 ALLOWED_SOURCES = {MANUAL_SOURCE, "user-supplied forecast, unverified"}
+OPERATOR_LABELS = {
+    "uk": (
+        "Неперевірений прогноз для групи",
+        "Орієнтовне вікно за планом",
+        "Поза вказаним орієнтовним вікном",
+        "Виміряна напруга Shelly",
+        "Поточна напруга Shelly невідома",
+        "Джерело: користувач; не звірено з ДТЕК. "
+        "Час може змінитися, відключення може не бути.",
+    ),
+    "ru": (
+        "Непроверенный прогноз для группы",
+        "Ориентировочный интервал по плану",
+        "Вне указанного ориентировочного интервала",
+        "Измеренное напряжение Shelly",
+        "Текущее напряжение Shelly неизвестно",
+        "Источник: пользователь; не сверено с ДТЭК. "
+        "Время может измениться, отключения может не быть.",
+    ),
+    "en": (
+        "Unverified forecast for group",
+        "Approximate planned window",
+        "Outside the listed approximate planned window",
+        "Shelly measured voltage",
+        "Current Shelly voltage unknown",
+        "Source: user-supplied; not cross-checked with DTEK. "
+        "Times may shift or the outage may not happen.",
+    ),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +65,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--at", help="Offset-aware ISO-8601 observation time")
     parser.add_argument("--max-age-sec", type=int, default=45)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--language", choices=("uk", "ru", "en"), default="uk")
     return parser.parse_args()
 
 
@@ -126,6 +156,8 @@ def compare(
         "group": forecast.group,
         "source": MANUAL_SOURCE,
         "source_verified": False,
+        "forecast_is_approximate": True,
+        "forecast_window_does_not_trigger_outage": True,
         "predicted_window": list(window) if window else None,
         "actual_mains_outage_verified": False,
         "measurement": "recent_valid_voltage" if fresh else "unknown_or_stale",
@@ -135,6 +167,33 @@ def compare(
         "connectivity_gaps_open": open_gaps,
         "device_controls_or_telegram_writes": False,
     }
+
+
+def operator_summary(result: dict, language: str = "uk") -> str:
+    """Show forecast and measured evidence without an outage claim."""
+
+    if result.get("status") != "pass":
+        raise ValueError("cannot format failed comparison")
+    if result.get("source") != MANUAL_SOURCE:
+        raise ValueError("manual forecast provenance invalid")
+    if result.get("source_verified") is not False:
+        raise ValueError("source cannot claim provider verification")
+    labels = OPERATOR_LABELS.get(language, OPERATOR_LABELS["uk"])
+    title, active, absent, measured, unknown, disclaimer = labels
+    lines = [f"📅 {title} {result['group']}"]
+    window = result.get("predicted_window")
+    if window:
+        lines.append(f"🪫 {active}: {window[0]}–{window[1]}")
+    else:
+        lines.append(f"📅 {absent}")
+    if result.get("measurement") == "recent_valid_voltage":
+        v = result["voltage_v"]
+        f = result["frequency_hz"]
+        lines.append(f"⚡ {measured}: {v:.1f} V / {f:.2f} Hz")
+    else:
+        lines.append(f"⚡ {unknown}")
+    lines.append(f"ℹ️ {disclaimer}")
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -166,8 +225,7 @@ def main() -> int:
     else:
         print(f"{result['status'].upper()}: manual forecast comparison")
         if result["status"] == "pass":
-            print("Predicted window:", result["predicted_window"])
-            print("Measured voltage:", result["voltage_v"])
+            print(operator_summary(result, args.language))
         else:
             print("Reason:", result["reason"])
     return 0 if result["status"] == "pass" else 1

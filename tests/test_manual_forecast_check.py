@@ -207,6 +207,110 @@ class ManualForecastCheckerTests(unittest.TestCase):
             self.assertEqual(CHECK.main(), 1)
         self.assertEqual(json.loads(output.getvalue())["status"], "fail")
 
+    def test_localized_summary_distinguishes_forecast_and_voltage(self):
+        """Expose unverified graph and actual voltage as separate evidence."""
+
+        report = self.compare("20:00:05")
+        messages = {
+            "uk": ("Неперевірений", "не звірено з ДТЕК"),
+            "ru": ("Непроверенный", "не сверено с ДТЭК"),
+            "en": ("Unverified", "not cross-checked with DTEK"),
+        }
+        for lang, words in messages.items():
+            with self.subTest(lang=lang):
+                text = CHECK.operator_summary(report, lang)
+                self.assertIn("20:00–24:00", text)
+                self.assertIn("227.8 V", text)
+                self.assertIn(words[0], text)
+                self.assertIn(words[1], text)
+
+    def test_forecast_boundaries_are_not_switching_commands(self):
+        """Scheduled times cannot assert or trigger a mains outage."""
+
+        for clock in ("19:59:59", "20:00:00", "20:01:00"):
+            with self.subTest(clock=clock):
+                result = self.compare(clock)
+                self.assertTrue(result["forecast_is_approximate"])
+                self.assertTrue(
+                    result["forecast_window_does_not_trigger_outage"]
+                )
+                self.assertFalse(result["actual_mains_outage_verified"])
+                self.assertFalse(result["device_controls_or_telegram_writes"])
+
+    def test_summary_marks_planned_times_as_approximate(self):
+        """No locale should imply exact DTEK power switching times."""
+
+        report = self.compare("20:00:05")
+        expected = {
+            "uk": ("Орієнтовне", "Час може змінитися"),
+            "ru": ("Ориентировочный", "Время может измениться"),
+            "en": ("Approximate", "Times may shift"),
+        }
+        for language, (title, caution) in expected.items():
+            with self.subTest(language=language):
+                summary = CHECK.operator_summary(report, language)
+                self.assertIn(title, summary)
+                self.assertIn(caution, summary)
+
+    def test_outside_forecast_not_equivalent_to_power_available(self):
+        """A missed planned window does not guarantee mains availability."""
+
+        report = self.compare("19:59:59")
+        report["measurement"] = "unknown_or_stale"
+        report["voltage_v"] = None
+        for language in ("uk", "ru", "en"):
+            with self.subTest(language=language):
+                summary = CHECK.operator_summary(report, language)
+                self.assertNotIn("227.8 V", summary)
+                self.assertNotIn("electricity is on", summary.lower())
+
+    def test_localized_summary_hides_voltage_when_offline(self):
+        """A fresh pre-gap reading must never look like current voltage."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute(
+                "insert into outages values (?,NULL)",
+                (timestamp("20:00:02"),),
+            )
+        report = self.compare("20:00:05")
+        for lang, phrase in (
+            ("uk", "невідома"),
+            ("ru", "неизвестно"),
+            ("en", "unknown"),
+        ):
+            with self.subTest(lang=lang):
+                text = CHECK.operator_summary(report, lang)
+                self.assertIn(phrase, text)
+                self.assertNotIn("227.8", text)
+
+    def test_operator_summary_fails_closed_on_fake_source(self):
+        """Never show a forged official source as an operator report."""
+
+        report = self.compare("20:00:05")
+        report["source_verified"] = True
+        with self.assertRaises(ValueError):
+            CHECK.operator_summary(report, "uk")
+
+    def test_cli_text_uses_explicit_unverified_label(self):
+        """Human CLI output always distinguishes measured and predicted."""
+
+        args = [
+            "manual-forecast-check",
+            "--forecast",
+            str(self.forecast),
+            "--db",
+            str(self.database),
+            "--at",
+            "2026-11-06T20:00:05+02:00",
+            "--language",
+            "ru",
+        ]
+        output = io.StringIO()
+        with patch.object(sys, "argv", args), redirect_stdout(output):
+            self.assertEqual(CHECK.main(), 0)
+        self.assertIn("Непроверенный прогноз", output.getvalue())
+        self.assertIn("227.8 V", output.getvalue())
+
     def test_help_is_available(self):
         """Make standalone CLI options discoverable with --help."""
 

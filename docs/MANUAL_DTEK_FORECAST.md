@@ -51,3 +51,33 @@ the voltage and sample age whenever any open connectivity gap exists,
 even if the preceding measured sample is younger than max-age-sec.
 This prevents the 20:00 boundary from showing stale mains readings
 after communication has just failed.
+
+
+## Private human-readable summary
+
+The read-only checker can render localized, terminal-only operator
+summaries. No Telegram API requests are generated:
+
+    python3 scripts/manual-forecast-check.py --forecast /opt/shelly-voltage/validation/2026-11-06-group-10.1-user-forecast.json --db /var/lib/shelly-voltage/voltage.sqlite3 --language uk
+
+The title and footnote explicitly identify an unverified manual
+source. A predicted scheduled window and a fresh voltage measurement
+appear on separate lines. If communication is lost, the measured
+voltage is omitted and marked unknown, even if the last sample was
+just a few seconds old.
+
+
+## Approximate timing, not a switching timetable
+
+The operator has clarified that the DTEK planned outage windows can
+differ significantly from reality. Window membership denotes **only
+a scheduled interval on the provided forecast**, not an exact moment
+when mains supply changes. There is deliberately no made-up plus/minus
+tolerance or automatic outage trigger when crossing 20:00 or 24:00.
+An outage can happen earlier, later, or not happen at all.
+
+The JSON report explicitly sets forecast_is_approximate=true and
+forecast_window_does_not_trigger_outage=true. RU/UK/EN human-readable
+summaries label forecast windows *approximate* and state that real
+timings may shift. Only recent valid Shelly voltage is displayed as
+measured evidence; an open connectivity gap hides the last value.
