@@ -89,6 +89,49 @@ class BackupVerificationTests(unittest.TestCase):
         path.write_bytes(path.read_bytes() + b"tampered")
         self.assertEqual(self.verify(), 2)
 
+    def test_wrong_sidecar_filename_is_failure(self):
+        """Reject a matching digest paired with another backup name."""
+
+        archive = create_backup(self.root)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(f"{archive}.sha256").write_text(
+            f"{digest}  voltage-other.sqlite3.gz\n"
+        )
+        self.assertEqual(self.verify(), 2)
+
+    def test_absolute_sidecar_filename_is_accepted(self):
+        """Existing sha256sum files may contain their original path."""
+
+        archive = create_backup(self.root)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(f"{archive}.sha256").write_text(f"{digest}  {archive}\n")
+        self.assertEqual(self.verify(), 0)
+
+    def test_digest_only_sidecar_remains_accepted(self):
+        """Legacy checksum-only files must remain compatible."""
+
+        archive = create_backup(self.root)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(f"{archive}.sha256").write_text(digest + "\n")
+        self.assertEqual(self.verify(), 0)
+
+    def test_symlink_sidecar_is_rejected(self):
+        """Do not read checksum metadata via a symbolic link."""
+
+        archive = create_backup(self.root)
+        sidecar = Path(f"{archive}.sha256")
+        real = self.root / "stored-checksum"
+        sidecar.rename(real)
+        sidecar.symlink_to(real)
+        self.assertEqual(self.verify(), 2)
+
+    def test_oversized_sidecar_is_rejected(self):
+        """Ignore unexpectedly large checksum metadata files."""
+
+        archive = create_backup(self.root)
+        Path(f"{archive}.sha256").write_text("0" * 5000)
+        self.assertEqual(self.verify(), 2)
+
     def test_corrupted_gzip_is_failure(self):
         """Reject malformed compression even with a matching checksum."""
 
