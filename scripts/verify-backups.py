@@ -46,22 +46,45 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def checksum_error(archive: Path) -> str | None:
-    """Verify the checksum file against the archived bytes."""
+def parse_sidecar(archive: Path) -> tuple[str | None, str | None]:
+    """Read a checksum and verify its optional archive filename."""
 
     sidecar = Path(f"{archive}.sha256")
+    if sidecar.is_symlink():
+        return None, "SHA256 sidecar symlink rejected"
     if not sidecar.is_file():
-        return "SHA256 sidecar missing"
+        return None, "SHA256 sidecar missing"
     try:
-        expected = sidecar.read_text(encoding="utf-8").split()[0].lower()
-        if re.fullmatch(r"[0-9a-f]{64}", expected) is None:
-            return "invalid SHA256 sidecar"
+        with sidecar.open("rb") as stream:
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            return None, "invalid SHA256 sidecar"
+        lines = raw.decode("utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return None, "SHA256 sidecar unreadable"
+    if len(lines) != 1:
+        return None, "invalid SHA256 sidecar"
+    line = lines[0]
+    if not re.fullmatch(r"[0-9a-fA-F]{64}(?: [ *].+)?", line):
+        return None, "invalid SHA256 sidecar"
+    if len(line) > 64 and Path(line[66:]).name != archive.name:
+        return None, "SHA256 filename mismatch"
+    return line[:64].lower(), None
+
+
+def checksum_error(archive: Path) -> str | None:
+    """Compare the archived bytes with the sidecar SHA256 digest."""
+
+    expected, problem = parse_sidecar(archive)
+    if problem:
+        return problem
+    try:
         digest = hashlib.sha256()
         with archive.open("rb") as stream:
             for chunk in iter(lambda: stream.read(BLOCK_SIZE), b""):
                 digest.update(chunk)
-    except (OSError, UnicodeError, IndexError):
-        return "SHA256 sidecar unreadable"
+    except OSError:
+        return "SHA256 archive unreadable"
     return None if digest.hexdigest() == expected else "SHA256 mismatch"
 
 
