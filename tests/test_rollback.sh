@@ -17,6 +17,9 @@ chmod 0755 "$TARGET/scripts/backup.sh"
 printf '0.4.2-hw\n' > "$TARGET/VERSION"
 printf 'new\n' > "$TARGET/NEW_ONLY"
 printf 'KEEP_ME=1\n' > "$TARGET/.env"
+printf 'BACKUP_KEEP_ME=1\n' > "$TARGET/.env.pre-upgrade"
+mkdir -p "$TARGET/validation"
+printf 'keep private QA results\n' > "$TARGET/validation/acceptance.txt"
 printf 'secret-preserved\n' > "$TARGET/secrets/token"
 
 python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
@@ -89,6 +92,8 @@ test "$(cat "$TARGET/VERSION")" = "0.4.1-hw"
 test -f "$TARGET/OLD_ONLY"
 test ! -e "$TARGET/NEW_ONLY"
 grep -qx 'KEEP_ME=1' "$TARGET/.env"
+grep -qx 'BACKUP_KEEP_ME=1' "$TARGET/.env.pre-upgrade"
+grep -qx 'keep private QA results' "$TARGET/validation/acceptance.txt"
 grep -qx 'secret-preserved' "$TARGET/secrets/token"
 
 python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
