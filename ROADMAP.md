@@ -1,3 +1,44 @@
+## 2026-11-06 11:22 Europe/Kyiv — offline release gate and installer dry run
+
+- **LIVE STATE:** outage #13 remained open from 10:30:51 Kyiv.
+  At 11:17 the installed `0.5.13-hw` monitor was healthy,
+  Docker restarts 0, /health=200, /ready=503, and
+  SQLite quick_check OK with 21,950 real samples and 0 fake
+  voltage-zero rows. Last real voltage was recorded 10:30:08
+  (235.7 V); it is **stale** and cannot confirm live mains.
+  Ten warnings during the offline period were classified as
+  Shelly polling/network unavailability, with no new
+  Telegram polling or channel-status update errors.
+- **BACKUPS / PASS:** the latest three daily archives passed
+  read-only checksum and SQLite restoration in isolated
+  network-disabled Docker. The newest archive passed
+  the 36-hour freshness check.
+- **SOURCE / PASS:** PR #139 (`f95a169`) added independent
+  stale-safe live voltage/frequency fields for each
+  configured L1/L2/L3 phase. 437/437 isolated tests,
+  Ruff/40-line quality gate and GitHub CI on Python
+  3.11/3.12/3.13 PASS. Still source-only; no live upgrade.
+- **INSTALL PREVIEW / PASS:** current `main` installer
+  `install.sh --dry-run --non-interactive` returned
+  `DRY-RUN PASS`, without changing production.
+- **PROMOTION GATE / EXPECTED FAIL:** read-only
+  `promotion-check.py` against the actual open outage
+  #13 baseline and live services returned exit 2,
+  `status=fail` and six recorded gate reasons, including
+  open outage, missing post-baseline fresh samples,
+  pending Telegram status rotation and /ready HTTP 503.
+  This is a correct release block during offline,
+  **not** a completed physical acceptance.
+  The private 0600 evidence file stays on LXC 110:
+  `validation/2026-11-06-outage13-promotion-gate-offline.json`.
+- **RECOVERY:** the user's approximate 17:00 Kyiv estimate
+  remains tentative. The existing hourly read-only
+  automation uses the exact valid private outage #13
+  baseline; no new duplicate automation was created.
+  Do not run a real installer, force an outage, alter
+  electrical thresholds, claim Telegram delivery or
+  promote release without fresh field evidence.
+
 ## 2026-11-06 11:18 Europe/Kyiv — continued offline QA and phase-safe JSON
 
 - **LIVE HARDWARE / UNCHANGED:** on Proxmox LXC 110, installed
