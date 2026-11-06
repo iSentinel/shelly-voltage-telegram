@@ -168,3 +168,23 @@ must not merge, duplicate, reverse, or overwrite each other.
 
 The parser does not fetch provider pages, write trusted cache files,
 send Telegram messages, or issue commands to Shelly.
+
+## Midnight continuity / natural offline QA
+
+The November 6 group 10.1 forecast ends at 24:00, exactly when
+the separate November 7 forecast begins at 00:00. This boundary
+must never close a natural Shelly connectivity-loss record or
+silently mark electricity restored. The November 7 02:30
+forecast ending and the 07:00 forecast starting are equally
+only predicted timetable changes, not measured power events.
+
+The deterministic networkless tests in
+tests/test_manual_forecast_midnight_continuity.py use one open
+natural-like incident #15 and a single stale 234.8 V reading
+before that gap. Across both forecast days, the current
+voltage stays unknown and no new event is written.
+
+These tests simulate future clock values; they are NOT field
+observations. A real Shelly restart/recovery must be accepted
+later using fresh measured voltage and the original incident
+baseline, not inferred from DTEK windows.
