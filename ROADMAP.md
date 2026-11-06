@@ -1,3 +1,40 @@
+## 2026-11-06 07:24 Europe/Kyiv — Telegram screenshot accepted for current production
+
+- **VISUAL / PASS (installed 0.5.12-hw):** operator-provided
+  Telegram status-channel screenshot confirms that a recovery/status
+  message was visible, with voltage, frequency, the natural 6 h 19 min
+  connectivity outage and a 10-minute voltage event summary.
+  This is evidence for that visible message, not a receipt for every
+  subscriber or live Telegram acceptance of the uninstalled candidate.
+- **EVENT DISTINCTION:** real Shelly communication outage #11 ended
+  06:37:02 Kyiv; separate voltage normalization was recorded at
+  06:57:46 Kyiv / 211.7 V. The displayed summary at 06:57–07:07
+  covers only the post-normalization window; its 0 s out of normal
+  cannot be extrapolated to the preceding low-voltage readings.
+- **SOURCE / DONE:** PR #114 merged as
+  `e80392cdc947ed083f39793c703dd767448f8471` to label
+  Shelly **connectivity** restoration accurately in RU/UK/EN,
+  instead of claiming utility mains restoration. PR #115 merged as
+  `e0a8b1b60a4b93b705d5817b42514df6c9e17c38` to clarify
+  recovery-first event-summary coverage. Neither changes voltage
+  thresholds, monitor data, Telegram pin policy or send/edit logic.
+- **QA:** 409/409 and then 410/410 isolated Docker unit tests PASS;
+  Ruff 0.14.2 / PEP8 / <=40-line functions quality PASS.
+  Both PRs passed GitHub CI on Python 3.11, 3.12 and 3.13.
+  Exact merged-source parity on Gateway PASS.
+- **LIVE / NO UPDATE:** LXC 110 production remains `0.5.12-hw`,
+  healthy with zero Docker restarts, Shelly online, HTTP `/ready=200`,
+  SQLite integrity OK and zero invented 0 V readings. Persisted
+  settings: status edit window 10 min, pin off; no pinned status ID.
+  Private visual-acceptance record:
+  `validation/natural-baselines/outage-11-telegram-visual-20261106.json`.
+  The screenshot itself is not published.
+- **NEXT RELEASE GATES:** no automatic installation. Candidate
+  `0.5.13-hw` still needs its own approved live Telegram/display
+  acceptance, a fresh current-version rollback snapshot and verified
+  rollback procedure, owner approval, and later real Pro 3EM/3CT63
+  validation when that hardware is available.
+
 ## 2026-11-06 07:06 Europe/Kyiv — natural outage #11 recovery
 
 - **REAL DEVICE / PASS:** Pro EM-50 resumed normal polling without a
