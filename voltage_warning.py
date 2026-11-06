@@ -1,0 +1,124 @@
+"""Pure, opt-in low-voltage advisory state machine for future acceptance."""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, replace
+
+
+@dataclass(frozen=True)
+class WarningPolicy:
+    """Bounded voltage warning thresholds with a disabled default."""
+
+    enabled: bool = False
+    below_v: float = 207.0
+    clear_v: float = 210.0
+    dwell_sec: int = 180
+    clear_sec: int = 120
+    max_sample_gap_sec: int = 45
+
+
+@dataclass(frozen=True)
+class WarningState:
+    """Persistable in-memory advisory state, independent of Shelly writes."""
+
+    active: bool = False
+    low_since: float | None = None
+    clear_since: float | None = None
+    last_ts: float | None = None
+
+
+def validate_policy(policy: WarningPolicy) -> None:
+    """Reject unsafe, inverted or immediate-action warning policies."""
+
+    bounds = (
+        0 < policy.below_v < policy.clear_v < 500
+        and math.isfinite(policy.below_v)
+        and math.isfinite(policy.clear_v)
+        and 30 <= policy.dwell_sec <= 3600
+        and 30 <= policy.clear_sec <= 3600
+        and 10 <= policy.max_sample_gap_sec <= 300
+    )
+    if not bounds:
+        raise ValueError("invalid low-voltage warning policy")
+
+
+def valid_sample(voltage: float | None) -> bool:
+    """Reject offline placeholders and physically implausible voltages."""
+
+    return (
+        isinstance(voltage, (int, float))
+        and not isinstance(voltage, bool)
+        and math.isfinite(voltage)
+        and 0 < voltage < 500
+    )
+
+
+def observe_warning(
+    state: WarningState,
+    voltage: float | None,
+    timestamp: float,
+    policy: WarningPolicy | None = None,
+) -> tuple[WarningState, str | None]:
+    """Report only sustained low voltage and confirmed sustained recovery."""
+
+    settings = policy or WarningPolicy()
+    validate_policy(settings)
+    if not settings.enabled or not math.isfinite(timestamp):
+        return state, None
+    if state.last_ts is not None and timestamp <= state.last_ts:
+        return state, None
+    if (
+        state.last_ts is not None
+        and timestamp - state.last_ts > settings.max_sample_gap_sec
+    ):
+        state = replace(state, low_since=None, clear_since=None)
+    if not valid_sample(voltage):
+        return replace(
+            state, last_ts=timestamp, low_since=None, clear_since=None
+        ), None
+    if state.active:
+        return evaluate_recovery(state, voltage, timestamp, settings)
+    return evaluate_low_voltage(state, voltage, timestamp, settings)
+
+
+def evaluate_low_voltage(
+    state: WarningState,
+    voltage: float,
+    now: float,
+    policy: WarningPolicy,
+) -> tuple[WarningState, str | None]:
+    """Require continuous low readings before starting a warning."""
+
+    if voltage >= policy.below_v:
+        return replace(state, last_ts=now, low_since=None), None
+    since = state.low_since if state.low_since is not None else now
+    triggered = now - since >= policy.dwell_sec
+    updated = replace(
+        state,
+        last_ts=now,
+        low_since=None if triggered else since,
+        active=triggered,
+    )
+    return updated, "warning_started" if triggered else None
+
+
+def evaluate_recovery(
+    state: WarningState,
+    voltage: float,
+    now: float,
+    policy: WarningPolicy,
+) -> tuple[WarningState, str | None]:
+    """Clear an existing warning only after stable upper-threshold readings."""
+
+    if voltage < policy.clear_v:
+        return replace(state, last_ts=now, clear_since=None), None
+    since = state.clear_since if state.clear_since is not None else now
+    cleared = now - since >= policy.clear_sec
+    updated = replace(
+        state,
+        last_ts=now,
+        active=not cleared,
+        clear_since=None if cleared else since,
+    )
+    return updated, "warning_cleared" if cleared else None
