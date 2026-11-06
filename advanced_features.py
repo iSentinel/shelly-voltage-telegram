@@ -22,15 +22,16 @@ def connect_ro(path: Path) -> sqlite3.Connection:
 
 
 def phase_stats(
-    path: Path, phase: str, since: float
+    path: Path, phase: str, since: float, until: float | None = None
 ) -> dict[str, float | int | None]:
-    """Return summary statistics for one phase since a timestamp."""
+    """Return observed phase samples within a bounded time interval."""
 
     with closing(connect_ro(path)) as db:
         row = db.execute(
             "SELECT COUNT(*),MIN(voltage),MAX(voltage),AVG(voltage) "
-            "FROM measurements WHERE phase=? AND ts>=?",
-            (phase, since),
+            "FROM measurements WHERE phase=? AND ts>=? "
+            "AND (? IS NULL OR ts<=?)",
+            (phase, since, until, until),
         ).fetchone()
     return {"count": int(row[0]), "min": row[1], "max": row[2], "avg": row[3]}
 

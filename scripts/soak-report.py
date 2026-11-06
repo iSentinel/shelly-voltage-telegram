@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize samples and confirmed outages over a selected time window."""
+"""Summarize measured voltage and Shelly connectivity-loss intervals."""
 
 from __future__ import annotations
 
@@ -208,7 +208,7 @@ def outage_report(
     now: float,
     zone: ZoneInfo,
 ) -> dict[str, object]:
-    """Summarize confirmed outage rows overlapping the report window."""
+    """Summarize connectivity-loss rows, not verified mains outages."""
 
     duration = 0.0
     intervals: list[dict[str, object]] = []
@@ -227,10 +227,17 @@ def outage_report(
                 "window_overlap_seconds": round(overlap, 3),
             }
         )
+    count = len(rows)
+    opened = sum(row[1] is None for row in rows)
+    seconds = round(duration, 3)
     return {
-        "confirmed_outages": len(rows),
-        "confirmed_open_outages": sum(row[1] is None for row in rows),
-        "confirmed_outage_seconds": round(duration, 3),
+        "connectivity_losses": count,
+        "open_connectivity_losses": opened,
+        "connectivity_loss_seconds": seconds,
+        "connectivity_loss_intervals": intervals,
+        "confirmed_outages": count,
+        "confirmed_open_outages": opened,
+        "confirmed_outage_seconds": seconds,
         "confirmed_outage_intervals": intervals,
     }
 
@@ -256,13 +263,17 @@ def build_report(
         "first_sample": local_time(rows[0][0], zone) if rows else None,
         "last_sample": local_time(rows[-1][0], zone) if rows else None,
         "sample_gap_interpretation": (
-            "sample gaps are diagnostic only; confirmed outages come from "
-            "the outages table"
+            "sample gaps are diagnostic only; Shelly connectivity losses "
+            "are stored in the legacy outages table"
         ),
+        "connectivity_loss_semantics": (
+            "device polling availability transitions after hysteresis; "
+            "not proof of mains switching, physical cause or downtime"
+        ),
+        "legacy_confirmed_outage_keys_deprecated": True,
         "confirmed_outage_semantics": (
-            "starts when offline hysteresis is satisfied "
-            "and ends when recovery "
-            "hysteresis is satisfied; not exact mains-loss boundaries"
+            "legacy key names refer to Shelly connectivity gaps after "
+            "offline/recovery hysteresis; not exact mains-loss boundaries"
         ),
     }
     report.update(aggregate(rows))
@@ -276,8 +287,16 @@ def build_report(
 def print_text(report: dict[str, object]) -> None:
     """Print a stable human-readable summary."""
 
+    deprecated = {
+        "confirmed_outages",
+        "confirmed_open_outages",
+        "confirmed_outage_seconds",
+        "confirmed_outage_intervals",
+        "confirmed_outage_semantics",
+    }
     for key, value in report.items():
-        print(f"{key}={value}")
+        if key not in deprecated:
+            print(f"{key}={value}")
 
 
 def main() -> int:

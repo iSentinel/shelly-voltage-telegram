@@ -821,15 +821,19 @@ class Storage:
         with closing(self.connect()) as db, db:
             rows = db.execute(
                 "SELECT started_at, ended_at FROM outages "
-                "WHERE started_at < ? AND COALESCE(ended_at, ?) >= ? "
+                "WHERE started_at <= ? AND COALESCE(ended_at, ?) > ? "
                 "AND phase=?",
-                (end.timestamp(), now, start.timestamp(), phase),
+                (now, now, start.timestamp(), phase),
             ).fetchall()
         count = len(rows)
         duration = sum(
             max(
                 0.0,
-                min(float(row[1] or now), end.timestamp())
+                min(
+                    float(row[1]) if row[1] is not None else now,
+                    now,
+                    end.timestamp(),
+                )
                 - max(float(row[0]), start.timestamp()),
             )
             for row in rows
@@ -3170,7 +3174,11 @@ class Monitor:
     def daily_summary_text(self) -> str:
         """Render localized three-phase daily operational summary."""
 
-        since = time.time() - 86400
+        now = time.time()
+        local = datetime.fromtimestamp(now, ZoneInfo(self.cfg.timezone))
+        since = local.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).timestamp()
         lines = [tr(self.language, "summary_title")]
         for phase in self.active_phases():
             if not self.phase_configured(phase):
@@ -3178,8 +3186,8 @@ class Monitor:
                     tr(self.language, "summary_unconfigured", phase=phase)
                 )
                 continue
-            st = phase_stats(self.cfg.database_path, phase, since)
-            outages = self.storage.outage_stats(time.time(), phase)
+            st = phase_stats(self.cfg.database_path, phase, since, until=now)
+            outages = self.storage.outage_stats(now, phase)
             outage_duration = duration_text(
                 float(outages["duration"]), self.language
             )
@@ -3196,6 +3204,7 @@ class Monitor:
                 )
             )
         lines.append(tr(self.language, "outage_interpretation"))
+        lines.append(tr(self.language, "summary_observation_notice"))
         return "\n".join(lines)
 
     def weekly_summary_text(self) -> str:

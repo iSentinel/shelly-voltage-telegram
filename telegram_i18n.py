@@ -199,6 +199,10 @@ _TEXT = {
             "отключение электричества (возможна проблема сети или IP)."
         ),
         "summary_title": "📅 Суточная сводка",
+        "summary_observation_notice": (
+            "ℹ️ Только измерения за сегодня (Киев), не непрерывное "
+            "наблюдение. При потере связи текущее напряжение неизвестно."
+        ),
         "summary_unconfigured": "⚪ {phase}: не настроена",
         "quality_title": "📊 Качество {phase} за {hours}ч",
         "quality_samples": "Измерений: {value}",
@@ -453,6 +457,10 @@ _TEXT = {
             "зникнення електрики (можлива проблема мережі або IP)."
         ),
         "summary_title": "📅 Добове зведення",
+        "summary_observation_notice": (
+            "ℹ️ Лише вимірювання за сьогодні (Київ), не безперервний "
+            "моніторинг. Без зв'язку поточна напруга невідома."
+        ),
         "summary_unconfigured": "⚪ {phase}: не налаштована",
         "quality_title": "📊 Якість {phase} за {hours}г",
         "quality_samples": "Вимірювань: {value}",
@@ -730,6 +738,10 @@ _TEXT = {
             "cuts. Network or IP changes can cause them."
         ),
         "summary_title": "📅 Daily summary",
+        "summary_observation_notice": (
+            "ℹ️ Observed samples from today (Kyiv), not continuous "
+            "power evidence. Current voltage is unknown while offline."
+        ),
         "summary_unconfigured": "⚪ {phase}: not configured",
         "quality_title": "📊 Quality {phase} for {hours}h",
         "quality_samples": "Measurements: {value}",
