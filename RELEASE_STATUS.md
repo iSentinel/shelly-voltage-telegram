@@ -1,3 +1,26 @@
+## 2026-11-06 11:49 — host-safe recovery acceptance CLI merged
+
+- **Production:** installed `0.5.13-hw` remains Docker
+  healthy and unrestarted, with Shelly offline under
+  real outage #13, /ready 503, SQLite integrity OK,
+  21,950 real measurements and zero fabricated 0 V.
+- **Source-only PR #142:** the recovery acceptance script
+  now detects Docker vs host SQLite defaults and preserves
+  explicit `--db`. Four new regression cases;
+  441/441 offline tests and CI on Python 3.11/3.12/3.13
+  PASS, merged as `b6b552c`. Tested without `--db`
+  against actual open outage #13: host path selected and
+  open-outage baseline PASS. No success of recovery
+  or channel-visible delivery is claimed.
+- **Backups and automation:** 3/3 retained backup checks
+  PASS. The existing hourly recovery task is enabled
+  and uses the correct private baseline for #13.
+- **Release gates remain open:** natural recovery,
+  stable 15-minute Telegram status, visual channel
+  review and physical acceptance of other Shelly models.
+  Public release metadata not changed, no deployment
+  or restart during the outage.
+
 ## 2026-11-06 11:22 — correct production promotion block during Shelly outage
 
 - **Production** remains installed `0.5.13-hw`, healthy but
