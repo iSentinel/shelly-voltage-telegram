@@ -56,6 +56,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         help="Optionally fail backups older than this many hours.",
     )
+    parser.add_argument(
+        "--max-age-newest-only",
+        action="store_true",
+        help="Limit age of newest archive only; validate all selected copies.",
+    )
     return parser.parse_args(argv)
 
 
@@ -147,6 +152,14 @@ def age_error(archive: Path, max_age_hours: float | None) -> str | None:
     return None
 
 
+def selected_age_limit(
+    index: int, max_age_hours: float | None, newest_only: bool
+) -> float | None:
+    """Optionally apply age only to the newest selected archive."""
+
+    return max_age_hours if index == 1 or not newest_only else None
+
+
 def validate_archive(
     index: int, archive: Path, limit: int, max_age_hours: float | None = None
 ) -> bool:
@@ -214,6 +227,22 @@ def report_result(
     return 0 if status == "PASS" else 2
 
 
+def validated_count(
+    selected: list[Path],
+    limit: int,
+    age_hours: float | None,
+    newest_only: bool,
+) -> int:
+    """Check every copy with the appropriate freshness limit."""
+
+    return sum(
+        validate_archive(
+            i, archive, limit, selected_age_limit(i, age_hours, newest_only)
+        )
+        for i, archive in enumerate(selected, 1)
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     """Validate archives and return a stable PASS/FAIL exit code."""
 
@@ -227,6 +256,9 @@ def main(argv: list[str] | None = None) -> int:
         not math.isfinite(args.max_age_hours) or args.max_age_hours <= 0
     ):
         logger.error("FAIL: max-age-hours must be positive and finite")
+        return report_result("FAIL", 0, 0, args.count, args.jsonl)
+    if args.max_age_newest_only and args.max_age_hours is None:
+        logger.error("FAIL: --max-age-newest-only needs --max-age-hours")
         return report_result("FAIL", 0, 0, args.count, args.jsonl)
     if not args.backup_dir.is_dir():
         logger.error("FAIL: backup directory not available")
@@ -242,9 +274,8 @@ def main(argv: list[str] | None = None) -> int:
             args.count,
         )
     limit = args.max_size_mib * BLOCK_SIZE
-    passed = sum(
-        validate_archive(i, archive, limit, args.max_age_hours)
-        for i, archive in enumerate(selected, 1)
+    passed = validated_count(
+        selected, limit, args.max_age_hours, args.max_age_newest_only
     )
     complete = len(selected) == args.count and passed == args.count
     status = "PASS" if complete else "FAIL"

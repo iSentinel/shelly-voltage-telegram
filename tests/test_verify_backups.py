@@ -292,6 +292,86 @@ class BackupVerificationTests(unittest.TestCase):
             2,
         )
 
+    def test_newest_only_allows_older_retained_copies(self):
+        """Check only newest age while verifying all archive contents."""
+
+        now = time.time()
+        for index, hours in enumerate((1, 48, 72)):
+            archive = create_backup(self.root, f"voltage-{index}")
+            date = now - hours * 3600
+            os.utime(archive, (date, date))
+        args = [
+            "--backup-dir",
+            str(self.root),
+            "--count",
+            "3",
+            "--max-age-hours",
+            "36",
+        ]
+        self.assertEqual(BACKUPS.main(args), 2)
+        self.assertEqual(BACKUPS.main(args + ["--max-age-newest-only"]), 0)
+
+    def test_newest_only_rejects_old_newest_backup(self):
+        """Do not hide a stalled timer behind older valid copies."""
+
+        for index, hours in enumerate((48, 72, 96)):
+            archive = create_backup(self.root, f"voltage-{index}")
+            date = time.time() - hours * 3600
+            os.utime(archive, (date, date))
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "3",
+                    "--max-age-hours",
+                    "36",
+                    "--max-age-newest-only",
+                ]
+            ),
+            2,
+        )
+
+    def test_newest_only_still_validates_older_checksums(self):
+        """A fresh copy must not conceal corrupt retained backups."""
+
+        create_backup(self.root, "voltage-fresh")
+        old = create_backup(self.root, "voltage-old")
+        os.utime(old, (time.time() - 172800,) * 2)
+        old.write_bytes(old.read_bytes() + b"corrupt")
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "2",
+                    "--max-age-hours",
+                    "36",
+                    "--max-age-newest-only",
+                ]
+            ),
+            2,
+        )
+
+    def test_newest_only_requires_age_limit(self):
+        """Reject a freshness selector without a maximum age."""
+
+        create_backup(self.root)
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "1",
+                    "--max-age-newest-only",
+                ]
+            ),
+            2,
+        )
+
     def test_max_age_rejects_a_future_timestamp(self):
         """A future-dated archive must not pass a freshness check."""
 
