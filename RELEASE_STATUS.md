@@ -1,3 +1,26 @@
+## 2026-11-06 — live outage #13 and stale-safe status candidate
+
+- **Deployed:** `0.5.13-hw` on LXC 110, still healthy while
+  the physical Shelly remained offline. At 10:45 Kyiv
+  outage #13 was open, /health=200, /ready=503,
+  database quick_check OK, 21,950 valid samples and no
+  fabricated zero-voltage rows.
+- **Source-only improvement:** PR #137 (`61b9f53`) exposes
+  `live_voltage`, `live_frequency`, `sample_is_stale`
+  and `sample_age_seconds` in status JSON, preserving
+  existing last-known fields for backward compatibility.
+  434/434 unit tests and GitHub CI Python 3.11/3.12/3.13
+  PASS. Not installed while Shelly is offline.
+- **Restoration expectation:** user-supplied approximate
+  17:00 Kyiv schedule, not a guarantee. The existing
+  hourly read-only recovery check was updated to use the
+  valid outage #13 baseline instead of old #7 evidence.
+- **Still gated:** accepted read-only recovery verification,
+  subsequent separate 15-minute stable status check,
+  operator-visible Telegram channel edits and explicit
+  public-release approval. No live restarts or simulated
+  electrical events.
+
 ## 2026-11-06 — live low-voltage recovery, release still in test
 
 - **Installed production `0.5.13-hw`:** physical Pro EM-50

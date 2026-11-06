@@ -1,3 +1,42 @@
+## 2026-11-06 10:46 Europe/Kyiv — outage #13 offline, safe API and monitoring checkpoint
+
+- **LIVE / READ-ONLY:** Proxmox LXC 110 remained up with deployed
+  `0.5.13-hw`, Docker healthy and zero restarts; /health HTTP 200,
+  /ready HTTP 503. Shelly Pro EM-50 still offline with open
+  outage #13 (started 10:30:51), 21,950 valid SQLite measurements,
+  PRAGMA quick_check OK and no synthetic 0 V records. The last
+  valid 235.7 V / 50 Hz measurement was at 10:30:08 and is
+  **stale**, not a current power measurement or proof that
+  mains electricity is disconnected.
+- **EXPECTED RESTORATION / TENTATIVE:** the operator estimates
+  restoration around 17:00 Europe/Kyiv according to a local
+  schedule. Do not interpret that schedule as a confirmed event
+  or force a status transition.
+- **AUTOMATED FIELD FOLLOW-UP:** the existing enabled hourly
+  read-only Shelly recovery task was corrected from an old
+  outage #7 baseline to outage #13's valid private 0600 file.
+  Its hourly schedule remains unchanged. It must compare
+  actual connectivity, fresh measurements, /ready and Telegram
+  status rotation, without restarts or artificial events.
+  A separate full 15-minute stable-recovery baseline is required
+  if the natural stability timer becomes active.
+- **SOURCE / PR #137:** added nonbreaking status JSON
+  `live_voltage`, `live_frequency`, `sample_is_stale` and
+  `sample_age_seconds` so downstream dashboards cannot confuse
+  last-known voltage with live voltage while Shelly is offline.
+  Legacy `voltage` and `frequency` remain unchanged.
+  434/434 isolated network-disabled Docker tests, Ruff/PEP8,
+  <=40-line functions and GitHub CI Python 3.11/3.12/3.13
+  PASS. Merged into main as `61b9f53`. The feature is
+  **not yet deployed** to the running bot.
+- **NEXT:** await actual Shelly connectivity; verify outage #13
+  against `validation/natural-baselines/outage-13-20261106-baseline.json`
+  read-only and mark the exact PASS/FAIL reasons. Independently
+  inspect the visible Telegram status channel, retain both
+  historical and new SQLite measurements, and keep public
+  release promotion gated. No forced network, relay or
+  electrical test.
+
 ## 2026-11-06 10:35 Europe/Kyiv — natural Shelly outage #13, recovery baseline captured
 
 - **LIVE / CONFIRMED:** Shelly Pro EM-50 became unreachable again at
