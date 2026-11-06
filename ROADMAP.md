@@ -1,3 +1,46 @@
+## 2026-11-06 14:13 Europe/Kyiv — unpinned Telegram status cleanup fix
+
+- **REAL FIELD / READ-ONLY:** Shelly Pro EM-50 stayed offline
+  during outage #13 (opened 10:30:51 Kyiv). At 14:05
+  the installed `0.5.13-hw` bot remained healthy with zero
+  Docker restarts; /health HTTP 200, /ready HTTP 503;
+  SQLite quick_check OK, 21,950 genuine measurements,
+  zero fabricated 0 V, and one open outage. Last voltage
+  235.7 V / 50 Hz at 10:30:08 is **stale**, not current
+  mains telemetry. Telegram polling/status errors since
+  this outage began: 0. Existing baseline #13 mode 0600
+  remains preserved.
+- **CODE AUDIT / DUPLICATE RISK:** the source implementation
+  of `delete_previous_status()` attempted Telegram
+  `unpinChatMessage` for *every* old status. Pinning is
+  disabled by default; Telegram can reject an unpin
+  request for a message that is not pinned. The function
+  then returned before `deleteMessage`, leaving a
+  duplicated old post after a successful new status send.
+  This is a source-reviewed risk, not a verified channel
+  duplicate from the current outage.
+- **SOURCE-ONLY FIX:** consult the persisted pinned status
+  ID. If the old message was not pinned by the bot, delete
+  it directly. If it was pinned, explicitly unpin it
+  before deletion. A benign `message to unpin not found`
+  response is treated as already unpinned; other unpin
+  failures still prevent deletion. Never unpin a
+  different pinned message.
+- **QA / PASS:** three new tests check unpinned removal,
+  stale pin metadata, and unrelated pinned messages.
+  Four existing tests now explicitly set a pin marker
+  when checking the required unpin-before-delete order.
+  Full network-disabled, read-only Docker test suite
+  **450/450 PASS**, pinned Ruff 0.14.2, PEP8 and
+  40-line function quality gate PASS. No live Telegram
+  API use, real Shelly RPC control or production restart.
+- **NEXT:** require GitHub Python 3.11/3.12/3.13 CI,
+  inspect channel-visible status after natural recovery,
+  and validate outage #13 using the accepted private
+  baseline. The estimated 17:00 Kyiv restoration
+  remains tentative. Do not promote the public release
+  or claim real delivery based on synthetic tests.
+
 ## 2026-11-06 12:44 Europe/Kyiv — safe recovery status replacement candidate
 
 - **FIELD / READ-ONLY:** Shelly Pro EM-50 remained offline under
