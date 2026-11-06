@@ -1,3 +1,45 @@
+## 2026-11-06 12:20 Europe/Kyiv — prolonged outage #13 and restart idempotence QA
+
+- **PRODUCTION / READ-ONLY:** physical Shelly Pro EM-50 still offline
+  under open outage #13 since 10:30:51. At 12:17, Docker
+  installed `0.5.13-hw` was healthy, 0 restarts, `/health=200`,
+  `/ready=503`; SQLite quick_check OK, 21,950 real measurements,
+  zero artificial 0 V. Last real measurement at 10:30:08
+  (235.7 V / 50 Hz) is historical only, not current voltage.
+  Telegram API doctor OK, SQLite doctor OK, Shelly doctor error
+  as expected. Prometheus returned NaN for offline live voltage
+  and frequency, with offline connectivity correctly active.
+- **SOAK / READ-ONLY:** the two-hour soak window contained 59
+  real samples before the interruption, with no fabricated
+  readings during the open outage. Sample-gap statistics
+  describe observed sampling only; outage journal entries,
+  not missing samples, define confirmed connectivity outages.
+- **CODE AUDIT:** the production code records availability
+  alerts only on a connectivity transition and uses an
+  idempotent open-outage database check. The existing short
+  test used a mocked outage writer and did not cover prolonged
+  failures and a restored open-outage state across restart.
+- **SOURCE-ONLY TESTS:** added two tests with a temporary real
+  SQLite database: 120 consecutive failed polls generate
+  exactly one open outage and one optional Telegram
+  unavailability alert; a new monitor initialized with that
+  same active outage never duplicates the outage or alert.
+  The last good sample remains intact, there are no fake
+  0 V rows, and the text says Shelly is unavailable rather
+  than asserting confirmed electrical power loss.
+  Isolated network-disabled Docker suite **443/443 PASS**;
+  Ruff, PEP8, maximum 40-line function gate PASS. No live
+  Telegram API call, fabricated physical reading or
+  production restart.
+- **NEXT:** retain valid private outage #13 pre-recovery
+  baseline and verify the specific event after natural
+  reconnection; then perform an independent 15-minute
+  stable recovery check and inspect the real Telegram
+  channel. The user's approximate 17:00 Kyiv restoration
+  time remains tentative, not verified. Keep public
+  promotion and alternate Shelly hardware acceptance
+  pending.
+
 ## 2026-11-06 11:49 Europe/Kyiv — outage #13 still open; recovery CLI host-path fix
 
 - **LIVE / FIELD:** LXC 110 installed production `0.5.13-hw`
