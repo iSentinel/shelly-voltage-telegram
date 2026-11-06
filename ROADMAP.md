@@ -1,3 +1,51 @@
+## 2026-11-06 08:11 Europe/Kyiv — validated rollback hygiene and archive gate
+
+- **LIVE / untouched:** production LXC 110 remains on `0.5.12-hw`,
+  Shelly online (238.9 V / 50.0 Hz at 08:09), Docker healthy
+  with zero restarts, HTTP `/ready=200`. SQLite quick_check OK,
+  21,140 real samples, zero fabricated 0 V rows and no open outages.
+- **DONE / PR #120:** source archive filter now excludes
+  `validation/`, local `dist*/`, caches, logs, SQLite data,
+  private env backups and symlinks. Rollback preserves the
+  operator-owned `.env*`, `secrets/` and `validation/` on the host.
+  A disposable test rollback verified they survive a version change.
+  Exact source parity PASS; 413/413 tests, Ruff and Python
+  3.11/3.12/3.13 CI PASS. Merged `24e381325614fc9d9c5c5f3922de35456f8a53c5`.
+- **REAL SNAPSHOT / 0.5.12-hw:** rebuilt the private source snapshot
+  at `/var/backups/shelly-voltage/upgrades/20261106-072935-0.5.12-hw/`.
+  It contains only 75 source entries, including `.env.example`,
+  with zero private or generated entries. Source and SQLite
+  SHA256 sidecars PASS. The standard rollback dry run PASS.
+  The 20,902-measurement SQLite snapshot was previously
+  restored successfully in a disposable directory; no real
+  production rollback was performed.
+- **DONE / PR #121:** `scripts/rollback.sh` validates tar members
+  after SHA256 checks and **before** any service stop or file
+  replacement, rejecting absolute/traversal paths, symbolic or
+  hard links, special files, privileged modes and excessive
+  archive size/member counts. Source restore also avoids
+  overwriting operator config and evidence from legacy snapshots.
+  Two checksum-consistent malicious fixture archives (traversal
+  and symlink) were both rejected; a safe throwaway rollback
+  passed. 413/413 tests, Ruff and Python 3.11/3.12/3.13 CI
+  PASS. Merged `ab2638e5249e6c22f36308f63a7c9b8057cfe5fd`.
+- **BACKUPS / PASS:** newest daily backup passed read-only
+  SHA256, SQLite restore and an explicit 36-hour freshness
+  check (1/1 PASS; archived 20,589 measurements).
+- **CANDIDATE GATE / read-only PASS:** after PR #121, exact
+  `main` at `ab2638e` (candidate `0.5.13-hw`) passed
+  `scripts/promotion-check.py` against real natural Shelly
+  outage #11 baseline; no errors, 0 exit status. Private
+  report at
+  `validation/natural-baselines/outage-11-after-safe-rollback-pr121.json`.
+  This is not authorization or evidence of candidate deployment.
+- **NEXT / hardware and operator-gated:** preserve installed
+  `0.5.12-hw` until explicit authorization for a controlled
+  `0.5.13-hw` production install, recipient-visible Telegram
+  send/edit acceptance on the new version, and a verified
+  version-specific live rollback procedure. Real Pro 3EM/3CT63
+  acceptance remains separate until device hardware is available.
+
 ## 2026-11-06 07:50 Europe/Kyiv — secure snapshot, candidate QA, and public release safety
 
 - **LIVE / no upgrade:** production LXC 110 remains on `0.5.12-hw`,
