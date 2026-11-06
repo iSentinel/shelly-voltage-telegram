@@ -2672,6 +2672,64 @@ class AdvancedFeatureTests(unittest.TestCase):
         self.assertIn("No valid measurement yet", page)
         self.assertNotIn("0.0 V", page)
 
+    def test_dashboard_html_has_responsive_accessible_phase_cards(self):
+        """Keep the local dashboard usable without external scripts."""
+
+        cards = [
+            {
+                "phase": "L1",
+                "state": "online",
+                "voltage": 230.5,
+                "frequency": 50.0,
+                "sample_age_seconds": 4.0,
+            },
+            {
+                "phase": "L2",
+                "state": "offline",
+                "voltage": None,
+                "frequency": None,
+                "sample_age_seconds": 80.0,
+            },
+        ]
+        page = APP.dashboard_html("Local meter", cards)
+        self.assertIn('name="viewport"', page)
+        self.assertIn("<main>", page)
+        self.assertIn('class="status status-online"', page)
+        self.assertIn('class="status status-offline"', page)
+        self.assertIn("230.5", page)
+        self.assertIn("Frequency: 50.00 Hz", page)
+        self.assertIn("Frequency: —", page)
+        self.assertIn("Last valid sample: 1 minute ago", page)
+
+    def test_dashboard_html_escapes_dynamic_labels(self):
+        """Never inject phase names or heading text into HTML markup."""
+
+        row = {
+            "phase": "<em>Phase name</em>",
+            "state": "invalid<state>",
+            "voltage": None,
+        }
+        page = APP.dashboard_html("<b>Dashboard</b>", [row])
+        self.assertIn("&lt;b&gt;Dashboard&lt;/b&gt;", page)
+        self.assertIn("&lt;em&gt;Phase name&lt;/em&gt;", page)
+        self.assertNotIn("<b>Dashboard</b>", page)
+        self.assertNotIn("<em>Phase name", page)
+        self.assertIn("Unknown", page)
+
+    def test_dashboard_hides_stale_frequency_with_voltage(self):
+        """Frequency must not look current after a stale voltage sample."""
+
+        monitor = APP.Monitor(config(stale_after=45.0))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(230.0, 50.0, 3.0)
+        with patch.object(APP.time, "time", return_value=1050.0):
+            rows = APP.dashboard_rows(monitor)
+        self.assertIsNone(rows[0]["voltage"])
+        self.assertIsNone(rows[0]["frequency"])
+        page = APP.dashboard_html("meter", rows)
+        self.assertIn("Frequency: —", page)
+        self.assertNotIn("50.00 Hz", page)
+
     def test_quality_and_dashboard_are_phase_aware(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "q.sqlite3"
