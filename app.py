@@ -35,6 +35,7 @@ from advanced_features import (
     weekly_quality_stats,
 )
 from apartment_phases import ApartmentRegistry, apartment_command
+from dtek_schedule import format_schedule
 from notification_features import (
     abnormal_seconds,
     instability_count,
@@ -5300,10 +5301,18 @@ class Monitor:
         except ValueError:
             self.telegram.send(tr(self.language, "maintenance_usage"))
 
+    def schedule_text(self) -> str:
+        """Render an optional, read-only DTEK forecast."""
+
+        return format_schedule(
+            self.language,
+            os.getenv("DTEK_REGION", ""),
+            os.getenv("DTEK_GROUP", ""),
+        )
+
     def command_text(self, command: str) -> str | None:
         """Render localized command responses."""
 
-        snap = self.state.snapshot()
         if command == "/start":
             return tr(self.language, "menu_title")
         if command == "/help":
@@ -5319,13 +5328,14 @@ class Monitor:
             "/week": self.weekly_summary_text,
             "/audit": self.audit_text,
             "/device": self.device_health_text,
+            "/schedule": self.schedule_text,
         }
         if command in reports:
             return reports[command]()
         known = {"/voltage", "/today", "/minmax", "/history", "/outages"}
         if command not in known:
             return None
-        if snap["voltage"] is None:
+        if self.state.snapshot()["voltage"] is None:
             return tr(self.language, "no_current")
         if command == "/voltage":
             return (
