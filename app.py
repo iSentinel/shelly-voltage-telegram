@@ -5531,6 +5531,7 @@ def dashboard_rows(monitor: Monitor) -> list[dict[str, object]]:
                 "phase": label,
                 "state": state,
                 "voltage": snap["live_voltage"],
+                "frequency": snap["live_frequency"],
                 "sample_age_seconds": snap["sample_age_seconds"],
             }
         )
