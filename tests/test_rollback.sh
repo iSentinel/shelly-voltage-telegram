@@ -115,3 +115,22 @@ with sqlite3.connect(sys.argv[1]) as db:
 PY
 
 echo "ROLLBACK_FIXTURE PASS"
+
+
+# Matching checksums must not permit rollback to a corrupt SQLite database.
+BAD_SNAPSHOT="$TMP/invalid-sqlite-snapshot"
+mkdir -p "$BAD_SNAPSHOT"
+cp "$SNAP/source.tar.gz" "$SNAP/source.tar.gz.sha256" "$BAD_SNAPSHOT/"
+printf "%s" "not a SQLite database" | gzip -c > "$BAD_SNAPSHOT/voltage-bad.sqlite3.gz"
+sha256sum "$BAD_SNAPSHOT/voltage-bad.sqlite3.gz" \
+    > "$BAD_SNAPSHOT/voltage-bad.sqlite3.gz.sha256"
+set +e
+SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$BAD_SNAPSHOT" --dry-run --no-start \
+    > "$TMP/invalid-sqlite.log" 2>&1
+bad_status=$?
+set -e
+test "$bad_status" -eq 2
+! grep -q "DRY-RUN: stop Compose service" "$TMP/invalid-sqlite.log"
+echo "ROLLBACK_CORRUPT_SQLITE_FAILS_BEFORE_STOP=PASS"
