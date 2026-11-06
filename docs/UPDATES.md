@@ -28,6 +28,34 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Check archived SQLite before any live upgrade or rollback
+
+`scripts/validate-rollback-snapshot.py` performs a **read-only**
+restore into a disposable temporary file. It validates the source
+archive members, bounds database extraction (2 GiB by default),
+runs `PRAGMA quick_check` and confirms a readable `measurements`
+table. It requires one unambiguous SQLite archive.
+
+Both `scripts/install.sh` and `scripts/rollback.sh` invoke this
+check after preparing/verifying the snapshot and **before**
+stopping Docker or changing the application source. It complements
+the SHA256 and path/link checks; it does not replace them.
+
+```bash
+python3 scripts/validate-rollback-snapshot.py --help
+python3 scripts/validate-rollback-snapshot.py \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory>
+sudo bash scripts/rollback.sh \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory> \
+  --dry-run --no-start
+```
+
+Older snapshots may contain legacy `.env.*` backups. Their names
+are not a substitute for validating the snapshot: the rollback
+extractor excludes them to protect current credentials, and the
+SQLite contents must still pass validation. Avoid copying private
+snapshot data to public GitHub or to Telegram.
+
 ## Validate rollback archives before stopping the monitor
 
 `scripts/rollback.sh` validates the source archive **before**
