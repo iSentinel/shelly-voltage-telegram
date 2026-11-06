@@ -5,11 +5,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import sys
+import types
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import dtek_schedule as dtek
 
@@ -153,6 +155,68 @@ class DtekScheduleTests(unittest.TestCase):
             [("00:00", "01:30")],
         )
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_browser_collector_rejects_redirected_host(self):
+        """Do not follow untrusted hosts after browser navigation."""
+
+        api = MagicMock()
+        browser = api.__enter__.return_value.chromium.launch.return_value
+        page = browser.new_page.return_value
+        page.url = "https://unexpected.example/shutdowns"
+        package = types.ModuleType("playwright")
+        package.__path__ = []
+        sync = types.ModuleType("playwright.sync_api")
+        sync.sync_playwright = lambda: api
+        with patch.dict(
+            sys.modules,
+            {"playwright": package, "playwright.sync_api": sync},
+        ):
+            with self.assertRaisesRegex(ValueError, "another host"):
+                COLLECTOR.browser_html("k", 5)
+        browser.close.assert_called_once()
+
+    def test_browser_collector_closes_browser_after_valid_page(self):
+        """Close the one-shot Chromium browser after collecting HTML."""
+
+        api = MagicMock()
+        browser = api.__enter__.return_value.chromium.launch.return_value
+        page = browser.new_page.return_value
+        page.url = dtek.REGIONS["k"]
+        page.content.return_value = "<html>fixture</html>"
+        package = types.ModuleType("playwright")
+        package.__path__ = []
+        sync = types.ModuleType("playwright.sync_api")
+        sync.sync_playwright = lambda: api
+        with patch.dict(
+            sys.modules,
+            {"playwright": package, "playwright.sync_api": sync},
+        ):
+            self.assertEqual(COLLECTOR.browser_html("k", 5),
+                             "<html>fixture</html>")
+        browser.close.assert_called_once()
+
+    def test_cli_fixture_dry_run_does_not_write(self):
+        """Exercise the collector CLI without network or disk output."""
+
+        html = "<script>fact = " + json.dumps(example_fact(self.now))
+        fixture = Path(self.tmp.name) / "fixture.html"
+        fixture.write_text(html + ";</script>", encoding="utf-8")
+        argv = [
+            "collector", "--region", "k", "--fixture-html",
+            str(fixture), "--output", str(self.path), "--dry-run",
+        ]
+        with patch.object(sys, "argv", argv):
+            self.assertEqual(COLLECTOR.main(), 0)
+        self.assertFalse(self.path.exists())
+
+    def test_symlink_cache_rejected(self):
+        """The monitor must not follow an untrusted cache symlink."""
+
+        target = Path(self.tmp.name) / "actual.json"
+        target.write_text(json.dumps(example_cache(self.now)))
+        self.path.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "symlinks"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
 
     def test_collector_does_not_replace_on_invalid(self):
         self.write_cache(example_cache(self.now))
