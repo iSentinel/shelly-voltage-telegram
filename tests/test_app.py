@@ -1704,6 +1704,81 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.telegram.send.assert_called_once()
         self.assertIn("недоступен", monitor.telegram.send.call_args.args[0])
 
+    def test_prolonged_outage_has_one_journal_entry_and_one_alert(self):
+        """Repeated offline polls must not duplicate alerts or outages."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "prolonged.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=db_path,
+                    telegram_token="token",
+                    telegram_chat_id="123",
+                    availability_alerts_enabled=True,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.add(APP.time.time() - 10, 235.7, 50.0)
+            monitor.state.restore(APP.time.time() - 10, 235.7, 50.0)
+            monitor.shelly.read = Mock(side_effect=RuntimeError("unavailable"))
+            monitor.telegram.send = Mock(return_value=1)
+            for _ in range(120):
+                self.assertFalse(monitor.poll_once())
+            self.assertEqual(monitor.storage.outage_total(), 1)
+            self.assertIsNotNone(monitor.storage.open_outage_started())
+            self.assertEqual(monitor.storage.latest()[1], 235.7)
+            monitor.telegram.send.assert_called_once()
+            message = monitor.telegram.send.call_args.args[0]
+            self.assertIn("недоступен", message)
+            self.assertNotIn("питание отключено", message.lower())
+            with closing(monitor.storage.connect()) as db:
+                self.assertEqual(
+                    db.execute("SELECT COUNT(*) FROM measurements").fetchone()[
+                        0
+                    ],
+                    1,
+                )
+                self.assertEqual(
+                    db.execute(
+                        "SELECT COUNT(*) FROM measurements WHERE voltage=0"
+                    ).fetchone()[0],
+                    0,
+                )
+
+    def test_restarted_offline_monitor_does_not_repeat_outage_alert(self):
+        """Restoring an open outage must not notify again on failed polls."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "restart.sqlite3"
+            cfg = config(
+                database_path=path,
+                telegram_token="token",
+                telegram_chat_id="123",
+                availability_alerts_enabled=True,
+            )
+            original = APP.Monitor(cfg)
+            original.storage.initialize()
+            original.shelly.read = Mock(
+                side_effect=RuntimeError("unavailable")
+            )
+            original.telegram.send = Mock(return_value=1)
+            for _ in range(4):
+                original.poll_once()
+            self.assertEqual(original.storage.outage_total(), 1)
+            original.telegram.send.assert_called_once()
+            restarted = APP.Monitor(cfg)
+            restarted.state.restore_outage(
+                original.storage.open_outage_started(), 1
+            )
+            restarted.shelly.read = Mock(
+                side_effect=RuntimeError("still unavailable")
+            )
+            restarted.telegram.send = Mock(return_value=2)
+            for _ in range(20):
+                self.assertFalse(restarted.poll_once())
+            self.assertEqual(restarted.storage.outage_total(), 1)
+            restarted.telegram.send.assert_not_called()
+
     def _recovery_monitor(self, path: Path):
         """Build a monitor with an open outage and mocked Telegram."""
 
