@@ -110,6 +110,74 @@ def complete_stable_rotation(path: Path) -> None:
         db.commit()
 
 
+class RecoveryDatabasePathTests(unittest.TestCase):
+    """Select existing databases without creating or modifying one."""
+
+    def test_host_database_selected_when_container_database_missing(self):
+        """Support running the acceptance command directly inside LXC."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            host = Path(directory) / "host.sqlite3"
+            host.touch()
+            container = Path(directory) / "missing.sqlite3"
+            with (
+                patch.object(RECOVERY, "DEFAULT_DB", container),
+                patch.object(RECOVERY, "HOST_DB", host),
+            ):
+                request = RECOVERY.parser().parse_args(["baseline"])
+            self.assertEqual(request.db, host)
+
+    def test_container_database_takes_priority_when_both_exist(self):
+        """Do not change the default of existing Docker deployments."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            container = Path(directory) / "docker.sqlite3"
+            host = Path(directory) / "host.sqlite3"
+            container.touch()
+            host.touch()
+            with (
+                patch.object(RECOVERY, "DEFAULT_DB", container),
+                patch.object(RECOVERY, "HOST_DB", host),
+            ):
+                request = RECOVERY.parser().parse_args(["baseline"])
+            self.assertEqual(request.db, container)
+
+    def test_no_database_returns_legacy_default_without_creating_files(self):
+        """Missing databases must still fail safely when opened."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            container = Path(directory) / "docker.sqlite3"
+            host = Path(directory) / "host.sqlite3"
+            with (
+                patch.object(RECOVERY, "DEFAULT_DB", container),
+                patch.object(RECOVERY, "HOST_DB", host),
+            ):
+                request = RECOVERY.parser().parse_args(["baseline"])
+            self.assertEqual(request.db, container)
+            self.assertFalse(container.exists())
+            self.assertFalse(host.exists())
+            with self.assertRaisesRegex(ValueError, "database does not exist"):
+                RECOVERY.open_db(request.db)
+
+    def test_explicit_db_override_beats_detected_database(self):
+        """Preserve an explicit operator-selected read-only database."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            host = Path(directory) / "host.sqlite3"
+            other = Path(directory) / "other.sqlite3"
+            host.touch()
+            with patch.object(RECOVERY, "HOST_DB", host):
+                request = RECOVERY.parser().parse_args(
+                    [
+                        "--db",
+                        str(other),
+                        "baseline",
+                    ]
+                )
+            self.assertEqual(request.db, other)
+            self.assertFalse(other.exists())
+
+
 class RecoveryAcceptanceTests(unittest.TestCase):
     def test_baseline_captures_open_outage(self):
         with tempfile.TemporaryDirectory() as directory:

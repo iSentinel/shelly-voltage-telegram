@@ -17,9 +17,20 @@ from contextlib import closing
 from pathlib import Path
 
 DEFAULT_DB = Path("/data/voltage.sqlite3")
+HOST_DB = Path("/var/lib/shelly-voltage/voltage.sqlite3")
 DEFAULT_HEALTH = "http://127.0.0.1:8080/health"
 DEFAULT_READY = "http://127.0.0.1:8080/ready"
 STABLE_RECOVERY_SECONDS = 15 * 60
+
+
+def default_db_path() -> Path:
+    """Use a mounted container database or the LXC host database."""
+
+    if DEFAULT_DB.is_file():
+        return DEFAULT_DB
+    if HOST_DB.is_file():
+        return HOST_DB
+    return DEFAULT_DB
 
 
 def open_db(path: Path) -> sqlite3.Connection:
@@ -600,11 +611,22 @@ def write_output(payload: dict[str, object], output: Path | None) -> None:
     print(text)
 
 
+def add_database_argument(cli: argparse.ArgumentParser) -> None:
+    """Configure the detected SQLite path with an explicit override."""
+
+    cli.add_argument(
+        "--db",
+        type=Path,
+        default=default_db_path(),
+        help="SQLite path (auto-detect Docker or LXC; override for certainty)",
+    )
+
+
 def parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
 
     cli = argparse.ArgumentParser(description=__doc__)
-    cli.add_argument("--db", type=Path, default=DEFAULT_DB)
+    add_database_argument(cli)
     cli.add_argument("--health-url", default=DEFAULT_HEALTH)
     cli.add_argument("--ready-url", default=DEFAULT_READY)
     cli.add_argument("--timeout", type=float, default=5.0)

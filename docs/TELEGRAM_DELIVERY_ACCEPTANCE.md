@@ -7,10 +7,12 @@ event, fresh samples, readiness and rotation of the stable
 Telegram message. This does not prove mains power failed
 or that subscribers saw a channel alert.
 
-When running the recovery acceptance script on **LXC 110
-outside Docker**, the default `/data/voltage.sqlite3` is
-a *container-only* path. Always explicitly give the actual
-host database path **before the subcommand**:
+The acceptance command now detects its default SQLite path:
+`/data/voltage.sqlite3` inside Docker, otherwise
+`/var/lib/shelly-voltage/voltage.sqlite3` when running on LXC.
+When neither database exists, it fails safely without creating one.
+For reproducible field checks, explicitly set the host database
+path with `--db` **before the subcommand**, as shown below:
 
 ```bash
 umask 077
