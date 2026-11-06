@@ -15,6 +15,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/iSentinel/shelly-voltage-telegram?style=for-the-badge&color=22C55E" alt="License"></a>
 </p>
 
+<p align="center">📦 <strong>Latest published GitHub Release:</strong> <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases/latest">Open latest release and download</a> · <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases">All releases</a></p>
+
 <p align="center">
   <img src="docs/assets/telegram-status.png" alt="Telegram voltage status message" width="430">
 </p>
@@ -29,7 +31,7 @@ Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 The private administrator **Updates** menu checks GitHub Releases without
 installing automatically; see [safe updates](docs/UPDATES.md).
-Software candidate: `0.5.13-hw`; public release and production: `0.5.12-hw`.
+Public GitHub Release: `0.5.12-hw`; production field-test runtime: `0.5.13-hw` (not a published release).
 
 ## Overview
 
@@ -48,7 +50,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 - Current software candidate: **0.5.13-hw**
 - Current release: **0.5.12-hw**
-- Production deployment: **0.5.12-hw**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- Production field-test runtime: **0.5.13-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
 - Candidate `0.5.10-hw` extends the read-only recovery acceptance CLI so a natural 15-minute stable-recovery rotation can be verified without controlling Shelly or writing to the live database.

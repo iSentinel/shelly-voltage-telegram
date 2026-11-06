@@ -15,6 +15,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/iSentinel/shelly-voltage-telegram?style=for-the-badge&color=22C55E" alt="Лицензия"></a>
 </p>
 
+<p align="center">📦 <strong>Последний опубликованный релиз:</strong> <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases/latest">Посмотреть и скачать</a> · <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases">Все релизы</a></p>
+
 <p align="center">
   <img src="docs/assets/telegram-status.png" alt="Сообщение бота о напряжении в Telegram" width="430">
 </p>
@@ -27,7 +29,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
+Публичный релиз GitHub: `0.5.12-hw`; тестовая версия на сервере: `0.5.13-hw` (ещё не опубликована).
 
 ## Что делает проект
 
@@ -50,7 +52,7 @@ Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
 
 - Текущий software candidate: **`0.5.12-hw`**.
 - Текущий публичный релиз: **`0.5.12-hw`**.
-- Production использует **`0.5.12-hw`** на физическом Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
+- Тестовая production-установка использует **`0.5.13-hw`** с физическим Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
 - Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` через 15 минут стабильного восстановления бесшумно заменяет recovery-сообщение новым актуальным статусом.
 - Candidate `0.5.10-hw` добавляет read-only полевую проверку естественной 15-минутной ротации статуса после восстановления.

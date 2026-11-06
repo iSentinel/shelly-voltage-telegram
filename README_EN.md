@@ -15,6 +15,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/iSentinel/shelly-voltage-telegram?style=for-the-badge&color=22C55E" alt="License"></a>
 </p>
 
+<p align="center">📦 <strong>Latest published GitHub Release:</strong> <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases/latest">Open latest release and download</a> · <a href="https://github.com/iSentinel/shelly-voltage-telegram/releases">All releases</a></p>
+
 <p align="center">
   <img src="docs/assets/telegram-status.png" alt="Telegram voltage status message" width="430">
 </p>
@@ -27,7 +29,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Software candidate and release target: `0.5.12-hw`; production: `0.5.12-hw`.
+Public GitHub Release: `0.5.12-hw`; production field-test runtime: `0.5.13-hw` (not a published release).
 
 ## What it does
 
@@ -48,9 +50,9 @@ The service is designed as a **monitor only**. It does not switch relays, change
 
 ## Project status
 
-- **Current software candidate: `0.5.12-hw`**
+- **Current software candidate: `0.5.13-hw`**
 - **Current release: `0.5.12-hw`**
-- **Production deployment: `0.5.12-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- **Production field-test runtime: `0.5.13-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Candidate `0.5.9-hw` silently replaces an unchanged recovery post with a fresh current-status post after 15 stable minutes.
 - Candidate `0.5.10-hw` adds read-only field acceptance for the natural 15-minute stable-recovery status rotation.
