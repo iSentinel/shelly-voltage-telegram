@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import io
 import hashlib
 import importlib.util
 import os
@@ -11,6 +12,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 PATH = Path(__file__).resolve().parents[1] / "scripts/verify-backups.py"
 SPEC = importlib.util.spec_from_file_location("backup_verifier", PATH)
@@ -130,6 +132,27 @@ class BackupVerificationTests(unittest.TestCase):
             ),
             2,
         )
+
+    def test_unreadable_directory_reports_access_error(self):
+        """A listing permission error must explain why no backups appear."""
+
+        output = io.StringIO()
+        with (
+            patch.object(BACKUPS.os, "scandir", side_effect=PermissionError),
+            patch("sys.stderr", output),
+        ):
+            result = self.verify()
+        self.assertEqual(result, 2)
+        self.assertIn("cannot read backup directory", output.getvalue())
+        self.assertIn("PermissionError", output.getvalue())
+
+    def test_symbolic_link_archive_is_not_used(self):
+        """Do not follow links outside the selected backup directory."""
+
+        real = create_backup(self.root, "voltage-real")
+        linked = self.root / "voltage-linked.sqlite3.gz"
+        linked.symlink_to(real)
+        self.assertEqual(self.verify(count=2), 2)
 
     def test_invalid_count_is_failure(self):
         """Zero is never interpreted as permission to skip checks."""
