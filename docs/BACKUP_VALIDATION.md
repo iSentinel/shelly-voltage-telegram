@@ -25,6 +25,12 @@ The last command checks the three most recently modified
 `voltage-*.sqlite3.gz` archives. The operator can choose a smaller
 unpacked size limit when the SQLite database is small.
 
+For machine-readable acceptance, add `--jsonl`. It emits exactly
+one JSON object on standard output with `status`, `passed`, `checked`,
+`requested`, and `read_only`. Diagnostic messages remain on standard
+error. The same exit codes apply, and file paths are never included in
+the JSONL record. Nothing is scheduled automatically.
+
 The verifier checks the corresponding `.sha256` file before extracting
 each archive, limits the size of decompressed data, restores it into an
 automatically removed temporary directory, runs
