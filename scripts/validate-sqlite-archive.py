@@ -37,7 +37,7 @@ def restore_bounded(archive: Path, destination: Path, max_bytes: int) -> None:
 def validate_database(archive: Path, max_bytes: int) -> int:
     """Restore into a temporary file and verify basic database integrity."""
 
-    with tempfile.TemporaryDirectory(prefix="svt-rollback-check-") as directory:
+    with tempfile.TemporaryDirectory(prefix="svt-check-") as directory:
         restored = Path(directory) / "restored.sqlite3"
         restore_bounded(archive, restored, max_bytes)
         with sqlite3.connect(f"file:{restored}?mode=ro", uri=True) as db:
@@ -62,7 +62,7 @@ def main() -> int:
     try:
         count = validate_database(args.archive, args.max_size_mib * BLOCK_SIZE)
     except (OSError, EOFError, ValueError, sqlite3.Error):
-        print("FAIL: archived SQLite is corrupt or unreadable", file=sys.stderr)
+        print("FAIL: invalid SQLite archive", file=sys.stderr)
         return 2
     print(f"SQLITE ARCHIVE PASS: {count} restored measurements")
     return 0
