@@ -28,6 +28,32 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Validate rollback content before stopping the monitor
+
+An upgrade now checks its freshly created source/SQLite snapshot before
+copying source files or restarting Docker. The rollback command also
+validates the selected snapshot *before* a dry run or live rollback can
+stop the monitoring service. It requires valid source archive entries,
+no local `.env.*` backup or `secrets/` paths, one SQLite backup,
+and an SQLite `PRAGMA quick_check=ok` after bounded extraction to a
+temporary file. Checksum verification remains mandatory and separate.
+
+A local, read-only check does not change the installed database:
+
+```bash
+python3 scripts/validate-rollback-snapshot.py --help
+python3 scripts/validate-rollback-snapshot.py \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory>
+sudo bash scripts/rollback.sh --dry-run --no-start \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory>
+```
+
+The validator deliberately uses only Python standard-library modules
+because the host running a rollback may not have the application
+dependencies installed. Corrupt or private source archives fail closed
+before service disruption. This check does **not** simulate stopping
+Docker or prove that a production rollback has succeeded.
+
 ## Public source-release privacy
 
 `scripts/release.sh` uses a separate public-release filter. It excludes
