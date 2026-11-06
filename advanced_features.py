@@ -311,6 +311,18 @@ def format_stamp(ts: float, timezone: str) -> str:
     )
 
 
+def dashboard_sample_age(row: dict[str, object]) -> str:
+    """Describe the last sample without treating it as current voltage."""
+
+    age = row.get("sample_age_seconds")
+    if age is None:
+        return "No valid measurement yet"
+    seconds = max(0, int(float(age)))
+    if seconds < 60:
+        return f"Last valid sample: {seconds} seconds ago"
+    return f"Last valid sample: {seconds // 60} minutes ago"
+
+
 def dashboard_html(title: str, rows: list[dict[str, object]]) -> str:
     """Render a dependency-free local dashboard."""
 
@@ -323,9 +335,11 @@ def dashboard_html(title: str, rows: list[dict[str, object]]) -> str:
             if row.get("voltage") is None
             else f"{float(row['voltage']):.1f} V"
         )
+        age = html.escape(dashboard_sample_age(row))
         card = (
             f"<section><h2>{name}</h2>"
-            f"<strong>{voltage}</strong><p>{state}</p></section>"
+            f"<strong>{voltage}</strong><p>{state}</p>"
+            f"<small>{age}</small></section>"
         )
         cards.append(card)
     body = "".join(cards)
@@ -337,6 +351,7 @@ def dashboard_html(title: str, rows: list[dict[str, object]]) -> str:
         "background:#111;color:#eee}main{display:grid;grid-template-columns:"
         "repeat(auto-fit,minmax(220px,1fr));gap:16px}"
         "section{padding:20px;background:#222;"
-        "border-radius:12px}strong{font-size:2rem}</style>"
+        "border-radius:12px}strong{font-size:2rem;display:block}"
+        "small{display:block;color:#aaa;margin-top:12px}</style>"
         f"<h1>{html.escape(title)}</h1><main>{body}</main>"
     )
