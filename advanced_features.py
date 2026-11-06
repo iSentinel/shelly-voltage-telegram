@@ -319,39 +319,87 @@ def dashboard_sample_age(row: dict[str, object]) -> str:
         return "No valid measurement yet"
     seconds = max(0, int(float(age)))
     if seconds < 60:
-        return f"Last valid sample: {seconds} seconds ago"
-    return f"Last valid sample: {seconds // 60} minutes ago"
+        unit = "second" if seconds == 1 else "seconds"
+        return f"Last valid sample: {seconds} {unit} ago"
+    minutes = seconds // 60
+    unit = "minute" if minutes == 1 else "minutes"
+    return f"Last valid sample: {minutes} {unit} ago"
+
+
+DASHBOARD_CSS = """
+:root{color-scheme:dark;font-family:system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#f0f5fc;line-height:1.5}
+.shell{max-width:1100px;margin:auto;padding:clamp(18px,4vw,46px)}
+.eyebrow{color:#8fb9db;text-transform:uppercase;letter-spacing:.13em}
+h1{font-size:clamp(1.7rem,4vw,2.5rem);margin:.3em 0}
+.intro{color:#a9b7c9;margin-bottom:28px}
+main{display:grid;gap:18px}
+main{grid-template-columns:repeat(auto-fit,minmax(235px,1fr))}
+.phase-card{padding:24px;border:1px solid #2a3b50;border-radius:18px}
+.phase-card{background:#172337;box-shadow:0 12px 28px #0002}
+.phase-head{display:flex;align-items:center;gap:12px}
+.phase-head{justify-content:space-between}
+h2{font-size:1.2rem;margin:0}
+.status{font-size:.78rem;padding:5px 10px;border-radius:20px;}
+.status{white-space:nowrap}
+.status-online{background:#163b30;color:#a4f4c5}
+.status-recovering{background:#263a54;color:#c7e1ff}
+.status-offline{background:#4a3019;color:#ffce8c}
+.status-stale{background:#394252;color:#e1e8f2}
+.status-unknown,.status-unconfigured{background:#303847;color:#c5d0dd}
+.reading{font-size:clamp(2.4rem,7vw,3.6rem);font-weight:750;margin:24px 0 0}
+.unit{font-size:1rem;color:#adbcd0;margin-left:8px}
+.frequency{color:#d5e4f4;margin:8px 0}
+.sample-age{color:#a9b7c9;font-size:.85rem;margin:18px 0 0}
+footer{margin-top:30px;color:#a9b7c9;font-size:.86rem}
+@media(max-width:480px){.phase-card{padding:18px}.phase-head{flex-wrap:wrap}}
+"""
+
+
+def dashboard_card(row: dict[str, object]) -> str:
+    """Render one accessible phase card with escaped data."""
+
+    phase = html.escape(str(row["phase"]), quote=True)
+    state = str(row.get("state", "unknown")).lower()
+    labels = {
+        "online": "Online",
+        "recovering": "Recovering",
+        "offline": "Shelly offline",
+        "stale": "Reading stale",
+        "not configured": "Not configured",
+    }
+    label = labels.get(state, "Unknown")
+    style = state.replace(" ", "-") if state in labels else "unknown"
+    value = row.get("voltage")
+    voltage = "—" if value is None else f"{float(value):.1f}"
+    frequency = row.get("frequency") if value is not None else None
+    frequency_text = "—" if frequency is None else f"{float(frequency):.2f} Hz"
+    age = html.escape(dashboard_sample_age(row), quote=True)
+    return (
+        f'<article class="phase-card"><header class="phase-head">'
+        f'<h2>{phase}</h2><span class="status status-{style}">{label}</span>'
+        f'</header><div class="reading">{voltage}<span class="unit">V</span>'
+        f'</div><p class="frequency">Frequency: {frequency_text}</p>'
+        f'<p class="sample-age">{age}</p></article>'
+    )
 
 
 def dashboard_html(title: str, rows: list[dict[str, object]]) -> str:
-    """Render a dependency-free local dashboard."""
+    """Render responsive read-only HTML without external dependencies."""
 
-    cards = []
-    for row in rows:
-        name = html.escape(str(row["phase"]))
-        state = html.escape(str(row["state"]))
-        voltage = (
-            "—"
-            if row.get("voltage") is None
-            else f"{float(row['voltage']):.1f} V"
-        )
-        age = html.escape(dashboard_sample_age(row))
-        card = (
-            f"<section><h2>{name}</h2>"
-            f"<strong>{voltage}</strong><p>{state}</p>"
-            f"<small>{age}</small></section>"
-        )
-        cards.append(card)
-    body = "".join(cards)
+    heading = html.escape(title, quote=True)
+    cards = "".join(dashboard_card(row) for row in rows)
     return (
-        "<!doctype html><meta charset=utf-8>"
-        "<meta http-equiv=refresh content=30>"
-        f"<title>{html.escape(title)}</title>"
-        "<style>body{font-family:sans-serif;max-width:900px;margin:30px auto;"
-        "background:#111;color:#eee}main{display:grid;grid-template-columns:"
-        "repeat(auto-fit,minmax(220px,1fr));gap:16px}"
-        "section{padding:20px;background:#222;"
-        "border-radius:12px}strong{font-size:2rem;display:block}"
-        "small{display:block;color:#aaa;margin-top:12px}</style>"
-        f"<h1>{html.escape(title)}</h1><main>{body}</main>"
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta http-equiv="refresh" content="30">'
+        f"<title>{heading}</title><style>{DASHBOARD_CSS}</style></head>"
+        f'<body><div class="shell"><header><p class="eyebrow">'
+        f'Local read-only monitoring</p><h1>{heading}</h1><p class="intro">'
+        "Only fresh measurements are displayed as live voltage."
+        f"</p></header><main>{cards}</main><footer>"
+        "Shelly offline means connectivity is unavailable, "
+        "not confirmed mains power loss. Refreshes every 30 seconds."
+        "</footer></div></body></html>"
     )

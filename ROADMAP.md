@@ -1,3 +1,34 @@
+## 2026-11-06 — Local Dashboard UI v1, source-only design phase
+
+- **Goal:** make the existing local read-only HTML dashboard useful
+  on phone and desktop without opening a public service, adding
+  JavaScript dependencies, or controlling mains electricity.
+- **SOURCE IMPLEMENTED:** responsive cards for each active
+  configured phase; accessible headings and labels, explicit
+  online/recovering/stale/offline states, last valid sample
+  age, and frequency displayed only with a fresh voltage.
+  Dynamic heading and phase labels are HTML-escaped;
+  the page has no external resources and keeps its 30-second
+  automatic refresh interval.
+- **FRESHNESS / SAFETY:** reuse the PR #147 stale-safe
+  `dashboard_rows` and add `live_frequency` from the same
+  per-phase freshness check. A stale/unavailable reading
+  is always displayed as unavailable (not 0 V). Shelly
+  connectivity loss is not proof of electrical mains loss.
+- **QA / SOURCE ONLY:** three new tests cover responsive
+  layout and visible status labels, markup escaping, and
+  suppression of stale frequency alongside voltage.
+  Full isolated network-disabled unit suite **456/456 PASS**;
+  Ruff, PEP8 and max-40-line-function gate PASS. Actual
+  Pro 3EM physical acceptance and production deployment
+  remain separate. The currently installed bot is still
+  `0.5.13-hw`; outage #13 has not been forced or cleared.
+- **NEXT:** GitHub CI Python 3.11/3.12/3.13, future local
+  browser visual acceptance after a safe deployed update,
+  natural Shelly outage #13 recovery comparison, Telegram
+  channel visible-delivery check and 15-minute stability
+  gate. Public release promotion remains blocked.
+
 ## 2026-11-06 15:17 Europe/Kyiv — local dashboard stale-measurement safety
 
 - **GATEWAY / REAL HARDWARE:** Installed `0.5.13-hw` remained

@@ -1,3 +1,16 @@
+## 2026-11-06 — responsive local dashboard candidate
+
+- A new source-only local Dashboard UI v1 provides responsive
+  phase cards with state badges, measurement age and fresh
+  voltage/frequency; it does not expose management actions
+  or require external JavaScript or public HTTPS access.
+- The candidate passes **456/456** isolated unit tests
+  and the Ruff/40-line quality gates. It is **not deployed**
+  to the installed `0.5.13-hw` monitoring container.
+- Hardware outage #13 restoration, real Telegram channel
+  acceptance, 15-minute stable recovery, and controlled
+  release promotion remain open gates.
+
 ## 2026-11-06 14:13 — candidate Telegram unpinned-status cleanup
 
 - **Deployed:** `0.5.13-hw` continues to run healthy
