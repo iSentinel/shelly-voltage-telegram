@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import os
 import re
 import sqlite3
 import sys
@@ -110,6 +111,28 @@ def validate_archive(index: int, archive: Path, limit: int) -> bool:
     return True
 
 
+def recent_backups(directory: Path) -> list[Path] | None:
+    """Find regular archives and report a directory access error."""
+
+    try:
+        with os.scandir(directory) as entries:
+            paths = [
+                Path(entry.path)
+                for entry in entries
+                if entry.name.startswith("voltage-")
+                and entry.name.endswith(".sqlite3.gz")
+                and entry.is_file(follow_symlinks=False)
+            ]
+        return sorted(
+            paths, key=lambda item: item.stat().st_mtime, reverse=True
+        )
+    except OSError as exc:
+        logger.error(
+            "FAIL: cannot read backup directory ({})",
+            type(exc).__name__,
+        )
+        return None
+
 def main(argv: list[str] | None = None) -> int:
     """Validate the requested backups, with a clear final exit code."""
 
@@ -122,12 +145,16 @@ def main(argv: list[str] | None = None) -> int:
     if not args.backup_dir.is_dir():
         logger.error("FAIL: backup directory not available")
         return 2
-    archives = sorted(
-        args.backup_dir.glob("voltage-*.sqlite3.gz"),
-        key=lambda entry: entry.stat().st_mtime,
-        reverse=True,
-    )
+    archives = recent_backups(args.backup_dir)
+    if archives is None:
+        return 2
     selected = archives[: args.count]
+    if len(selected) < args.count:
+        logger.error(
+            "FAIL: found {} of {} required archives",
+            len(selected),
+            args.count,
+        )
     limit = args.max_size_mib * BLOCK_SIZE
     passed = sum(
         validate_archive(i, archive, limit)
