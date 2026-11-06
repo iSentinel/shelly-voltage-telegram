@@ -1,3 +1,25 @@
+## 2026-11-06 11:22 — correct production promotion block during Shelly outage
+
+- **Production** remains installed `0.5.13-hw`, healthy but
+  Shelly offline under open outage #13; /ready 503.
+  Source main includes additive live/cached readings
+  for L1/L2/L3 (PR #139, 437 tests and CI PASS) but
+  these are not installed during the open outage.
+- **Pre-deployment checks:** installer dry-run PASS, no
+  changes made. Read-only source-candidate promotion
+  check returned expected FAIL/exit 2 against the
+  exact outage #13 pre-recovery baseline: no closure,
+  no qualifying fresh data, no confirmed Telegram
+  status rotation and not ready. No public release
+  metadata was changed.
+- **Backups:** 3/3 real retained daily archives verified
+  checksum and SQLite restoration, latest within 36 h.
+  Private preflight report remains stored with mode 0600.
+- **Next:** verify actual natural Shelly recovery,
+  stable status and subscriber-visible Telegram channel
+  separately. User-estimated 17:00 Kyiv is not an
+  actual verified restoration.
+
 ## 2026-11-06 11:18 — phase-safe JSON merged, outage #13 still open
 
 - **Production:** installed `0.5.13-hw` with PR #128,
