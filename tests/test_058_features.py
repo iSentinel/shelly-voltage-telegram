@@ -94,6 +94,29 @@ class EpisodeSummaryTests(unittest.TestCase):
             self.assertEqual(summary["average"], "223.3")
             self.assertEqual(summary["transitions"], 3)
             self.assertEqual(summary["abnormal"], "2м 20с")
+            self.assertFalse(summary["starts_on_recovery"])
+
+    def test_recovery_only_summary_excludes_previous_voltage_period(self):
+        """A recovery-only window must not hide earlier low voltage."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = APP.Monitor(
+                config(
+                    database_path=Path(directory) / "recovered.sqlite3",
+                    voltage_status_edit_window_min=3,
+                    telegram_language="uk",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.add(1000.0, 225.0, 50.0, "L1")
+            monitor.update_voltage_episode("recovered", 225.0, 1000.0, "L1")
+            with patch.object(APP.time, "time", return_value=1181.0):
+                monitor.maybe_finalize_voltage_episode()
+            summary = monitor.voltage_episode_summary()
+            self.assertTrue(summary["starts_on_recovery"])
+            lines = "\n".join(APP.voltage_episode_summary_lines(monitor))
+            self.assertIn("До відновлення", lines)
+            self.assertIn("Поза нормою", lines)
 
     def test_finalization_edits_existing_status_without_new_message(self):
         with tempfile.TemporaryDirectory() as directory:
