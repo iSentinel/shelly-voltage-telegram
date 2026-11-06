@@ -1,3 +1,47 @@
+## 2026-11-06 08:58 Europe/Kyiv — production Telegram no-op edit hotfix
+
+- **FIX / DONE:** after owner-approved installation of `0.5.13-hw`,
+  live Telegram command polling logged three benign API
+  `message is not modified` responses as failures, increasing
+  `telegram_failures` from 0 to 3. The Bot API doctor remained
+  healthy. PR #128 merged as
+  `394f06852ae5e700fc376ac3c640e1f236d67de3` and handles
+  identical text edits and repeated inline keyboard clearing as
+  successful no-ops; actual errors are still propagated.
+- **QA / PASS:** 422/422 isolated, network-disabled Python tests;
+  Ruff 0.14.2, PEP8 and maximum 40-line functions PASS. GitHub CI
+  passed on Python 3.11, 3.12 and 3.13. Tested code and GitHub
+  branch matched byte for byte before merge.
+- **HOTFIX DEPLOY / PASS:** the same `0.5.13-hw` version was
+  redeployed on LXC 110 at 08:55 with the merged fix. Installer
+  returned PASS; actual source and Docker image contain the new
+  error handling. At 08:58 Shelly remained online, real voltage
+  polling continued (21,429 SQLite measurements), `/ready=200`,
+  SQLite `quick_check=ok`, no open outages and no artificial 0 V.
+  Docker healthy with zero restart count after hotfix start;
+  post-hotfix Telegram watchdog errors 0 and startup log warnings 0.
+- **CONFIG / PASS:** all six stored configuration/secret file
+  digests matched the pre-install baseline. The 10-minute
+  status-edit window and pin-off policy were not modified.
+- **ROLLBACK / READY:** a separate private `0.5.13-hw` snapshot
+  was created at
+  `/var/backups/shelly-voltage/upgrades/20261106-085538-0.5.13-hw/`.
+  Both SHA256 checks, SQLite temporary restore (21,413 samples)
+  and rollback dry run PASS. The earlier `0.5.12-hw` snapshot
+  is still available. No real rollback was executed.
+- **PRIVATE EVIDENCE:** `validation/2026-11-06-post-hotfix-0.5.13-hw-acceptance.json`
+  remains on LXC 110 with permissions 0600; private logs,
+  Telegram IDs and live databases have not been published.
+- **NEXT / OPERATOR CHECK:** the absence of further warnings
+  immediately after a restart does not prove the repeated-edit
+  path was exercised live. Use the authorized administrator's
+  private bot chat and repeat a harmless status/menu button
+  to confirm the reply is unchanged without a command-poll
+  failure or a duplicate post. Confirm text/visibility in the
+  configured channel separately. Do not simulate utility outages.
+  Public promotion and other Shelly hardware variants remain
+  outside this supervised test.
+
 ## 2026-11-06 08:44 Europe/Kyiv — owner-approved 0.5.13-hw production test installation
 
 - **INSTALLED / PASS:** the owner explicitly authorized updating the

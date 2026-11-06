@@ -1,13 +1,39 @@
+## 2026-11-06 08:58 — installed 0.5.13-hw Telegram callback hotfix
+
+After the owner's production upgrade and first live monitor run,
+three Telegram command-polling warnings were traced to the Bot API
+reply `message is not modified` when a callback attempted an
+identical edit. PR #128 (source `394f068`) now treats repeated
+identical text and markup edits as successful no-ops, without
+ignoring real failures such as `Forbidden`. The regression suite
+completed 422/422 tests and GitHub CI passed on Python 3.11,
+3.12 and 3.13.
+
+The hotfix was installed on production at 08:55 Kyiv, and the
+Shelly, SQLite and Telegram API read-only doctor checks passed.
+The watchdog showed zero fresh failures after restart; this
+alone does not prove the same button was clicked again.
+
+**Administrator manual acceptance (still pending):** open the
+bot's *private admin chat*, use `/status` or `/preview`, and
+click the same harmless status/menu button twice. Confirm that
+the response is readable, does not create unwanted duplicate
+posts and does not show an error on a repeated edit. Separately
+inspect the configured status channel for correct text and
+timestamps. Do not induce power outages or publish the private
+chat/channel identifiers. Report PASS, FAIL or NOT FOUND
+with a redacted screenshot if available.
+
 ## 2026-11-06 — screenshot acceptance of natural outage #11
 
 The operator provided a screenshot of the status-channel message after
 Shelly Pro EM-50 recovered. The visible message shows the device voltage,
 frequency, a 6 h 19 min interruption, a normalized-voltage event at
 06:57 and a 10-minute event summary. This is **positive visual
-evidence** that the current production release `0.5.12-hw` showed
+evidence** that the earlier installed `0.5.12-hw` release showed
 a recovery/status message to the operator. It is not a delivery
-receipt for all subscribers and does not validate the uninstalled
-`0.5.13-hw` candidate.
+receipt for all subscribers and does not validate the later
+`0.5.13-hw` installation.
 
 Gateway/SQLite evidence places the **end of connectivity loss**
 at 06:37:02 Kyiv and the separate **voltage normalization**
