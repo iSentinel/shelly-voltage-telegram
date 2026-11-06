@@ -28,6 +28,21 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Public source-release privacy
+
+`scripts/release.sh` uses a separate public-release filter. It excludes
+`.env`, every local `.env.*` backup and nested private environment
+files, plus `secrets/`, private validation data, generated databases
+and build outputs. The safe `.env.example` template is copied back
+explicitly. A final stage check refuses any private `.env*` filename
+other than `.env.example`.
+
+The reproducible-release test includes a separate artificial source
+directory with fake Telegram/Shelly credentials stored in multiple
+environment backup names. It verifies that none enter the release.
+Use `bash tests/test_release.sh` to check packaging without publishing
+anything. Do not use a real production configuration as test data.
+
 ## Telegram interface
 
 An authorized administrator can send `/updates` directly to the bot in a

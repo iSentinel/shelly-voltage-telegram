@@ -85,7 +85,8 @@ copy_public_tree() {
     local destination="$1"
     mkdir -p "$destination"
     tar -C "$PROJECT" \
-        --exclude='./.env' \
+        --exclude='./.env*' \
+        --exclude='*/.env*' \
         --exclude='./secrets' \
         --exclude='./dist' \
         --exclude='./dist-publish' \
@@ -105,6 +106,7 @@ copy_public_tree() {
         --exclude='*.sqlite3-*' \
         --exclude='*.log' \
         -cf - . | tar -C "$destination" -xf -
+    cp "$PROJECT/.env.example" "$destination/.env.example"
 }
 
 write_file_manifest() {
@@ -123,7 +125,7 @@ assert_public_tree() {
     forbidden="$(
         cd "$destination"
         find . -type f \( \
-            -name '.env' -o -path './secrets/*' -o \
+            \( -name '.env*' ! -name '.env.example' \) -o -path './secrets/*' -o \
             -path './dist-publish/*' -o -path './validation/*' -o \
             -path './.ruff_cache/*' -o -path './.pytest_cache/*' -o \
             -path './.mypy_cache/*' -o -name '.github-main-sha' -o \
