@@ -8,6 +8,7 @@ import gzip
 import sqlite3
 import sys
 import tempfile
+from contextlib import closing
 from pathlib import Path
 
 BLOCK_SIZE = 1024 * 1024
@@ -40,7 +41,7 @@ def validate_database(archive: Path, max_bytes: int) -> int:
     with tempfile.TemporaryDirectory(prefix="svt-check-") as directory:
         restored = Path(directory) / "restored.sqlite3"
         restore_bounded(archive, restored, max_bytes)
-        with sqlite3.connect(f"file:{restored}?mode=ro", uri=True) as db:
+        with closing(sqlite3.connect(f"file:{restored}?mode=ro", uri=True)) as db:
             if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise ValueError("SQLite quick_check failed")
             row = db.execute("SELECT COUNT(*) FROM measurements").fetchone()
