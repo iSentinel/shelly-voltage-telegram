@@ -100,7 +100,7 @@ class RollbackSnapshotValidationTests(unittest.TestCase):
         self.assertEqual(self.check().returncode, 2)
 
     def test_legacy_env_backup_is_safe_to_ignore_during_rollback(self):
-        """Historical env backups are excluded during extraction, not restored."""
+        """Legacy env backups are kept locally, not extracted."""
 
         make_source(self.snapshot / "source.tar.gz", "./.env.bak")
         self.assertEqual(self.check().returncode, 0)
