@@ -1,3 +1,54 @@
+## 2026-11-06 08:44 Europe/Kyiv — owner-approved 0.5.13-hw production test installation
+
+- **INSTALLED / PASS:** the owner explicitly authorized updating the
+  running Telegram voltage monitor. LXC 110 completed the standard
+  `scripts/install.sh --non-interactive` at 08:39 Kyiv from
+  `main` `fd45c42fb01aad7035443a142bba4e9aa4bf56d5`.
+  Both the on-host `VERSION` and running Docker `/app/VERSION`
+  identify `0.5.13-hw`. Docker is healthy, with zero restarts;
+  `/ready=200`.
+- **REAL SHELLY / PASS FOR CONNECTIVITY AND MEASUREMENTS:** the live
+  Shelly Pro EM-50 remained online at 50.0 Hz. In the first
+  08:39–08:42 interval, 21 fresh measurements were recorded
+  (237.7–241.8 V), and the subsequent read-only check reported
+  21,342 total samples, SQLite `quick_check=ok`,
+  zero 0 V samples and zero open outages.
+- **TELEGRAM API / PASS, VISIBLE DELIVERY / PENDING:** the post-install
+  `app.py doctor` returned Shelly/SQLite/Telegram `ok`; the
+  watchdog reported zero Telegram failures. This does **not**
+  establish that a new 0.5.13-hw Telegram message was delivered,
+  edited or seen by a subscriber. Administrator visual acceptance
+  remains open. Private-chat `/status` and `/preview` are safe
+  user-initiated checks; do not simulate an electrical failure.
+- **CONFIG PRESERVATION / PASS:** all six preinstall monitored
+  configuration/secret files had identical SHA256 digests after
+  installation; the persisted status-edit window remains 10
+  minutes and pinning remains off. No credentials or chat IDs
+  were included in public evidence.
+- **ROLLBACK / READY:** installer created a dedicated private
+  `0.5.12-hw` source + SQLite snapshot at
+  `/var/backups/shelly-voltage/upgrades/20261106-083902-0.5.12-hw/`.
+  Both SHA256 sidecars passed, the SQLite temporary restore
+  contained 21,315 measurements, and the newly installed
+  `rollback.sh --dry-run --no-start` passed. No real rollback
+  was needed or executed.
+- **PRIVATE EVIDENCE:** the 0600 owner-approved preinstall report,
+  configuration-hash manifest, installer log and post-install
+  acceptance JSON remain in `/opt/shelly-voltage/validation/`
+  on LXC 110. Do not publish screenshots, Telegram IDs,
+  tokens, local databases or private archives to GitHub.
+- **RELEASE BOUNDARY:** `VERSION=0.5.13-hw` means the code is
+  installed for supervised production testing, **not yet
+  publicly promoted or fully hardware/message accepted**.
+  Published `RELEASE_VERSION=0.5.12-hw` and historical
+  `LIVE_VERSION=0.5.6-hw` have not been changed.
+- **NEXT / operator acceptance:** inspect `/preview` and
+  `/status` in the administrator's private chat, confirm
+  correct RU/UK/EN status labels and message editing in
+  naturally occurring events, watch for stale/duplicate
+  channel statuses, and retain the verified rollback point.
+  Pro 3EM/3CT63 acceptance still requires real hardware.
+
 ## 2026-11-06 08:23 Europe/Kyiv — rollback SQLite preflight and field verification
 
 - **SOURCE / DONE:** PR #124 merged as
