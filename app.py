@@ -2944,14 +2944,17 @@ class Monitor:
         return True
 
     def delete_previous_status(self, old_id: str) -> None:
-        """Unpin the old status before deleting it."""
+        """Unpin only known pinned status messages before deleting them."""
 
-        try:
-            self.telegram.unpin(int(old_id), self.telegram.status_chat_id)
-        except Exception as exc:
-            logger.warning("Telegram old status unpin failed: {}", exc)
-            return
-        self.storage.delete_meta("telegram_status_pinned_id")
+        pinned_id = self.storage.get_meta("telegram_status_pinned_id")
+        if pinned_id == old_id:
+            try:
+                self.telegram.unpin(int(old_id), self.telegram.status_chat_id)
+            except Exception as exc:
+                if "message to unpin not found" not in str(exc).lower():
+                    logger.warning("Telegram old status unpin failed: {}", exc)
+                    return
+            self.storage.delete_meta("telegram_status_pinned_id")
         try:
             self.telegram.delete(int(old_id), self.telegram.status_chat_id)
         except Exception as exc:

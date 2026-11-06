@@ -1,3 +1,24 @@
+## 2026-11-06 — removing old status without spurious unpin failures
+
+The default channel status is **not pinned**. On replacement,
+the bot should remove the old post directly if there is no
+matching persisted pinned-status ID. Sending
+`unpinChatMessage` for an ordinary unpinned post can
+produce `message to unpin not found`, which must not
+prevent normal removal of the previous post.
+
+If the previous post **is known pinned**, unpin it
+before deletion. An already-unpinned response may
+be treated as benign, and the stale pin marker
+cleared. All other unpin failures must be logged
+and block deletion. Never unpin a different post.
+
+The new message still must be successfully sent and
+its ID saved **before** any old status cleanup.
+These cases have deterministic offline tests, but
+subscriber-visible channel verification after a
+natural Shelly restoration remains a separate gate.
+
 ## 2026-11-06 — safe channel status replacement during recovery
 
 During a confirmed Shelly **connectivity** recovery, the bot
