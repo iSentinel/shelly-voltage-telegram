@@ -1,3 +1,42 @@
+## 2026-11-06 09:53 Europe/Kyiv — restored transport and clearer Telegram diagnostics
+
+- **LIVE / PASS:** Proxmox LXC 110 on installed `0.5.13-hw` remained
+  healthy with zero Docker restarts and HTTP `/ready=200`. Shelly
+  online at 227.5 V / 50.0 Hz, SQLite `quick_check=ok`,
+  21,732 measurements, zero 0 V rows and zero open outages.
+- **TELEGRAM / TRANSIENT NETWORK EVENT:** at about 09:48–09:49
+  Kyiv, 11 Telegram `ConnectionError` and one `ReadTimeout`
+  occurred during the same interval as a transient Gateway SSH
+  timeout; five channel-status edits also failed due to transport
+  connectivity. This is not the former `message is not modified`
+  bug: there were zero such errors. Telegram/Shelly/SQLite
+  read-only doctor returned OK at 09:52, and there were no new
+  Telegram poll or status-update errors after 09:50 by 09:53.
+  The existing `telegram_failures=12` counter is cumulative.
+- **BACKUP / PASS:** all three retained daily archives validated
+  SHA256 and temporary SQLite restore; newest archive was younger
+  than 36 hours. Source-only PR #132 (`6bd7a3d`) adds opt-in
+  `--max-age-newest-only` to check latest freshness while
+  validating all retained copies. 428/428 tests and CI
+  Python 3.11/3.12/3.13 PASS. This option is not yet deployed.
+- **NEW SOURCE-ONLY DIAGNOSTIC:** retain the cumulative Telegram
+  error counter but add consecutive command-poll failure streak
+  and seconds since last successful poll to JSON watchdog and
+  Prometheus. A successful cycle clears the streak without
+  erasing historical failures; no previous successful poll is
+  represented by null in JSON and NaN in metrics.
+  430/430 isolated network-disabled Docker tests and pinned Ruff
+  quality gate PASS. No production restart or config change.
+- **TELEGRAM PRIVATE CHAT / OPERATOR PASS:** the owner confirmed
+  repeated presses of the same button do not create duplicate
+  messages, reinforcing the earlier Ukrainian `/preview`,
+  `/status`, and `/start` visual review.
+- **NEXT:** keep source-only observability changes behind CI;
+  check production transport metrics after a separately
+  authorized installation; inspect channel-message visibility
+  after a naturally occurring transition. Real Pro 3EM / 3CT63
+  acceptance and public release promotion remain separate.
+
 ## 2026-11-06 — operator accepts repeated Telegram button behavior
 
 - **PRIVATE CHAT / OPERATOR PASS:** the owner explicitly tested
