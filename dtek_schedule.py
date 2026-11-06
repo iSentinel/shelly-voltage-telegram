@@ -34,7 +34,7 @@ def extract_schedule(html: str) -> dict:
     marker = re.search(r"\bfact\s*=\s*\{", html)
     if marker is None:
         raise ValueError("DTEK schedule data not found")
-    data, _ = json.JSONDecoder().raw_decode(html[marker.end() - 1:])
+    data, _ = json.JSONDecoder().raw_decode(html[marker.end() - 1 :])
     if not isinstance(data, dict):
         raise ValueError("DTEK schedule data is invalid")
     return data
@@ -109,7 +109,9 @@ def validate_cache(data: dict, region: str, now: datetime) -> dict:
 
 
 def get_schedule(
-    region: str, group: str, cache_path: str | Path | None = None,
+    region: str,
+    group: str,
+    cache_path: str | Path | None = None,
     now: datetime | None = None,
 ) -> tuple[str, list[tuple[str, str]]]:
     """Read an optional local snapshot, with no network or device calls."""
@@ -142,7 +144,8 @@ def format_schedule(language: str, region: str, group: str) -> str:
     except (ValueError, OSError, UnicodeError, json.JSONDecodeError):
         return "ДТЭК: график недоступен. Сведения об отключениях неизвестны."
     titles = {
-        "ru": "Плановые отключения", "uk": "Планові відключення",
+        "ru": "Плановые отключения",
+        "uk": "Планові відключення",
         "en": "Scheduled outages",
     }
     lines = [f"📅 {titles.get(language, titles['ru'])} ДТЭК · {day} · {group}"]

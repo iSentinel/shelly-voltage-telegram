@@ -6,8 +6,8 @@ import importlib.util
 import json
 import os
 import sys
-import types
 import tempfile
+import types
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -35,7 +35,8 @@ def example_cache(now: datetime) -> dict:
     """Build a current schema-v1 cache."""
 
     return {
-        "version": 1, "region": "k",
+        "version": 1,
+        "region": "k",
         "fetched_at": now.isoformat(),
         "fact": example_fact(now),
     }
@@ -96,14 +97,9 @@ class DtekScheduleTests(unittest.TestCase):
 
     def test_valid_cache_parses_current_day(self):
         self.write_cache(example_cache(self.now))
-        day, periods = dtek.get_schedule(
-            "k", "1.2", self.path, self.now
-        )
-        self.assertEqual(
-            day, self.now.astimezone(
-                dtek.ZoneInfo("Europe/Kyiv")
-            ).date().isoformat()
-        )
+        day, periods = dtek.get_schedule("k", "1.2", self.path, self.now)
+        kyiv_day = self.now.astimezone(dtek.ZoneInfo("Europe/Kyiv")).date()
+        self.assertEqual(day, kyiv_day.isoformat())
         self.assertEqual(periods, [("00:00", "01:30")])
 
     def test_stale_cache_rejected(self):
@@ -114,9 +110,7 @@ class DtekScheduleTests(unittest.TestCase):
 
     def test_future_cache_rejected(self):
         data = example_cache(self.now)
-        data["fetched_at"] = (
-            self.now + timedelta(minutes=5)
-        ).isoformat()
+        data["fetched_at"] = (self.now + timedelta(minutes=5)).isoformat()
         self.write_cache(data)
         with self.assertRaisesRegex(ValueError, "future"):
             dtek.get_schedule("k", "1.2", self.path, self.now)
@@ -167,12 +161,14 @@ class DtekScheduleTests(unittest.TestCase):
         package.__path__ = []
         sync = types.ModuleType("playwright.sync_api")
         sync.sync_playwright = lambda: api
-        with patch.dict(
-            sys.modules,
-            {"playwright": package, "playwright.sync_api": sync},
+        with (
+            patch.dict(
+                sys.modules,
+                {"playwright": package, "playwright.sync_api": sync},
+            ),
+            self.assertRaisesRegex(ValueError, "another host"),
         ):
-            with self.assertRaisesRegex(ValueError, "another host"):
-                COLLECTOR.browser_html("k", 5)
+            COLLECTOR.browser_html("k", 5)
         browser.close.assert_called_once()
 
     def test_browser_collector_closes_browser_after_valid_page(self):
@@ -191,8 +187,8 @@ class DtekScheduleTests(unittest.TestCase):
             sys.modules,
             {"playwright": package, "playwright.sync_api": sync},
         ):
-            self.assertEqual(COLLECTOR.browser_html("k", 5),
-                             "<html>fixture</html>")
+            html = COLLECTOR.browser_html("k", 5)
+            self.assertEqual(html, "<html>fixture</html>")
         browser.close.assert_called_once()
 
     def test_cli_fixture_dry_run_does_not_write(self):
@@ -202,8 +198,14 @@ class DtekScheduleTests(unittest.TestCase):
         fixture = Path(self.tmp.name) / "fixture.html"
         fixture.write_text(html + ";</script>", encoding="utf-8")
         argv = [
-            "collector", "--region", "k", "--fixture-html",
-            str(fixture), "--output", str(self.path), "--dry-run",
+            "collector",
+            "--region",
+            "k",
+            "--fixture-html",
+            str(fixture),
+            "--output",
+            str(self.path),
+            "--dry-run",
         ]
         with patch.object(sys, "argv", argv):
             self.assertEqual(COLLECTOR.main(), 0)

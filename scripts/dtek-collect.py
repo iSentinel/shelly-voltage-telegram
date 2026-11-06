@@ -70,7 +70,8 @@ def build_payload(region: str, html: str, now: datetime) -> dict:
     if not count:
         raise ValueError("DTEK has no complete published groups today")
     payload = {
-        "version": 1, "region": region,
+        "version": 1,
+        "region": region,
         "fetched_at": now.astimezone(timezone.utc).isoformat(),
         "fact": fact,
     }
@@ -87,8 +88,11 @@ def write_cache(path: Path, payload: dict) -> None:
     name = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", dir=path.parent,
-            prefix=".dtek-", delete=False,
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".dtek-",
+            delete=False,
         ) as file:
             name = file.name
             os.fchmod(file.fileno(), 0o600)
@@ -113,9 +117,7 @@ def main() -> int:
             if args.fixture_html
             else browser_html(args.region, args.timeout_sec)
         )
-        payload = build_payload(
-            args.region, html, datetime.now(timezone.utc)
-        )
+        payload = build_payload(args.region, html, datetime.now(timezone.utc))
         if not args.dry_run:
             write_cache(args.output, payload)
         print("PASS: DTEK snapshot validated; dry_run=", args.dry_run)
