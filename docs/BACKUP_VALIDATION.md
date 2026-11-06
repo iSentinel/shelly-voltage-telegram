@@ -39,7 +39,11 @@ An unreadable backup directory fails explicitly with its exception type
 (for example, `PermissionError`) instead of appearing to contain no
 archives. The operator must use a read-only account with access to the
 backup directory; do not make private backups world-readable.
-Symbolic links are not treated as backup archives.
+Symbolic links are not treated as backup archives or checksum sidecars.
+When a SHA256 sidecar specifies a filename, its basename must
+match the archive being validated. Existing absolute-path and
+checksum-only sidecars remain supported; no referenced path is
+opened from a sidecar line.
 The script prints stable result labels rather than archive names or
 private filesystem contents.
 
