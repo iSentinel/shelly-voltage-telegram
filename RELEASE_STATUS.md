@@ -1,3 +1,28 @@
+## 2026-11-06 — operator-visible Telegram recovery; source UX improvements
+
+- **Operator visual check PASS for deployed 0.5.12-hw:** screenshot
+  shows a Telegram channel recovery/status message, plausible voltage
+  and frequency, a 6 h 19 min connectivity outage and an event summary.
+  This confirms one visible message, not subscriber-wide delivery.
+- **Separate timestamps:** Shelly communication recovered at
+  06:37:02 Europe/Kyiv, while the recorded voltage recovery event
+  occurred at 06:57:46 / 211.7 V. Summary 06:57–07:07 covers
+  the time **after** normalization only.
+- **Source-only 0.5.13-hw:** PR #114 changes the RU/UK/EN reconnect
+  banner to indicate Shelly connectivity rather than claiming mains
+  restoration; PR #115 adds a concise note about recovery-first
+  event-summary coverage. Source checksum parity PASS.
+- **CI:** full isolated suite 409/409 then 410/410 PASS, pinned Ruff
+  quality PASS; GitHub Python 3.11, 3.12 and 3.13 CI PASS for both.
+- **No deployment:** current 0.5.12-hw production healthy/ready,
+  zero restarts, status edit window 10 minutes and pin disabled.
+  Private operator-evidence JSON is retained on LXC 110, screenshot
+  not added to GitHub.
+- **Remaining gate:** candidate 0.5.13-hw still needs approved
+  physical Telegram/delivery acceptance, exact-version rollback
+  evidence and explicit owner authorization before installation.
+  Real Pro 3EM / 3CT63 acceptance is a separate hardware task.
+
 ## 2026-11-06 — real Shelly restoration, outage #11
 
 - Real Pro EM-50 connectivity outage #11 lasted from 00:17:46 to
