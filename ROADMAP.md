@@ -1,3 +1,43 @@
+## 2026-11-06 11:18 Europe/Kyiv — continued offline QA and phase-safe JSON
+
+- **LIVE HARDWARE / UNCHANGED:** on Proxmox LXC 110, installed
+  `0.5.13-hw` stayed Docker healthy with 0 restarts while Shelly
+  Pro EM-50 was offline. Outage #13 remained open since
+  10:30:51 Kyiv; at 11:17 /health HTTP 200 and /ready HTTP 503.
+  Last actual reading was at 10:30:08 (235.7 V), now stale.
+  SQLite quick_check OK, 21,950 samples, 0 manufactured
+  0 V samples, no current live voltage claim.
+- **LOGS / EXPECTED WARNINGS:** 10 prior WARNING lines in
+  the outage interval categorized as Shelly polling/network
+  unreachable, not Telegram command or status errors.
+  Cumulative Telegram failure count remains 12 from the
+  earlier recovered network interruption. No new Telegram
+  poll/status-update errors observed for outage #13.
+- **BACKUP RETENTION / PASS:** real production backups
+  validated read-only in a network-disabled Docker container,
+  with 3/3 SHA256 and SQLite restoration PASS and the
+  newest archive under the 36-hour freshness limit.
+- **SOURCE-ONLY PHASE IMPROVEMENT / PR #139:** the additive
+  `/status.json` live/cached fields introduced by PR #137
+  now apply independently to configured `phases.L1/L2/L3`.
+  One disconnected or stale phase returns null live voltage
+  without hiding valid live readings on other phases;
+  unconfigured phases preserve their legacy shape.
+  437/437 isolated unit tests PASS; Ruff, max 40-line
+  functions and GitHub CI Python 3.11/3.12/3.13 PASS.
+  Merged to `main` as `f95a169`; not installed on the
+  currently running production bot. These synthetic tests
+  are not physical Pro 3EM/3CT63 acceptance.
+- **RECOVERY MONITORING:** existing enabled hourly, read-only
+  automation is configured with the exact private outage #13
+  pre-recovery baseline. The user's approximate 17:00 Kyiv
+  electricity restoration estimate remains **unconfirmed**.
+  After actual reconnection, require new real samples,
+  outage #13 closure, /ready HTTP 200 and explicit
+  recovery-acceptance.py verify PASS. Independently verify
+  channel-visible Telegram status. Do not simulate a
+  power event or promote public release on API checks alone.
+
 ## 2026-11-06 10:46 Europe/Kyiv — outage #13 offline, safe API and monitoring checkpoint
 
 - **LIVE / READ-ONLY:** Proxmox LXC 110 remained up with deployed
