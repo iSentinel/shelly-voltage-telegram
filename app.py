@@ -1306,21 +1306,29 @@ class Telegram:
         }
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
-        self.call("editMessageText", payload)
+        try:
+            self.call("editMessageText", payload)
+        except RuntimeError as exc:
+            if not message_not_modified(exc):
+                raise
 
     def clear_reply_markup(
         self, message_id: int, chat_id: str | None = None
     ) -> None:
         """Remove inline controls from one Telegram message."""
 
-        self.call(
-            "editMessageReplyMarkup",
-            {
-                "chat_id": chat_id or self.cfg.telegram_chat_id,
-                "message_id": message_id,
-                "reply_markup": {"inline_keyboard": []},
-            },
-        )
+        try:
+            self.call(
+                "editMessageReplyMarkup",
+                {
+                    "chat_id": chat_id or self.cfg.telegram_chat_id,
+                    "message_id": message_id,
+                    "reply_markup": {"inline_keyboard": []},
+                },
+            )
+        except RuntimeError as exc:
+            if not message_not_modified(exc):
+                raise
 
     def answer_callback(self, callback_id: str, text: str = "") -> None:
         """Acknowledge an inline-keyboard callback."""
