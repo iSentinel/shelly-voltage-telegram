@@ -147,3 +147,24 @@ read-only comparisons. When an outage remains open, the private
 RU/UK/EN summary explicitly says current voltage is unknown;
 after a recorded network recovery, the report still does not
 claim a live current voltage or verified power restoration.
+
+## Two-day user-relayed forecast support (6/7 November 2026)
+
+A pasted message can contain two distinct daily forecast blocks,
+including a warning that actual electricity switching may differ.
+The parse_manual_forecast_days(text, year) function splits these
+by dated header, and validates each day's windows independently.
+
+The operator relayed both sets of group 10.1 times and described
+their original publication as official DTEK. This is **user-reported
+provenance**, not independent DTEK API validation. Therefore
+source remains user_supplied_unverified and provider_verified=false.
+No forecast claims a precise mains switching or causal time.
+
+November 7: 00:00-02:30, 07:00-14:30, 17:30-24:00.
+November 6: 00:00-05:30, 10:30-18:00, 20:00-24:00.
+November 6 at 24:00 equals November 7 at 00:00. Distinct dates
+must not merge, duplicate, reverse, or overwrite each other.
+
+The parser does not fetch provider pages, write trusted cache files,
+send Telegram messages, or issue commands to Shelly.

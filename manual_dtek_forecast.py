@@ -15,6 +15,12 @@ WINDOW_RE = re.compile(
     r"(\d{2}:\d{2})(?:\s*\([^\n]*\))?\s*$",
     re.M,
 )
+HEADER_RE = re.compile(
+    r"(?m)^[ \t]*(?:🗓[ \t]*)?"
+    r"(?:Прогнозований графік|Прогнозируемый график|Forecast)"
+    r"\b[^\n]*$",
+    re.I,
+)
 MANUAL_SOURCE = "user_supplied_unverified"
 LABELS = {
     "ru": (
@@ -85,6 +91,8 @@ def parse_manual_forecast(text: str, day: date) -> ManualForecast:
 
     if not isinstance(text, str) or len(text) > 4096:
         raise ValueError("forecast message exceeds size limit")
+    if len(HEADER_RE.findall(text)) > 1:
+        raise ValueError("multiple daily forecasts need separate parsing")
     group = GROUP_RE.search(text)
     header = text.splitlines()[0] if text else ""
     match = DATE_RE.search(header)
@@ -103,6 +111,50 @@ def parse_manual_forecast(text: str, day: date) -> ManualForecast:
         raise ValueError("forecast date differs from requested day")
     validate_periods(day, windows)
     return ManualForecast(day.isoformat(), group[1], windows)
+
+
+def header_calendar_day(header: str, year: int) -> date:
+    """Validate a date claimed in one manually relayed forecast header."""
+
+    found = DATE_RE.search(header)
+    if found is None:
+        raise ValueError("forecast header has no date")
+    stated_year = int(found[3]) if found[3] else year
+    if stated_year != year:
+        raise ValueError("forecast date is from the wrong year")
+    return date(stated_year, int(found[2]), int(found[1]))
+
+
+def parse_manual_forecast_days(
+    text: str, year: int
+) -> tuple[ManualForecast, ...]:
+    """Separate up to two chronological daily forecast blocks."""
+
+    if not isinstance(text, str) or len(text) > 8192:
+        raise ValueError("forecast batch exceeds size limit")
+    headers = list(HEADER_RE.finditer(text))
+    if not 1 <= len(headers) <= 2:
+        raise ValueError("expected one or two dated forecast headers")
+    if re.search(r"(?m)^[ \t]*🪫", text[: headers[0].start()]):
+        raise ValueError("orphaned outage window before first header")
+    forecasts = []
+    for index, match in enumerate(headers):
+        day = header_calendar_day(match.group(), year)
+        end = (
+            headers[index + 1].start()
+            if index + 1 < len(headers)
+            else len(text)
+        )
+        section = text[match.start() : end].strip()
+        forecast = parse_manual_forecast(section, day)
+        if forecasts and forecast.group != forecasts[0].group:
+            raise ValueError("mixed groups need separate forecast batches")
+        if forecasts and day != date.fromisoformat(
+            forecasts[-1].day
+        ) + timedelta(days=1):
+            raise ValueError("dates must be consecutive and ordered")
+        forecasts.append(forecast)
+    return tuple(forecasts)
 
 
 def preview_manual_forecast(
