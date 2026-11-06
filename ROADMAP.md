@@ -1,3 +1,45 @@
+## 2026-11-06 10:35 Europe/Kyiv — natural Shelly outage #13, recovery baseline captured
+
+- **LIVE / CONFIRMED:** Shelly Pro EM-50 became unreachable again at
+  10:30:51 Kyiv. The last valid reading was 235.7 V / 50.0 Hz at
+  10:30:08, and it is **stale**, not a present-voltage reading or
+  confirmation of power loss. At 10:32 the 0.5.13-hw Docker
+  container was still running/healthy with zero restarts;
+  HTTP `/health=200` but `/ready=503` due to lost
+  connectivity. SQLite quick_check OK, 21,950 measurements,
+  one open outage (#13), and zero fabricated 0 V rows.
+- **NATURAL RECOVERY BASELINE / PASS:** unlike the already
+  closed prior outage #12, this time the operator captured
+  an accepted recovery baseline for the **open** outage #13
+  with the correct host-side SQLite argument:
+  `--db /var/lib/shelly-voltage/voltage.sqlite3`.
+  The private 0600 file
+  `validation/natural-baselines/outage-13-20261106-baseline.json`
+  holds outage ID, counts and a SHA256 fingerprint of the
+  status message, not the raw private Telegram ID.
+- **GATES / EXPECTED FAIL WHILE OFFLINE:** a read-only recovery
+  check at 10:34:55 reported outage still open, no new valid
+  measurements, no status-message rotation, Shelly offline
+  and readiness not ready. The previous outage #12's
+  15-minute stable baseline was also correctly rejected:
+  it was interrupted by this new outage. Neither acceptance
+  was marked successful.
+- **BACKUP / PASS:** three retained daily backup archives
+  passed SHA256 and temporary SQLite restoration, with
+  the latest archive younger than 36 hours using source-only
+  `--max-age-newest-only` (PR #132). The installed bot and
+  database were not modified or restarted.
+- **SOURCE REVIEW:** the current tests already cover rejecting
+  a later outage during stable recovery. Do not duplicate
+  this existing coverage; prioritize the natural field
+  verification and Telegram visibility after recovery.
+- **NEXT:** if Shelly reconnects, run the read-only
+  `recovery-acceptance.py verify` with the exact outage #13
+  baseline and correct host database path. Mark success
+  only if the verifier reports PASS; separately inspect
+  the real Telegram channel. No synthetic mains event,
+  relay action or alert injection.
+
 ## 2026-11-06 10:22 Europe/Kyiv — natural Shelly recovery after low voltage
 
 - **REAL EVENT / OBSERVED:** Shelly Pro EM-50 recorded a persistent
