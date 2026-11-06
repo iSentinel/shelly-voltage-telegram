@@ -133,6 +133,7 @@ def recent_backups(directory: Path) -> list[Path] | None:
         )
         return None
 
+
 def main(argv: list[str] | None = None) -> int:
     """Validate the requested backups, with a clear final exit code."""
 
