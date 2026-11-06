@@ -5512,29 +5512,26 @@ def service_snapshot(monitor: Monitor) -> dict[str, object]:
 
 
 def dashboard_rows(monitor: Monitor) -> list[dict[str, object]]:
-    """Return cards for the selected independent voltage phases."""
+    """Show only fresh live measurements in local dashboard cards."""
 
     rows = []
     for phase in monitor.active_phases():
-        if not monitor.phase_configured(phase):
+        label = monitor.phase_label(phase)
+        snap = phase_service_snapshot(monitor, phase)
+        if snap["connectivity"] == "not_configured":
             rows.append(
-                {
-                    "phase": monitor.phase_label(phase),
-                    "state": "not configured",
-                    "voltage": None,
-                }
+                {"phase": label, "state": "not configured", "voltage": None}
             )
             continue
-        snap = monitor.phase_states[phase].snapshot()
+        state = snap["connectivity"]
+        if snap["sample_is_stale"] and state in {"online", "recovering"}:
+            state = "stale"
         rows.append(
             {
-                "phase": monitor.phase_label(phase),
-                "state": snap["connectivity"],
-                "voltage": (
-                    snap["voltage"]
-                    if snap["connectivity"] in {"online", "recovering"}
-                    else None
-                ),
+                "phase": label,
+                "state": state,
+                "voltage": snap["live_voltage"],
+                "sample_age_seconds": snap["sample_age_seconds"],
             }
         )
     return rows

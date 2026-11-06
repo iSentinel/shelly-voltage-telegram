@@ -2629,6 +2629,49 @@ class AdvancedFeatureTests(unittest.TestCase):
         self.assertEqual(rows[0]["state"], "recovering")
         self.assertEqual(rows[0]["voltage"], 228.5)
 
+    def test_dashboard_rejects_aged_online_measurement(self):
+        """An old online sample must never be shown as live voltage."""
+
+        monitor = APP.Monitor(config(stale_after=45.0))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(235.7, 50.0, 2.0)
+        with patch.object(APP.time, "time", return_value=1050.0):
+            rows = APP.dashboard_rows(monitor)
+        self.assertEqual(rows[0]["state"], "stale")
+        self.assertIsNone(rows[0]["voltage"])
+        self.assertEqual(rows[0]["sample_age_seconds"], 50.0)
+        page = APP.dashboard_html("test", rows)
+        self.assertNotIn("235.7 V", page)
+        self.assertIn("Last valid sample: 50 seconds ago", page)
+
+    def test_dashboard_uses_independent_fresh_phase_values(self):
+        """A stale L2 must not hide a fresh L1 or L3 on Pro 3EM."""
+
+        monitor = APP.Monitor(config(shelly_meter_type="pro3em"))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            for phase, voltage in (("L1", 228.0), ("L2", 230.0)):
+                monitor.phase_states[phase].success(voltage, 50.0, 2.0)
+        with patch.object(APP.time, "time", return_value=1100.0):
+            monitor.phase_states["L1"].success(229.0, 50.0, 2.0)
+            monitor.phase_states["L3"].success(231.0, 50.0, 2.0)
+            rows = APP.dashboard_rows(monitor)
+        self.assertEqual(
+            [item["voltage"] for item in rows], [229.0, None, 231.0]
+        )
+        self.assertEqual(
+            [item["state"] for item in rows], ["online", "stale", "online"]
+        )
+
+    def test_dashboard_displays_unknown_without_valid_sample(self):
+        """No sample must display unknown, not synthetic zero voltage."""
+
+        monitor = APP.Monitor(config())
+        rows = APP.dashboard_rows(monitor)
+        self.assertIsNone(rows[0]["voltage"])
+        page = APP.dashboard_html("test", rows)
+        self.assertIn("No valid measurement yet", page)
+        self.assertNotIn("0.0 V", page)
+
     def test_quality_and_dashboard_are_phase_aware(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "q.sqlite3"

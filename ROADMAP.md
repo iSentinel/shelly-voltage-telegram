@@ -1,3 +1,38 @@
+## 2026-11-06 15:17 Europe/Kyiv — local dashboard stale-measurement safety
+
+- **GATEWAY / REAL HARDWARE:** Installed `0.5.13-hw` remained
+  healthy, zero Docker restarts, HTTP /health 200 and /ready
+  503 while Shelly Pro EM-50 was offline. Outage #13 has
+  remained open since 10:30:51. Last real measurement at
+  10:30:08 (235.7 V / 50 Hz) is **historical only**.
+  SQLite quick_check OK with 21,950 measurements, no
+  synthesized 0 V, and no new Telegram poll/status errors.
+  Backup timer reported active/success and original private
+  pre-recovery baseline #13 retained mode 0600.
+- **SOURCE FINDING:** despite PRs #137/#139 correctly providing
+  stale-safe `/status.json` phase values, the local HTML
+  `/dashboard` independently rendered cached voltage whenever
+  a phase said online/recovering, without enforcing the
+  configured sample-age limit. A delayed poll could show
+  an outdated number as current.
+- **SOURCE-ONLY FIX:** reuse `phase_service_snapshot` and its
+  `live_voltage` / `sample_is_stale` rules. Display an
+  unavailable value and `stale` state for aged samples,
+  with last valid sample age visible on the local page.
+  Independent phases remain independent and missing
+  measurements never become false 0 V.
+- **QA:** three new tests cover aged-but-online readings,
+  per-phase freshness and no samples. Network-disabled,
+  read-only Docker unit suite **453/453 PASS**, Ruff, PEP8
+  and max-40-line function quality gates PASS.
+  Production is **not** upgraded during outage #13.
+- **NEXT:** GitHub CI Python 3.11/3.12/3.13,
+  natural Shelly recovery field gate, visible Telegram
+  channel acceptance, 15-minute stable-status verification,
+  and eventual controlled signed release. The owner's
+  approximately 17:00 Kyiv restoration estimate is
+  unconfirmed until fresh samples arrive.
+
 ## 2026-11-06 14:13 Europe/Kyiv — unpinned Telegram status cleanup fix
 
 - **REAL FIELD / READ-ONLY:** Shelly Pro EM-50 stayed offline
