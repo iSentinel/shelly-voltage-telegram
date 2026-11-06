@@ -1,3 +1,43 @@
+## 2026-11-06 07:06 Europe/Kyiv — natural outage #11 recovery
+
+- **REAL DEVICE / PASS:** Pro EM-50 resumed normal polling without a
+  service restart. Outage #11 (L1) opened 00:17:46 and closed 06:37:02
+  Europe/Kyiv on 2026-11-06, approximately 6 h 19 min. The service
+  was healthy with 0 restarts, `/ready` returned HTTP 200 and fresh
+  50 Hz voltage readings resumed.
+- **RECOVERY ACCEPTANCE / PASS:** the read-only
+  `scripts/recovery-acceptance.py verify` checked the exact baseline
+  `validation/natural-baselines/outage-11-20261106-0404.json` and
+  returned status `pass`, no errors. The outage closed, new SQLite
+  measurements appeared, there were zero fabricated 0 V rows,
+  `PRAGMA quick_check=ok`, and the status-message ID rotated.
+  A changed message ID is **not** independent evidence of subscriber
+  receipt or visual correctness.
+- **READ-ONLY PROMOTION PREFLIGHT / PASS:** current candidate
+  `0.5.13-hw` at `main` `88da3d7e7a3ce8d1ff50e7c178a1f674bf7df65f`
+  passed `scripts/promotion-check.py` against the restored
+  production `0.5.12-hw` and outage #11 baseline; exit 0, no errors.
+  This is a preflight, **not** permission to install the candidate.
+- **TELEGRAM DOCTOR / PASS:** read-only `app.py doctor` reported
+  `shelly=ok`, `sqlite=ok`, `telegram=ok` and confirmed the
+  destination type `channel`. No Telegram message was sent or edited.
+- **ROLLBACK READINESS:** existing rollback script `--dry-run`
+  validated the newest retained 0.5.11-hw snapshot checksum. Candidate
+  `install.sh --dry-run --non-interactive` passed and explicitly
+  planned a new versioned **0.5.12-hw** pre-upgrade source/SQLite
+  snapshot while preserving secrets. That new snapshot does not yet
+  exist; no rollback of candidate 0.5.13-hw has been exercised on live
+  hardware.
+- **PRIVATE EVIDENCE:** detailed read-only acceptance and promotion
+  reports remain under `/opt/shelly-voltage/validation/natural-baselines/`
+  on LXC 110, including `outage-11-natural-recovery-20261106.json`.
+  They are not committed to public source control.
+- **NEXT:** verify status editing/recovery visibly in the actual
+  Telegram channel with the owner; independently confirm acceptable
+  release and rollback behavior before a separately approved,
+  controlled 0.5.13-hw production promotion. Physical Pro 3EM /
+  3CT63 acceptance remains untested without that meter.
+
 ## 2026-11-06 05:53 Europe/Kyiv — backup freshness and live gate
 
 - **DONE / source-only:** PR #111 merged as
