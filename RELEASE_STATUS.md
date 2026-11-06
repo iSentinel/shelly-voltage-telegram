@@ -1,3 +1,23 @@
+## 2026-11-06 — recovery message replacement safety candidate
+
+- **Deployed:** production remains `0.5.13-hw`, Docker healthy
+  while Shelly offline under outage #13, no restart or
+  simulated electrical event. The physical recovery and
+  channel-visible Telegram acceptance gates remain open.
+- **Source candidate:** a review found that the recovery
+  handler removed the previous Telegram status before
+  attempting to publish a replacement. The proposed
+  source-only change preserves the old message until
+  the new one is confirmed, tracks a failed replacement
+  for retry across restart, and cancels it on a new
+  outage. Four new tests, 447/447 offline Python tests
+  and the pinned maintainability gate PASS.
+- **Release boundary:** this fixes a potential
+  transport-failure behavior in reviewed source; it
+  is not evidence that Telegram has delivered the
+  current outage #13 recovery. No installed version or
+  public release metadata changed.
+
 ## 2026-11-06 11:49 — host-safe recovery acceptance CLI merged
 
 - **Production:** installed `0.5.13-hw` remains Docker
