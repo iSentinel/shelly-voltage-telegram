@@ -1,3 +1,40 @@
+## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
+
+- **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`
+  remains Docker healthy, 0 restarts, /health HTTP 200,
+  /ready HTTP 503, Shelly offline under natural outage
+  #13 (opened 10:30:51). Last real sample 10:30:08
+  (235.7 V / 50 Hz) is stale. SQLite quick_check OK,
+  21,950 real measurements, zero artificial 0 V,
+  and no new Telegram poll/status errors. Private
+  baseline #13 mode 0600 unchanged. The user's
+  approximate 17:00 Kyiv restoration time is not
+  a verified event.
+- **SOURCE REVIEW:** the local diagnostic server did not
+  declare a cache policy for `/dashboard`, `/status.json`,
+  `/ready` and `/metrics`. Downstream clients or
+  intermediaries could retain earlier status content
+  after live device recovery.
+- **SOURCE-ONLY IMPROVEMENT:** send explicit
+  `Cache-Control: no-store, max-age=0` and
+  `Pragma: no-cache` on monitoring responses; also
+  set `X-Content-Type-Options: nosniff` and
+  `X-Frame-Options: DENY`. Set a restrictive
+  HTML-only Content-Security-Policy permitting
+  the existing inline CSS but no scripts,
+  frames or external resources. No secrets,
+  meters, database schema or Telegram behavior changed.
+- **QA:** three deterministic regression tests verify
+  cache, content-type and frame protections for
+  JSON, metrics and HTML and the HTML-only policy.
+  Full network-disabled, read-only Docker unit suite
+  **459/459 PASS**, Ruff and max-40-line function
+  quality gate PASS. Installed production is unchanged.
+- **NEXT:** require GitHub CI on Python 3.11/3.12/3.13,
+  then complete the natural #13 recovery baseline gate,
+  15-minute stable status, real channel visibility,
+  and controlled production upgrade only when safe.
+
 ## 2026-11-06 — Local Dashboard UI v1, source-only design phase
 
 - **Goal:** make the existing local read-only HTML dashboard useful

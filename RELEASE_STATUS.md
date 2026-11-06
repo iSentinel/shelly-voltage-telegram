@@ -1,3 +1,17 @@
+## 2026-11-06 — no-cache monitoring HTTP candidate
+
+- Read-only HTTP monitoring endpoints now send explicit
+  no-store/no-cache headers in source, with content-type
+  and frame protections. The local HTML dashboard applies
+  a restrictive policy that supports its inline CSS but
+  does not permit client-side JavaScript.
+- Isolated unit suite 459/459 PASS and Ruff/PEP8/
+  max-40-line gate PASS. Source-only; production
+  remains installed `0.5.13-hw` during Shelly outage #13.
+- Public release gates remain blocked pending genuine
+  Shelly recovery, Telegram status visibility, 15-minute
+  stability and controlled hardware acceptance.
+
 ## 2026-11-06 — responsive local dashboard candidate
 
 - A new source-only local Dashboard UI v1 provides responsive
