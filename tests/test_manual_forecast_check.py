@@ -311,6 +311,71 @@ class ManualForecastCheckerTests(unittest.TestCase):
         self.assertIn("Непроверенный прогноз", output.getvalue())
         self.assertIn("227.8 V", output.getvalue())
 
+    def test_only_observed_voltage_counts_in_planned_window(self):
+        """Observed samples prove presence at points, not continuous supply."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.executemany(
+                "insert into measurements values (?,?,?)",
+                [
+                    (timestamp("20:00:06"), 229.1, 50.0),
+                    (timestamp("20:00:16"), 231.4, 50.0),
+                    (timestamp("20:00:26"), 0.0, 50.0),
+                ],
+            )
+        forecast = CHECK.load_manual(self.forecast)
+        observed = datetime.fromisoformat("2026-11-06T20:00:30+02:00")
+        result = CHECK.observed_voltage_in_window(
+            self.database, forecast, observed
+        )
+        self.assertEqual(result["samples"], 2)
+        self.assertEqual(result["voltage_min_v"], 229.1)
+        self.assertEqual(result["voltage_max_v"], 231.4)
+        self.assertFalse(result["proves_continuous_supply"])
+
+    def test_no_samples_cannot_prove_mains_failure(self):
+        """An active forecast interval does not imply power loss."""
+
+        forecast = CHECK.load_manual(self.forecast)
+        observed = datetime.fromisoformat("2026-11-06T20:00:30+02:00")
+        report = CHECK.observed_voltage_in_window(
+            self.database, forecast, observed
+        )
+        self.assertEqual(report["samples"], 0)
+        self.assertIsNone(report["voltage_min_v"])
+        self.assertFalse(report["proves_continuous_supply"])
+
+    def test_observations_outside_forecast_not_attributed(self):
+        """Never attribute historical measurements to another forecast day."""
+
+        forecast = CHECK.load_manual(self.forecast)
+        observed = datetime.fromisoformat("2026-11-07T20:01:00+02:00")
+        report = CHECK.observed_voltage_in_window(
+            self.database, forecast, observed
+        )
+        self.assertEqual(report["samples"], 0)
+        self.assertIsNone(report["voltage_max_v"])
+
+    def test_history_report_never_overstates_continuous_supply(self):
+        """The human report distinguishes observations from an uptime claim."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute(
+                "insert into measurements values (?,?,?)",
+                (timestamp("20:00:05"), 230.0, 50.0),
+            )
+        forecast = CHECK.load_manual(self.forecast)
+        observed = datetime.fromisoformat("2026-11-06T20:00:10+02:00")
+        result = CHECK.compare(
+            forecast, CHECK.read_latest(self.database), observed
+        )
+        result["observed_in_planned_window"] = (
+            CHECK.observed_voltage_in_window(self.database, forecast, observed)
+        )
+        summary = CHECK.operator_summary(result, "en")
+        self.assertIn("1 Shelly samples", summary)
+        self.assertIn("not proof of continuous supply", summary)
+
     def test_help_is_available(self):
         """Make standalone CLI options discoverable with --help."""
 

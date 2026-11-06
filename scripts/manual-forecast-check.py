@@ -169,6 +169,46 @@ def compare(
     }
 
 
+def observed_voltage_in_window(
+    path: Path,
+    forecast: ManualForecast,
+    observed: datetime,
+) -> dict:
+    """Count measured-voltage samples inside an approximate forecast window."""
+
+    window = current_window(forecast, observed)
+    empty = {
+        "samples": 0,
+        "voltage_min_v": None,
+        "voltage_max_v": None,
+        "proves_continuous_supply": False,
+    }
+    if window is None:
+        return empty
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("SQLite database is missing or is a symlink")
+    start = local_stamp(date.fromisoformat(forecast.day), window[0])
+    end = min(
+        observed.timestamp(),
+        local_stamp(date.fromisoformat(forecast.day), window[1]),
+    )
+    uri = "file:" + quote(str(path.resolve())) + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=4)) as db:
+        count, low, high = db.execute(
+            "select count(*), min(voltage), max(voltage) "
+            "from measurements where ts >= ? and ts <= ? "
+            "and voltage > 0 and voltage < 500 "
+            "and frequency >= 40 and frequency <= 70",
+            (start, end),
+        ).fetchone()
+    return {
+        "samples": count,
+        "voltage_min_v": round(low, 1) if count else None,
+        "voltage_max_v": round(high, 1) if count else None,
+        "proves_continuous_supply": False,
+    }
+
+
 def operator_summary(result: dict, language: str = "uk") -> str:
     """Show forecast and measured evidence without an outage claim."""
 
@@ -192,6 +232,12 @@ def operator_summary(result: dict, language: str = "uk") -> str:
         lines.append(f"⚡ {measured}: {v:.1f} V / {f:.2f} Hz")
     else:
         lines.append(f"⚡ {unknown}")
+    evidence = result.get("observed_in_planned_window")
+    if evidence and evidence.get("samples"):
+        lines.append(
+            f"🔎 {evidence['samples']} Shelly samples in planned window; "
+            "not proof of continuous supply"
+        )
     lines.append(f"ℹ️ {disclaimer}")
     return "\n".join(lines)
 
@@ -210,6 +256,9 @@ def main() -> int:
             raise ValueError("--at must include a timezone offset")
         forecast = load_manual(args.forecast)
         result = compare(forecast, read_latest(args.db), now, args.max_age_sec)
+        result["observed_in_planned_window"] = observed_voltage_in_window(
+            args.db, forecast, now
+        )
     except (
         ValueError,
         TypeError,

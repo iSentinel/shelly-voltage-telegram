@@ -81,3 +81,17 @@ forecast_window_does_not_trigger_outage=true. RU/UK/EN human-readable
 summaries label forecast windows *approximate* and state that real
 timings may shift. Only recent valid Shelly voltage is displayed as
 measured evidence; an open connectivity gap hides the last value.
+
+
+## Measurement coverage inside an approximate scheduled window
+
+The read-only CLI also records the count and minimum/maximum of
+**valid observed voltage samples** within the user-supplied planned
+window up to the observation time. Samples outside that window and
+invalid 0 V placeholders are excluded.
+
+These observations establish measured voltage at individual moments,
+not uninterrupted electricity for the full window. Missing samples
+do not prove the mains are off. The report includes
+proves_continuous_supply=false, regardless of the count. The planned
+window does not trigger any Shelly or Telegram operations.
