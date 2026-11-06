@@ -1,3 +1,46 @@
+## 2026-11-06 11:49 Europe/Kyiv — outage #13 still open; recovery CLI host-path fix
+
+- **LIVE / FIELD:** LXC 110 installed production `0.5.13-hw`
+  remained healthy with zero Docker restarts. At 11:48 Shelly
+  was offline, /health HTTP 200 and /ready HTTP 503.
+  Outage #13 remained open since 10:30:51, with last valid
+  235.7 V at 10:30:08 now **stale**. SQLite quick_check OK,
+  21,950 samples and no synthetic 0 V. Existing private
+  baseline #13 unchanged and mode 0600. The 12 Telegram
+  failures remain historical, with no new poll/status errors
+  during this outage.
+- **QA / SOURCE-ONLY PR #142:** the read-only
+  `scripts/recovery-acceptance.py` now chooses
+  `/data/voltage.sqlite3` when mounted in Docker, otherwise
+  the host path `/var/lib/shelly-voltage/voltage.sqlite3`
+  when present. Explicit `--db` still takes priority,
+  and absent databases are not created. Four tests cover
+  host/container precedence, missing files and explicit
+  override. Full isolated network-disabled test suite
+  **441/441 PASS**, Ruff, PEP8 and 40-line function gate PASS.
+  GitHub CI Python 3.11/3.12/3.13 PASS and PR #142 merged
+  into `main` as `b6b552c`. Production not updated.
+- **FIELD CHECK / SOURCE ONLY:** executing the candidate
+  read-only baseline function without an explicit `--db`
+  on the real LXC correctly chose the host SQLite, returned
+  `status=pass`, identified open outage #13 and did not
+  expose the raw Telegram message ID. This checks the
+  path and open-outage baseline only; it is **not**
+  evidence of successful recovery or Telegram delivery.
+  Do not overwrite the original accepted private baseline.
+- **BACKUPS / PASS:** latest three retained daily archives
+  passed checksum and temporary SQLite restoration, with
+  newest under 36 hours (source-only newest-age policy).
+- **RECOVERY FOLLOW-UP:** existing enabled hourly read-only
+  task retains the correct outage #13 baseline and
+  Europe/Kyiv timezone. Approximate user-provided
+  electricity restoration time 17:00 remains tentative.
+  After natural reconnection require real new samples,
+  outage closure, /ready HTTP 200, explicit recovery
+  verifier PASS, separate 15-minute stable-status
+  verification and operator-visible Telegram channel check.
+  No artificial outage or production restart.
+
 ## 2026-11-06 11:22 Europe/Kyiv — offline release gate and installer dry run
 
 - **LIVE STATE:** outage #13 remained open from 10:30:51 Kyiv.
