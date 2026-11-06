@@ -1,3 +1,34 @@
+## 2026-11-06 — 0.5.13-hw installed for owner-approved production testing
+
+- **Running installation:** 0.5.13-hw from source commit
+  `fd45c42fb01aad7035443a142bba4e9aa4bf56d5` on Proxmox
+  LXC 110, installed at 08:39 Kyiv. Docker healthy, 0 restarts,
+  HTTP `/ready=200`, Shelly Pro EM-50 online with live 50.0 Hz
+  voltage readings. New measurements continue, SQLite quick_check OK,
+  no open outages and no fabricated zero voltage samples.
+- **Postinstall preservation:** all six monitored configuration
+  and secrets files had unchanged SHA256 values. Telegram status
+  edit window remains 10 minutes; default pinning remains off.
+  Read-only bot doctor: Shelly, SQLite and Telegram all OK.
+- **Pre-upgrade recovery:** private 0.5.12-hw rollback snapshot
+  created during the installer; source/SQLite SHA256 checks PASS,
+  bounded SQLite temporary restore PASS (21,315 samples),
+  `rollback.sh --dry-run --no-start` PASS. No live rollback
+  has been performed.
+- **Release metadata:** `VERSION=0.5.13-hw` is the installed
+  test build. `RELEASE_VERSION=0.5.12-hw` is still the public
+  release; `LIVE_VERSION=0.5.6-hw` is a historical acceptance
+  marker. Do not mark the candidate fully approved or publicly
+  release it solely because installation and hardware polling work.
+- **Pending operator check:** view `/status` and `/preview` in
+  the administrator's private Telegram chat, inspect the status
+  channel for visible text/edit correctness, and verify behavior
+  during natural transitions. Telegram API OK does not prove
+  subscriber-visible delivery.
+- **Private report:** on-host 0600
+  `validation/2026-11-06-post-install-0.5.13-hw-acceptance.json`;
+  no private data added to this repository.
+
 ## 2026-11-06 — candidate rollback SQLite preflight complete
 
 - **Candidate source:** `0.5.13-hw`, including merged PR #124
