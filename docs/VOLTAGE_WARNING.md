@@ -28,3 +28,25 @@ TODO before enabling on hardware:
   undervoltage from a network communication loss
 - Operator acceptance of a naturally occurring low-voltage event
 - Preserve existing 180/185 critical-alert behavior and settings
+
+
+## Read-only historical replay
+
+A one-shot CLI verifies the proposed policy using existing SQLite
+measurements without sending messages or writing any database rows.
+It always simulates opt-in settings and does not change live settings.
+
+    python scripts/warning-replay.py --help
+    python scripts/warning-replay.py --db /var/lib/shelly-voltage/voltage.sqlite3 --hours 12
+    python scripts/warning-replay.py --db /var/lib/shelly-voltage/voltage.sqlite3 --hours 6 --dwell-sec 300 --json
+
+Limits: 1–24 hours, <=8,640 samples, read-only database access,
+no symlinks, no background activity. PASS describes simulation only.
+All reported event times use Europe/Kyiv.
+
+**Important:** the existing Telegram alert-level mechanism already
+has warning_low=207 V, alert_dwell=15 seconds and recovery_dwell=30
+seconds, with alerts enabled on the observed live installation.
+The proposed slower, optional state machine must *reuse* the existing
+notification lifecycle if integrated; do not create a second public
+notification for the same voltage transition.
