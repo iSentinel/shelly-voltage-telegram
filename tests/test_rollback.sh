@@ -75,6 +75,10 @@ PY
 
 gzip -c "$TMP/old.sqlite3" > "$SNAP/voltage-old.sqlite3.gz"
 sha256sum "$SNAP/voltage-old.sqlite3.gz" > "$SNAP/voltage-old.sqlite3.gz.sha256"
+python3 "$PROJECT/scripts/validate-rollback-snapshot.py" \
+    --snapshot "$SNAP" > "$TMP/sqlite-content.log"
+grep -q "SNAPSHOT CONTENT PASS" "$TMP/sqlite-content.log"
+echo "ROLLBACK_SQLITE_CONTENT_PREFLIGHT=PASS"
 
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
