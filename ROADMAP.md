@@ -1,3 +1,45 @@
+## 2026-11-06 09:08 Europe/Kyiv — real elevated voltage and threshold QA
+
+- **FIELD / LIVE:** with the installed `0.5.13-hw` hotfix, Shelly
+  Pro EM-50 remained online at 245.9 V / 50.0 Hz.
+  Read-only SQLite windows: last 5 minutes 243.7–250.6 V
+  (average 246.12), last 15 minutes 243.7–251.0 V,
+  last 30 minutes 237.7–251.8 V, and last 60 minutes
+  232.9–251.8 V. No sample reached the configured 253 V
+  warning or 255 V critical threshold. SQLite quick_check
+  OK, 21,489 rows, no fake 0 V and no open outage;
+  Docker healthy/0 restarts, `/ready=200`,
+  Telegram watchdog failures 0.
+- **CONFIG / READ ONLY:** active warning/critical upper limits
+  253/255 V and lower limits 207/190 V; warnings enabled,
+  alert dwell 15 seconds, recovery dwell 30 seconds,
+  language Ukrainian, ten-minute edit window and no
+  automatic pinning. No voltage thresholds or electrical
+  hardware were changed.
+- **SCREENSHOT / PARTIAL TELEGRAM ACCEPTANCE:** the operator's
+  private Telegram screenshot at 09:05–09:06 demonstrates that
+  `/preview`, `/status` and `/start` generated readable
+  Ukrainian voltage/status responses (about 244.9 V),
+  and the preview explicitly stated it did not change
+  the public status-channel message. This is not evidence
+  of repeated-button no-op edit behavior or subscriber-wide
+  channel delivery. The image remains private.
+- **QA / SOURCE ONLY:** added regression cases for the
+  exact 253.0 V warning and 255.0 V critical boundaries,
+  15-second alert dwell, 30-second recovery dwell, and
+  a transient 253.5 V spike reverting below threshold
+  without generating an alert. All 424/424 isolated
+  network-disabled Docker unit tests and pinned Ruff
+  quality gate PASS. No artificial readings were sent
+  to production or Telegram.
+- **NEXT:** independently verify a harmless repeated
+  status/menu callback in the private admin chat, observe
+  the bot during any naturally occurring over-voltage
+  transition and confirm status-channel visibility.
+  Do not simulate outages, adjust device relays or
+  reduce thresholds without operator authorization.
+  Real Pro 3EM / 3CT63 acceptance stays separate.
+
 ## 2026-11-06 08:58 Europe/Kyiv — production Telegram no-op edit hotfix
 
 - **FIX / DONE:** after owner-approved installation of `0.5.13-hw`,
