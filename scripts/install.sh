@@ -93,6 +93,8 @@ snapshot_upgrade() {
         "$old_version" "$(tr -d '\n' < "$SOURCE/VERSION")" \
         > "$snapshot/manifest.env"
     sha256sum "$snapshot/source.tar.gz" > "$snapshot/source.tar.gz.sha256"
+    python3 "$SOURCE/scripts/validate-rollback-snapshot.py" \
+        --snapshot "$snapshot"
     find /var/backups/shelly-voltage/upgrades -mindepth 1 -maxdepth 1 \
         -type d -printf '%T@ %p\n' | sort -nr | awk 'NR > 5 {print $2}' | \
         xargs -r rm -rf
