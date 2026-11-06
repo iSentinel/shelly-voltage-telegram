@@ -50,3 +50,19 @@ seconds, with alerts enabled on the observed live installation.
 The proposed slower, optional state machine must *reuse* the existing
 notification lifecycle if integrated; do not create a second public
 notification for the same voltage transition.
+
+
+## Proposed settings schema (not wired to the live bot)
+
+Pure helpers policy_to_settings and policy_from_settings round-trip
+six opt-in keys: early_warning_enabled, early_warning_below_v,
+early_warning_clear_v, early_warning_dwell_sec,
+early_warning_clear_sec, and early_warning_max_gap_sec.
+The initial enabled value is 0. Unknown keys are ignored, but known
+keys must pass strict type/range and hysteresis checks. This is a
+**proposal for future audited SQLite metadata**, not a change to the
+running Telegram settings UI, .env or production database.
+
+overlaps_existing_alert flags the common case in which adding a second
+channel notification would duplicate the existing 207 V level alert.
+It does not disable existing notifications and makes no API calls.

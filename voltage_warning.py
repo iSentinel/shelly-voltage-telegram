@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 
@@ -122,3 +123,62 @@ def evaluate_recovery(
         clear_since=None if cleared else since,
     )
     return updated, "warning_cleared" if cleared else None
+
+
+SETTINGS_PREFIX = "early_warning_"
+
+
+def policy_to_settings(policy: WarningPolicy) -> dict[str, str]:
+    """Serialize an advisory policy as plain, auditable setting values."""
+
+    validate_policy(policy)
+    return {
+        f"{SETTINGS_PREFIX}enabled": "1" if policy.enabled else "0",
+        f"{SETTINGS_PREFIX}below_v": f"{policy.below_v:g}",
+        f"{SETTINGS_PREFIX}clear_v": f"{policy.clear_v:g}",
+        f"{SETTINGS_PREFIX}dwell_sec": str(policy.dwell_sec),
+        f"{SETTINGS_PREFIX}clear_sec": str(policy.clear_sec),
+        f"{SETTINGS_PREFIX}max_gap_sec": str(policy.max_sample_gap_sec),
+    }
+
+
+def policy_from_settings(values: Mapping[str, str]) -> WarningPolicy:
+    """Read strict opt-in settings without altering existing alert policy."""
+
+    defaults = policy_to_settings(WarningPolicy())
+    merged = {
+        name: values.get(name, default) for name, default in defaults.items()
+    }
+    enabled = merged[f"{SETTINGS_PREFIX}enabled"]
+    if enabled not in {"0", "1"}:
+        raise ValueError("early-warning enabled flag must be 0 or 1")
+    try:
+        policy = WarningPolicy(
+            enabled=enabled == "1",
+            below_v=float(merged[f"{SETTINGS_PREFIX}below_v"]),
+            clear_v=float(merged[f"{SETTINGS_PREFIX}clear_v"]),
+            dwell_sec=int(merged[f"{SETTINGS_PREFIX}dwell_sec"]),
+            clear_sec=int(merged[f"{SETTINGS_PREFIX}clear_sec"]),
+            max_sample_gap_sec=int(merged[f"{SETTINGS_PREFIX}max_gap_sec"]),
+        )
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("invalid early-warning settings") from exc
+    validate_policy(policy)
+    return policy
+
+
+def overlaps_existing_alert(
+    policy: WarningPolicy,
+    existing_low_v: float,
+    existing_enabled: bool,
+) -> bool:
+    """Flag proposed extra messages already covered by live level alerts."""
+
+    validate_policy(policy)
+    if not math.isfinite(existing_low_v):
+        raise ValueError("existing alert threshold must be finite")
+    return (
+        policy.enabled
+        and existing_enabled
+        and policy.below_v <= existing_low_v
+    )
