@@ -57,3 +57,16 @@ Source inspiration (reviewed, not bundled as a separate bot):
 - https://github.com/mr-devboy/dtek-monitor
 - https://github.com/mr-devboy/power-monitor
 - https://github.com/antondziuin/DtekSchedulePowerOutSenderBotHelper
+
+
+## DTEK anti-automation challenge
+
+The live HTTP response from Kyiv's shutdowns page on 2026-11-06
+was 212 bytes with an _Incapsula_Resource script and no schedule.
+HTTP 200 in this case **does not mean success**. The parser rejects
+this response with a recognized provider-challenge diagnostic, leaving
+the last valid cache untouched. Never bypass the provider's protection
+or silently replace unknown status with a "no planned outages" claim.
+
+The /schedule command localizes unavailable, unconfigured, empty
+schedule and source-disclaimer text in Russian, Ukrainian and English.

@@ -26,11 +26,38 @@ CACHE_MAX_BYTES = 512 * 1024
 CACHE_MAX_AGE = timedelta(hours=2)
 
 
+MESSAGES = {
+    "ru": (
+        "ДТЭК: укажите DTEK_REGION и DTEK_GROUP в настройках.",
+        "ДТЭК: график недоступен. Сведения об отключениях неизвестны.",
+        "Плановые отключения ДТЭК",
+        "✅ По опубликованному графику отключений нет",
+        "ℹ️ Прогноз ДТЭК, не фактические показания Shelly.",
+    ),
+    "uk": (
+        "ДТЕК: укажіть DTEK_REGION і DTEK_GROUP у налаштуваннях.",
+        "ДТЕК: графік недоступний. Інформація про відключення невідома.",
+        "Планові відключення ДТЕК",
+        "✅ За оприлюдненим графіком відключень немає",
+        "ℹ️ Прогноз ДТЕК, а не фактичні показники Shelly.",
+    ),
+    "en": (
+        "DTEK: set DTEK_REGION and DTEK_GROUP in settings.",
+        "DTEK: schedule unavailable. Outage information is unknown.",
+        "DTEK scheduled outages",
+        "✅ No outages in the published schedule",
+        "ℹ️ DTEK forecast, not live measurements from Shelly.",
+    ),
+}
+
+
 def extract_schedule(html: str) -> dict:
     """Decode the DTEK fact object with bounded input and JSON parsing."""
 
     if len(html) > 2_000_000:
         raise ValueError("DTEK source HTML exceeds size limit")
+    if "_Incapsula_Resource" in html or "incapsula" in html.lower():
+        raise ValueError("DTEK anti-bot challenge; no schedule available")
     marker = re.search(r"\bfact\s*=\s*\{", html)
     if marker is None:
         raise ValueError("DTEK schedule data not found")
@@ -135,22 +162,20 @@ def get_schedule(
 
 
 def format_schedule(language: str, region: str, group: str) -> str:
-    """Format a forecast, preserving unknown state when source is absent."""
+    """Format a localized forecast, preserving unknown provider state."""
 
+    missing, unavailable, title, empty, disclaimer = MESSAGES.get(
+        language, MESSAGES["ru"]
+    )
     if not region or not group:
-        return "ДТЭК: укажите DTEK_REGION и DTEK_GROUP в настройках."
+        return missing
     try:
         day, periods = get_schedule(region, group)
     except (ValueError, OSError, UnicodeError, json.JSONDecodeError):
-        return "ДТЭК: график недоступен. Сведения об отключениях неизвестны."
-    titles = {
-        "ru": "Плановые отключения",
-        "uk": "Планові відключення",
-        "en": "Scheduled outages",
-    }
-    lines = [f"📅 {titles.get(language, titles['ru'])} ДТЭК · {day} · {group}"]
+        return unavailable
+    lines = [f"📅 {title} · {day} · {group}"]
     lines.extend(f"🪫 {start}–{end}" for start, end in periods)
     if not periods:
-        lines.append("✅ По опубликованному графику отключений нет")
-    lines.append("ℹ️ Прогноз ДТЭК, не фактические показания Shelly.")
+        lines.append(empty)
+    lines.append(disclaimer)
     return "\n".join(lines)

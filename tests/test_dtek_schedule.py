@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
 import tempfile
 import types
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -65,6 +67,100 @@ class DtekScheduleTests(unittest.TestCase):
     def test_empty_dtek_page_is_not_an_empty_schedule(self):
         with self.assertRaisesRegex(ValueError, "not found"):
             dtek.extract_schedule("<html></html>")
+
+    def test_incapsula_challenge_is_not_a_valid_schedule(self):
+        """HTTP 200 challenge HTML must never be treated as outage data."""
+
+        html = (
+            '<html><script src="/_Incapsula_Resource?challenge">'
+            "</script></html>"
+        )
+        with self.assertRaisesRegex(ValueError, "anti-bot"):
+            dtek.extract_schedule(html)
+
+    def test_challenge_does_not_replace_last_valid_cache(self):
+        """Keep a previous snapshot when the official page blocks access."""
+
+        self.write_cache(example_cache(self.now))
+        original = self.path.read_bytes()
+        fixture = Path(self.tmp.name) / "blocked.html"
+        fixture.write_text("<script src='/_Incapsula_Resource'>")
+        argv = [
+            "collector",
+            "--region",
+            "k",
+            "--fixture-html",
+            str(fixture),
+            "--output",
+            str(self.path),
+        ]
+        result = io.StringIO()
+        with patch.object(sys, "argv", argv), redirect_stdout(result):
+            self.assertEqual(COLLECTOR.main(), 1)
+        self.assertIn("provider-challenge", result.getvalue())
+        self.assertEqual(self.path.read_bytes(), original)
+
+    def test_unconfigured_is_translated_for_all_languages(self):
+        """Avoid Russian-only fallbacks for existing supported locales."""
+
+        expected = {"ru": "укажите", "uk": "укажіть", "en": "set"}
+        for language, fragment in expected.items():
+            with self.subTest(language=language):
+                text = dtek.format_schedule(language, "", "")
+                self.assertIn(fragment, text)
+
+    def test_schedule_unavailable_is_translated(self):
+        """Unknown provider state must be clear in RU, UK and EN."""
+
+        expected = {
+            "ru": "график недоступен",
+            "uk": "графік недоступний",
+            "en": "schedule unavailable",
+        }
+        with patch.object(dtek, "get_schedule", side_effect=ValueError):
+            for language, fragment in expected.items():
+                with self.subTest(language=language):
+                    self.assertIn(
+                        fragment, dtek.format_schedule(language, "k", "1.2")
+                    )
+
+    def test_published_intervals_are_translated(self):
+        """Date, group and outage windows remain visible in every language."""
+
+        expected = {
+            "ru": "Плановые",
+            "uk": "Планові",
+            "en": "scheduled",
+        }
+        with patch.object(
+            dtek,
+            "get_schedule",
+            return_value=("2026-11-06", [("14:00", "18:00")]),
+        ):
+            for language, fragment in expected.items():
+                with self.subTest(language=language):
+                    text = dtek.format_schedule(language, "k", "1.2")
+                    self.assertIn(fragment.lower(), text.lower())
+                    self.assertIn("14:00–18:00", text)
+                    self.assertIn("1.2", text)
+
+    def test_no_outages_is_translated_only_for_valid_schedule(self):
+        """Empty schedule from a validated source is a distinct state."""
+
+        expected = {
+            "ru": "отключений нет",
+            "uk": "відключень немає",
+            "en": "No outages",
+        }
+        with patch.object(
+            dtek,
+            "get_schedule",
+            return_value=("2026-11-06", []),
+        ):
+            for language, fragment in expected.items():
+                with self.subTest(language=language):
+                    text = dtek.format_schedule(language, "k", "1.2")
+                    self.assertIn(fragment, text)
 
     def test_half_hour_windows_are_merged(self):
         hours = {str(hour): "yes" for hour in range(1, 25)}

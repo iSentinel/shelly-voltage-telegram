@@ -123,7 +123,9 @@ def main() -> int:
         print("PASS: DTEK snapshot validated; dry_run=", args.dry_run)
         return 0
     except Exception as exc:  # Never publish a partial cache on failure.
-        print("FAIL: DTEK schedule unavailable", type(exc).__name__)
+        challenge = isinstance(exc, ValueError) and "anti-bot" in str(exc)
+        reason = "provider-challenge" if challenge else type(exc).__name__
+        print("FAIL: DTEK schedule unavailable", reason)
         return 1
 
 
