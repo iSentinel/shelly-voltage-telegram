@@ -109,11 +109,34 @@ bot's send/edit API results and channel permissions **read-only** before
 considering a diagnostic message. Do not alter or simulate the physical
 power state to reproduce an outage.
 
+## 2026-11-06 — installed 0.5.13-hw operator acceptance
+
+The owner authorized a controlled production installation of
+`0.5.13-hw` on LXC 110 at 08:39 Europe/Kyiv. Real Shelly Pro EM-50
+polling, Docker health/readiness, SQLite integrity and a private
+0.5.12-hw rollback snapshot passed post-install tests. The Telegram
+doctor reported API access OK, but this does **not** establish that
+a new 0.5.13-hw status was visible or edited in the channel.
+
+The channel administrator can now test `/status` and `/preview`
+in the **private chat**. Check voltage/time accuracy, Ukrainian or
+selected-language labels, clarity of connectivity versus voltage
+restoration, and whether an existing visible status is reused or
+edited without unexpected duplicates. Compare the operator's
+visible result with actual new version timestamps. Do not simulate
+a mains outage or insert synthetic voltage readings.
+
+Record the visible result as PASS/FAIL/NOT FOUND and keep any
+screenshot private. A bot doctor PASS, a restarted container or
+a new database record is not proof of subscriber-visible message
+delivery. Do not mark Telegram delivery fully accepted until the
+operator has checked it.
+
 ## Release gate
 
-The production monitor remains on published `0.5.12-hw`. Candidate
-`0.5.13-hw` has passed isolated, synthetic-sensor Docker tests, but
-visible Telegram delivery and live hardware acceptance for that
-candidate are still separate requirements. Do not turn on automatic
-installation or promote a release solely because API access and
-SQLite recovery checks passed.
+The runtime is now `0.5.13-hw` under supervised production testing,
+but the last **published** release is still `0.5.12-hw`.
+The historical `LIVE_VERSION=0.5.6-hw` acceptance marker remains
+unchanged. Public promotion is separate from installation and
+requires the operator's visible-message acceptance. Pro 3EM/3CT63
+support also remains pending physical testing on those models.
