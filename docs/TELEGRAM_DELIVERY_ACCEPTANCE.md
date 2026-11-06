@@ -1,3 +1,28 @@
+## 2026-11-06 — natural low-voltage and Shelly outage #12
+
+A genuine Pro EM-50 measurement triggered `warning_low`
+at 205.0 V around 10:08:33 Kyiv. The warning was saved
+in private SQLite metadata and the stable Telegram status
+message identifier remained present. No new Telegram transport
+errors were found during that check. These are **internal**
+delivery indicators, not proof that a subscriber saw the
+status-channel message.
+
+Shelly connectivity was then lost from 10:16:51 to 10:20:01
+(outage #12, 190.4 seconds). The last voltage sample before
+disconnect was stale and must not be displayed as a current
+measurement; do not equate connectivity loss with confirmed
+mains failure. Two real readings during the reconnection
+hysteresis were retained, followed by normal polling.
+No zero-voltage readings were synthesized.
+
+**Outstanding operator check:** inspect the status channel
+for the naturally occurring low-voltage warning, offline
+status and subsequent recovery. Verify the timestamps and
+whether the same status was edited as configured. Do not
+create a fake outage, edit the device's voltage thresholds
+or claim that private API checks prove subscriber visibility.
+
 ## 2026-11-06 — transport health versus cumulative polling errors
 
 During supervised testing of installed `0.5.13-hw`, Telegram
