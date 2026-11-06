@@ -112,6 +112,28 @@ class ManualForecastCheckerTests(unittest.TestCase):
         self.assertFalse(result["actual_mains_outage_verified"])
         self.assertIsNone(result["voltage_v"])
 
+    def test_open_gap_hides_even_very_recent_measurement(self):
+        """Connection loss makes voltage unknown regardless of sample age."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute(
+                "insert into outages values (?,NULL)",
+                (timestamp("20:00:02"),),
+            )
+        result = self.compare("20:00:05")
+        self.assertEqual(result["predicted_window"], ["20:00", "24:00"])
+        self.assertEqual(result["measurement"], "unknown_or_stale")
+        self.assertIsNone(result["voltage_v"])
+        self.assertIsNone(result["sample_age_sec"])
+        self.assertEqual(result["connectivity_gaps_open"], 1)
+
+    def test_non_object_json_is_rejected(self):
+        """Malformed manual cache objects fail with an actionable error."""
+
+        self.forecast.write_text("[]")
+        with self.assertRaisesRegex(ValueError, "object"):
+            CHECK.load_manual(self.forecast)
+
     def test_provider_verified_flag_rejected(self):
         """Manual data must not masquerade as official DTEK information."""
 

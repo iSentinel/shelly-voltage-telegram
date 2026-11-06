@@ -45,6 +45,8 @@ def load_manual(path: Path) -> ManualForecast:
     if not path.is_file() or path.is_symlink() or path.stat().st_size > 16384:
         raise ValueError("manual forecast file is unavailable or oversized")
     data = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise ValueError("manual forecast root must be an object")
     if data.get("source") not in ALLOWED_SOURCES:
         raise ValueError("forecast source is not the manual source")
     if data.get("source_verified", data.get("provider_verified")) is not False:
@@ -115,6 +117,7 @@ def compare(
         and 0 < voltage < 500
         and math.isfinite(frequency)
         and 40 <= frequency <= 70
+        and open_gaps == 0
     )
     window = current_window(forecast, observed)
     return {

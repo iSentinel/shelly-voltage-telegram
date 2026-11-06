@@ -41,3 +41,13 @@ latest SQLite voltage sample and reports **separate evidence**:
 A source_verified flag set to true causes FAIL. This tool must not
 be integrated into automatic public channel publishing without
 private-admin review and source-specific consent.
+
+
+## Connectivity race at the forecast boundary
+
+A recently recorded voltage is **not** a current reading if Shelly
+has already entered an open connectivity gap. The checker suppresses
+the voltage and sample age whenever any open connectivity gap exists,
+even if the preceding measured sample is younger than max-age-sec.
+This prevents the 20:00 boundary from showing stale mains readings
+after communication has just failed.
