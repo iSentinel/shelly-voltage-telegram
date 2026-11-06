@@ -1,3 +1,39 @@
+## 2026-11-06 05:44 Europe/Kyiv — isolated candidate hardware simulation
+
+- **DONE / candidate-only:** built `0.5.13-hw` from GitHub `main`
+  `fcf33e8570ede3905e3f8839d39a7861e3198eae` inside
+  standalone QA LXC 111. Test device was a local synthetic Pro EM-50
+  HTTP RPC mock on a private Docker `--internal` network. No
+  production secrets, Telegram token, Shelly access, or host port
+  publishing were provided.
+- **PASS / synthetic:** HTTP readiness started true at 230 V / 50 Hz;
+  three consecutive failed polls caused offline readiness HTTP 503
+  and one open connectivity outage. Mock recovery restored readiness,
+  closed that exact outage, and resumed fresh samples.
+- **PASS / synthetic low voltage:** a 196 V / 49.9 Hz test input
+  produced five measurements below the 207 V warning threshold;
+  returning the fixture to 230 V resumed normal measurements.
+  Telegram was disabled, so no alarm delivery or channel-message
+  edit was demonstrated by this test.
+- **PASS / stale-safe:** on a second mock connectivity loss, exported
+  Prometheus voltage/frequency gauges became `NaN`, not a replay of
+  the last voltage or a false 0 V. After recovery the readings were
+  restored, and both recorded outages were closed.
+- **Final QA evidence:** 232 synthetic measurements, two closed
+  outages, zero open outages, zero fabricated 0 V samples, and
+  SQLite `PRAGMA quick_check=ok`. Local-only report at
+  `/root/shelly-candidate-qa-20261106/acceptance.json` (LXC 111).
+- **Cleanup:** the temporary candidate, fake RPC, Docker network and
+  candidate image were removed. The original `shelly-qa-monitor`
+  remains healthy with zero restarts. Production LXC 110 was not
+  changed and remains on public `0.5.12-hw`.
+- **NEXT / physical acceptance:** outage #11 on the real Shelly
+  remains open as of the latest 05:36 check. Wait for natural
+  restoration, verify the captured outage baseline, fresh voltage,
+  stable-message rotation and actual Telegram recipient receipt.
+  A software simulation must not be treated as real hardware or
+  Telegram delivery acceptance. Do not auto-promote `0.5.13-hw`.
+
 ## 2026-11-06 04:46 Europe/Kyiv Gateway continuation checkpoint
 
 - **DONE / source only:** PR #107 merged as `d471212219a2b78f6f464a3d28937ef847c93055`.

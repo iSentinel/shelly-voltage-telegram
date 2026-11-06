@@ -1,3 +1,23 @@
+## 2026-11-06 — isolated 0.5.13-hw synthetic hardware smoke
+
+- Source commit: `fcf33e8570ede3905e3f8839d39a7861e3198eae`
+  (`main` at time of test); image built only in isolated QA LXC 111.
+- PASS: synthetic Pro EM-50 230 V / 50 Hz, a three-failure
+  connectivity outage and automatic recovery. Repeated loss/recovery
+  gave two fully closed outages and zero fabricated 0 V samples.
+- PASS: five synthetic 196 V / 49.9 Hz samples and return to 230 V.
+- PASS: offline Prometheus gauges changed to `NaN`; online gauges
+  resumed. Final database: 232 measurements, SQLite quick_check OK.
+- Telegram was disabled and no physical device or power source was
+  manipulated. This is **not** evidence of real Telegram message
+  receipt, pin/edit behavior or natural voltage-threshold acceptance.
+- Isolated candidate containers/network/image were cleaned up,
+  original QA monitor remained healthy (0 restarts); no deployment
+  to production `0.5.12-hw`.
+- Real Shelly outage #11 is still awaiting natural recovery and
+  administrator-confirmed Telegram acceptance before a controlled
+  `0.5.13-hw` promotion can be considered.
+
 ## 2026-11-06 — 0.5.13-hw candidate source verification
 
 - `0.5.13-hw` is a **source-only candidate**, not a public release
