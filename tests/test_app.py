@@ -2806,6 +2806,58 @@ class AdvancedFeatureTests(unittest.TestCase):
                 APP.metrics_text(monitor),
             )
 
+    def test_three_phase_live_readings_hide_offline_voltage(self):
+        """Offline L2 must not appear as a current 3EM measurement."""
+
+        monitor = APP.Monitor(config(shelly_meter_type="pro3em"))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            for phase, voltage in (
+                ("L1", 229.0),
+                ("L2", 231.0),
+                ("L3", 233.0),
+            ):
+                monitor.phase_states[phase].success(voltage, 50.0, 3.0)
+        with patch.object(APP.time, "time", return_value=1010.0):
+            monitor.phase_states["L2"].error("offline", offline_after=1)
+            snapshot = APP.service_snapshot(monitor)
+        phases = snapshot["phases"]
+        self.assertEqual(phases["L2"]["voltage"], 231.0)
+        self.assertIsNone(phases["L2"]["live_voltage"])
+        self.assertIsNone(phases["L2"]["live_frequency"])
+        self.assertTrue(phases["L2"]["sample_is_stale"])
+        self.assertEqual(phases["L2"]["sample_age_seconds"], 10.0)
+        self.assertEqual(phases["L1"]["live_voltage"], 229.0)
+        self.assertEqual(phases["L3"]["live_voltage"], 233.0)
+
+    def test_three_phase_recovery_and_age_boundaries(self):
+        """Only fresh recovered phase values are safe as live telemetry."""
+
+        monitor = APP.Monitor(config(shelly_meter_type="pro3em"))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.phase_states["L2"].success(225.0, 50.0, 3.0)
+        with patch.object(APP.time, "time", return_value=1050.0):
+            aged = APP.service_snapshot(monitor)["phases"]["L2"]
+        self.assertIsNone(aged["live_voltage"])
+        self.assertTrue(aged["sample_is_stale"])
+        with patch.object(APP.time, "time", return_value=1060.0):
+            monitor.phase_states["L2"].error("offline", offline_after=1)
+            monitor.phase_states["L2"].success(
+                226.5, 49.9, 3.0, recovery_after=2
+            )
+            recovered = APP.service_snapshot(monitor)["phases"]["L2"]
+        self.assertEqual(recovered["connectivity"], "recovering")
+        self.assertEqual(recovered["live_voltage"], 226.5)
+        self.assertEqual(recovered["live_frequency"], 49.9)
+        self.assertFalse(recovered["sample_is_stale"])
+
+    def test_unconfigured_phase_snapshot_remains_compatible(self):
+        """An absent phase must not invent an electrical measurement."""
+
+        monitor = APP.Monitor(config(shelly_meter_type="pro_em50"))
+        snapshot = APP.service_snapshot(monitor)["phases"]
+        self.assertEqual(snapshot["L2"], {"connectivity": "not_configured"})
+        self.assertEqual(snapshot["L3"], {"connectivity": "not_configured"})
+
     def test_phase_metrics_and_watchdog(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "metrics.sqlite3"

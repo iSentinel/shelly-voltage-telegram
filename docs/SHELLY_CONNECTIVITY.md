@@ -87,6 +87,12 @@ them from live telemetry:
 - `sample_age_seconds` reports the age of the last valid reading
   in seconds, or `null` before the first successful sample.
 
+The same current-versus-cached fields are also available for each
+configured `phases.L1`, `phases.L2` and `phases.L3` entry, so a
+multi-phase dashboard can distinguish an offline line from a live
+line. An unconfigured phase remains
+`{"connectivity": "not_configured"}` without invented measurements.
+
 New dashboards should use `live_voltage` and
 `sample_is_stale` instead of displaying cached `voltage`
 as current. The existing `/ready` HTTP 503 behavior and
