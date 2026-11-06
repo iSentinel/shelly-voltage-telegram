@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -39,7 +40,7 @@ def make_source(
 def make_database(path: Path, extra_bytes: int = 0) -> bytes:
     """Create a disposable SQLite database with a single voltage reading."""
 
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.execute("CREATE TABLE measurements(voltage REAL NOT NULL)")
         db.execute("INSERT INTO measurements VALUES (220.0)")
         if extra_bytes:
