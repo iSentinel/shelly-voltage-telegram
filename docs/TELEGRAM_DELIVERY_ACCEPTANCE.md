@@ -1,3 +1,45 @@
+## 2026-11-06 — read-only Gateway baseline for Shelly outage #13
+
+At 10:30:51 Europe/Kyiv the live Shelly lost connectivity
+again. A recovery baseline was captured while outage #13
+was still open, so a later comparison can verify the **same**
+event, fresh samples, readiness and rotation of the stable
+Telegram message. This does not prove mains power failed
+or that subscribers saw a channel alert.
+
+When running the recovery acceptance script on **LXC 110
+outside Docker**, the default `/data/voltage.sqlite3` is
+a *container-only* path. Always explicitly give the actual
+host database path **before the subcommand**:
+
+```bash
+umask 077
+python3 /opt/shelly-voltage/scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  baseline \
+  --output /opt/shelly-voltage/validation/natural-baselines/outage-13-20261106-baseline.json
+```
+
+After connectivity is restored, use the matching saved
+baseline with the **read-only** verification command:
+
+```bash
+python3 /opt/shelly-voltage/scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  verify \
+  --baseline /opt/shelly-voltage/validation/natural-baselines/outage-13-20261106-baseline.json \
+  --output /opt/shelly-voltage/validation/natural-baselines/outage-13-20261106-recovery-check.json
+```
+
+Keep these files private (mode 0600) and check the
+`status` field and exit code; **FAIL while offline or
+before Telegram status rotation is expected**. Do not
+replace an earlier failed report with a fabricated PASS.
+A previous stable recovery baseline for outage #12
+was interrupted by outage #13 and must not be counted
+as a completed fifteen-minute stability check. A real
+channel-view check remains a separate acceptance step.
+
 ## 2026-11-06 — natural low-voltage and Shelly outage #12
 
 A genuine Pro EM-50 measurement triggered `warning_low`
