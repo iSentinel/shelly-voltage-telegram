@@ -9,7 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts/validate-sqlite-archive.py"
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts/validate-sqlite-archive.py"
 
 
 class SQLiteArchiveTests(unittest.TestCase):
