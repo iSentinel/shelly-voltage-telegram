@@ -5432,10 +5432,29 @@ def metrics_text(monitor: Monitor) -> str:
     return "\n".join(lines) + "\n"
 
 
+def add_live_measurement_fields(
+    payload: dict[str, object], stale_after: float
+) -> None:
+    """Expose current readings without changing last-known history fields."""
+
+    sample_at = payload["last_success"]
+    age = None if sample_at is None else max(0.0, time.time() - sample_at)
+    fresh = (
+        payload["connectivity"] in {"online", "recovering"}
+        and age is not None
+        and age <= stale_after
+    )
+    payload["sample_age_seconds"] = age
+    payload["sample_is_stale"] = not fresh
+    payload["live_voltage"] = payload["voltage"] if fresh else None
+    payload["live_frequency"] = payload["frequency"] if fresh else None
+
+
 def service_snapshot(monitor: Monitor) -> dict[str, object]:
     """Return liveness plus phase/watchdog state for HTTP diagnostics."""
 
     payload = monitor.state.snapshot()
+    add_live_measurement_fields(payload, monitor.cfg.stale_after)
     payload["phases"] = {
         p: (
             monitor.phase_states[p].snapshot()
