@@ -34,6 +34,7 @@ _TEXT = {
         "cmd_audit": "Журнал настроек",
         "cmd_device": "Состояние Shelly",
         "cmd_updates": "Проверить GitHub Releases",
+        "cmd_schedule": "Плановые отключения ДТЭК",
         "updates_installed": "Установленная версия: {version}",
         "updates_latest": "Последний стабильный релиз GitHub: {version}",
         "updates_available": "Обновление доступно: {answer}",
@@ -316,6 +317,7 @@ _TEXT = {
         "cmd_audit": "Журнал налаштувань",
         "cmd_device": "Стан Shelly",
         "cmd_updates": "Перевірити GitHub Releases",
+        "cmd_schedule": "Планові відключення ДТЕК",
         "updates_installed": "Встановлена версія: {version}",
         "updates_latest": "Останній стабільний реліз GitHub: {version}",
         "updates_available": "Оновлення доступне: {answer}",
@@ -601,6 +603,7 @@ _TEXT = {
         "cmd_audit": "Settings audit",
         "cmd_device": "Shelly health",
         "cmd_updates": "Check GitHub releases",
+        "cmd_schedule": "DTEK outage schedule",
         "updates_installed": "Installed: {version}",
         "updates_latest": "Latest stable GitHub release: {version}",
         "updates_available": "Update available: {answer}",
@@ -875,6 +878,7 @@ def command_descriptions(language: str) -> dict[str, str]:
         "audit",
         "device",
         "updates",
+        "schedule",
     )
     return {name: tr(language, f"cmd_{name}") for name in names}
 
