@@ -5450,18 +5450,24 @@ def add_live_measurement_fields(
     payload["live_frequency"] = payload["frequency"] if fresh else None
 
 
+def phase_service_snapshot(monitor: Monitor, phase: str) -> dict[str, object]:
+    """Add safe current values for each configured voltage phase."""
+
+    if not monitor.phase_configured(phase):
+        return {"connectivity": "not_configured"}
+    phase_data = monitor.phase_states[phase].snapshot()
+    add_live_measurement_fields(phase_data, monitor.cfg.stale_after)
+    return phase_data
+
+
 def service_snapshot(monitor: Monitor) -> dict[str, object]:
     """Return liveness plus phase/watchdog state for HTTP diagnostics."""
 
     payload = monitor.state.snapshot()
     add_live_measurement_fields(payload, monitor.cfg.stale_after)
     payload["phases"] = {
-        p: (
-            monitor.phase_states[p].snapshot()
-            if monitor.phase_configured(p)
-            else {"connectivity": "not_configured"}
-        )
-        for p in ("L1", "L2", "L3")
+        phase: phase_service_snapshot(monitor, phase)
+        for phase in ("L1", "L2", "L3")
     }
     payload["line_labels"] = monitor.phase_labels().split(", ")
     payload["watchdog"] = {
