@@ -1,3 +1,31 @@
+## 2026-11-06 — transport health versus cumulative polling errors
+
+During supervised testing of installed `0.5.13-hw`, Telegram
+transport briefly lost connectivity at about 09:48–09:49 Kyiv.
+The log showed 11 connection errors, one read timeout and five
+status-update transport failures. A separate Gateway SSH timeout
+occurred in the same interval. At 09:52 the Telegram API doctor
+passed, and the 09:53 log check showed no additional failures
+after 09:50. The cumulative failure total of 12 is historical;
+it is not a measure of currently failed requests.
+
+A source-only diagnostics enhancement adds two non-secret
+watchdog JSON fields:
+`telegram_consecutive_failures` and
+`telegram_poll_success_age_seconds`. Corresponding Prometheus
+gauges are `shelly_telegram_consecutive_failures` and
+`shelly_telegram_poll_success_age_seconds`. Null in JSON or
+NaN in Prometheus means no command poll has yet succeeded.
+A successful polling cycle resets the consecutive streak
+while the total counter remains monotonic. These fields are
+read-only; they do not change Telegram commands, status edits,
+API authorization, retries, or electrical thresholds.
+
+The operator has confirmed that repeating the same harmless
+private-chat button does not create duplicate messages. The
+remaining visual acceptance concerns channel-message editing
+during a natural transition, not artificially created alarms.
+
 ## 2026-11-06 09:05–09:08 — high-voltage private chat visual review
 
 The operator supplied a screenshot of the **installed 0.5.13-hw**
