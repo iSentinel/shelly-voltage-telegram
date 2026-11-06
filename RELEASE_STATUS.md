@@ -1,3 +1,27 @@
+## 2026-11-06 11:18 — phase-safe JSON merged, outage #13 still open
+
+- **Production:** installed `0.5.13-hw` with PR #128,
+  still running/healthy without restart while Shelly
+  offline, /health 200 and /ready 503. Last real reading
+  10:30:08 Kyiv, outage #13 open from 10:30:51.
+  SQLite checks and 3/3 backup archive checks PASS.
+- **Candidate source:** PR #137 plus PR #139 provide
+  backward-compatible `live_voltage`,
+  `live_frequency`, `sample_is_stale` and
+  `sample_age_seconds` for root status and
+  independent configured L1/L2/L3 phases. Offline phase
+  readings are null rather than stale voltage.
+  PR #139 passed 437/437 isolated tests and CI for
+  Python 3.11/3.12/3.13; merged as `f95a169`.
+  This code is **not deployed** while the outage is open.
+- **Pending release gates:** natural recovery of Shelly
+  validated against private outage #13 baseline, separate
+  stable 15-minute recovery status and visual Telegram
+  channel acceptance, physical Pro 3EM/3CT63 tests,
+  and owner approval before public release promotion.
+  A tentative local schedule suggests restoration
+  around 17:00 Kyiv; it is not a guarantee.
+
 ## 2026-11-06 — live outage #13 and stale-safe status candidate
 
 - **Deployed:** `0.5.13-hw` on LXC 110, still healthy while
