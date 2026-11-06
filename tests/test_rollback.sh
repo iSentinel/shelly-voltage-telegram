@@ -162,3 +162,22 @@ with sqlite3.connect(sys.argv[1]) as db:
 PY
 
 echo "ROLLBACK_FIXTURE PASS"
+
+# A SHA256-valid gzip must be verified as SQLite before any service stop.
+INVALID_DB="$TMP/invalid-sqlite-snapshot"
+mkdir -p "$INVALID_DB"
+cp "$SNAP/source.tar.gz" "$SNAP/source.tar.gz.sha256" "$INVALID_DB/"
+printf "%s" "a corrupt SQLite database" | gzip -c \
+    > "$INVALID_DB/voltage-corrupt.sqlite3.gz"
+sha256sum "$INVALID_DB/voltage-corrupt.sqlite3.gz" \
+    > "$INVALID_DB/voltage-corrupt.sqlite3.gz.sha256"
+set +e
+SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$INVALID_DB" \
+        --dry-run --no-start > "$TMP/corrupt-sqlite-rollback.log" 2>&1
+invalid_status=$?
+set -e
+test "$invalid_status" -eq 2
+! grep -q "DRY-RUN: stop Compose service" "$TMP/corrupt-sqlite-rollback.log"
+echo "ROLLBACK_BAD_SQLITE_REJECTED_BEFORE_STOP=PASS"

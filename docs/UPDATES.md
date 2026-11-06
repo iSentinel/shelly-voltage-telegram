@@ -28,6 +28,31 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Validate SQLite restore content before interruption
+
+Source archive safety and SHA256 verification are separate checks. The
+installer now also inspects the freshly created SQLite backup **before**
+copying any new release files, and `rollback.sh` checks the selected
+backup **before** rescuing data or stopping Docker. The read-only
+validation expands the gzip stream with a 2048 MiB default size limit
+into a temporary directory, opens SQLite read-only, runs
+`PRAGMA quick_check`, and confirms the `measurements` table exists.
+It does not write to the production database or send Telegram messages.
+
+```bash
+python3 scripts/validate-sqlite-archive.py --help
+python3 scripts/validate-sqlite-archive.py \
+  --archive /var/backups/shelly-voltage/upgrades/<snapshot>/voltage-YYYYMMDD-HHMMSS.sqlite3.gz
+sudo bash scripts/rollback.sh --dry-run --no-start \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot>
+```
+
+The validator uses only the Python standard library, so it works on
+the recovery host even without the bot's application dependencies.
+A malformed gzip or SQLite image fails with exit code 2 before service
+disruption. A successful temporary restore is **not** evidence that a
+real production rollback or a candidate release has been approved.
+
 ## Validate rollback archives before stopping the monitor
 
 `scripts/rollback.sh` validates the source archive **before**
