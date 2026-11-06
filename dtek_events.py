@@ -49,8 +49,8 @@ def classify_house(house: object, update: object = "") -> ProviderEvent:
         category = "none"
     else:
         category = "unknown"
-    return ProviderEvent(category, reason or kind, start, end,
-                         clean_field(update, 80))
+    updated = clean_field(update, 80)
+    return ProviderEvent(category, reason or kind, start, end, updated)
 
 
 def parse_house_response(payload: object, house: str) -> ProviderEvent:
@@ -67,7 +67,6 @@ def parse_house_response(payload: object, house: str) -> ProviderEvent:
 def event_key(event: ProviderEvent) -> str:
     """Deduplicate substantive event changes, not poll timestamps."""
 
-    fields = [event.category, event.reason, event.started,
-              event.expected_end]
+    fields = [event.category, event.reason, event.started, event.expected_end]
     encoded = json.dumps(fields, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()[:20]

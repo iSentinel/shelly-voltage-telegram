@@ -52,14 +52,12 @@ class DtekEventTests(unittest.TestCase):
     def test_missing_fields_are_unknown_not_no_outage(self):
         self.assertEqual(classify_house({}).category, "unknown")
         self.assertEqual(classify_house(None).category, "unknown")
-        self.assertEqual(
-            classify_house(example(type=None)).category, "unknown"
-        )
+        wrong = classify_house(example(type=None))
+        self.assertEqual(wrong.category, "unknown")
 
     def test_explicitly_empty_fields_are_none(self):
-        event = classify_house(example(
-            sub_type="", start_date="", end_date=""
-        ))
+        empty = example(sub_type="", start_date="", end_date="")
+        event = classify_house(empty)
         self.assertEqual(event.category, "none")
 
     def test_unlabeled_dates_are_unknown(self):
@@ -68,9 +66,7 @@ class DtekEventTests(unittest.TestCase):
 
     def test_wrong_house_is_unknown(self):
         reply = {"data": {"17": example()}}
-        self.assertEqual(
-            parse_house_response(reply, "21").category, "unknown"
-        )
+        self.assertEqual(parse_house_response(reply, "21").category, "unknown")
 
     def test_exact_house_and_source_timestamp(self):
         reply = {
