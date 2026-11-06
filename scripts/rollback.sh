@@ -82,7 +82,8 @@ restore_source() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore source -> $TARGET"; return; }
     mkdir -p "$TARGET"
     find "$TARGET" -mindepth 1 -maxdepth 1 \
-        ! -name '.env' ! -name 'secrets' -exec rm -rf -- {} +
+        ! -name '.env*' ! -name 'secrets' ! -name 'validation' \
+        -exec rm -rf -- {} +
     tar -xzf "$SNAPSHOT/source.tar.gz" -C "$TARGET"
 }
 
