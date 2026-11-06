@@ -55,6 +55,33 @@ validate_snapshot() {
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
     sha256sum -c "$SNAPSHOT/source.tar.gz.sha256"
     sha256sum -c "${backup}.sha256"
+    python3 - "$SNAPSHOT/source.tar.gz" <<'PY_CHECK'
+import sys
+import tarfile
+from pathlib import PurePosixPath
+
+try:
+    count = 0
+    size = 0
+    with tarfile.open(sys.argv[1], "r:gz") as archive:
+        for entry in archive:
+            count += 1
+            size += entry.size
+            parts = PurePosixPath(entry.name).parts
+            safe_type = entry.isfile() or entry.isdir()
+            if (
+                entry.name.startswith("/")
+                or ".." in parts
+                or not safe_type
+                or entry.mode & 0o6000
+                or count > 20000
+                or size > 512 * 1024 * 1024
+            ):
+                raise ValueError("unsafe source archive member")
+except (OSError, ValueError, tarfile.TarError) as error:
+    print(f"ERROR: invalid source archive: {error}", file=sys.stderr)
+    raise SystemExit(3) from error
+PY_CHECK
 }
 
 rescue_current_db() {
@@ -84,7 +111,9 @@ restore_source() {
     find "$TARGET" -mindepth 1 -maxdepth 1 \
         ! -name '.env*' ! -name 'secrets' ! -name 'validation' \
         -exec rm -rf -- {} +
-    tar -xzf "$SNAPSHOT/source.tar.gz" -C "$TARGET"
+    tar -xzf "$SNAPSHOT/source.tar.gz" -C "$TARGET" \
+        --exclude="./.env" --exclude="./.env.*" \
+        --exclude="./secrets" --exclude="./validation"
 }
 
 restore_database() {

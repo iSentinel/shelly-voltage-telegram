@@ -28,6 +28,26 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Validate rollback archives before stopping the monitor
+
+`scripts/rollback.sh` validates the source archive **before**
+making a rescue backup, stopping Compose or replacing files. Alongside
+the existing SHA256 checks, it now rejects path traversal, absolute
+paths, symbolic/hard links, special file types, setuid/setgid modes,
+more than 20,000 archive entries and uncompressed source archives
+larger than 512 MiB.
+
+During extraction, local `.env`, `.env.*`, `secrets/` and
+`validation/` are excluded from older source snapshots. Even an
+otherwise valid historical snapshot must not overwrite current
+credentials or private QA evidence.
+
+The isolated rollback fixture includes two deliberately unsafe,
+checksum-consistent source archives (a traversal path and a symlink).
+Both must fail before any test target changes. Use the read-only
+`rollback.sh --snapshot DIR --dry-run --no-start` preflight before
+considering a real version rollback.
+
 ## Preserve local evidence on rollback
 
 `scripts/rollback.sh` preserves the current deployment `.env*`

@@ -47,6 +47,11 @@ PY
 
 printf '0.4.1-hw\n' > "$OLD_SRC/VERSION"
 printf 'old\n' > "$OLD_SRC/OLD_ONLY"
+printf 'snapshot-overwrite\n' > "$OLD_SRC/.env"
+printf 'snapshot-overwrite\n' > "$OLD_SRC/.env.pre-upgrade"
+mkdir -p "$OLD_SRC/validation" "$OLD_SRC/secrets"
+printf 'snapshot-overwrite\n' > "$OLD_SRC/validation/acceptance.txt"
+printf 'snapshot-overwrite\n' > "$OLD_SRC/secrets/token"
 tar -C "$OLD_SRC" -czf "$SNAP/source.tar.gz" .
 sha256sum "$SNAP/source.tar.gz" > "$SNAP/source.tar.gz.sha256"
 
@@ -70,6 +75,43 @@ PY
 
 gzip -c "$TMP/old.sqlite3" > "$SNAP/voltage-old.sqlite3.gz"
 sha256sum "$SNAP/voltage-old.sqlite3.gz" > "$SNAP/voltage-old.sqlite3.gz.sha256"
+
+# Reject corrupt but checksum-consistent archives before touching the target.
+for unsafe_type in traversal symlink; do
+    unsafe="$TMP/unsafe-$unsafe_type"
+    mkdir -p "$unsafe"
+    cp "$SNAP/voltage-old.sqlite3.gz" "$unsafe/"
+    sha256sum "$unsafe/voltage-old.sqlite3.gz" > "$unsafe/voltage-old.sqlite3.gz.sha256"
+    python3 - "$unsafe/source.tar.gz" "$unsafe_type" <<'PY_UNSAFE'
+import io
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "w:gz") as archive:
+    if sys.argv[2] == "traversal":
+        info = tarfile.TarInfo("../escape.txt")
+        payload = b"should-not-extract"
+        info.size = len(payload)
+        archive.addfile(info, io.BytesIO(payload))
+    else:
+        info = tarfile.TarInfo("./redirect")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "/etc/passwd"
+        archive.addfile(info)
+PY_UNSAFE
+    sha256sum "$unsafe/source.tar.gz" > "$unsafe/source.tar.gz.sha256"
+    if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$unsafe" \
+            --dry-run --no-start > "$TMP/unsafe-$unsafe_type.log" 2>&1; then
+        echo "ERROR: unsafe $unsafe_type archive was accepted" >&2
+        exit 1
+    fi
+    grep -q "ERROR: invalid source archive" "$TMP/unsafe-$unsafe_type.log"
+    test ! -e "$TMP/escape.txt"
+    test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
+    echo "ROLLBACK_UNSAFE_$unsafe_type=REJECTED"
+done
 
 MISSING_DB="$DB_DIR/missing.sqlite3"
 SVT_ROOT="$TARGET" \
