@@ -1098,6 +1098,61 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
         monitor.record_voltage_event.assert_not_called()
         self.assertIsNone(monitor.alert_candidate)
 
+    def test_low_voltage_warning_critical_and_recovery_dwell(self):
+        """Follow the configured low-voltage thresholds and delays."""
+
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                alerts_enabled=True,
+                alert_dwell_sec=15.0,
+                alert_recovery_dwell_sec=30.0,
+            )
+        )
+        monitor.record_voltage_event = Mock()
+        self.assertEqual(monitor.runtime_voltage_level(207.1), "normal")
+        self.assertEqual(monitor.runtime_voltage_level(207.0), "warning")
+        self.assertEqual(monitor.runtime_voltage_level(190.0), "critical")
+        readings = (
+            (100.0, 205.0),
+            (114.0, 205.0),
+            (115.0, 205.0),
+            (130.0, 189.0),
+            (145.0, 189.0),
+            (160.0, 210.0),
+            (189.0, 210.0),
+            (190.0, 210.0),
+        )
+        counts = (0, 0, 1, 1, 2, 2, 2, 3)
+        for (now, voltage), count in zip(readings, counts):
+            with patch.object(APP.time, "monotonic", return_value=now):
+                monitor.maybe_alert(voltage, 50.0)
+            self.assertEqual(monitor.record_voltage_event.call_count, count)
+        kinds = [
+            call.args[0]
+            for call in monitor.record_voltage_event.call_args_list
+        ]
+        self.assertEqual(kinds, ["warning_low", "critical_low", "recovered"])
+
+    def test_short_low_voltage_spike_does_not_alert(self):
+        """Do not warn when voltage recovers before the 15-second dwell."""
+
+        monitor = APP.Monitor(
+            config(
+                telegram_token="token",
+                telegram_chat_id="123",
+                alerts_enabled=True,
+                alert_dwell_sec=15.0,
+            )
+        )
+        monitor.record_voltage_event = Mock()
+        for now, voltage in ((100.0, 202.0), (110.0, 202.0), (111.0, 210.0)):
+            with patch.object(APP.time, "monotonic", return_value=now):
+                monitor.maybe_alert(voltage, 50.0)
+        monitor.record_voltage_event.assert_not_called()
+        self.assertIsNone(monitor.alert_candidate)
+
     def test_high_level_alert_routes_to_shared_status(self):
         """Route high-voltage transitions through shared status."""
 

@@ -1,3 +1,45 @@
+## 2026-11-06 10:14 Europe/Kyiv — natural low voltage warning and lower-limit QA
+
+- **LIVE / REAL PHYSICAL SHELLY:** Pro EM-50 remained online at
+  50.0 Hz. After the earlier elevated 250+ V readings the
+  voltage dropped below 207 V at about 10:08 and reached
+  a read-only observed low of approximately 195.3 V
+  at 10:10:45. By 10:14 voltage had recovered to
+  202.3 V but remained below the 207 V warning threshold.
+  Of the preceding ten minutes, 38 recorded measurements
+  were at or below 207 V; none reached or passed the
+  190 V critical-low threshold.
+- **NOTIFICATION STATE / PERSISTED:** the live SQLite metadata
+  recorded `last_voltage_event.kind=warning_low` at
+  10:08:33 Europe/Kyiv with a 205.0 V measurement and a
+  corresponding low transition entry. The stable status-message
+  ID is stored (its value remains private); there were zero
+  Telegram send/status-update errors and zero command-poll
+  errors after the warning at the 10:14 check. These facts
+  support internal event handling but are not a verified
+  subscriber-visible channel delivery receipt.
+- **PRODUCTION / UNCHANGED:** installed `0.5.13-hw` Docker
+  healthy, zero restarts, HTTP `/ready=200`, SQLite
+  `quick_check=ok`, 21,878 real samples, zero fabricated
+  0 V rows and no open Shelly connectivity outage.
+  The Telegram API doctor returned OK. Historical
+  transport errors remain cumulative at 12; no new ones
+  have occurred since 09:50.
+- **QA / SOURCE ONLY:** two new regression cases exercise
+  the exact 207 V warning-low and 190 V critical-low
+  boundaries with 15-second warning/critical dwell,
+  30-second recovery dwell, and a brief 202 V dip
+  returning above 207 V before any alert. Tests use mocked
+  local time and events, no live device or Telegram calls.
+  The full isolated unit suite is 432/432 PASS; pinned
+  Ruff and 40-line-function quality gate PASS.
+- **NEXT:** keep physical-voltage thresholds unchanged,
+  continue natural transition and Telegram-channel
+  observation, check whether a subscriber actually sees
+  the warning-low status, and retain verified rollback
+  snapshots. Public release promotion and alternate
+  Pro 3EM/3CT63 physical acceptance remain separate.
+
 ## 2026-11-06 09:53 Europe/Kyiv — restored transport and clearer Telegram diagnostics
 
 - **LIVE / PASS:** Proxmox LXC 110 on installed `0.5.13-hw` remained
