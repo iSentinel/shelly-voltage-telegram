@@ -34,6 +34,8 @@ OPERATOR_LABELS = {
         "Поточна напруга Shelly невідома",
         "Джерело: користувач; не звірено з ДТЕК. "
         "Час може змінитися, відключення може не бути.",
+        "Спостережень Shelly у плановому вікні: {count}. "
+        "Безперервне живлення не доведено.",
     ),
     "ru": (
         "Непроверенный прогноз для группы",
@@ -43,6 +45,8 @@ OPERATOR_LABELS = {
         "Текущее напряжение Shelly неизвестно",
         "Источник: пользователь; не сверено с ДТЭК. "
         "Время может измениться, отключения может не быть.",
+        "Измерений Shelly в плановом интервале: {count}. "
+        "Непрерывное питание не доказано.",
     ),
     "en": (
         "Unverified forecast for group",
@@ -52,6 +56,8 @@ OPERATOR_LABELS = {
         "Current Shelly voltage unknown",
         "Source: user-supplied; not cross-checked with DTEK. "
         "Times may shift or the outage may not happen.",
+        "Shelly samples in planned window: {count}. "
+        "Continuous supply is not proven.",
     ),
 }
 
@@ -79,8 +85,11 @@ def load_manual(path: Path) -> ManualForecast:
         raise ValueError("manual forecast root must be an object")
     if data.get("source") not in ALLOWED_SOURCES:
         raise ValueError("forecast source is not the manual source")
-    if data.get("source_verified", data.get("provider_verified")) is not False:
+    verification = (data.get("source_verified"), data.get("provider_verified"))
+    if any(flag is not None and flag is not False for flag in verification):
         raise ValueError("manual forecast cannot claim provider verification")
+    if all(flag is None for flag in verification):
+        raise ValueError("manual forecast requires explicit unverified source")
     day = date.fromisoformat(data["date_kyiv"])
     group = str(data["group"])
     if not re.fullmatch(r"\d{1,2}\.\d", group):
@@ -218,8 +227,10 @@ def operator_summary(result: dict, language: str = "uk") -> str:
         raise ValueError("manual forecast provenance invalid")
     if result.get("source_verified") is not False:
         raise ValueError("source cannot claim provider verification")
+    if result.get("forecast_is_approximate") is not True:
+        raise ValueError("forecast must be marked approximate")
     labels = OPERATOR_LABELS.get(language, OPERATOR_LABELS["uk"])
-    title, active, absent, measured, unknown, disclaimer = labels
+    title, active, absent, measured, unknown, disclaimer, coverage = labels
     lines = [f"📅 {title} {result['group']}"]
     window = result.get("predicted_window")
     if window:
@@ -234,10 +245,7 @@ def operator_summary(result: dict, language: str = "uk") -> str:
         lines.append(f"⚡ {unknown}")
     evidence = result.get("observed_in_planned_window")
     if evidence and evidence.get("samples"):
-        lines.append(
-            f"🔎 {evidence['samples']} Shelly samples in planned window; "
-            "not proof of continuous supply"
-        )
+        lines.append("🔎 " + coverage.format(count=evidence["samples"]))
     lines.append(f"ℹ️ {disclaimer}")
     return "\n".join(lines)
 

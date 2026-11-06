@@ -143,6 +143,24 @@ class ManualForecastCheckerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "verification"):
             CHECK.load_manual(self.forecast)
 
+    def test_conflicting_verified_flags_rejected(self):
+        """Neither verified flag may override an explicitly manual source."""
+
+        data = json.loads(self.forecast.read_text())
+        data["provider_verified"] = True
+        self.forecast.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "verification"):
+            CHECK.load_manual(self.forecast)
+
+    def test_missing_explicit_verification_fails_closed(self):
+        """No implicit trust state may be inferred from absent flags."""
+
+        data = json.loads(self.forecast.read_text())
+        data.pop("source_verified")
+        self.forecast.write_text(json.dumps(data))
+        with self.assertRaisesRegex(ValueError, "unverified"):
+            CHECK.load_manual(self.forecast)
+
     def test_wrong_provenance_rejected(self):
         """Reject a cached provider object in the manual forecast reader."""
 
@@ -291,6 +309,22 @@ class ManualForecastCheckerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CHECK.operator_summary(report, "uk")
 
+    def test_observation_count_localized_in_all_languages(self):
+        """Localize the measured-sample disclaimer in each language."""
+
+        report = self.compare("20:00:05")
+        report["observed_in_planned_window"] = {
+            "samples": 1,
+            "proves_continuous_supply": False,
+        }
+        for lang, phrase in (
+            ("ru", "Непрерывное питание не доказано"),
+            ("uk", "Безперервне живлення не доведено"),
+            ("en", "Continuous supply is not proven"),
+        ):
+            with self.subTest(lang=lang):
+                self.assertIn(phrase, CHECK.operator_summary(report, lang))
+
     def test_cli_text_uses_explicit_unverified_label(self):
         """Human CLI output always distinguishes measured and predicted."""
 
@@ -373,8 +407,8 @@ class ManualForecastCheckerTests(unittest.TestCase):
             CHECK.observed_voltage_in_window(self.database, forecast, observed)
         )
         summary = CHECK.operator_summary(result, "en")
-        self.assertIn("1 Shelly samples", summary)
-        self.assertIn("not proof of continuous supply", summary)
+        self.assertIn("Shelly samples in planned window: 1", summary)
+        self.assertIn("Continuous supply is not proven", summary)
 
     def test_help_is_available(self):
         """Make standalone CLI options discoverable with --help."""

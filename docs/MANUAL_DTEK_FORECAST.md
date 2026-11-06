@@ -95,3 +95,12 @@ not uninterrupted electricity for the full window. Missing samples
 do not prove the mains are off. The report includes
 proves_continuous_supply=false, regardless of the count. The planned
 window does not trigger any Shelly or Telegram operations.
+
+
+## Manual provenance consistency
+
+A user-supplied schedule may never promote itself to official DTEK
+data. The loader rejects missing verification metadata and
+contradictory source_verified/provider_verified flags, including
+a false value beside a true value. Reported sample counts and the
+no-continuous-supply caveat are localized in RU, UK and EN.
