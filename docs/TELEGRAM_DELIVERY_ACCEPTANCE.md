@@ -1,3 +1,30 @@
+## 2026-11-06 09:05–09:08 — high-voltage private chat visual review
+
+The operator supplied a screenshot of the **installed 0.5.13-hw**
+Telegram bot showing `/preview`, `/status` and `/start`
+responses in Ukrainian. The visible voltage around 244.9 V
+and the displayed 251.8 V daily maximum are consistent with
+the read-only Shelly/SQLite measurement history examined
+through Gateway. The private preview explicitly confirmed
+that it did **not** edit the public channel message.
+
+**Partial visual PASS:** readable Ukrainian private-chat
+status/preview responses and plausible electrical readings.
+**Still pending:** press the *same* harmless status/menu
+button twice to confirm PR #128's unchanged-edit handling
+and inspect actual status-channel visibility/edit behavior.
+The screenshot does not prove these operations or show
+delivery to all subscribers.
+
+The configured upper warning limit is 253 V and critical
+limit is 255 V, with a 15-second alert dwell. Samples
+below 253 V are shown as green by the present threshold
+policy even when they are elevated relative to nominal
+230 V. No threshold crossing was observed in the last
+hour at 09:08, so the absence of an alert was expected.
+Do not simulate a mains over-voltage or lower warning
+thresholds merely to generate test notifications.
+
 ## 2026-11-06 08:58 — installed 0.5.13-hw Telegram callback hotfix
 
 After the owner's production upgrade and first live monitor run,
