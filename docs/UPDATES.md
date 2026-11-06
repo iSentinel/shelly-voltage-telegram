@@ -28,6 +28,27 @@ archives, credentials, or SQLite data to a public repository.
 `bash scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
+## Preserve local evidence on rollback
+
+`scripts/rollback.sh` preserves the current deployment `.env*`
+configuration files (including local backups), `secrets/`, and
+`validation/` while restoring the versioned application source and
+SQLite database. Prior to this fix, a rollback could delete local
+environment backups and private QA acceptance reports.
+
+`scripts/source-tar.sh` excludes these private records from new source
+snapshots and installer source-copy streams. It also skips local
+`dist/`, `dist-audit/`, `dist-publish/`, tool caches, SQLite
+databases, debug logs and symbolic links. The public
+`.env.example` template is retained. Privately held evidence
+remains at its original path instead of being embedded in a
+versioned code archive.
+
+The isolated rollback fixture checks that `.env`,
+`.env.pre-upgrade`, `secrets/`, and `validation/` survive a
+real test rollback against a temporary source/database directory.
+This fixture never targets the installed monitor.
+
 ## Public source-release privacy
 
 `scripts/release.sh` uses a separate public-release filter. It excludes
