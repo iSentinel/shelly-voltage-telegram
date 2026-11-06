@@ -234,7 +234,10 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                 (200, {"connectivity": "online"}),
                 (200, {"ready": True}),
             ]
-            with patch.object(RECOVERY, "fetch_json", side_effect=responses):
+            with (
+                patch.object(RECOVERY, "fetch_json", side_effect=responses),
+                patch.object(RECOVERY.time, "time", return_value=25.0),
+            ):
                 payload = RECOVERY.verify_payload(verify_args)
             self.assertEqual(payload["status"], "pass")
 
