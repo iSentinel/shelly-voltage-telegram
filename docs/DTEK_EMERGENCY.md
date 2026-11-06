@@ -31,3 +31,14 @@ Safety boundaries for future work:
   this PR does not change any production runtime behavior.
 
 Unit fixtures in tests/test_dtek_events.py use synthetic data only.
+
+
+## Read-only Telegram HTML preview
+
+The pure format_advisory(event, language) helper renders a localized
+preview in RU/UK/EN. It HTML-escapes external provider strings, bounds
+all field lengths, and explicitly labels DTEK as an advisory source,
+**not** a Shelly measurement. Unknown/unrecognized categories do not
+publish potentially misleading reason/times. The helper makes no
+Telegram API call, creates no message IDs, and does not touch SQLite.
+Actual send/edit policy remains a separate opt-in acceptance gate.

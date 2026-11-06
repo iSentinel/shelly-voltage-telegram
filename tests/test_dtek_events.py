@@ -8,6 +8,7 @@ from dtek_events import (
     ProviderEvent,
     classify_house,
     event_key,
+    format_advisory,
     parse_house_response,
 )
 
@@ -90,6 +91,77 @@ class DtekEventTests(unittest.TestCase):
     def test_normalization_removes_newlines(self):
         event = classify_house(example(sub_type="Аварійні\n  роботи"))
         self.assertNotIn("\n", event.reason)
+
+    def test_advisory_is_not_a_power_loss_claim(self):
+        """Make it clear that the provider is only an external source."""
+
+        message = format_advisory(classify_house(example()), "uk")
+        self.assertIn("ДТЕК повідомляє", message)
+        self.assertIn("не показники Shelly", message)
+        self.assertNotIn("Світло зникло", message)
+
+    def test_unsafe_provider_markup_is_escaped(self):
+        """Never render untrusted DTEK reason as Telegram HTML markup."""
+
+        event = classify_house(
+            example(sub_type="Аварійні <script>& небезпека")
+        )
+        message = format_advisory(event, "ru")
+        self.assertIn("&lt;script&gt;&amp;", message)
+        self.assertNotIn("<script>", message)
+
+    def test_unknown_does_not_display_untrusted_details(self):
+        """An unrecognized reason must not be promoted as confirmed."""
+
+        event = classify_house(example(sub_type="Неизвестный код"))
+        message = format_advisory(event, "ru")
+        self.assertIn("неизвестна", message)
+        self.assertNotIn("Неизвестный код", message)
+
+    def test_no_outage_is_a_provider_report_only(self):
+        """No DTEK advisory never equals evidence of live voltage."""
+
+        empty = example(sub_type="", start_date="", end_date="", type="")
+        message = format_advisory(classify_house(empty), "en")
+        self.assertIn("DTEK reports no active outage", message)
+        self.assertIn("Not a Shelly measurement", message)
+
+    def test_all_supported_locales_render(self):
+        """Render titles and disclaimers for all supported languages."""
+
+        for language, expected in (
+            ("ru", "Причина"),
+            ("uk", "Причина"),
+            ("en", "Reason"),
+        ):
+            with self.subTest(language=language):
+                message = format_advisory(classify_house(example()), language)
+                self.assertIn(expected, message)
+                self.assertIn("<b>", message)
+                self.assertIn("</i>", message)
+
+    def test_long_values_are_bounded(self):
+        """Keep a maliciously long provider message within Telegram size."""
+
+        event = ProviderEvent(
+            "emergency",
+            reason="А" * 10000,
+            started="x" * 10000,
+            expected_end="x" * 10000,
+            source_updated="x" * 10000,
+        )
+        message = format_advisory(event, "uk")
+        self.assertLess(len(message), 1500)
+        self.assertNotIn("А" * 161, message)
+
+    def test_unknown_category_fails_closed(self):
+        """A new provider category must not imply a known outage type."""
+
+        message = format_advisory(
+            ProviderEvent("unexpected", reason="wrong"), "en"
+        )
+        self.assertIn("unknown", message)
+        self.assertNotIn("wrong", message)
 
     def test_no_address_or_token_stored(self):
         event = ProviderEvent("unknown")
