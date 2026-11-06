@@ -403,6 +403,45 @@ class OutageStorageTests(unittest.TestCase):
 class TelegramTransportTests(unittest.TestCase):
     """Validate Telegram transport timeouts."""
 
+    def test_identical_edit_is_successful(self):
+        """An unchanged Telegram message must not interrupt command polling."""
+
+        telegram = APP.Telegram(
+            config(telegram_token="token", telegram_chat_id="123")
+        )
+        telegram.call = Mock(
+            side_effect=RuntimeError("Bad Request: message is not modified")
+        )
+        telegram.edit(42, "same text")
+        telegram.call.assert_called_once()
+        self.assertEqual(telegram.call.call_args.args[0], "editMessageText")
+
+    def test_identical_markup_clear_is_successful(self):
+        """Repeated removal of inline controls is harmless."""
+
+        telegram = APP.Telegram(
+            config(telegram_token="token", telegram_chat_id="123")
+        )
+        telegram.call = Mock(
+            side_effect=RuntimeError("Bad Request: message is not modified")
+        )
+        telegram.clear_reply_markup(42)
+        self.assertEqual(
+            telegram.call.call_args.args[0], "editMessageReplyMarkup"
+        )
+
+    def test_real_telegram_edit_errors_still_propagate(self):
+        """Only already-current messages may be treated as success."""
+
+        telegram = APP.Telegram(
+            config(telegram_token="token", telegram_chat_id="123")
+        )
+        telegram.call = Mock(side_effect=RuntimeError("Forbidden"))
+        with self.assertRaisesRegex(RuntimeError, "Forbidden"):
+            telegram.edit(42, "new text")
+        with self.assertRaisesRegex(RuntimeError, "Forbidden"):
+            telegram.clear_reply_markup(42)
+
     def test_get_updates_http_timeout_exceeds_long_poll(self):
         cfg = config(telegram_token="token", telegram_chat_id="123")
         telegram = APP.Telegram(cfg)
