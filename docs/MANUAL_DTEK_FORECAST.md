@@ -104,3 +104,29 @@ data. The loader rejects missing verification metadata and
 contradictory source_verified/provider_verified flags, including
 a false value beside a true value. Reported sample counts and the
 no-continuous-supply caveat are localized in RU, UK and EN.
+
+## Independently confirmed power-loss incident review
+
+When a user explicitly reports that electricity is off, their report
+is independent evidence. It must **not** be confused with the instant
+when the monitor notices missing Shelly connectivity. The source of
+the schedule remains unverified, and neither event proves the precise
+physical mains switching time.
+
+For incident #15 on 2026-11-06, an offline CLI accepts an existing
+private operator-confirmation snapshot and the read-only production
+SQLite database. It verifies that the snapshot references the same
+real network-gap event, checks the last valid voltage sample, and
+prints a private RU/UK/EN provenance report:
+
+    python3 scripts/incident-evidence-review.py --help
+    python3 scripts/incident-evidence-review.py --incident /opt/shelly-voltage/validation/2026-11-06-2033-user-confirmed-power-loss-incident15.json --db /var/lib/shelly-voltage/voltage.sqlite3 --language ru
+    python3 scripts/incident-evidence-review.py --incident /opt/shelly-voltage/validation/2026-11-06-2033-user-confirmed-power-loss-incident15.json --db /var/lib/shelly-voltage/voltage.sqlite3 --json
+
+The review leaves exact_power_off_time=null, marks any
+scheduled-window match as timing-only, and always reports
+cause_verified_by_schedule=false. A Shelly network recovery does
+not silently become proof that the power is back. Corrupt, missing
+or verified-claim evidence is rejected. Synthetic zero-voltage
+samples are excluded. The tool uses no network, Telegram or
+SQLite writes.
