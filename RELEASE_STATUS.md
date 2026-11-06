@@ -1,3 +1,33 @@
+## 2026-11-06 — installed 0.5.13-hw Telegram no-op edit hotfix
+
+- **Deployed source:** `0.5.13-hw` with merged PR #128
+  (`394f068`) on LXC 110. After the initial installation,
+  a benign Telegram `message is not modified` response
+  had raised three command polling warnings. The hotfix
+  treats only unchanged text/markup edits as success;
+  unrelated Telegram errors still propagate.
+- **Regression:** 422/422 isolated tests PASS, Ruff quality PASS
+  and GitHub CI Python 3.11/3.12/3.13 PASS.
+- **Observed live state:** second installer PASS at 08:55 Kyiv,
+  Docker healthy/0 restarts, Shelly online/50 Hz, readiness
+  HTTP 200, SQLite integrity OK, 21,429 measurements by 08:58,
+  zero artificial 0 V and no open outage. Watchdog errors
+  after hotfix restart: 0. This is *not yet* independent live
+  confirmation of repeated identical edits.
+- **Rollback:** private pre-hotfix `0.5.13-hw` snapshot contains
+  21,413 measurements; source/SQLite checksums, bounded
+  restore and rollback dry-run PASS. The earlier `0.5.12-hw`
+  snapshot also remains available. Neither rollback was executed.
+- **Configuration:** the six recorded configuration/secret file
+  hashes were unchanged. Status edit policy remains 10 minutes,
+  status pinning off.
+- **Outstanding acceptance:** administrator-visible Telegram
+  `/status`, `/preview` and repeated callback tests, real
+  channel visibility/edit checks, and further naturally
+  occurring monitoring. Public `RELEASE_VERSION=0.5.12-hw`
+  and historic `LIVE_VERSION=0.5.6-hw` have not been changed;
+  production testing is not public release promotion.
+
 ## 2026-11-06 — 0.5.13-hw installed for owner-approved production testing
 
 - **Running installation:** 0.5.13-hw from source commit
