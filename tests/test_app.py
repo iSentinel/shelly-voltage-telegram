@@ -1604,7 +1604,8 @@ class MonitorRegressionTests(unittest.TestCase):
             )
             self.assertIsNotNone(monitor.last_recovery_duration)
             sent_text = monitor.telegram.send.call_args.args[0]
-            self.assertIn("Питание восстановлено", sent_text)
+            self.assertIn("Связь с Shelly восстановлена", sent_text)
+            self.assertNotIn("Питание восстановлено", sent_text)
 
     def test_confirmed_outage_clears_old_voltage_event(self):
         """Do not keep an old recovery header during a new outage."""

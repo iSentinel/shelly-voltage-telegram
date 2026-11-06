@@ -81,6 +81,21 @@ class TelegramLocaleTests(unittest.TestCase):
                 with self.subTest(key=key, fragment=word):
                     self.assertNotIn(word, value)
 
+    def test_connectivity_recovery_never_claims_mains_restoration(self):
+        """A device reconnect cannot prove that the grid recovered."""
+
+        expected = {
+            "ru": ("Связь с Shelly восстановлена", "Питание восстановлено"),
+            "uk": ("Зв’язок із Shelly відновлено", "Живлення відновлено"),
+            "en": ("Shelly connection restored", "Power restored"),
+        }
+        for lang, (allowed, forbidden) in expected.items():
+            with self.subTest(lang=lang):
+                text = I18N.tr(lang, "power_recovered", duration="6h")
+                self.assertIn(allowed, text)
+                self.assertNotIn(forbidden, text)
+                self.assertIn("6h", text)
+
     def test_ukrainian_summary_uses_ukrainian_labels(self):
         """The daily summary must not inherit Russian outage wording."""
 

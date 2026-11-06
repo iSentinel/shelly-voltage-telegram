@@ -1,3 +1,29 @@
+## 2026-11-06 — screenshot acceptance of natural outage #11
+
+The operator provided a screenshot of the status-channel message after
+Shelly Pro EM-50 recovered. The visible message shows the device voltage,
+frequency, a 6 h 19 min interruption, a normalized-voltage event at
+06:57 and a 10-minute event summary. This is **positive visual
+evidence** that the current production release `0.5.12-hw` showed
+a recovery/status message to the operator. It is not a delivery
+receipt for all subscribers and does not validate the uninstalled
+`0.5.13-hw` candidate.
+
+Gateway/SQLite evidence places the **end of connectivity loss**
+at 06:37:02 Kyiv and the separate **voltage normalization**
+at 06:57:46 Kyiv (211.7 V). These timestamps refer to different
+events and must not be conflated. A connectivity restoration alone
+does not prove that electrical mains were restored: it might simply
+mean the LAN or meter became reachable. Candidate translations
+therefore explicitly say **Shelly connection restored** in RU/UK/EN
+instead of claiming independent power restoration.
+
+The displayed event summary covers 06:57–07:07. Its zero seconds
+outside normal refer to that *post-recovery window*, not to the
+preceding 06:37–06:57 readings. No missing low-voltage event duration
+is inferred from that summary. The screenshot remains private in the
+user conversation; do not add it to the public repository.
+
 # Telegram notification delivery acceptance
 
 This checklist distinguishes **bot API access**, **database state**, and
