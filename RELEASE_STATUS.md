@@ -1,3 +1,24 @@
+## 2026-11-06 14:13 — candidate Telegram unpinned-status cleanup
+
+- **Deployed:** `0.5.13-hw` continues to run healthy
+  during physical Shelly outage #13; /ready=503,
+  no fabricated voltage readings or Docker restarts.
+- **Candidate:** after PR #145's send-before-delete
+  recovery safety, avoid calling Telegram unpin on
+  an old message that the bot did not pin. Otherwise
+  Telegram may reject the unpin and an old message
+  may remain as a duplicate. Actual pinned status
+  messages must be unpinned before deletion.
+  Stale pin markers reporting already-unpinned
+  messages are safe to clear; all other failures
+  still block deletion. Source-only 450/450 tests,
+  Ruff and max-40-line checks PASS.
+- **Still gated:** GitHub CI, real recovery acceptance
+  against outage #13 baseline, 15-minute stable
+  status, visible Telegram channel review, alternate
+  hardware physical tests and explicit release promotion.
+  No live upgrade or real Telegram sends performed.
+
 ## 2026-11-06 — recovery message replacement safety candidate
 
 - **Deployed:** production remains `0.5.13-hw`, Docker healthy
