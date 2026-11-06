@@ -6,11 +6,12 @@ import gzip
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import sqlite3
 import tempfile
 import unittest
-from contextlib import closing
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -202,6 +203,54 @@ class BackupVerificationTests(unittest.TestCase):
 
         create_backup(self.root)
         self.assertEqual(self.verify(count=0), 2)
+
+    def test_jsonl_success_contains_no_backup_paths(self):
+        """Machine output contains only a stable summary, not paths."""
+
+        create_backup(self.root)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = BACKUPS.main(
+                ["--backup-dir", str(self.root), "--count", "1", "--jsonl"]
+            )
+        data = json.loads(output.getvalue())
+        self.assertEqual(result, 0)
+        self.assertEqual(data["status"], "pass")
+        self.assertEqual(data["passed"], 1)
+        self.assertEqual(data["checked"], 1)
+        self.assertTrue(data["read_only"])
+        self.assertNotIn(str(self.root), output.getvalue())
+        self.assertEqual(len(output.getvalue().splitlines()), 1)
+
+    def test_jsonl_failure_preserves_exit_code(self):
+        """A missing archive produces JSONL and a nonzero status."""
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = BACKUPS.main(
+                ["--backup-dir", str(self.root), "--count", "1", "--jsonl"]
+            )
+        data = json.loads(output.getvalue())
+        self.assertEqual(result, 2)
+        self.assertEqual(data["status"], "fail")
+        self.assertEqual(data["passed"], 0)
+        self.assertEqual(data["checked"], 0)
+        self.assertEqual(data["requested"], 1)
+
+    def test_jsonl_missing_directory_is_reported(self):
+        """Even missing storage returns one machine-readable record."""
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            result = BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root / "missing"),
+                    "--jsonl",
+                ]
+            )
+        self.assertEqual(result, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "fail")
 
     def test_help_is_available(self):
         """All operator tools must support the standard help flag."""
