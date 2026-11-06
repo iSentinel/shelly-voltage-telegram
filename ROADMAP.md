@@ -1,3 +1,29 @@
+## 2026-11-06 — operator accepts repeated Telegram button behavior
+
+- **PRIVATE CHAT / OPERATOR PASS:** the owner explicitly tested
+  pressing the same Telegram button multiple times after the
+  deployed `0.5.13-hw` PR #128 no-op edit hotfix and confirmed
+  that the actions work correctly **without creating new messages**.
+  This closes the repeated-button duplicate-message UI acceptance
+  check. It is a direct operator report, not a fresh server-log
+  audit or proof of delivery to every channel subscriber.
+- **PREVIOUS VISUAL / PASS:** the owner also showed readable
+  Ukrainian `/preview`, `/status` and `/start` private-chat
+  responses with plausible real Shelly voltage readings.
+  The preview correctly indicated no public channel status edit.
+- **GATEWAY ROUTING:** a typed read-only Proxmox host health check
+  succeeded through Gateway's Europe execution plane.
+  Host diagnostics found no failed systemd units; this does not
+  independently establish LXC 110 bot log status at this checkpoint.
+  Additional direct SSH and GitHub operations were temporarily
+  blocked by tool safety checks before this host inspection.
+- **NEXT:** verify current LXC 110 Docker readiness, SQLite,
+  Telegram command-poll logs and fresh physical voltage when
+  authorized command execution is available. Channel-visible
+  message edit/delivery under natural transitions, public
+  release promotion and real Pro 3EM/3CT63 hardware remain
+  separate acceptance tasks. Do not fabricate an outage.
+
 ## 2026-11-06 09:08 Europe/Kyiv — real elevated voltage and threshold QA
 
 - **FIELD / LIVE:** with the installed `0.5.13-hw` hotfix, Shelly
