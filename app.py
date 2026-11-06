@@ -5372,14 +5372,38 @@ class Monitor:
 
 
 OUTAGE_COUNT_HELP = (
-    "# HELP shelly_outages_total "
-    "Confirmed connectivity outages after hysteresis."
+    "# HELP shelly_outages_total Legacy name for Shelly connectivity "
+    "losses after hysteresis; not verified mains outages."
 )
 OUTAGE_DURATION_HELP = (
-    "# HELP shelly_outage_duration_today_seconds "
-    "Confirmed outage duration after hysteresis; "
-    "not exact mains-loss boundaries."
+    "# HELP shelly_outage_duration_today_seconds Legacy name for "
+    "connectivity-loss duration; not electricity downtime."
 )
+
+
+def connectivity_metric_lines(
+    outage_count: int, stats: dict[str, float]
+) -> list[str]:
+    """Keep legacy Prometheus series while adding clear source semantics."""
+
+    count, seconds = stats["count"], stats["duration"]
+    return [
+        "# HELP shelly_connectivity_losses_total "
+        "Shelly connection-loss transitions after hysteresis.",
+        f"shelly_connectivity_losses_total {outage_count}",
+        "# HELP shelly_connectivity_losses_today "
+        "Shelly connection-loss intervals today.",
+        f"shelly_connectivity_losses_today {count}",
+        "# HELP shelly_connectivity_loss_duration_today_seconds "
+        "Connectivity-loss duration, not measured mains downtime.",
+        f"shelly_connectivity_loss_duration_today_seconds {seconds:.3f}",
+        OUTAGE_COUNT_HELP,
+        f"shelly_outages_total {outage_count}",
+        "# HELP shelly_outages_today Legacy connectivity-loss count today.",
+        f"shelly_outages_today {count}",
+        OUTAGE_DURATION_HELP,
+        f"shelly_outage_duration_today_seconds {seconds:.3f}",
+    ]
 
 
 def live_metric_value(snap: dict[str, object], key: str) -> str:
@@ -5409,6 +5433,8 @@ def phase_metrics(monitor: Monitor, phase: str) -> list[str]:
         f'shelly_frequency_hz{{phase="{phase}"}} {frequency}',
         f'shelly_last_success_age_seconds{{phase="{phase}"}} {age:.3f}',
         f'shelly_outages_total{{phase="{phase}"}} {snap["outage_count"]}',
+        f'shelly_connectivity_losses_total{{phase="{phase}"}} '
+        f"{snap['outage_count']}",
         f"shelly_connectivity_state{{{state_labels}}} 1",
     ]
 
@@ -5433,18 +5459,11 @@ def metrics_text(monitor: Monitor) -> str:
     loop_age = time.monotonic() - monitor.last_loop_tick
     poll_age = telegram_poll_success_age(monitor)
     poll_age_metric = "NaN" if poll_age is None else f"{poll_age:.3f}"
-    outage_help = OUTAGE_COUNT_HELP
-    duration_help = OUTAGE_DURATION_HELP
     lines = [
         f"shelly_voltage_volts {voltage}",
         f"shelly_frequency_hz {frequency}",
         f"shelly_last_success_age_seconds {age:.3f}",
-        outage_help,
-        f"shelly_outages_total {snap['outage_count']}",
-        "# HELP shelly_outages_today Confirmed connectivity outages today.",
-        f"shelly_outages_today {outage_stats['count']}",
-        duration_help,
-        f"shelly_outage_duration_today_seconds {outage_stats['duration']:.3f}",
+        *connectivity_metric_lines(snap["outage_count"], outage_stats),
         f"shelly_telegram_enabled {int(monitor.telegram.enabled)}",
         f"shelly_telegram_failures_total {monitor.telegram_failures}",
         "shelly_telegram_consecutive_failures "
