@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -42,6 +43,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=2048,
         help="Maximum unpacked size per backup (default: 2048 MiB).",
+    )
+    parser.add_argument(
+        "--jsonl",
+        action="store_true",
+        help="Emit a single JSON Lines result on standard output.",
     )
     return parser.parse_args(argv)
 
@@ -157,21 +163,43 @@ def recent_backups(directory: Path) -> list[Path] | None:
         return None
 
 
+def report_result(
+    status: str, passed: int, checked: int, requested: int, jsonl: bool
+) -> int:
+    """Report a stable exit status without exposing backup file paths."""
+
+    if jsonl:
+        print(
+            json.dumps(
+                {
+                    "status": status.lower(),
+                    "read_only": True,
+                    "passed": passed,
+                    "checked": checked,
+                    "requested": requested,
+                },
+                sort_keys=True,
+            )
+        )
+    logger.info("{}: {}/{} backups validated", status, passed, requested)
+    return 0 if status == "PASS" else 2
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Validate the requested backups, with a clear final exit code."""
+    """Validate archives and return a stable PASS/FAIL exit code."""
 
     args = parse_args(argv)
     logger.remove()
     logger.add(sys.stderr, format="{level}: {message}")
     if args.count < 1 or args.max_size_mib < 1:
         logger.error("FAIL: count and max-size-mib must be positive")
-        return 2
+        return report_result("FAIL", 0, 0, args.count, args.jsonl)
     if not args.backup_dir.is_dir():
         logger.error("FAIL: backup directory not available")
-        return 2
+        return report_result("FAIL", 0, 0, args.count, args.jsonl)
     archives = recent_backups(args.backup_dir)
     if archives is None:
-        return 2
+        return report_result("FAIL", 0, 0, args.count, args.jsonl)
     selected = archives[: args.count]
     if len(selected) < args.count:
         logger.error(
@@ -186,8 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     complete = len(selected) == args.count and passed == args.count
     status = "PASS" if complete else "FAIL"
-    logger.info("{}: {}/{} backups validated", status, passed, args.count)
-    return 0 if complete else 2
+    return report_result(status, passed, len(selected), args.count, args.jsonl)
 
 
 if __name__ == "__main__":
