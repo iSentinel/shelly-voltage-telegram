@@ -821,15 +821,19 @@ class Storage:
         with closing(self.connect()) as db, db:
             rows = db.execute(
                 "SELECT started_at, ended_at FROM outages "
-                "WHERE started_at < ? AND COALESCE(ended_at, ?) >= ? "
+                "WHERE started_at <= ? AND COALESCE(ended_at, ?) > ? "
                 "AND phase=?",
-                (end.timestamp(), now, start.timestamp(), phase),
+                (now, now, start.timestamp(), phase),
             ).fetchall()
         count = len(rows)
         duration = sum(
             max(
                 0.0,
-                min(float(row[1] or now), end.timestamp())
+                min(
+                    float(row[1]) if row[1] is not None else now,
+                    now,
+                    end.timestamp(),
+                )
                 - max(float(row[0]), start.timestamp()),
             )
             for row in rows

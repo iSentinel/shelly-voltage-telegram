@@ -29,3 +29,21 @@ not the exact instant electricity physically returns.
 No SQLite schema change, production deployment, Telegram command
 or device-control operation is involved. Existing tests validate
 identical legacy and new values across old and current schemas.
+
+## Daily boundaries and future timestamp protection
+
+The live monitor's daily connectivity loss totals are based on
+the current Kyiv calendar day and the real observation timestamp.
+When one network gap continues across midnight, it is still one
+SQLite event; the next day's elapsed seconds begin at 00:00
+instead of creating a synthetic closure and new event.
+
+Daily stats now exclude future-starting gaps and clamp any
+future recorded end timestamp to the actual observation time.
+Neither forecast windows nor a bad clock value can inflate the
+elapsed duration by adding seconds that have not happened yet.
+
+The deterministic isolated tests exercise an incident starting
+November 6 at 20:31:07 and continuing over November 7 00:00,
+including future timestamp corruption. There are no physical
+Shelly operations or writes to production SQLite.
