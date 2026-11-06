@@ -35,6 +35,11 @@ The summary is `PASS: N/N backups validated` with exit code `0`
 only when **all requested copies** pass. A missing archive, missing
 checksum, checksum mismatch, bad gzip, broken SQLite database, or
 exceeded size limit results in `FAIL` and exit code `2`.
+An unreadable backup directory fails explicitly with its exception type
+(for example, `PermissionError`) instead of appearing to contain no
+archives. The operator must use a read-only account with access to the
+backup directory; do not make private backups world-readable.
+Symbolic links are not treated as backup archives.
 The script prints stable result labels rather than archive names or
 private filesystem contents.
 
