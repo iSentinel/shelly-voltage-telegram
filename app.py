@@ -1609,7 +1609,7 @@ def voltage_episode_summary_lines(monitor: Monitor) -> list[str]:
     if not data:
         return []
     lang = monitor.language
-    return [
+    lines = [
         "",
         tr(lang, "episode_title"),
         tr(lang, "episode_period", **data),
@@ -1617,6 +1617,9 @@ def voltage_episode_summary_lines(monitor: Monitor) -> list[str]:
         tr(lang, "episode_transitions", count=data["transitions"]),
         tr(lang, "episode_abnormal", duration=data["abnormal"]),
     ]
+    if data["starts_on_recovery"]:
+        lines.append(tr(lang, "episode_recovery_scope"))
+    return lines
 
 
 def instability_lines(monitor: Monitor) -> list[str]:
@@ -2672,6 +2675,7 @@ class Monitor:
             return None
         start = float(episode["start_at"])
         end = float(episode["finalized_at"])
+        transitions = episode.get("transitions") or []
         stats = self.storage.range_stats(
             start, end, str(episode.get("phase", "L1"))
         )
@@ -2685,7 +2689,10 @@ class Monitor:
             "minimum": fmt(stats["min"]),
             "maximum": fmt(stats["max"]),
             "average": fmt(stats["avg"]),
-            "transitions": len(episode.get("transitions") or []),
+            "transitions": len(transitions),
+            "starts_on_recovery": bool(
+                transitions and transitions[0].get("kind") == "recovered"
+            ),
             "abnormal": duration_text(
                 abnormal_seconds(episode, end), self.language
             ),

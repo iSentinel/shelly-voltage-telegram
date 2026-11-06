@@ -20,7 +20,11 @@ instead of claiming independent power restoration.
 
 The displayed event summary covers 06:57–07:07. Its zero seconds
 outside normal refer to that *post-recovery window*, not to the
-preceding 06:37–06:57 readings. No missing low-voltage event duration
+preceding 06:37–06:57 readings.
+The candidate now adds a localized scope note to any finalized
+episode whose first recorded transition is recovery. It makes clear
+that measurements before recovery are excluded, without fabricating
+an unobserved abnormal duration. No missing low-voltage event duration
 is inferred from that summary. The screenshot remains private in the
 user conversation; do not add it to the public repository.
 
