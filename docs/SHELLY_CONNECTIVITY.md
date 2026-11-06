@@ -74,6 +74,26 @@ curl -sS --max-time 5 http://127.0.0.1:8080/health
 The local HTTP server normally binds only to `127.0.0.1:8080`, inside the
 Docker host or LXC. Do not expose it publicly to simplify testing.
 
+### Use current fields from `/status.json`
+
+Older clients may use `voltage` and `frequency` as the
+**last valid readings**. Those values intentionally remain stored
+when Shelly becomes unavailable. New read-only fields distinguish
+them from live telemetry:
+
+- `live_voltage` and `live_frequency` are `null` when the
+  last reading is stale or the device is offline.
+- `sample_is_stale` is true if there is no valid fresh reading.
+- `sample_age_seconds` reports the age of the last valid reading
+  in seconds, or `null` before the first successful sample.
+
+New dashboards should use `live_voltage` and
+`sample_is_stale` instead of displaying cached `voltage`
+as current. The existing `/ready` HTTP 503 behavior and
+Prometheus NaN values remain unchanged. These fields are
+informational; they do not control electricity or send
+Telegram messages.
+
 ## 4. If measurements are fresh but Telegram is stale
 
 In the private Telegram control chat, send `/status`. Compare that response
