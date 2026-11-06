@@ -1,3 +1,29 @@
+## 2026-11-06 05:53 Europe/Kyiv — backup freshness and live gate
+
+- **DONE / source-only:** PR #111 merged as
+  `39d5ce2f57304936a9d0080d30f6162d0d677bb8`. Backup validator
+  now optionally rejects stale/future-dated backup archives with
+  `--max-age-hours`; without this option, behavior is unchanged.
+  The limit applies to all selected archives, keeps JSONL path-free,
+  and does not enable any automatic checking schedule.
+- **QA:** 408/408 isolated Docker tests PASS. Pinned Ruff 0.14.2,
+  PEP8, import ordering and the 40-line function gate PASS.
+  CI on Python 3.11/3.12/3.13 PASS; exact merged-source parity PASS.
+- **Real read-only check:** most recent daily backup passed SHA256,
+  SQLite restoration and a 36-hour freshness limit. A 1-hour limit
+  produced the expected FAIL/exit 2. Private JSONL evidence:
+  `/opt/shelly-voltage/validation/2026-11-06-backup-freshness.jsonl`.
+- **Live production unchanged:** `0.5.12-hw` Docker remains healthy
+  with zero restarts; physical Shelly outage #11 is still open and
+  HTTP `/ready=503`. Read-only `doctor` reports Telegram API and
+  SQLite OK, Shelly unavailable. Five cumulative Telegram transport
+  failures were visible, with last warnings logged around 03:12.
+- **Release gate:** read-only outage #11 verification correctly returns
+  FAIL/exit 2 until the exact outage naturally closes, fresh samples
+  resume and a stable Telegram status is observed. Actual recipient
+  delivery and 0.5.13 physical acceptance remain unverified.
+  Do not auto-install or simulate real electrical transitions.
+
 ## 2026-11-06 05:44 Europe/Kyiv — isolated candidate hardware simulation
 
 - **DONE / candidate-only:** built `0.5.13-hw` from GitHub `main`

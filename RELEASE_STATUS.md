@@ -1,3 +1,23 @@
+## 2026-11-06 — 0.5.13-hw backup freshness QA
+
+- PR #111 merged `--max-age-hours` as an explicit opt-in
+  read-only archive freshness check. Default archive verification,
+  JSONL payload and exit codes remain unchanged.
+- PASS: 408/408 Python tests in isolated offline Docker, Ruff
+  and project maintainability gates, plus GitHub CI for Python
+  3.11, 3.12 and 3.13.
+- PASS: actual latest backup archive on LXC 110 passed the
+  36-hour age check with SQLite integrity and retained samples;
+  an intentional 1-hour limit failed as expected with code 2.
+- PASS: checksum parity with exact merged `main` files.
+  Results saved locally in a private, one-record JSONL report.
+- Production remains at `0.5.12-hw`; real Shelly outage #11
+  has not closed. `/ready=503` is expected. Read-only doctor
+  reports Telegram API OK and SQLite OK; no message was sent.
+- Physical 0.5.13-hw acceptance and Telegram recipient-visible
+  message confirmation remain pending before a controlled
+  update with rollback. No automatic promotion was performed.
+
 ## 2026-11-06 — isolated 0.5.13-hw synthetic hardware smoke
 
 - Source commit: `fcf33e8570ede3905e3f8839d39a7861e3198eae`
