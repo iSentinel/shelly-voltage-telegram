@@ -1,8 +1,7 @@
 # Read-only backup validation
 
-`scripts/verify-backups.py` is a source-candidate administrator tool.
-It will only be available with a future approved release; installed
-production `0.5.12-hw` does not yet contain it.
+`scripts/verify-backups.py` is an administrator tool included in the
+installed production `0.5.13-hw` test build.
 
 The tool validates retained daily backups without stopping Docker,
 modifying SQLite production data, extracting files into the live
@@ -38,6 +37,23 @@ reject old backups. If more than one archive is selected, the age
 limit applies to **every selected archive**. Invalid, future-dated
 or too-old archives fail with exit code 2; this checks file timestamps,
 not whether Telegram messages were delivered. No schedule is enabled.
+
+For **daily backup retention**, combine newest-copy freshness with
+integrity checks for all retained copies. For example:
+
+```bash
+python3 scripts/verify-backups.py \
+  --backup-dir /var/backups/shelly-voltage \
+  --count 3 --max-age-hours 36 --max-age-newest-only --jsonl
+```
+
+This opt-in mode checks whether the **most recent** archive is
+within 36 hours, while still verifying the checksums and SQLite
+integrity of all three selected archives. Older copies are not
+rejected solely because of their age. Without
+`--max-age-newest-only`, the existing all-copies age policy
+remains unchanged. Using the new flag without
+`--max-age-hours` is an error (exit code 2).
 
 The verifier checks the corresponding `.sha256` file before extracting
 each archive, limits the size of decompressed data, restores it into an
