@@ -1,3 +1,27 @@
+## 2026-11-06 — live low-voltage recovery, release still in test
+
+- **Installed production `0.5.13-hw`:** physical Pro EM-50
+  naturally crossed the configured warning-low threshold
+  and logged `warning_low` at 10:08:33 (205.0 V). No
+  190 V critical-low crossing was recorded.
+- **Connectivity event:** outage #12 lasted 190.4 seconds
+  (10:16:51–10:20:01 Kyiv). It was a measured Shelly
+  connectivity interruption, not proven electrical mains
+  loss. Docker stayed healthy; readiness correctly changed
+  to 503 during the outage and returned to 200 after recovery.
+  Real recovery-hysteresis readings were preserved, SQLite
+  remained healthy, and no synthetic 0 V records were made.
+- **Source/CI:** PR #134 added deterministic 207/190 V
+  threshold and recovery dwell regression tests; 432/432
+  network-disabled unit tests and CI Python 3.11/3.12/3.13
+  passed. No production deployment or restart was necessary.
+- **Acceptance boundary:** internal event persistence and
+  zero Telegram errors do not prove that the alert was
+  displayed in the subscribed channel. Pre-recovery
+  baseline was not successfully captured for outage #12.
+  Public release metadata remains unchanged until channel
+  review and explicit promotion approval.
+
 ## 2026-11-06 — Telegram transport recovery and source-only observability
 
 - **Installed runtime:** `0.5.13-hw` with PR #128 remains the

@@ -1,3 +1,42 @@
+## 2026-11-06 10:22 Europe/Kyiv — natural Shelly recovery after low voltage
+
+- **REAL EVENT / OBSERVED:** Shelly Pro EM-50 recorded a persistent
+  205.0 V `warning_low` at 10:08:33. Voltage later reached approximately
+  195.3 V but not the 190 V critical-low threshold; no artificial
+  alert or control operation was performed.
+- **CONNECTIVITY LOSS / OUTAGE #12:** Shelly became unavailable
+  at 10:16:51 Europe/Kyiv. Docker remained healthy with zero
+  restarts and HTTP `/health=200` while `/ready=503`
+  correctly reflected loss of measurement readiness. The last
+  valid 207.1 V measurement at 10:16:09 was **stale**, not a
+  current reading or proof of mains power loss.
+- **NATURAL RECOVERY / OBSERVED:** outage #12 closed at 10:20:01,
+  duration 190.4 seconds. Two real 50 Hz samples (206.3 V,
+  204.9 V) were stored during recovery hysteresis before
+  the outage was finalized. Afterwards Shelly returned online,
+  readiness 200, SQLite quick_check OK, 21,904 measurements
+  at the 10:22 read-only check, no artificial zero-voltage
+  samples or open outages. No Telegram send or poll errors
+  appeared during this event.
+- **PRIVATE EVIDENCE:** `validation/2026-11-06-outage-12-recovery-field-acceptance.json`
+  with 0600 permissions on LXC 110. The baseline command was
+  initially called using its container-only default DB path,
+  then retried after the outage had already closed. Both
+  attempts failed safely, so the event does **not** have
+  a valid pre-recovery baseline; this limits acceptance
+  claims. A failed-baseline file was labeled accordingly.
+- **QA / SOURCE-ONLY:** PR #134 adds regression coverage for
+  lower 207/190 V threshold boundaries, 15-second
+  warning/critical dwell, 30-second recovery and brief
+  sub-207 V dips. 432/432 isolated unit tests, Ruff and
+  CI Python 3.11/3.12/3.13 PASS, merged to `main`.
+- **NEXT:** confirm the natural low-voltage message and
+  outage/recovery update in the actual Telegram status
+  channel. A stored status message ID, lack of API errors
+  and internal event metadata are not a visual receipt.
+  Keep public promotion and alternate Shelly hardware
+  acceptance open until separate verification.
+
 ## 2026-11-06 10:14 Europe/Kyiv — natural low voltage warning and lower-limit QA
 
 - **LIVE / REAL PHYSICAL SHELLY:** Pro EM-50 remained online at
