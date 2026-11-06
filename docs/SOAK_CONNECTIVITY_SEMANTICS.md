@@ -47,3 +47,17 @@ The deterministic isolated tests exercise an incident starting
 November 6 at 20:31:07 and continuing over November 7 00:00,
 including future timestamp corruption. There are no physical
 Shelly operations or writes to production SQLite.
+
+## Daily Telegram digest: one Kyiv calendar-day interval
+
+The daily Telegram summary previously mixed the last rolling 24
+hours of voltage samples with connectivity-loss totals since
+midnight. They now share the same Kyiv calendar-day interval
+from 00:00 through the report timestamp, with an inclusive
+bound on real samples and no future-dated measurements.
+
+The RU/UK/EN message includes an observation disclaimer:
+stored voltage samples are NOT continuous proof of mains supply;
+when Shelly is offline current voltage is unknown. No historical
+value is used as current voltage. This is a draft change and
+does not send an actual Telegram message.
