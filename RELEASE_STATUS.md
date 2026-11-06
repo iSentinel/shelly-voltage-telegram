@@ -1,3 +1,31 @@
+## 2026-11-06 — secure rollback preparation and release packaging
+
+- **Installed runtime:** production `0.5.12-hw`, healthy/ready,
+  real Shelly online and no Docker restarts. `0.5.13-hw` is
+  still a candidate; no install, rollback or public release was performed.
+- **Rollback evidence:** an explicit, private `0.5.12-hw`
+  source + SQLite snapshot passed SHA256, source-archive content
+  checks, 20,902-sample temporary restore, SQLite quick_check and
+  rollback dry-run. It retains public `.env.example` but none of
+  the historical `.env.*` backups or private `secrets/` data.
+  No real rollback has been attempted.
+- **PR #117 merged:** the installer snapshot/source-copy pipeline
+  now filters all private environment backups; 412/412 tests,
+  Ruff and Python 3.11/3.12/3.13 CI PASS.
+- **PR #118 merged:** public release packaging filters the same
+  private files, rejects unsafe staged entries and passes a
+  reproducible fixture with fake credentials; no package was
+  published. Python 3.11/3.12/3.13 CI PASS.
+- **Isolated candidate hardware simulation:** 0.5.13-hw source
+  `77bf2b7` passed a fresh mock Pro EM-50 QA cycle in LXC 111,
+  including 196 V/49.9 Hz sampling, two recovery cycles,
+  offline `NaN` metrics, 162 samples, two closed outages and
+  zero artificial 0 V rows. The temporary candidate was removed.
+- **Remaining release gate:** owner-authorized 0.5.13-hw physical
+  run, direct Telegram message/edit/visibility acceptance and
+  controlled rollback procedure. A QA simulation and old release
+  screenshot are not sufficient evidence for candidate promotion.
+
 ## 2026-11-06 — operator-visible Telegram recovery; source UX improvements
 
 - **Operator visual check PASS for deployed 0.5.12-hw:** screenshot
