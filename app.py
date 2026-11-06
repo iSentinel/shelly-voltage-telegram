@@ -5536,6 +5536,7 @@ def dashboard_rows(monitor: Monitor) -> list[dict[str, object]]:
         )
     return rows
 
+
 class HealthHandler(BaseHTTPRequestHandler):
     """Serve local read-only monitoring HTTP endpoints."""
 
