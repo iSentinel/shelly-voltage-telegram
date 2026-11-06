@@ -4948,6 +4948,10 @@ class Monitor:
             self.handle_updates_command(sender_id)
         elif command == "/apartments":
             self.handle_apartments_command(sender_id, parts)
+        elif command == "/schedule":
+            self.telegram.send(
+                self.schedule_text(), notify=False, chat_id=sender_id
+            )
         elif command == "/preview":
             self.send_compact_preview(sender_id)
         elif command == "/view":
@@ -5087,6 +5091,8 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
+        if command == "/schedule":
+            return  # Private admin only, never a public-channel reply.
         if command == "/week" and len(parts) != 1:
             return
         if command in {"/chart", "/export"}:

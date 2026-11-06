@@ -89,6 +89,29 @@ class CompactPreviewTests(unittest.TestCase):
         monitor.telegram.edit.assert_not_called()
         monitor.telegram.pin.assert_not_called()
 
+    def test_dtek_schedule_is_private_admin_only(self):
+        """Only an approved administrator can request the DTEK forecast."""
+
+        monitor = make_monitor()
+        monitor.schedule_text = Mock(return_value="DTEK fixture")
+        private = private_update(7)
+        private["message"]["text"] = "/schedule"
+        monitor.handle_update(private)
+        monitor.telegram.send.assert_called_once_with(
+            "DTEK fixture", notify=False, chat_id="7"
+        )
+
+        monitor.telegram.send.reset_mock()
+        other = private_update(8)
+        other["message"]["text"] = "/schedule"
+        monitor.handle_update(other)
+        monitor.telegram.send.assert_not_called()
+
+        channel = private_update(7, "channel")
+        channel["message"]["text"] = "/schedule"
+        monitor.handle_update(channel)
+        monitor.telegram.send.assert_not_called()
+
     def test_other_user_cannot_request_preview(self):
         """Ignore attempts from a Telegram user not on the admin list."""
 

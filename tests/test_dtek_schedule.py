@@ -1,17 +1,67 @@
-"""Offline tests for the optional DTEK outage schedule adapter."""
+"""Offline tests for the cache-only DTEK schedule adapter."""
 
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import patch
 
 import dtek_schedule as dtek
 
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/dtek-collect.py"
+SPEC = importlib.util.spec_from_file_location("dtek_collector", SCRIPT)
+COLLECTOR = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(COLLECTOR)
+
+
+def example_fact(now: datetime) -> dict:
+    """Build realistic grouped, complete published intervals."""
+
+    day = now.astimezone(dtek.ZoneInfo("Europe/Kyiv")).date().isoformat()
+    hours = {str(hour): "yes" for hour in range(1, 25)}
+    hours["1"] = "no"
+    hours["2"] = "first"
+    return {"today": day, "data": {day: {"GPV1.2": hours}}}
+
+
+def example_cache(now: datetime) -> dict:
+    """Build a current schema-v1 cache."""
+
+    return {
+        "version": 1, "region": "k",
+        "fetched_at": now.isoformat(),
+        "fact": example_fact(now),
+    }
+
 
 class DtekScheduleTests(unittest.TestCase):
-    """Verify half-hour periods and safe failures."""
+    """Check read-only parsing, freshness and failure boundaries."""
+
+    def setUp(self):
+        """Prepare an isolated cache path."""
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "cache.json"
+        self.now = datetime.now(timezone.utc)
+
+    def write_cache(self, data):
+        """Write a synthetic cache fixture."""
+
+        self.path.write_text(json.dumps(data), encoding="utf-8")
 
     def test_extract_fact_without_greedy_match(self):
         html = '<script>fact = {"data": {"x": 1}}; other = {};</script>'
         self.assertEqual(dtek.extract_schedule(html)["data"], {"x": 1})
+
+    def test_empty_dtek_page_is_not_an_empty_schedule(self):
+        with self.assertRaisesRegex(ValueError, "not found"):
+            dtek.extract_schedule("<html></html>")
 
     def test_half_hour_windows_are_merged(self):
         hours = {str(hour): "yes" for hour in range(1, 25)}
@@ -32,34 +82,84 @@ class DtekScheduleTests(unittest.TestCase):
             self.assertIn("DTEK_REGION", dtek.format_schedule("ru", "", ""))
             fetch.assert_not_called()
 
-    def test_fetch_failure_is_not_no_outages(self):
-        with patch.object(
-            dtek, "get_schedule", side_effect=ValueError("bad")
-        ):
+    def test_source_failure_not_treated_as_no_outages(self):
+        with patch.dict(os.environ, {"DTEK_CACHE_FILE": str(self.path)}):
             text = dtek.format_schedule("ru", "k", "1.2")
-            self.assertIn("недоступен", text)
-            self.assertNotIn("отключений нет", text)
+        self.assertIn("недоступен", text)
+        self.assertNotIn("отключений нет", text)
 
-    def test_invalid_group_rejected_before_network(self):
+    def test_invalid_group_rejected(self):
         with self.assertRaisesRegex(ValueError, "invalid"):
-            dtek.get_schedule("k", "../etc/passwd")
+            dtek.get_schedule("k", "../etc/passwd", self.path)
 
-    def test_valid_schedule_uses_kyiv_today(self):
-        day = dtek.datetime.now(
-            dtek.ZoneInfo("Europe/Kyiv")
-        ).strftime("%Y-%m-%d")
-        hours = {str(hour): "yes" for hour in range(1, 25)}
-        hours["1"] = "no"
-        import json
-        data = {"data": {day: {"GPV1.2": hours}}}
-        response = Mock(text=f"<script>fact = {json.dumps(data)};</script>")
-        response.raise_for_status.return_value = None
-        session = Mock()
-        session.get.return_value = response
-        self.assertEqual(
-            dtek.get_schedule("k", "1.2", session)[1],
-            [("00:00", "01:00")],
+    def test_valid_cache_parses_current_day(self):
+        self.write_cache(example_cache(self.now))
+        day, periods = dtek.get_schedule(
+            "k", "1.2", self.path, self.now
         )
+        self.assertEqual(
+            day, self.now.astimezone(
+                dtek.ZoneInfo("Europe/Kyiv")
+            ).date().isoformat()
+        )
+        self.assertEqual(periods, [("00:00", "01:30")])
+
+    def test_stale_cache_rejected(self):
+        old = self.now - timedelta(hours=3)
+        self.write_cache(example_cache(old))
+        with self.assertRaisesRegex(ValueError, "stale"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
+
+    def test_future_cache_rejected(self):
+        data = example_cache(self.now)
+        data["fetched_at"] = (
+            self.now + timedelta(minutes=5)
+        ).isoformat()
+        self.write_cache(data)
+        with self.assertRaisesRegex(ValueError, "future"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
+
+    def test_source_day_not_today(self):
+        data = example_cache(self.now)
+        data["fact"] = example_fact(self.now - timedelta(days=2))
+        self.write_cache(data)
+        with self.assertRaisesRegex(ValueError, "source date"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
+
+    def test_wrong_region_cache_rejected(self):
+        self.write_cache(example_cache(self.now))
+        with self.assertRaisesRegex(ValueError, "metadata"):
+            dtek.get_schedule("kr", "1.2", self.path, self.now)
+
+    def test_invalid_cache_group_rejected(self):
+        data = example_cache(self.now)
+        group = next(iter(data["fact"]["data"].values()))
+        group["GPV1.2"].pop("24")
+        self.write_cache(data)
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
+
+    def test_cache_size_limit(self):
+        self.path.write_text(" " * (dtek.CACHE_MAX_BYTES + 1))
+        with self.assertRaisesRegex(ValueError, "too large"):
+            dtek.get_schedule("k", "1.2", self.path, self.now)
+
+    def test_collector_accepts_complete_today(self):
+        html = f"<script>fact = {json.dumps(example_fact(self.now))};</script>"
+        data = COLLECTOR.build_payload("k", html, self.now)
+        COLLECTOR.write_cache(self.path, data)
+        self.assertEqual(
+            dtek.get_schedule("k", "1.2", self.path, self.now)[1],
+            [("00:00", "01:30")],
+        )
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_collector_does_not_replace_on_invalid(self):
+        self.write_cache(example_cache(self.now))
+        original = self.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "not found"):
+            COLLECTOR.build_payload("k", "<html></html>", self.now)
+        self.assertEqual(self.path.read_bytes(), original)
 
 
 if __name__ == "__main__":
