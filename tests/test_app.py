@@ -2385,6 +2385,48 @@ class AdvancedFeatureTests(unittest.TestCase):
             self.assertEqual(rows, 12)
             self.assertIn("voltage_v", csv_path.read_text().splitlines()[0])
 
+    def test_service_snapshot_clearly_labels_offline_cached_voltage(self):
+        """Never present historical voltage as a current JSON reading."""
+
+        monitor = APP.Monitor(config(stale_after=45.0))
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(235.7, 50.0, 3.0)
+        with patch.object(APP.time, "time", return_value=1010.0):
+            monitor.state.error("unreachable", offline_after=1)
+            snapshot = APP.service_snapshot(monitor)
+        self.assertEqual(snapshot["voltage"], 235.7)
+        self.assertEqual(snapshot["frequency"], 50.0)
+        self.assertIsNone(snapshot["live_voltage"])
+        self.assertIsNone(snapshot["live_frequency"])
+        self.assertEqual(snapshot["sample_age_seconds"], 10.0)
+        self.assertTrue(snapshot["sample_is_stale"])
+
+    def test_service_snapshot_freshness_and_recovery(self):
+        """Expose only readings which are connected and recent enough."""
+
+        monitor = APP.Monitor(config(stale_after=45.0))
+        first = APP.service_snapshot(monitor)
+        self.assertIsNone(first["sample_age_seconds"])
+        self.assertTrue(first["sample_is_stale"])
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(230.0, 50.0, 3.0)
+        with patch.object(APP.time, "time", return_value=1001.0):
+            fresh = APP.service_snapshot(monitor)
+        self.assertEqual(fresh["live_voltage"], 230.0)
+        self.assertEqual(fresh["live_frequency"], 50.0)
+        self.assertFalse(fresh["sample_is_stale"])
+        with patch.object(APP.time, "time", return_value=1050.0):
+            old = APP.service_snapshot(monitor)
+        self.assertIsNone(old["live_voltage"])
+        self.assertTrue(old["sample_is_stale"])
+        with patch.object(APP.time, "time", return_value=1051.0):
+            monitor.state.error("unreachable", offline_after=1)
+            monitor.state.success(231.5, 50.0, 3.0, recovery_after=2)
+            recovered = APP.service_snapshot(monitor)
+        self.assertEqual(recovered["connectivity"], "recovering")
+        self.assertEqual(recovered["live_voltage"], 231.5)
+        self.assertFalse(recovered["sample_is_stale"])
+
     def test_dashboard_hides_stale_voltage_while_offline(self):
         monitor = APP.Monitor(config(recovery_after_successes=2))
         monitor.state.restore(APP.time.time(), 230.0, 50.0)
