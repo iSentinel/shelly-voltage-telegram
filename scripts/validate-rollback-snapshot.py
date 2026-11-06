@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import tarfile
 import tempfile
+from contextlib import closing
 from pathlib import Path, PurePosixPath
 
 BLOCK_SIZE = 1024 * 1024
@@ -66,7 +67,7 @@ def check_database(archive: Path, limit: int) -> int:
     with tempfile.TemporaryDirectory(prefix="svt-rollback-test-") as directory:
         path = Path(directory) / "restored.sqlite3"
         restore_bounded(archive, path, limit)
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+        with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
             if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise ValueError("SQLite quick_check failed")
             row = db.execute("SELECT COUNT(*) FROM measurements").fetchone()
