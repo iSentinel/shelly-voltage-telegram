@@ -1606,7 +1606,11 @@ class MonitorRegressionTests(unittest.TestCase):
 
     def test_existing_status_message_is_edited(self):
         monitor = self._telegram_monitor()
-        monitor.storage.get_meta = Mock(return_value="42")
+        monitor.storage.get_meta = Mock(
+            side_effect=lambda key: (
+                None if key == APP.RECOVERY_ROTATION_PENDING_KEY else "42"
+            )
+        )
         monitor.storage.set_meta = Mock()
 
         monitor.update_status()
@@ -1618,7 +1622,11 @@ class MonitorRegressionTests(unittest.TestCase):
 
     def test_message_not_modified_is_successful_update(self):
         monitor = self._telegram_monitor()
-        monitor.storage.get_meta = Mock(return_value="42")
+        monitor.storage.get_meta = Mock(
+            side_effect=lambda key: (
+                None if key == APP.RECOVERY_ROTATION_PENDING_KEY else "42"
+            )
+        )
         monitor.storage.set_meta = Mock()
         monitor.telegram.edit.side_effect = RuntimeError(
             "Bad Request: message is not modified"
@@ -1832,6 +1840,111 @@ class MonitorRegressionTests(unittest.TestCase):
             sent_text = monitor.telegram.send.call_args.args[0]
             self.assertIn("Связь с Shelly восстановлена", sent_text)
             self.assertNotIn("Питание восстановлено", sent_text)
+
+    def test_recovery_publish_failure_preserves_existing_channel_status(self):
+        """A failed replacement must not delete the only channel message."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-send-failure.sqlite3"
+            monitor = self._recovery_monitor(path)
+            monitor.telegram.send.side_effect = [
+                RuntimeError("network down"),
+                901,
+            ]
+            monitor.poll_once()
+            monitor.poll_once()
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "675"
+            )
+            self.assertIsNotNone(
+                monitor.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+            monitor.telegram.unpin.assert_not_called()
+            monitor.telegram.delete.assert_not_called()
+            monitor.update_status()
+            self.assertEqual(monitor.telegram.send.call_count, 2)
+            monitor.telegram.edit.assert_not_called()
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "901"
+            )
+            self.assertIsNone(
+                monitor.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+
+    def test_recovery_rotation_retry_survives_process_restart(self):
+        """A pending send remains retryable when a monitor restarts."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recovery-retry-restart.sqlite3"
+            original = self._recovery_monitor(path)
+            original.telegram.send.side_effect = RuntimeError("unavailable")
+            original.poll_once()
+            original.poll_once()
+            self.assertIsNotNone(
+                original.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+            restarted = APP.Monitor(original.cfg)
+            restarted.storage.initialize()
+            restarted.state.success(230.0, 50.0, 5.0)
+            restarted.telegram.send = Mock(return_value=902)
+            restarted.telegram.unpin = Mock()
+            restarted.telegram.delete = Mock()
+            restarted.update_status()
+            self.assertEqual(
+                restarted.storage.get_meta("telegram_status_message_id"), "902"
+            )
+            restarted.telegram.delete.assert_called_once_with(
+                675, restarted.telegram.status_chat_id
+            )
+            self.assertIsNone(
+                restarted.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+
+    def test_new_outage_cancels_pending_recovery_status_rotation(self):
+        """Do not publish an outdated recovery after another disconnect."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = self._recovery_monitor(
+                Path(directory) / "recovery-cancel.sqlite3"
+            )
+            monitor.telegram.send.side_effect = RuntimeError("unavailable")
+            monitor.poll_once()
+            monitor.poll_once()
+            self.assertIsNotNone(
+                monitor.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+            monitor.state.error("offline again", offline_after=1)
+            monitor.clear_voltage_event()
+            self.assertIsNone(
+                monitor.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+            monitor.telegram.send.reset_mock()
+            monitor.update_status()
+            monitor.telegram.send.assert_not_called()
+
+    def test_recovery_publishes_before_deleting_previous_status(self):
+        """Confirm the new post exists before cleanup begins."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = self._recovery_monitor(
+                Path(directory) / "recovery-order.sqlite3"
+            )
+            order = []
+            monitor.telegram.send.side_effect = lambda *a, **k: (
+                order.append("send") or 900
+            )
+            monitor.telegram.unpin.side_effect = lambda *a, **k: (
+                order.append("unpin")
+            )
+            monitor.telegram.delete.side_effect = lambda *a, **k: (
+                order.append("delete")
+            )
+            monitor.poll_once()
+            monitor.poll_once()
+            self.assertEqual(order, ["send", "unpin", "delete"])
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"), "900"
+            )
 
     def test_confirmed_outage_clears_old_voltage_event(self):
         """Do not keep an old recovery header during a new outage."""
