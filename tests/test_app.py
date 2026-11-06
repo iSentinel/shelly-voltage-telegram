@@ -2657,6 +2657,58 @@ class AdvancedFeatureTests(unittest.TestCase):
                     1,
                 )
 
+    def test_telegram_poll_recovery_resets_only_failure_streak(self):
+        """Keep historic failures while reporting restored Telegram polling."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = APP.Monitor(
+                config(database_path=Path(directory) / "poll.sqlite3")
+            )
+            monitor.storage.initialize()
+            monitor.telegram.updates = Mock(
+                side_effect=[RuntimeError("network unavailable"), []]
+            )
+            stopped = Mock()
+            stopped.is_set.side_effect = [False, False, True]
+            with (
+                patch.object(APP, "STOP", stopped),
+                patch.object(APP.time, "monotonic", return_value=123.0),
+            ):
+                monitor.command_loop()
+                watchdog = APP.service_snapshot(monitor)["watchdog"]
+                metrics = APP.metrics_text(monitor)
+            self.assertEqual(watchdog["telegram_failures"], 1)
+            self.assertEqual(watchdog["telegram_consecutive_failures"], 0)
+            self.assertEqual(watchdog["telegram_poll_success_age_seconds"], 0)
+            self.assertIn("shelly_telegram_consecutive_failures 0", metrics)
+            self.assertIn(
+                "shelly_telegram_poll_success_age_seconds 0.000", metrics
+            )
+
+    def test_telegram_poll_failure_streak_before_first_success(self):
+        """Expose an ongoing outage without implying a successful poll."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            monitor = APP.Monitor(
+                config(database_path=Path(directory) / "failed.sqlite3")
+            )
+            monitor.storage.initialize()
+            monitor.telegram.updates = Mock(
+                side_effect=RuntimeError("network unavailable")
+            )
+            stopped = Mock()
+            stopped.is_set.side_effect = [False, False, True]
+            with patch.object(APP, "STOP", stopped):
+                monitor.command_loop()
+            watchdog = APP.service_snapshot(monitor)["watchdog"]
+            self.assertEqual(watchdog["telegram_failures"], 2)
+            self.assertEqual(watchdog["telegram_consecutive_failures"], 2)
+            self.assertIsNone(watchdog["telegram_poll_success_age_seconds"])
+            self.assertIn(
+                "shelly_telegram_poll_success_age_seconds NaN",
+                APP.metrics_text(monitor),
+            )
+
     def test_phase_metrics_and_watchdog(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "metrics.sqlite3"

@@ -1997,6 +1997,8 @@ class Monitor:
         self.maintenance_until = 0.0
         self.last_loop_tick = time.monotonic()
         self.telegram_failures = 0
+        self.telegram_consecutive_failures = 0
+        self.telegram_last_poll_success: float | None = None
         self.last_db_maintenance = 0.0
         self.alert_candidate: tuple[str, float] | None = None
         self.phase_alert_levels = {"L2": "normal", "L3": "normal"}
@@ -4768,8 +4770,11 @@ class Monitor:
                     else:
                         self.handle_update(update)
                     self.remember_telegram_offset(offset)
+                self.telegram_last_poll_success = time.monotonic()
+                self.telegram_consecutive_failures = 0
             except Exception as exc:
                 self.telegram_failures += 1
+                self.telegram_consecutive_failures += 1
                 logger.warning("Telegram command polling failed: {}", exc)
                 STOP.wait(5)
 
@@ -5379,6 +5384,13 @@ def phase_metrics(monitor: Monitor, phase: str) -> list[str]:
     ]
 
 
+def telegram_poll_success_age(monitor: Monitor) -> float | None:
+    """Report age of last completed Telegram command poll, if known."""
+
+    last = monitor.telegram_last_poll_success
+    return None if last is None else max(0.0, time.monotonic() - last)
+
+
 def metrics_text(monitor: Monitor) -> str:
     """Render legacy-compatible and three-phase Prometheus metrics."""
     snap = monitor.state.snapshot()
@@ -5390,6 +5402,8 @@ def metrics_text(monitor: Monitor) -> str:
     outage_stats = monitor.storage.outage_stats(now, "L1")
     maintenance = int(monitor.maintenance_active())
     loop_age = time.monotonic() - monitor.last_loop_tick
+    poll_age = telegram_poll_success_age(monitor)
+    poll_age_metric = "NaN" if poll_age is None else f"{poll_age:.3f}"
     outage_help = OUTAGE_COUNT_HELP
     duration_help = OUTAGE_DURATION_HELP
     lines = [
@@ -5404,6 +5418,9 @@ def metrics_text(monitor: Monitor) -> str:
         f"shelly_outage_duration_today_seconds {outage_stats['duration']:.3f}",
         f"shelly_telegram_enabled {int(monitor.telegram.enabled)}",
         f"shelly_telegram_failures_total {monitor.telegram_failures}",
+        "shelly_telegram_consecutive_failures "
+        f"{monitor.telegram_consecutive_failures}",
+        f"shelly_telegram_poll_success_age_seconds {poll_age_metric}",
         f"shelly_maintenance_active {maintenance}",
         f"shelly_monitor_loop_age_seconds {loop_age:.3f}",
     ]
@@ -5431,6 +5448,10 @@ def service_snapshot(monitor: Monitor) -> dict[str, object]:
     payload["watchdog"] = {
         "loop_age": time.monotonic() - monitor.last_loop_tick,
         "telegram_failures": monitor.telegram_failures,
+        "telegram_consecutive_failures": monitor.telegram_consecutive_failures,
+        "telegram_poll_success_age_seconds": telegram_poll_success_age(
+            monitor
+        ),
     }
     payload["maintenance"] = monitor.maintenance_active()
     return payload
