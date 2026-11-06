@@ -31,6 +31,14 @@ one JSON object on standard output with `status`, `passed`, `checked`,
 error. The same exit codes apply, and file paths are never included in
 the JSONL record. Nothing is scheduled automatically.
 
+To detect stale archives, opt in to an age limit. For example,
+`--count 1 --max-age-hours 36` checks that the newest backup was
+created within the last 36 hours. Existing default checks do not
+reject old backups. If more than one archive is selected, the age
+limit applies to **every selected archive**. Invalid, future-dated
+or too-old archives fail with exit code 2; this checks file timestamps,
+not whether Telegram messages were delivered. No schedule is enabled.
+
 The verifier checks the corresponding `.sha256` file before extracting
 each archive, limits the size of decompressed data, restores it into an
 automatically removed temporary directory, runs
