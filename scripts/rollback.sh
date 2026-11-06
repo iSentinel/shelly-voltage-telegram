@@ -82,6 +82,8 @@ except (OSError, ValueError, tarfile.TarError) as error:
     print(f"ERROR: invalid source archive: {error}", file=sys.stderr)
     raise SystemExit(3) from error
 PY_CHECK
+    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-rollback-snapshot.py" \
+        --snapshot "$SNAPSHOT"
 }
 
 rescue_current_db() {
