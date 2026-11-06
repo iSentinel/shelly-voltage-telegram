@@ -74,6 +74,16 @@ curl -sS --max-time 5 http://127.0.0.1:8080/health
 The local HTTP server normally binds only to `127.0.0.1:8080`, inside the
 Docker host or LXC. Do not expose it publicly to simplify testing.
 
+### Local `/dashboard` measurement freshness
+
+The HTML dashboard uses the same per-phase freshness rules as
+`/status.json`. If a phase appears connected but its last valid
+reading is older than the configured `stale_after` interval,
+the page displays `stale` and an unavailable voltage rather than
+showing the cached number as current. It also shows how old the
+last valid reading is. Offline connectivity is not proof of
+mains power loss. The dashboard remains local and read-only.
+
 ### Use current fields from `/status.json`
 
 Older clients may use `voltage` and `frequency` as the
