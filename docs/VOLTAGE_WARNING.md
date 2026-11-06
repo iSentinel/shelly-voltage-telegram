@@ -66,3 +66,28 @@ running Telegram settings UI, .env or production database.
 overlaps_existing_alert flags the common case in which adding a second
 channel notification would duplicate the existing 207 V level alert.
 It does not disable existing notifications and makes no API calls.
+
+## Telegram collision / release gate
+
+The existing level-alert Telegram status already reacts below its
+configured low-warning threshold (typically 207 V), while the
+separate low-voltage alert triggers at 180 V. A second advisory
+that triggers at 207 V **or 212 V** necessarily overlaps at lower
+voltage readings. Raising the proposed threshold is NOT sufficient
+to prevent duplicate Telegram notifications.
+
+warning_collision_reason() distinguishes a duplicate warning
+range from a broader threshold that needs single-flow routing.
+validate_unique_notification_path() fails closed if the
+independent advisory is enabled while the existing low-level
+notification path is enabled. This should be called before any
+future wiring of the independent advisory into Telegram.
+
+Until a single notification/edit/cooldown path is implemented,
+the optional early_warning_enabled setting remains disabled
+and must NOT be activated in production. For a slower warning
+confirmation without another notification, prefer Draft PR #154,
+which reuses the existing level alert and recovery flow.
+
+These collision guards are pure functions only. They do not
+migrate settings, send Telegram messages or control Shelly.

@@ -167,18 +167,46 @@ def policy_from_settings(values: Mapping[str, str]) -> WarningPolicy:
     return policy
 
 
+def warning_collision_reason(
+    policy: WarningPolicy,
+    existing_low_v: float,
+    existing_enabled: bool,
+) -> str | None:
+    """Detect intersecting voltage regions for independent notifications."""
+
+    validate_policy(policy)
+    if not math.isfinite(existing_low_v) or not 0 < existing_low_v < 500:
+        raise ValueError("existing low alert threshold is invalid")
+    if not policy.enabled or not existing_enabled:
+        return None
+    if policy.below_v <= existing_low_v:
+        return "duplicate_low_voltage_range"
+    return "broader_warning_requires_single_notification_flow"
+
+
 def overlaps_existing_alert(
     policy: WarningPolicy,
     existing_low_v: float,
     existing_enabled: bool,
 ) -> bool:
-    """Flag proposed extra messages already covered by live level alerts."""
+    """Block independent warnings whenever enabled low ranges intersect."""
 
-    validate_policy(policy)
-    if not math.isfinite(existing_low_v):
-        raise ValueError("existing alert threshold must be finite")
     return (
-        policy.enabled
-        and existing_enabled
-        and policy.below_v <= existing_low_v
+        warning_collision_reason(policy, existing_low_v, existing_enabled)
+        is not None
     )
+
+
+def validate_unique_notification_path(
+    policy: WarningPolicy,
+    existing_low_v: float,
+    existing_enabled: bool,
+) -> None:
+    """Reject parallel warning delivery before any Telegram integration."""
+
+    reason = warning_collision_reason(policy, existing_low_v, existing_enabled)
+    if reason:
+        raise ValueError(
+            "independent early warning would overlap active level alert: "
+            + reason
+        )

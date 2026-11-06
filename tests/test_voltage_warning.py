@@ -13,6 +13,8 @@ from voltage_warning import (
     overlaps_existing_alert,
     policy_from_settings,
     policy_to_settings,
+    validate_unique_notification_path,
+    warning_collision_reason,
 )
 
 POLICY = WarningPolicy(enabled=True)
@@ -267,11 +269,52 @@ class VoltageWarningTests(unittest.TestCase):
 
         self.assertFalse(overlaps_existing_alert(POLICY, 207.0, False))
 
-    def test_existing_alert_overlap_with_higher_proposed_threshold(self):
-        """A broader early threshold needs separate UX evaluation."""
+    def test_broader_warning_still_overlaps_existing_low_region(self):
+        """Below 207 V both a 212 V advisory and a 207 V alert fire."""
 
         higher = replace(POLICY, below_v=212.0, clear_v=215.0)
-        self.assertFalse(overlaps_existing_alert(higher, 207.0, True))
+        self.assertTrue(overlaps_existing_alert(higher, 207.0, True))
+        self.assertEqual(
+            warning_collision_reason(higher, 207.0, True),
+            "broader_warning_requires_single_notification_flow",
+        )
+
+    def test_lower_and_equal_thresholds_also_collide(self):
+        """The 180 V critical path and 207 V warning can both fire."""
+
+        for low_v in (180.0, 207.0, 212.0):
+            with self.subTest(existing_threshold=low_v):
+                self.assertTrue(overlaps_existing_alert(POLICY, low_v, True))
+
+    def test_unique_notification_guard_fails_closed(self):
+        """Never enable duplicate Telegram notifications accidentally."""
+
+        for early_v in (180.0, 207.0, 212.0):
+            policy = replace(POLICY, below_v=early_v, clear_v=early_v + 3.0)
+            with (
+                self.subTest(early_threshold=early_v),
+                self.assertRaisesRegex(ValueError, "overlap"),
+            ):
+                validate_unique_notification_path(policy, 207.0, True)
+
+    def test_unique_notification_guard_allows_disabled_paths(self):
+        """The disabled-by-default candidate changes no live alerts."""
+
+        validate_unique_notification_path(WarningPolicy(), 207.0, True)
+        validate_unique_notification_path(POLICY, 207.0, False)
+        self.assertIsNone(
+            warning_collision_reason(WarningPolicy(), 207.0, True)
+        )
+
+    def test_invalid_active_existing_threshold_rejected(self):
+        """An invalid live threshold cannot silently bypass the guard."""
+
+        for low_v in (0.0, -5.0, 500.0, float("inf")):
+            with (
+                self.subTest(existing_threshold=low_v),
+                self.assertRaises(ValueError),
+            ):
+                validate_unique_notification_path(POLICY, low_v, True)
 
     def test_existing_invalid_alert_threshold_rejected(self):
         """Do not compare current alert level with a corrupt value."""
