@@ -1,3 +1,25 @@
+## 2026-11-06 — real Shelly restoration, outage #11
+
+- Real Pro EM-50 connectivity outage #11 lasted from 00:17:46 to
+  06:37:02 Europe/Kyiv. The deployed monitor `0.5.12-hw`
+  automatically resumed polling, remained healthy with 0 restarts,
+  and returned `/ready` HTTP 200.
+- PASS: exact natural-outage recovery baseline comparison, new SQLite
+  samples, SQLite integrity, 0 artificial 0 V records and Telegram
+  status-message ID rotation. No Telegram send/edit was executed
+  during acceptance; actual message visibility remains unverified.
+- PASS: read-only `0.5.13-hw` candidate pre-promotion check
+  against the real outage #11 baseline; 0 errors. Read-only
+  Telegram/Shelly/SQLite doctor checks all returned OK.
+- PASS: candidate installer and existing rollback scripts completed
+  their respective dry runs. The installer proposes to create a
+  new 0.5.12-hw rollback snapshot; the only currently validated
+  retained snapshot predates this and is from 0.5.11-hw.
+- The candidate has **not** been installed, released or approved.
+  Human-visible Telegram delivery, a verified current-version
+  rollback, owner approval, and Pro 3EM hardware testing are
+  separate outstanding acceptance gates.
+
 ## 2026-11-06 — 0.5.13-hw backup freshness QA
 
 - PR #111 merged `--max-age-hours` as an explicit opt-in
