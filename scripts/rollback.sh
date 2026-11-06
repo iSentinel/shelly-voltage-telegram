@@ -55,6 +55,8 @@ validate_snapshot() {
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
     sha256sum -c "$SNAPSHOT/source.tar.gz.sha256"
     sha256sum -c "${backup}.sha256"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-rollback-snapshot.py" \
+        --snapshot "$SNAPSHOT"
 }
 
 rescue_current_db() {
