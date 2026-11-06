@@ -1992,6 +1992,7 @@ class Monitor:
         ) = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
+        self.last_summary_attempt = -300.0
         self.weekly_digest_attempts: dict[str, float] = {}
         self.last_recovery_duration: float | None = None
         self.last_recovery_at: float | None = None
@@ -3244,6 +3245,10 @@ class Monitor:
         )
         if not due or day == self.last_summary_day:
             return
+        attempt = time.monotonic()
+        if attempt - self.last_summary_attempt < 300.0:
+            return
+        self.last_summary_attempt = attempt
         self.telegram.send(
             self.daily_summary_text(), chat_id=self.telegram.status_chat_id
         )
@@ -4766,13 +4771,24 @@ class Monitor:
             self.maybe_finalize_voltage_episode()
             self.maybe_rotate_stable_recovery_status()
             self.update_status()
-            try:
-                self.maybe_daily_summary()
-                self.maybe_weekly_private_reports()
-                self.maybe_database_maintenance()
-            except Exception as exc:
-                logger.warning("Periodic maintenance failed: {}", exc)
+            self.run_periodic_tasks()
             STOP.wait(self.cfg.poll_interval)
+
+    def run_periodic_tasks(self) -> None:
+        """Run independent jobs despite one Telegram or SQLite failure."""
+
+        jobs = (
+            ("daily_summary", self.maybe_daily_summary),
+            ("weekly_private", self.maybe_weekly_private_reports),
+            ("database", self.maybe_database_maintenance),
+        )
+        for name, task in jobs:
+            try:
+                task()
+            except Exception as exc:
+                logger.warning(
+                    "Periodic {} failed: {}", name, type(exc).__name__
+                )
 
     def maybe_database_maintenance(self) -> None:
         """Run rollup/checkpoint/optimize no more than once per day."""
