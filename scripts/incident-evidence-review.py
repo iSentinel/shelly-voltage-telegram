@@ -9,6 +9,7 @@ import math
 import re
 import sqlite3
 import sys
+import time
 from contextlib import closing
 from datetime import date, datetime
 from pathlib import Path
@@ -23,18 +24,21 @@ LABELS = {
         "Потеря связи Shelly",
         "Точное время выключения неизвестно",
         "Ориентировочный график не определяет причину",
+        "Текущее напряжение неизвестно: Shelly офлайн",
     ),
     "uk": (
         "Відключення електрики повідомив користувач",
         "Втрата зв'язку Shelly",
         "Точний час вимкнення невідомий",
         "Орієнтовний графік не визначає причину",
+        "Поточна напруга невідома: Shelly офлайн",
     ),
     "en": (
         "Power loss reported by operator",
         "Shelly connection loss",
         "Exact power-off time unknown",
         "Approximate schedule does not establish cause",
+        "Current voltage unknown: Shelly offline",
     ),
 }
 
@@ -47,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--db", type=Path, required=True)
     p.add_argument("--language", choices=tuple(LABELS), default="ru")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--at", help="Timezone-aware ISO-8601 observation time")
     return p.parse_args()
 
 
@@ -146,11 +151,44 @@ def checked_timeline(
     return int(match[1]), confirmation
 
 
-def review(record: dict, event: tuple, last: tuple | None) -> dict:
+def connection_gap_timing(
+    event: tuple, last: tuple, observed_at: float
+) -> dict:
+    """Report a network gap without guessing physical outage duration."""
+
+    connection, finish, _phase = event
+    end = observed_at if finish is None else finish
+    if not all(math.isfinite(x) for x in (connection, end, observed_at)):
+        raise ValueError("nonfinite incident observation time")
+    if observed_at < connection or end < connection:
+        raise ValueError("observation predates connectivity event")
+    if finish is not None and observed_at < finish:
+        raise ValueError("observation predates recorded recovery")
+    return {
+        "connection_gap_state": "open" if finish is None else "closed",
+        "connection_gap_elapsed_seconds": round(end - connection, 1),
+        "last_sample_age_at_loss_seconds": round(connection - last[0], 1),
+        "current_voltage_v": None,
+        "current_voltage_status": (
+            "unknown_while_connection_lost"
+            if finish is None
+            else "not_verified_by_review"
+        ),
+        "actual_power_off_duration_seconds": None,
+    }
+
+
+def review(
+    record: dict,
+    event: tuple,
+    last: tuple | None,
+    observed_at: float | None = None,
+) -> dict:
     """Correlate independent evidence without inferring an exact outage."""
 
     incident_id, confirmation = checked_timeline(record, event, last)
     connection, finish, phase = event
+    clock = time.time() if observed_at is None else observed_at
     return {
         "status": "pass",
         "incident_id": incident_id,
@@ -176,22 +214,24 @@ def review(record: dict, event: tuple, last: tuple | None) -> dict:
         "cause_verified_by_schedule": False,
         "current_voltage_assumed_zero": False,
         "read_only": True,
+        **connection_gap_timing(event, last, clock),
     }
 
 
 def operator_text(record: dict, language: str) -> str:
     """Explain proven and unproven facts without false outage times."""
 
-    confirmed, loss, unknown, caution = LABELS[language]
-    return "\n".join(
-        (
-            f"PASS: #{record['incident_id']}",
-            f"✅ {confirmed}",
-            f"📡 {loss}: {record['connection_lost_kyiv']}",
-            f"⚠️ {unknown}",
-            f"📅 {caution}",
-        )
-    )
+    confirmed, loss, unknown, caution, offline = LABELS[language]
+    lines = [
+        f"PASS: #{record['incident_id']}",
+        f"✅ {confirmed}",
+        f"📡 {loss}: {record['connection_lost_kyiv']}",
+        f"⚠️ {unknown}",
+        f"📅 {caution}",
+    ]
+    if record["connection_gap_state"] == "open":
+        lines.append(f"⚡ {offline}")
+    return "\n".join(lines)
 
 
 def main() -> int:
@@ -204,7 +244,8 @@ def main() -> int:
         if match is None:
             raise ValueError("incident identifier is missing")
         row, last = query_incident(args.db, int(match[1]))
-        result = review(record, row, last)
+        clock = offset_stamp(args.at) if args.at else time.time()
+        result = review(record, row, last, observed_at=clock)
     except (
         ValueError,
         TypeError,

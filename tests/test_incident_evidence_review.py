@@ -108,6 +108,90 @@ class IndependentIncidentEvidenceTests(unittest.TestCase):
         self.assertEqual(result["last_real_voltage_before_loss_v"], 234.8)
         self.assertTrue(result["read_only"])
 
+    def test_open_gap_duration_not_claimed_as_power_off_duration(self):
+        """An extended offline gap cannot measure real mains downtime."""
+
+        clock = epoch("2026-11-06T21:06:07+02:00")
+        record = REVIEW.read_incident(self.file)
+        row, last = REVIEW.query_incident(self.db, 15)
+        result = REVIEW.review(record, row, last, observed_at=clock)
+        self.assertEqual(result["connection_gap_state"], "open")
+        self.assertAlmostEqual(
+            result["connection_gap_elapsed_seconds"], 2100.0, delta=0.2
+        )
+        self.assertIsNone(result["actual_power_off_duration_seconds"])
+        self.assertIsNone(result["current_voltage_v"])
+        self.assertEqual(
+            result["current_voltage_status"],
+            "unknown_while_connection_lost",
+        )
+
+    def test_last_sample_age_is_relative_to_network_loss(self):
+        """Avoid displaying a pre-gap reading as a current voltage."""
+
+        result = self.run_review()
+        self.assertAlmostEqual(
+            result["last_sample_age_at_loss_seconds"], 42.1, delta=0.2
+        )
+        self.assertIsNone(result["current_voltage_v"])
+        self.assertFalse(result["current_voltage_assumed_zero"])
+
+    def test_closed_event_stays_historical_not_current(self):
+        """Closing Shelly connectivity does not verify today's voltage."""
+
+        with closing(sqlite3.connect(self.db)) as connection, connection:
+            connection.execute(
+                "update outages set ended_at=? where id=15",
+                (epoch("2026-11-06T21:02:00+02:00"),),
+            )
+        record = REVIEW.read_incident(self.file)
+        event, last = REVIEW.query_incident(self.db, 15)
+        result = REVIEW.review(
+            record, event, last, epoch("2026-11-06T21:03:00+02:00")
+        )
+        self.assertEqual(result["connection_gap_state"], "closed")
+        self.assertEqual(result["connection_gap_elapsed_seconds"], 1852.9)
+        self.assertEqual(
+            result["current_voltage_status"], "not_verified_by_review"
+        )
+        self.assertIsNone(result["actual_power_off_duration_seconds"])
+
+    def test_review_rejects_time_before_connection_loss(self):
+        """Never calculate a negative elapsed duration for an open gap."""
+
+        record = REVIEW.read_incident(self.file)
+        event, last = REVIEW.query_incident(self.db, 15)
+        with self.assertRaisesRegex(ValueError, "predates"):
+            REVIEW.review(
+                record, event, last, epoch("2026-11-06T20:30:59+02:00")
+            )
+
+    def test_russian_offline_report_hides_stale_voltage(self):
+        """Operator wording must say unknown rather than the old 234.8 V."""
+
+        result = self.run_review()
+        message = REVIEW.operator_text(result, "ru")
+        self.assertIn("Текущее напряжение неизвестно", message)
+        self.assertNotIn("234.8", message)
+
+    def test_naive_observation_cli_is_fail_closed(self):
+        """A timestamp without timezone must not use the host default."""
+
+        args = [
+            "incident-evidence-review",
+            "--incident",
+            str(self.file),
+            "--db",
+            str(self.db),
+            "--at",
+            "2026-11-06T21:00:00",
+            "--json",
+        ]
+        output = io.StringIO()
+        with patch.object(sys, "argv", args), redirect_stdout(output):
+            self.assertEqual(REVIEW.main(), 1)
+        self.assertEqual(json.loads(output.getvalue())["status"], "fail")
+
     def test_planned_window_does_not_verify_cause(self):
         """A matching forecast cannot prove exact power-switch timing."""
 

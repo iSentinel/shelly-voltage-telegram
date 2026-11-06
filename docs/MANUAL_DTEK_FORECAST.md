@@ -130,3 +130,20 @@ not silently become proof that the power is back. Corrupt, missing
 or verified-claim evidence is rejected. Synthetic zero-voltage
 samples are excluded. The tool uses no network, Telegram or
 SQLite writes.
+
+
+## Long-duration disconnection evidence
+
+During an extended offline period, the incident review emits
+connection_gap_state, connection_gap_elapsed_seconds and
+last_sample_age_at_loss_seconds. These are based on Shelly
+network reachability and actual stored sample timestamps, **not**
+physical mains switching timestamps or a measured power-outage
+duration. The physical outage duration and current voltage are
+always omitted from historical incident review.
+
+Operators may specify an offset-aware --at timestamp for repeatable
+read-only comparisons. When an outage remains open, the private
+RU/UK/EN summary explicitly says current voltage is unknown;
+after a recorded network recovery, the report still does not
+claim a live current voltage or verified power restoration.
