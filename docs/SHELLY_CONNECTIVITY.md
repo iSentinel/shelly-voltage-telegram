@@ -1,3 +1,18 @@
+### HTTP monitoring response freshness
+
+The local read-only monitoring endpoints
+`/status.json`, `/ready`, `/metrics` and `/dashboard`
+explicitly request **no caching**. Browsers and
+intermediaries should fetch current responses rather than
+reusing an older online/offline or voltage snapshot.
+A refresh still depends on the last **real** Shelly
+measurement: no-store does not imply the meter is online.
+
+Monitoring responses disable content sniffing and framing.
+The HTML dashboard permits only its built-in CSS; external
+scripts and frames are not needed. No configuration or
+electrical control is available from these endpoints.
+
 # Shelly shows online in its app, but Telegram says offline
 
 This guide diagnoses local Shelly RPC, the running Docker configuration,
