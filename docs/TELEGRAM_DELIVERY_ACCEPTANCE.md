@@ -1,3 +1,22 @@
+## 2026-11-06 — safe channel status replacement during recovery
+
+During a confirmed Shelly **connectivity** recovery, the bot
+must preserve the previous status post until the Telegram
+API reports a successful replacement send. Only after
+persisting the new message ID may the previous post be
+unpinned and deleted. If the send fails, keep the old
+message and its ID, retain a private SQLite marker to
+retry after transport recovery or process restart, and
+cancel the marker if another real outage begins.
+
+This prevents **known** failed publishes from leaving an
+empty status channel. An ambiguous network timeout after
+Telegram has accepted a message cannot be guaranteed
+exactly-once by this API and still requires actual
+channel-view validation. No live Telegram sends or
+artificial Shelly alarms are permitted as part of
+source-only QA; use deterministic mocked tests instead.
+
 ## 2026-11-06 — read-only Gateway baseline for Shelly outage #13
 
 At 10:30:51 Europe/Kyiv the live Shelly lost connectivity

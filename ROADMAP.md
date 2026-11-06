@@ -1,3 +1,43 @@
+## 2026-11-06 12:44 Europe/Kyiv — safe recovery status replacement candidate
+
+- **FIELD / READ-ONLY:** Shelly Pro EM-50 remained offline under
+  physical connectivity outage #13, open since 10:30:51 Kyiv.
+  At 12:37 production `0.5.13-hw` was Docker healthy with
+  0 restarts, /health=200, /ready=503. SQLite quick_check OK,
+  21,950 real samples and no invented 0 V values; the last
+  235.7 V reading at 10:30:08 is **stale**. Telegram and SQLite
+  doctor checks were OK; Shelly doctor correctly reported
+  unavailable. Existing private outage #13 pre-recovery
+  baseline remains accepted, mode 0600.
+- **REVIEW FINDING:** on confirmed connectivity recovery the
+  installed implementation deletes the old status message
+  *before* sending its replacement. A Telegram transport failure
+  can therefore leave the channel without its previous status.
+  This is a source-code defect candidate, not a witnessed
+  failed delivery on the current offline production instance.
+- **SOURCE-ONLY FIX:** send a new recovery status, persist
+  its message ID, then unpin/delete the previous message.
+  On publish failure preserve the original message and
+  record a pending rotation in SQLite. Retrying works
+  through regular status updates and after process restart;
+  a new confirmed outage cancels the pending recovery.
+  The recovery banner continues to say **Shelly connectivity**
+  has recovered, not that mains power was restored.
+- **QA:** four added regression tests cover failed publish,
+  send-before-delete order, retry across restart and pending
+  rotation cancellation by a new outage. Two older status
+  tests now mock exact metadata keys. Isolated network-disabled
+  Docker full suite **447/447 PASS**, Ruff, PEP8 and
+  maximum 40-line functions gate PASS. This is a
+  pre-deployment candidate, with **no live Telegram calls**.
+- **NEXT:** require Python 3.11/3.12/3.13 GitHub CI and
+  source review; keep installed production unchanged
+  while Shelly offline. When it naturally reconnects,
+  verify outage #13 with its own private baseline,
+  check subscriber-visible status and 15-minute
+  stabilization before deciding on any later deployment
+  or public release.
+
 ## 2026-11-06 12:20 Europe/Kyiv — prolonged outage #13 and restart idempotence QA
 
 - **PRODUCTION / READ-ONLY:** physical Shelly Pro EM-50 still offline

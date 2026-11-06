@@ -65,6 +65,7 @@ VERSION = read_version()
 SCHEMA_VERSION = 3
 RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
 RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
+RECOVERY_ROTATION_PENDING_KEY = "telegram_recovery_rotation_pending_at"
 STOP = threading.Event()
 
 MENU_ALLOWED_ACTIONS = (
@@ -2247,6 +2248,7 @@ class Monitor:
         self.storage.delete_meta("voltage_episode")
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.storage.delete_meta(RECOVERY_STATUS_STABLE_KEY)
+        self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
 
     def record_poll_failure(self, exc: Exception) -> None:
         """Record one failed poll and persist an offline transition."""
@@ -2486,6 +2488,14 @@ class Monitor:
         connectivity = str(snap["connectivity"])
         if not self.telegram_due(voltage, connectivity):
             return
+        if connectivity == "online" and self.storage.get_meta(
+            RECOVERY_ROTATION_PENDING_KEY
+        ):
+            duration = self.last_recovery_duration
+            if duration is None:
+                duration = self.storage.latest_closed_outage_duration()
+            self.rotate_status_after_recovery(duration or 0.0)
+            return
         key = self.status_message_key()
         if not self.upsert_status_message(
             multiphase_status_text(self), key, self.telegram.status_chat_id
@@ -2554,22 +2564,38 @@ class Monitor:
                 )
 
     def rotate_status_after_recovery(self, duration: float) -> None:
-        """Replace the stable status post after a confirmed power recovery."""
+        """Keep the old channel status until its replacement is published."""
 
         if not self.telegram.enabled:
             return
-        key = self.status_message_key()
-        stored = self.storage.get_meta(key)
-        if stored:
-            self.delete_previous_status(stored)
-        self.storage.delete_meta(key)
-        self.storage.delete_meta("telegram_status_pinned_id")
-        self.storage.delete_meta("voltage_status_edit_window_started_at")
+        pending_at = self.storage.get_meta(RECOVERY_ROTATION_PENDING_KEY)
         self.last_recovery_duration = duration
-        self.last_recovery_at = time.time()
-        self.last_telegram = 0.0
-        self.last_sent_connectivity = None
-        self.update_status()
+        self.last_recovery_at = (
+            float(pending_at) if pending_at else time.time()
+        )
+        key = self.status_message_key()
+        old_id = self.storage.get_meta(key)
+        try:
+            new_id = self.telegram.send(
+                multiphase_status_text(self),
+                reply_markup=self.status_keyboard(),
+                chat_id=self.telegram.status_chat_id,
+            )
+        except Exception as exc:
+            logger.warning("Telegram recovery status publish failed: {}", exc)
+            self.storage.set_meta(
+                RECOVERY_ROTATION_PENDING_KEY, str(self.last_recovery_at)
+            )
+            self.last_telegram = 0.0
+            self.last_sent_connectivity = None
+            return
+        self.storage.set_meta(key, str(new_id))
+        self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
+        self.storage.delete_meta("voltage_status_edit_window_started_at")
+        self.delete_previous_voltage_status(old_id, new_id)
+        self.storage.delete_meta("telegram_status_pinned_id")
+        self.ensure_status_pinned(new_id)
+        self.finish_voltage_status_update()
 
     def maybe_availability_alert(
         self, state: str, duration: float | None = None
