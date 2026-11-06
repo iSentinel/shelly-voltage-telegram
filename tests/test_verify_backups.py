@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import tempfile
+import time
 import unittest
 from contextlib import closing, redirect_stdout
 from pathlib import Path
@@ -251,6 +252,82 @@ class BackupVerificationTests(unittest.TestCase):
             )
         self.assertEqual(result, 2)
         self.assertEqual(json.loads(output.getvalue())["status"], "fail")
+
+    def test_max_age_passes_a_fresh_backup(self):
+        """An opt-in age limit accepts a newly created archive."""
+
+        create_backup(self.root)
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "1",
+                    "--max-age-hours",
+                    "36",
+                ]
+            ),
+            0,
+        )
+
+    def test_max_age_rejects_a_stale_backup(self):
+        """A valid but old backup fails only when age checking is on."""
+
+        archive = create_backup(self.root)
+        old = time.time() - 7200
+        os.utime(archive, (old, old))
+        self.assertEqual(self.verify(), 0)
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "1",
+                    "--max-age-hours",
+                    "1",
+                ]
+            ),
+            2,
+        )
+
+    def test_max_age_rejects_a_future_timestamp(self):
+        """A future-dated archive must not pass a freshness check."""
+
+        archive = create_backup(self.root)
+        future = time.time() + 7200
+        os.utime(archive, (future, future))
+        self.assertEqual(
+            BACKUPS.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "1",
+                    "--max-age-hours",
+                    "36",
+                ]
+            ),
+            2,
+        )
+
+    def test_max_age_rejects_invalid_options(self):
+        """Reject zero, negative and non-finite maximum age values."""
+
+        create_backup(self.root)
+        for value in ("0", "-1", "nan", "inf", "-inf"):
+            with self.subTest(value=value):
+                result = BACKUPS.main(
+                    [
+                        "--backup-dir",
+                        str(self.root),
+                        "--count",
+                        "1",
+                        f"--max-age-hours={value}",
+                    ]
+                )
+                self.assertEqual(result, 2)
 
     def test_help_is_available(self):
         """All operator tools must support the standard help flag."""
