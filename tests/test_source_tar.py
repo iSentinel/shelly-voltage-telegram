@@ -26,6 +26,14 @@ def make_fixture(root: Path) -> None:
         "nested/README.md": "safe",
         "__pycache__/generated.pyc": "private",
         "scripts/run.py": "print(123)",
+        "validation/private.json": "hidden",
+        "dist/private.tar.gz": "hidden",
+        "dist-audit/private.json": "hidden",
+        "dist-publish/private.tar.gz": "hidden",
+        ".ruff_cache/analysis": "hidden",
+        "nested/local.sqlite3": "hidden",
+        "nested/debug.log": "hidden",
+        "ROADMAP.md.pre-0.5.3": "hidden",
     }
     for name, content in files.items():
         path = root / name
@@ -52,6 +60,38 @@ class SourceTarTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(missing.returncode, 2)
+
+    def test_excludes_local_artifacts_and_symlinks(self):
+        """Keep private QA data, generated files and links out of sources."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_fixture(root)
+            (root / "linked-secret").symlink_to(root / ".env")
+            (root / "linked-folder").symlink_to(
+                root / "secrets", target_is_directory=True
+            )
+            result = subprocess.run(
+                ["bash", str(SCRIPT), str(root)],
+                check=True,
+                capture_output=True,
+            )
+            with tarfile.open(fileobj=io.BytesIO(result.stdout)) as archive:
+                names = set(archive.getnames())
+                for value in (
+                    "./linked-secret",
+                    "./linked-folder",
+                    "./validation/private.json",
+                    "./dist/private.tar.gz",
+                    "./dist-audit/private.json",
+                    "./dist-publish/private.tar.gz",
+                    "./.ruff_cache/analysis",
+                    "./nested/local.sqlite3",
+                    "./nested/debug.log",
+                    "./ROADMAP.md.pre-0.5.3",
+                ):
+                    self.assertNotIn(value, names)
+                self.assertIn("./scripts/run.py", names)
 
     def test_excludes_env_backups_and_preserves_template(self):
         """Omit credentials even when their names resemble local backups."""
