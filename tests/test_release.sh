@@ -58,3 +58,25 @@ RELEASE="$EXTRACT/$NAME"
 )
 
 echo "RELEASE_REPRODUCIBILITY PASS"
+
+# A local credential backup must never enter a public release archive.
+FIXTURE="$TMP/private-source"
+mkdir -p "$FIXTURE/scripts" "$FIXTURE/secrets" "$FIXTURE/nested"
+cp "$PROJECT/scripts/release.sh" "$FIXTURE/scripts/release.sh"
+for file in VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py Dockerfile compose.yaml requirements.txt README.md .env.example; do
+    cp "$PROJECT/$file" "$FIXTURE/$file"
+done
+printf "%s\n" "SHELLY_HOST=private.invalid" > "$FIXTURE/.env"
+printf "%s\n" "TELEGRAM_BOT_TOKEN=fake-private-value" > "$FIXTURE/.env.pre-ip-fix-20261104"
+printf "%s\n" "SHELLY_PASSWORD=fake-private-value" > "$FIXTURE/.env.bak"
+printf "%s\n" "PRIVATE_CREDENTIAL=fake-value" > "$FIXTURE/nested/.env.secret"
+printf "%s\n" "fake-private-value" > "$FIXTURE/secrets/token"
+"$FIXTURE/scripts/release.sh" --output-dir "$TMP/private-dist" --source-date-epoch "$EPOCH" > "$TMP/private-release.log"
+tar -tzf "$TMP/private-dist/$NAME.tar.gz" > "$TMP/private-list.txt"
+grep -q "/.env.example$" "$TMP/private-list.txt"
+if grep -E "/\\.env" "$TMP/private-list.txt" | grep -v "/\\.env.example$"; then
+    echo "ERROR: local .env backup leaked into release archive" >&2
+    exit 1
+fi
+! grep -q "/secrets/" "$TMP/private-list.txt"
+echo "RELEASE_PRIVATE_ENV_EXCLUSION PASS"
