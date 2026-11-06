@@ -83,11 +83,9 @@ snapshot_upgrade() {
         echo "DRY-RUN: snapshot current source and SQLite -> $snapshot"
         return
     fi
-    mkdir -p "$snapshot"
-    tar -C "$TARGET" \
-        --exclude='./.git' --exclude='./.env' --exclude='./secrets' \
-        --exclude='__pycache__' --exclude='*.pyc' \
-        -czf "$snapshot/source.tar.gz" .
+    mkdir -m 0700 -p "$snapshot"
+    bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
+        gzip -c > "$snapshot/source.tar.gz"
     DATABASE_PATH=/var/lib/shelly-voltage/voltage.sqlite3 \
         BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
         "$SOURCE/scripts/backup.sh" > "$snapshot/backup.log"
@@ -108,9 +106,8 @@ copy_source() {
         echo "DRY-RUN: copy project files $SOURCE -> $TARGET, preserving .env/secrets"
         return
     fi
-    tar -C "$SOURCE" \
-        --exclude='./.git' --exclude='./.env' --exclude='./secrets' \
-        -cf - . | tar -C "$TARGET" -xf -
+    bash "$SOURCE/scripts/source-tar.sh" "$SOURCE" |
+        tar -C "$TARGET" -xf -
 }
 
 prepare_state() {

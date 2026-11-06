@@ -4,6 +4,30 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
+## Protect credentials in pre-upgrade snapshots
+
+When `scripts/install.sh` upgrades an existing deployment from a separate
+source directory, it first creates a versioned source + online SQLite
+backup. The source snapshot and the source-copy step share
+`scripts/source-tar.sh`: it excludes local `.env` files and **all
+`.env.*` backups except the public `.env.example` template**, plus
+`secrets/`, Git metadata, and generated Python bytecode. This avoids
+archiving older configuration backups that may still hold credentials.
+
+The new snapshot directory is created with mode `0700`. The source
+and SQLite archives retain their SHA256 checksums and can be checked
+with the existing rollback dry run:
+
+```bash
+sudo bash scripts/rollback.sh --dry-run --no-start \
+  --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory>
+```
+
+Create or choose the snapshot on the host; never upload private
+archives, credentials, or SQLite data to a public repository.
+`bash scripts/source-tar.sh --help` describes the standalone archive
+filter. These safety checks do not enable automatic installation.
+
 ## Telegram interface
 
 An authorized administrator can send `/updates` directly to the bot in a
