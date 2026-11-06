@@ -7,11 +7,13 @@ import argparse
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
 import sys
 import tempfile
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -48,6 +50,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--jsonl",
         action="store_true",
         help="Emit a single JSON Lines result on standard output.",
+    )
+    parser.add_argument(
+        "--max-age-hours",
+        type=float,
+        help="Optionally fail backups older than this many hours.",
     )
     return parser.parse_args(argv)
 
@@ -124,9 +131,31 @@ def inspect_restored_database(archive: Path, max_bytes: int) -> int:
             return int(row[0])
 
 
-def validate_archive(index: int, archive: Path, limit: int) -> bool:
+def age_error(archive: Path, max_age_hours: float | None) -> str | None:
+    """Reject a stale or implausibly future-dated backup when requested."""
+
+    if max_age_hours is None:
+        return None
+    try:
+        age_seconds = time.time() - archive.stat().st_mtime
+    except OSError:
+        return "backup timestamp unreadable"
+    if age_seconds < -300:
+        return "backup timestamp is in the future"
+    if age_seconds > max_age_hours * 3600:
+        return "backup is older than allowed"
+    return None
+
+
+def validate_archive(
+    index: int, archive: Path, limit: int, max_age_hours: float | None = None
+) -> bool:
     """Check one archive, returning a stable PASS or FAIL result."""
 
+    problem = age_error(archive, max_age_hours)
+    if problem:
+        logger.error("FAIL copy {}: {}", index, problem)
+        return False
     problem = checksum_error(archive)
     if problem:
         logger.error("FAIL copy {}: {}", index, problem)
@@ -194,6 +223,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.count < 1 or args.max_size_mib < 1:
         logger.error("FAIL: count and max-size-mib must be positive")
         return report_result("FAIL", 0, 0, args.count, args.jsonl)
+    if args.max_age_hours is not None and (
+        not math.isfinite(args.max_age_hours) or args.max_age_hours <= 0
+    ):
+        logger.error("FAIL: max-age-hours must be positive and finite")
+        return report_result("FAIL", 0, 0, args.count, args.jsonl)
     if not args.backup_dir.is_dir():
         logger.error("FAIL: backup directory not available")
         return report_result("FAIL", 0, 0, args.count, args.jsonl)
@@ -209,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     limit = args.max_size_mib * BLOCK_SIZE
     passed = sum(
-        validate_archive(i, archive, limit)
+        validate_archive(i, archive, limit, args.max_age_hours)
         for i, archive in enumerate(selected, 1)
     )
     complete = len(selected) == args.count and passed == args.count
