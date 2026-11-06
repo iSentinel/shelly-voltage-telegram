@@ -3119,7 +3119,7 @@ class Monitor:
         )
 
     def outage_history_text(self, phase: str = "L1") -> str:
-        """Render localized recent confirmed outage intervals."""
+        """Render Shelly connectivity gaps, not proven power outages."""
 
         try:
             rows = outage_history(self.cfg.database_path, phase, 10)
