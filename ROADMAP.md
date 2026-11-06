@@ -1,3 +1,34 @@
+## 2026-11-06 04:46 Europe/Kyiv Gateway continuation checkpoint
+
+- **DONE / source only:** PR #107 merged as `d471212219a2b78f6f464a3d28937ef847c93055`.
+  The backup verifier now checks a SHA256 sidecar's optional archive
+  filename, rejects sidecar symlinks and oversized checksum files,
+  and supports legacy digest-only / absolute-path sidecars.
+- **DONE / source only:** PR #108 merged as
+  `46b566153e0df6f18ad0672fa2bfc88df11faa19`.
+  Optional `--jsonl` reports one path-free read-only PASS/FAIL record
+  with `passed`, `checked` and `requested` fields and unchanged exit codes.
+  No automated verification schedule was enabled.
+- **QA:** network-disabled isolated full suite 404/404 PASS,
+  Ruff 0.14.2 and the 40-line/function quality gate PASS.
+  GitHub CI passed on Python 3.11, 3.12 and 3.13 for both PRs.
+  Source parity with merged `main` PASS. The latest three actual
+  daily backup archives passed checksum and SQLite restoration
+  checks (20,589 / 17,414 / 14,501 retained samples).
+- **Live field snapshot (Gateway / LXC 110):** Docker remains healthy,
+  restart count 0, production `0.5.12-hw`, physical-acceptance marker
+  `0.5.6-hw`. Pro EM-50 is offline; `/ready=503`, outage #11 remains
+  open, SQLite `quick_check=ok`, 20,589 samples and no synthetic 0 V.
+  Private read-only evidence saved as
+  `validation/2026-11-06-gateway-progress-0446.json` on production.
+- **NEXT / hardware-gated:** verify the captured outage #11 after
+  natural restoration, confirm fresh voltage samples and Telegram
+  recovery/stable-message behavior, verify rollback readiness and
+  administrator-visible Telegram features before considering a
+  controlled `0.5.13-hw` promotion. Do not induce an electrical
+  event, auto-promote the candidate or enable optional subscriptions.
+  Pro 3EM / 3CT63 acceptance remains blocked until real hardware exists.
+
 ## 2026-11-06 automated read-only backup acceptance
 
 - **Source stage:** added `scripts/verify-backups.py`, an opt-in CLI
