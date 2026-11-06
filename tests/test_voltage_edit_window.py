@@ -107,6 +107,7 @@ class VoltageEditWindowTests(unittest.TestCase):
             operations.attach_mock(getattr(monitor.telegram, name), name)
         self.event(monitor, "critical_low", 1000.0)
         self.event(monitor, "recovered", 1599.0)
+        monitor.storage.set_meta("telegram_status_pinned_id", "101")
         operations.reset_mock()
         self.event(monitor, "critical_high", 1601.0)
         self.assertEqual(
