@@ -2001,6 +2001,7 @@ class Monitor:
         self.telegram_consecutive_failures = 0
         self.telegram_last_poll_success: float | None = None
         self.last_db_maintenance = 0.0
+        self.last_db_maintenance_attempt = -300.0
         self.alert_candidate: tuple[str, float] | None = None
         self.phase_alert_levels = {"L2": "normal", "L3": "normal"}
         self.phase_alert_candidates: dict[str, tuple[str, float]] = {}
@@ -4780,6 +4781,10 @@ class Monitor:
         now = time.time()
         if now - self.last_db_maintenance < 86400:
             return
+        attempt = time.monotonic()
+        if attempt - self.last_db_maintenance_attempt < 300.0:
+            return
+        self.last_db_maintenance_attempt = attempt
         self.storage.rollup_hourly(now - 3600)
         result = self.storage.database_maintenance()
         self.last_db_maintenance = now
