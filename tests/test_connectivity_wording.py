@@ -6,7 +6,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_app import APP, config
 
@@ -141,6 +141,80 @@ class ConnectivityWordingTests(unittest.TestCase):
                 text = monitor.outage_history_text("L1")
             self.assertIn("потери связи", text.lower())
             self.assertIn("не всегда означает", text.lower())
+
+    def test_telegram_timeout_never_creates_a_zero_measurement(self):
+        """A failed availability send must not fabricate voltage data."""
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "timeout.sqlite3"
+            monitor = APP.Monitor(
+                config(
+                    database_path=path,
+                    telegram_token="test-token",
+                    telegram_chat_id="123",
+                    availability_alerts_enabled=True,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.telegram.send = Mock(
+                side_effect=RuntimeError("ReadTimeout")
+            )
+            for _ in range(5):
+                monitor.record_poll_failure(RuntimeError("No route to host"))
+            self.assertEqual(monitor.storage.outage_total(), 1)
+            monitor.telegram.send.assert_called_once()
+            self.assertIsNone(monitor.storage.latest())
+
+    def test_indeterminate_alert_send_does_not_loop(self):
+        """An API timeout does not prove that Telegram rejected a send."""
+
+        with tempfile.TemporaryDirectory() as folder:
+            monitor = APP.Monitor(
+                config(
+                    database_path=Path(folder) / "pending.sqlite3",
+                    telegram_token="test-token",
+                    telegram_chat_id="123",
+                    availability_alerts_enabled=True,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.telegram.send = Mock(
+                side_effect=RuntimeError("ConnectionError")
+            )
+            for _ in range(20):
+                monitor.record_poll_failure(RuntimeError("network"))
+            monitor.telegram.send.assert_called_once()
+            text = monitor.telegram.send.call_args.args[0]
+            self.assertNotIn("electricity off", text.lower())
+            self.assertNotIn("питание отключено", text.lower())
+
+    def test_status_edit_can_resume_after_indeterminate_alert(self):
+        """The editable status path remains usable after a send timeout."""
+
+        with tempfile.TemporaryDirectory() as folder:
+            monitor = APP.Monitor(
+                config(
+                    database_path=Path(folder) / "status.sqlite3",
+                    telegram_token="test-token",
+                    telegram_chat_id="123",
+                    telegram_status_chat_id="-100123",
+                    availability_alerts_enabled=True,
+                )
+            )
+            monitor.storage.initialize()
+            monitor.storage.set_meta("telegram_status_message_id", "147")
+            monitor.telegram.send = Mock(
+                side_effect=RuntimeError("ReadTimeout")
+            )
+            monitor.telegram.edit = Mock()
+            monitor.maybe_availability_alert("offline")
+            monitor.update_status()
+            monitor.telegram.send.assert_called_once()
+            monitor.telegram.edit.assert_called_once()
+            self.assertEqual(
+                monitor.storage.get_meta("telegram_status_message_id"),
+                "147",
+            )
 
     def test_no_history_uses_connection_loss_wording(self):
         """Zero events means zero connectivity gaps, not powered uptime."""
