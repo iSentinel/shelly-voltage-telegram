@@ -55,7 +55,7 @@ _TEXT = {
         "no_measurements": "{phase}: нет корректных измерений.",
         "l1_today": "{phase} сегодня: {minimum}–{maximum} В, ср. {average} В",
         "power_recovered": (
-            "✅ Питание восстановлено · перерыв связи {duration}"
+            "✅ Связь с Shelly восстановлена · перерыв связи {duration}"
         ),
         "last_l1": "🕐 Последние данные {phase}: {stamp}",
         "event_low": "🚨 Низкое напряжение сети",
@@ -339,7 +339,7 @@ _TEXT = {
             "{phase} сьогодні: {minimum}–{maximum} В, сер. {average} В"
         ),
         "power_recovered": (
-            "✅ Живлення відновлено · перерва зв'язку {duration}"
+            "✅ Зв’язок із Shelly відновлено · перерва зв’язку {duration}"
         ),
         "last_l1": "🕐 Останні дані {phase}: {stamp}",
         "event_low": "🚨 Низька напруга мережі",
@@ -618,7 +618,9 @@ _TEXT = {
         "network_title": "⚡ Grid voltage · {phases}",
         "no_measurements": "{phase}: no valid measurements.",
         "l1_today": "{phase} today: {minimum}–{maximum} V, avg {average} V",
-        "power_recovered": "✅ Power restored · connection loss {duration}",
+        "power_recovered": (
+            "✅ Shelly connection restored · connection loss {duration}"
+        ),
         "last_l1": "🕐 Last {phase} data: {stamp}",
         "event_low": "🚨 Low grid voltage",
         "event_warning_low": "⚠️ Low voltage",
