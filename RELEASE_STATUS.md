@@ -1,3 +1,26 @@
+## 2026-11-06 — 0.5.13-hw candidate source verification
+
+- `0.5.13-hw` is a **source-only candidate**, not a public release
+  or installed service. Production remains on `0.5.12-hw`.
+- PR #107 (merged) hardens archived backup checksum sidecars against
+  wrong filenames, symlinks and oversized metadata.
+- PR #108 (merged) adds opt-in, path-free `--jsonl` reporting while
+  retaining normal CLI output and PASS/FAIL exit codes.
+- Acceptance in an isolated offline Docker test environment:
+  **404/404 unit tests PASS**, Ruff and maintainability checks PASS;
+  both PRs passed GitHub CI for Python 3.11, 3.12 and 3.13.
+- Three real archived SQLite backups passed read-only verification;
+  their restored measurement counts were 20,589 / 17,414 / 14,501.
+- Latest Gateway production inspection: Docker healthy with zero
+  restarts, Shelly offline, `/ready=503`, outage #11 open,
+  SQLite integrity OK and zero synthetic 0 V samples.
+- No production restart, service configuration change, backup
+  schedule change, Telegram message or Shelly write RPC was made.
+- **Blocked until natural hardware recovery:** validate outage #11,
+  fresh samples, 15-minute stable-status behavior, Telegram admin
+  visibility and rollback safety before a separately approved
+  `0.5.13-hw` promotion. Physical Pro 3EM testing is still pending.
+
 ## 2026-11-04 natural restoration evidence (partial hardware acceptance)
 
 - PASS: a naturally occurring Pro EM-50 availability outage was recorded
