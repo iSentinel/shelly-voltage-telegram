@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ class SQLiteArchiveTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         dbpath = self.root / "sample.sqlite3"
-        with sqlite3.connect(dbpath) as db:
+        with closing(sqlite3.connect(dbpath)) as db, db:
             db.execute("CREATE TABLE measurements(voltage REAL)")
             db.execute("INSERT INTO measurements VALUES (230.0)")
         self.archive = self.root / "voltage-test.sqlite3.gz"
@@ -62,7 +63,7 @@ class SQLiteArchiveTests(unittest.TestCase):
         """Stop extraction when the uncompressed SQLite exceeds the limit."""
 
         oversized = self.root / "large.sqlite3"
-        with sqlite3.connect(oversized) as db:
+        with closing(sqlite3.connect(oversized)) as db, db:
             db.execute("CREATE TABLE measurements(voltage REAL)")
             db.execute("CREATE TABLE padding(blob BLOB)")
             db.execute("INSERT INTO padding VALUES (?)", (bytes(2_000_000),))
