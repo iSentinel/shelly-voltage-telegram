@@ -1,3 +1,27 @@
+## 2026-11-06 — Telegram transport recovery and source-only observability
+
+- **Installed runtime:** `0.5.13-hw` with PR #128 remains the
+  production-tested installation on LXC 110. Gateway checked
+  Docker healthy, readiness 200, real Shelly online,
+  SQLite integrity OK and no open outages. No new installation.
+- **Observed network interruption:** twelve cumulative command
+  polling failures (11 connection errors and one read timeout)
+  occurred at about 09:48–09:49 Kyiv while Gateway SSH was also
+  temporarily unavailable. Read-only Telegram API doctor passed
+  at 09:52; no further transport failures were observed after
+  09:50 at the 09:53 log inspection. These are not identical-edit
+  errors and should not be interpreted as twelve ongoing faults.
+- **Source-only improvements:** PR #132 improves backup freshness
+  validation without changing retention checks (428/428 tests).
+  New opt-in Telegram observability fields distinguish total
+  polling failures, consecutive failures and time since the last
+  successful poll (430/430 tests, Ruff PASS). These code
+  enhancements are not yet installed.
+- **Release boundary:** keep public `RELEASE_VERSION=0.5.12-hw`
+  until channel-visible message/edit acceptance is complete.
+  Owner-reported private-chat repeated-button test is PASS;
+  public channel delivery under natural transitions remains pending.
+
 ## 2026-11-06 — installed 0.5.13-hw Telegram no-op edit hotfix
 
 - **Deployed source:** `0.5.13-hw` with merged PR #128
