@@ -1,3 +1,33 @@
+## 2026-11-06 — pre-rollback archive validation and clean snapshot
+
+- Production `0.5.12-hw` remains installed and healthy on
+  LXC 110, with real Shelly online, HTTP readiness 200, zero
+  Docker restarts, SQLite integrity OK, and no open outages.
+- PR #120 merged: retain private operator config backups and
+  acceptance reports during rollback, and keep them out of new
+  source snapshots. The current 0.5.12-hw rollback source
+  snapshot has 75 safe entries, with the required
+  `.env.example` and no local `.env.*`, `validation/`,
+  caches, links or build outputs.
+- PR #121 merged: before stopping services, source archive
+  contents are checked for traversal, absolute paths,
+  symbolic/hard links, special files, privileged modes and
+  excessive size. Extraction also skips operator-owned
+  config and evidence from historical archives.
+- PASS: both SHA256 snapshot sidecars and the actual private
+  0.5.12-hw rollback `--dry-run --no-start`. Disposable
+  restore of 20,902 backed-up samples previously passed.
+  Malicious traversal/link fixture archives were rejected.
+- PASS: 413/413 isolated full-suite tests, pinned Ruff and
+  Python 3.11/3.12/3.13 CI for both source PRs.
+- PASS: newest actual daily SQLite backup, 36-hour freshness
+  and restore check (1/1), plus read-only current
+  `0.5.13-hw` preflight against natural outage #11.
+- **Not performed:** actual production rollback, 0.5.13-hw
+  installation, its live Telegram send/edit/visibility
+  acceptance, publication of a new release, or physical
+  Pro 3EM/3CT63 validation.
+
 ## 2026-11-06 — secure rollback preparation and release packaging
 
 - **Installed runtime:** production `0.5.12-hw`, healthy/ready,
