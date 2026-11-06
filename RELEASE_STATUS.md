@@ -1,3 +1,29 @@
+## 2026-11-06 — candidate rollback SQLite preflight complete
+
+- **Candidate source:** `0.5.13-hw`, including merged PR #124
+  (`a53bf7f`). The source installer now checks its freshly
+  created SQLite backup, and rollback verifies a bounded temporary
+  SQLite restore **before** any Docker or database changes. The
+  earlier source archive safety and private-evidence protection
+  remain intact.
+- **Validation:** 419/419 tests PASS in isolated offline Docker,
+  Ruff 0.14.2 and function-length gate PASS, and GitHub CI
+  Python 3.11/3.12/3.13 PASS. A deliberately corrupt SQLite
+  archive with a correct SHA256 fails before service-stop steps.
+- **Real snapshot:** the private `0.5.12-hw` rollback point
+  passed checksum, safe source inspection, SQLite temporary
+  restore with 20,902 measurements, and rollback dry-run.
+  No live rollback or candidate installation occurred.
+- **Latest production Gateway observation (08:22 Kyiv):**
+  installed `0.5.12-hw`, Shelly online, 238.2 V / 50.0 Hz,
+  Docker healthy/0 restarts, readiness HTTP 200, SQLite OK,
+  21,218 samples, 0 fake 0 V rows and no open outages.
+- **Pending:** owner-approved production installation,
+  independently verified `0.5.13-hw` Telegram delivery/edit
+  and on-device behavior, plus a real controlled rollback
+  acceptance. Do not mark the candidate hardware-accepted
+  solely from source tests or snapshot verification.
+
 ## 2026-11-06 — pre-rollback archive validation and clean snapshot
 
 - Production `0.5.12-hw` remains installed and healthy on

@@ -1,3 +1,42 @@
+## 2026-11-06 08:23 Europe/Kyiv — rollback SQLite preflight and field verification
+
+- **SOURCE / DONE:** PR #124 merged as
+  `a53bf7faee2aae4fb1b61393f5d5572869240245`. The candidate
+  `0.5.13-hw` installer now verifies the just-created SQLite rollback
+  archive before replacing source files. The rollback script verifies
+  SHA256, source tar safety (existing PR #121) **and** a bounded
+  temporary SQLite restore before any rescue, Docker stop, source
+  replacement, or live database overwrite.
+- **FAIL-CLOSED QA:** malformed gzip, invalid SQLite, symbolic-link
+  source archives, bad size limits and over-limit extraction are
+  rejected. A temporary rollback fixture containing a deliberately
+  corrupted SQLite archive with a matching SHA256 stops **before**
+  the Docker stop action. No real rollback was performed.
+- **QUALITY / PASS:** full network-disabled Docker suite **419/419**
+  tests, Ruff 0.14.2, PEP8 and the 40-line-function gate PASS on
+  Gateway. GitHub CI passed on Python 3.11, 3.12 and 3.13. Existing
+  temporary-only rollback fixture and installer `--dry-run` PASS.
+- **REAL BACKUP / READ-ONLY:** the private 0.5.12-hw versioned
+  snapshot under `/var/backups/shelly-voltage/upgrades/` passed
+  the new stdlib-only validator with 20,902 restored measurements
+  and `PRAGMA quick_check=ok`, followed by rollback
+  `--dry-run --no-start`. The on-host snapshot remains private.
+- **LIVE / NO DEPLOYMENT:** at the latest 08:22 Kyiv Gateway check,
+  the deployed `0.5.12-hw` was healthy with zero Docker restarts,
+  Shelly online at 238.2 V / 50.0 Hz, `/ready=200`,
+  SQLite quick_check OK, 21,218 samples, zero artificial 0 V
+  samples and zero open outages.
+- **CONCURRENCY:** PRs #120 and #121 already protect private
+  runtime files and source archive paths. Earlier overlapping
+  PR #122 was closed in favor of the minimal complementary
+  validator in #124, to avoid overwriting those protections.
+- **NEXT / owner-gated:** obtain explicit authorization before any
+  live `0.5.13-hw` deployment; independently verify real
+  Telegram send/edit/visibility and exercise a controlled rollback.
+  Simulated hardware, a dry run, and a read-only restore do not
+  establish post-upgrade acceptance. Pro 3EM/3CT63 real-device
+  testing remains separate.
+
 ## 2026-11-06 08:11 Europe/Kyiv — validated rollback hygiene and archive gate
 
 - **LIVE / untouched:** production LXC 110 remains on `0.5.12-hw`,
