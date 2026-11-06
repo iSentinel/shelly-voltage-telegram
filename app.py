@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import signal
 import sqlite3
@@ -1975,6 +1976,7 @@ class Monitor:
         self.daily_summary_minute = cfg.daily_summary_minute
         self.pin_status = cfg.telegram_pin_status
         self.alert_dwell = cfg.alert_dwell_sec
+        self.warning_dwell = cfg.alert_dwell_sec
         self.recovery_dwell = cfg.alert_recovery_dwell_sec
 
     def initialize_runtime_counters(self) -> None:
@@ -2194,7 +2196,7 @@ class Monitor:
         if candidate is None or candidate[0] != level:
             self.phase_alert_candidates[phase] = (level, now)
             return
-        dwell = self.recovery_dwell if level == "normal" else self.alert_dwell
+        dwell = self.level_dwell(level)
         if now - candidate[1] < dwell:
             return
         self.phase_alert_levels[phase] = level
@@ -3026,6 +3028,13 @@ class Monitor:
                 self.low_voltage_active = False
                 self.record_voltage_event("recovered", voltage, frequency)
 
+    def level_dwell(self, level: str) -> float:
+        """Choose warning, critical, or normal-state confirmation time."""
+
+        if level == "warning":
+            return self.warning_dwell
+        return self.recovery_dwell if level == "normal" else self.alert_dwell
+
     def runtime_voltage_level(self, voltage: float) -> str:
         """Classify voltage using live-adjustable alert thresholds."""
 
@@ -3052,7 +3061,7 @@ class Monitor:
         if not self.alert_candidate or self.alert_candidate[0] != level:
             self.alert_candidate = (level, now)
             return
-        dwell = self.recovery_dwell if level == "normal" else self.alert_dwell
+        dwell = self.level_dwell(level)
         if now - self.alert_candidate[1] < dwell:
             return
         self.alert_level = level
@@ -3380,6 +3389,7 @@ class Monitor:
             "daily_minute": str(self.cfg.daily_summary_minute),
             "pin_status": "1" if self.cfg.telegram_pin_status else "0",
             "alert_dwell": str(self.cfg.alert_dwell_sec),
+            "warning_dwell": str(self.cfg.alert_dwell_sec),
             "recovery_dwell": str(self.cfg.alert_recovery_dwell_sec),
         }
 
@@ -3387,7 +3397,11 @@ class Monitor:
         """Read one runtime setting with environment fallback."""
 
         stored = self.storage.get_meta(f"telegram_setting_{name}")
-        return stored if stored is not None else self.setting_defaults()[name]
+        if stored is not None:
+            return stored
+        if name == "warning_dwell":
+            return self.setting_value("alert_dwell")
+        return self.setting_defaults()[name]
 
     def load_runtime_settings(self) -> None:
         """Apply all persisted settings without restarting the service."""
@@ -3419,6 +3433,17 @@ class Monitor:
         )
         self.pin_status = self.setting_value("pin_status") == "1"
 
+    def validated_warning_dwell(self) -> float:
+        """Reject invalid saved warning dwell without disrupting alerts."""
+
+        try:
+            value = float(self.setting_value("warning_dwell"))
+        except (TypeError, ValueError, OverflowError):
+            return self.alert_dwell
+        if not math.isfinite(value) or not 0 <= value <= 600:
+            return self.alert_dwell
+        return value
+
     def load_runtime_alert_settings(self) -> None:
         """Apply voltage thresholds, summaries, and alert timing settings."""
 
@@ -3439,6 +3464,7 @@ class Monitor:
         self.daily_summary_hour = int(self.setting_value("daily_hour"))
         self.daily_summary_minute = int(self.setting_value("daily_minute"))
         self.alert_dwell = float(self.setting_value("alert_dwell"))
+        self.warning_dwell = self.validated_warning_dwell()
         self.recovery_dwell = float(self.setting_value("recovery_dwell"))
 
     def is_admin(self, user_id: str) -> bool:
@@ -3533,6 +3559,7 @@ class Monitor:
                 voltage=self.low_voltage_alert_v,
             ),
             tr(lang, "settings_recovery", voltage=self.low_voltage_recovery_v),
+            tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
             tr(
                 lang,
                 "settings_levels",
@@ -3595,6 +3622,7 @@ class Monitor:
                     state=labels["levels"],
                     range=self.voltage_range_text(),
                 ),
+                tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
                 tr(lang, "settings_outage", state=labels["availability"]),
                 "",
                 tr(lang, "settings_choose"),
@@ -3681,6 +3709,7 @@ class Monitor:
                     state=labels["levels"],
                     range=self.voltage_range_text(),
                 ),
+                tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
                 tr(
                     lang,
                     "settings_dwell",
@@ -3986,12 +4015,28 @@ class Monitor:
             ],
         ]
 
+    def warning_dwell_setting_rows(self) -> list[list[dict[str, str]]]:
+        """Build localizable warning-only confirmation presets."""
+
+        button = self.setting_button
+        return [
+            [
+                button(
+                    tr(self.language, "button_warning_dwell", seconds=n),
+                    f"warnwait_{n}",
+                )
+                for n in pair
+            ]
+            for pair in ((15, 60), (180, 300))
+        ]
+
     def voltage_setting_rows(self) -> list[list[dict[str, str]]]:
         """Build warning and critical voltage setting rows."""
 
         button = self.setting_button
         return [
             [button("⚠️ Уровни ON/OFF", "alerts_toggle")],
+            *self.warning_dwell_setting_rows(),
             [
                 button("Warn low -5V", "warnlow_dec"),
                 button("Warn low +5V", "warnlow_inc"),
@@ -4575,11 +4620,27 @@ class Monitor:
                 else "alert_dwell"
             )
             step = -5.0 if action.endswith("dec") else 5.0
+            previous = values[key]
             values[key] = (
                 f"{max(0.0, min(300.0, float(values[key]) + step)):g}"
             )
+            if key == "alert_dwell" and values["warning_dwell"] == previous:
+                values["warning_dwell"] = values[key]
             return True
         return False
+
+    def apply_warning_dwell_setting(
+        self, action: str, values: dict[str, str]
+    ) -> bool:
+        """Configure warning-only dwell, keeping critical speed unchanged."""
+
+        if not action.startswith("warnwait_"):
+            return False
+        seconds = action.removeprefix("warnwait_")
+        if seconds not in {"15", "60", "180", "300"}:
+            raise ValueError("unsupported warning dwell choice")
+        values["warning_dwell"] = seconds
+        return True
 
     def apply_level_setting(self, action: str, values: dict[str, str]) -> bool:
         """Adjust ordered warning and critical voltage thresholds."""
@@ -4643,6 +4704,7 @@ class Monitor:
             or self.apply_basic_setting(action, values)
             or self.apply_low_setting(action, values)
             or self.apply_timing_setting(action, values)
+            or self.apply_warning_dwell_setting(action, values)
             or self.apply_level_setting(action, values)
         ):
             raise ValueError("unknown settings action")
