@@ -5769,6 +5769,37 @@ def telegram_doctor(telegram: Telegram) -> dict[str, object]:
     }
 
 
+def telegram_destinations_check(cfg: Config) -> int:
+    """Read-only Telegram API check without showing IDs or sending posts."""
+
+    data = safe_telegram_doctor(Telegram(cfg))
+    status = data.get("status")
+    if status == "disabled":
+        print("TELEGRAM_DESTINATIONS=DISABLED")
+        return 0
+    if status != "ok":
+        error = data.get("error_type", "invalid_response")
+        print(f"TELEGRAM_DESTINATIONS=FAIL reason={error}")
+        return 2
+    control = data.get("control_chat_id")
+    target = data.get("status_chat_id")
+    kind = data.get("status_chat_type")
+    valid_type = kind in {"private", "group", "supergroup", "channel"}
+    if not data.get("bot") or control in (None, "", "None"):
+        print("TELEGRAM_DESTINATIONS=FAIL reason=incomplete_api_reply")
+        return 2
+    if target in (None, "", "None") or not valid_type:
+        print("TELEGRAM_DESTINATIONS=FAIL reason=incomplete_api_reply")
+        return 2
+    separate = "yes" if control != target else "no"
+    print(
+        "TELEGRAM_DESTINATIONS=PASS "
+        f"bot=ok control=ok status=ok type={kind} separate={separate}"
+    )
+    print("Subscriber-visible message delivery is not verified.")
+    return 0
+
+
 def telegram_chat_rows(updates: list[dict]) -> list[dict[str, object]]:
     """Return unique chat summaries from Telegram updates."""
 
@@ -5844,6 +5875,7 @@ def parser() -> argparse.ArgumentParser:
             "db-check",
             "version",
             "telegram-discover",
+            "telegram-check",
         ],
     )
     return cli
@@ -5871,6 +5903,8 @@ def main() -> int:
         return doctor(cfg)
     if args.command == "telegram-discover":
         return telegram_discover(cfg)
+    if args.command == "telegram-check":
+        return telegram_destinations_check(cfg)
     install_signals()
     Monitor(cfg).run()
     return 0
