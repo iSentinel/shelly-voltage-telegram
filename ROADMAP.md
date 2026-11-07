@@ -1,3 +1,21 @@
+## 2026-11-08 QA: DTEK-style Unix-midnight schedule keys
+
+- Read-only Gateway comparison with the current community mirror Kyiv JSON
+  showed actual fact.today is an integer Unix timestamp and fact.data has
+  a timestamp string key for 00:00 in the Europe/Kyiv timezone.
+- Standalone DTEK cache adapter now accepts this shape along with existing
+  ISO and local textual date labels. A time that is not Kyiv midnight,
+  yesterday's schedule, duplicate same-day formats, Unix milliseconds and
+  malformed source date are rejected without any claimed power event.
+- Real mirror-format compatibility check for community Kyiv GPV10.1
+  produced 04:00–11:30 and 14:30–22:00. This DOES NOT verify the
+  official DTEK provenance or actual power state.
+- 8 new unit tests PASS; entire baseline QA suite 963/963 PASS, Ruff and
+  project quality gate PASS. Proxmox LXC110 /ready 200; production unchanged.
+- NEXT: independent official provider capture and provenance, preserve
+  possible/uncertain hours as unknown, physical multimeter hardware QA,
+  subscriber-visible Telegram acceptance and explicit release review.
+
 ## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
 
 - **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`
