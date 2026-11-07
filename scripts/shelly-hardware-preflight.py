@@ -45,6 +45,26 @@ def meter_client(cfg: app.Config, model: str) -> app.ShellyClient:
     return app.RpcMeterClient(cfg, app.METER_RPC[model])
 
 
+def validated_sample(raw: object) -> tuple[float, float, float]:
+    """Check numeric RPC values without requiring a newer deployed app."""
+
+    if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+        raise RuntimeError("invalid meter sample")
+    if any(isinstance(value, bool) for value in raw):
+        raise RuntimeError("invalid meter sample")
+    try:
+        voltage, frequency, latency = (float(value) for value in raw)
+    except (ValueError, TypeError, OverflowError):
+        raise RuntimeError("invalid meter sample") from None
+    if not all(
+        math.isfinite(value) for value in (voltage, frequency, latency)
+    ):
+        raise RuntimeError("invalid meter sample")
+    if not (0 < voltage < 500 and 40 <= frequency <= 70 and latency >= 0):
+        raise RuntimeError("meter sample out of range")
+    return voltage, frequency, latency
+
+
 def phase_sample(client: app.ShellyClient, model: str) -> dict:
     """Read one atomic RPC sample and validate every required phase."""
 
@@ -56,10 +76,7 @@ def phase_sample(client: app.ShellyClient, model: str) -> dict:
         measured = {"L1": client.read()}
     result = {}
     for phase, values in measured.items():
-        voltage, frequency, latency = values
-        voltage, frequency = app.validated_meter_numbers(voltage, frequency)
-        if voltage <= 0 or not math.isfinite(latency) or latency < 0:
-            raise RuntimeError("meter sample is not usable")
+        voltage, frequency, latency = validated_sample(values)
         result[phase] = {
             "voltage_v": round(voltage, 1),
             "frequency_hz": round(frequency, 2),

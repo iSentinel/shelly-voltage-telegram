@@ -92,6 +92,37 @@ class HardwarePreflightTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     PROBE.run_probe(client, args(samples=1))
 
+    def test_legacy_runtime_without_shared_validator_still_works(self):
+        """The probe must work on currently deployed 0.5.13-hw."""
+
+        client = Mock()
+        client.device_health.return_value = identity()
+        client.read.return_value = (190.0, 50.0, 31.5)
+        with patch.object(
+            PROBE.app,
+            "validated_meter_numbers",
+            create=True,
+            side_effect=AssertionError("legacy runtime must not need it"),
+        ):
+            report = PROBE.run_probe(client, args(samples=1))
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["samples"][0]["L1"]["voltage_v"], 190.0)
+
+    def test_malformed_rpc_and_latency_fail_locally(self):
+        """Reject nonfinite, missing, boolean or invalid latency values."""
+
+        for values in (
+            None,
+            (None, 50.0, 20.0),
+            (True, 50.0, 20.0),
+            (230.0, float("nan"), 20.0),
+            (230.0, 50.0, float("inf")),
+            (230.0, 50.0, -1.0),
+            (230.0, 50.0),
+        ):
+            with self.subTest(values=values), self.assertRaises(RuntimeError):
+                PROBE.validated_sample(values)
+
     def test_invalid_sampling_rejected_without_rpc(self):
         """Reject unreasonable counts or invalid delays before reading."""
 
