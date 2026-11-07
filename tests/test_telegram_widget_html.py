@@ -61,6 +61,8 @@ class WidgetMarkupTests(unittest.TestCase):
             self.assertNotIn(forbidden, html)
         self.assertIn("publicDataChanged", html)
         self.assertIn("watchPublicData", html)
+        self.assertIn("setInterval(render,10000)", html)
+        self.assertIn('onEvent("activated",render)', html)
 
     def test_preview_never_claims_power_from_a_schedule(self):
         """Forecast source and live-measurement disclaimer stay visible."""
