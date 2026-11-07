@@ -1830,12 +1830,13 @@ def render_voltage_status(
     """Render voltage and primary history under the configuration lock."""
 
     lang = monitor.language
-    lines = voltage_event_lines(monitor) if include_event_context else []
+    l1 = monitor.state.snapshot()
+    connectivity = str(l1["connectivity"])
+    show_event = include_event_context and connectivity == "online"
+    lines = voltage_event_lines(monitor) if show_event else []
     lines.extend(
         [tr(lang, "network_title", phases=monitor.phase_labels()), ""]
     )
-    l1 = monitor.state.snapshot()
-    connectivity = str(l1["connectivity"])
     status_key = "status_" + connectivity
     if connectivity not in {"online", "recovering", "offline", "starting"}:
         status_key = "status_starting"
@@ -1849,7 +1850,8 @@ def render_voltage_status(
         return "\n".join(lines + ["", notice])
     ts = float(l1["last_success"] or time.time())
     lines.extend(primary_day_lines(monitor, ts))
-    lines.extend(recovery_banner_lines(monitor))
+    if connectivity == "online":
+        lines.extend(recovery_banner_lines(monitor))
     lines.extend(instability_lines(monitor))
     if include_event_context:
         lines.extend(voltage_episode_summary_lines(monitor))

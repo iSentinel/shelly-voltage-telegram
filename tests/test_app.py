@@ -577,7 +577,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.state.restore(APP.time.time(), 179.3, 50.0)
+            monitor.state.success(179.3, 50.0, 1.0, recovery_after=1)
             monitor.storage.day_stats = Mock(
                 return_value={
                     "count": 1,
@@ -668,7 +668,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
 
         monitor = APP.Monitor(config())
         stamp = APP.time.time()
-        monitor.state.restore(stamp, 186.1, 50.0)
+        monitor.state.success(186.1, 50.0, 1.0, recovery_after=1)
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 179.3, "max": 220.0, "avg": 205.0}
         )
@@ -2441,7 +2441,8 @@ class AdvancedFeatureTests(unittest.TestCase):
         """Keep the recovered label for only thirty minutes."""
 
         monitor = APP.Monitor(config())
-        monitor.state.restore(1000.0, 225.9, 50.0)
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(225.9, 50.0, 1.0, recovery_after=1)
         stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
         monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60
@@ -2459,7 +2460,8 @@ class AdvancedFeatureTests(unittest.TestCase):
         """Keep outages in history without advertising a stale recovery."""
 
         monitor = APP.Monitor(config())
-        monitor.state.restore(1000.0, 225.9, 50.0)
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(225.9, 50.0, 1.0, recovery_after=1)
         stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
         monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60
