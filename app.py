@@ -1074,6 +1074,11 @@ class ShellyClient:
         )
         response.raise_for_status()
         payload = response.json()
+        faults = em_status_errors(payload)
+        if faults:
+            raise RuntimeError(
+                "EM1.GetStatus meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
         return float(payload["voltage"]), float(payload["freq"]), rpc_ms
 
@@ -1091,6 +1096,11 @@ class RpcMeterClient(ShellyClient):
 
         started = time.perf_counter()
         payload = self.rpc(self.rpc_method, {"id": self.em1_id})
+        faults = em_status_errors(payload)
+        if faults:
+            raise RuntimeError(
+                f"{self.rpc_method} meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
         voltage = payload.get("voltage")
         frequency = payload.get("freq")
