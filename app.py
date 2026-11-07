@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import signal
 import sqlite3
@@ -1219,17 +1220,35 @@ class Telegram:
             error = exc.__class__.__name__
             raise RuntimeError(f"Telegram transport error: {error}") from None
         try:
-            return response.json()
+            data = response.json()
         except ValueError:
             raise RuntimeError("Telegram returned invalid JSON") from None
+        if not isinstance(data, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
+        return data
+
+    @staticmethod
+    def rate_limit_delay(data: dict) -> float:
+        """Bound a malformed Telegram 429 retry value without exceptions."""
+
+        params = data.get("parameters")
+        retry = params.get("retry_after", 1) if isinstance(params, dict) else 1
+        if isinstance(retry, bool):
+            return 1.0
+        try:
+            seconds = float(retry)
+        except (TypeError, ValueError, OverflowError):
+            return 1.0
+        if not math.isfinite(seconds) or seconds < 0:
+            return 1.0
+        return min(seconds, 30.0)
 
     def _call_with_retry(self, method: str, payload: dict) -> dict:
-        """Retry one bounded Telegram rate-limit response."""
+        """Retry only a Telegram 429 response, once, with a safe delay."""
 
         data = self._post(method, payload)
         if data.get("error_code") == 429:
-            retry = data.get("parameters", {}).get("retry_after", 1)
-            delay = min(30.0, max(0.0, float(retry)))
+            delay = self.rate_limit_delay(data)
             logger.warning("Telegram rate limited; retry in {:.1f}s", delay)
             time.sleep(delay)
             data = self._post(method, payload)
