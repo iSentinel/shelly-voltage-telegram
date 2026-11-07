@@ -79,13 +79,14 @@ def valid_phase_sample_ts(
     if outage is None:
         return None
     row = db.execute(
-        "SELECT ts FROM measurements WHERE phase=? "
-        "AND voltage>0 AND voltage<500 "
-        "AND frequency>=40 AND frequency<=70 "
+        "SELECT ts,voltage,frequency FROM measurements WHERE phase=? "
         "ORDER BY ts DESC LIMIT 1",
         (outage[3],),
     ).fetchone()
-    return float(row[0]) if row is not None else None
+    if row is None or not valid_stable_measurement(row):
+        return None
+    stamp = float(row[0])
+    return stamp if math.isfinite(stamp) else None
 
 
 def current_db_state(path: Path) -> dict[str, object]:
@@ -288,7 +289,7 @@ def recovery_sample_errors(state: dict, now: float) -> list[str]:
     phase = str(event.get("phase"))
     stamp = state.get("last_valid_phase_sample_ts")
     if stamp is None or not math.isfinite(stamp):
-        return [f"no valid {phase} measurement since recovery"]
+        return [f"no fresh valid {phase} measurement since recovery"]
     ended = float(event["ended_at"])
     if not math.isfinite(ended) or ended > now:
         return ["invalid recovery timestamp"]
