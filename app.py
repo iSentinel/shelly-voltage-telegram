@@ -5878,6 +5878,28 @@ def health_handler(monitor: Monitor):
     return BoundHealthHandler
 
 
+def pending_readiness(
+    monitor: Monitor, snap: dict[str, object]
+) -> tuple[int, dict] | None:
+    """Reject intermediate startup and recovery before reporting ready."""
+
+    if snap["connectivity"] == "recovering":
+        return 503, {
+            "ready": False,
+            "reason": "recovery not yet confirmed",
+            "connectivity": "recovering",
+            "successes": snap["consecutive_successes"],
+            "required_successes": monitor.cfg.recovery_after_successes,
+        }
+    if snap["connectivity"] != "online":
+        return 503, {
+            "ready": False,
+            "reason": "waiting for confirmed online sample",
+            "connectivity": snap["connectivity"],
+        }
+    return None
+
+
 def readiness(monitor: Monitor) -> tuple[int, dict]:
     """Return data readiness without conflating it with service liveness."""
 
@@ -5898,6 +5920,9 @@ def readiness(monitor: Monitor) -> tuple[int, dict]:
             "reason": "no successful sample yet",
             "connectivity": snap["connectivity"],
         }
+    pending = pending_readiness(monitor, snap)
+    if pending is not None:
+        return pending
     age = max(0.0, time.time() - float(last))
     if age > monitor.cfg.stale_after:
         return 503, {
