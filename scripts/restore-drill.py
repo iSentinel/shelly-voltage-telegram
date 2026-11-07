@@ -7,6 +7,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -126,6 +127,14 @@ def exercise_restored_copy(database: Path) -> tuple[int, str]:
     return int(count), str(state["connectivity"])
 
 
+def ensure_scratch_headroom(directory: Path, limit: int) -> None:
+    """Reject an extraction that could exhaust the temporary filesystem."""
+
+    safety = 32 * 1024 * 1024
+    if shutil.disk_usage(directory).free < limit + safety:
+        raise ValueError("insufficient temporary filesystem headroom")
+
+
 def restore_one(index: int, archive: Path, limit: int) -> bool:
     """Verify and restore a backup, then discard every temporary file."""
 
@@ -134,6 +143,7 @@ def restore_one(index: int, archive: Path, limit: int) -> bool:
         return False
     try:
         with tempfile.TemporaryDirectory(prefix="svt-restore-drill-") as tmp:
+            ensure_scratch_headroom(Path(tmp), limit)
             target = Path(tmp) / "restored.sqlite3"
             VERIFY.unpack_archive(archive, target, limit)
             target.chmod(0o600)

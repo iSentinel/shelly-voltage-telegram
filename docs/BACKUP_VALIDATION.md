@@ -104,6 +104,13 @@ python scripts/restore-drill.py \
 
 The command validates each archive's SHA-256 sidecar, enforces a maximum
 decompressed size, and creates a separate disposable SQLite copy.
+Before each extraction it also checks free space **on the temporary
+filesystem**, requiring the configured maximum decompressed size plus
+32 MiB safety headroom. If this capacity is unavailable, the drill
+returns FAIL before unpacking anything. A capacity check cannot prevent
+other processes from consuming disk space concurrently, so the
+maximum size should remain conservative; for the current small
+database, `--max-size-mib 64` is appropriate.
 When a v1/v2 backup predates the three-phase `phase` column, the
 restore drill first verifies the original restored SQLite and then
 runs the application's supported schema migration **inside that
