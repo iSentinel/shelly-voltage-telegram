@@ -259,8 +259,8 @@ _TEXT = {
         "weekly_title": "📅 Качество электросети · 7 дней",
         "weekly_period": "🗓 {start} — {end} · {zone}",
         "weekly_phase": (
-            "{phase}: {minimum}–{maximum} V, ср. "
-            "{average} V · измерений {count}"
+            "{phase}: {minimum}–{maximum} В, ср. "
+            "{average} В · измерений {count}"
         ),
         "weekly_coverage": (
             "✅ Измеренные интервалы: {observed} · без данных: {unknown}"
