@@ -121,6 +121,67 @@ class StoragePreflightTests(unittest.TestCase):
         report = self.inspect(2048)
         self.assertEqual(report["status"], "fail")
 
+    def test_empty_matching_backup_never_yields_pass(self):
+        """A zero-byte archive with a valid name is not a usable backup."""
+
+        for path in self.backup.iterdir():
+            path.write_bytes(b"")
+        result = self.inspect(2048)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("backup_missing", result["reasons"])
+        self.assertIn("backup_metadata_untrusted", result["reasons"])
+
+    def test_future_dated_backup_does_not_hide_stale_copy(self):
+        """An impossible clock timestamp cannot mask an old backup."""
+
+        import os
+
+        stale = next(self.backup.iterdir())
+        os.utime(stale, (self.now - 48 * 3600,) * 2)
+        future = self.backup / "voltage-future.sqlite3.gz"
+        future.write_bytes(b"sample")
+        os.utime(future, (self.now + 3600,) * 2)
+        result = self.inspect(2048)
+        self.assertEqual(result["status"], "warn")
+        self.assertIn("backup_stale", result["reasons"])
+        self.assertIn("backup_metadata_untrusted", result["reasons"])
+        self.assertEqual(result["backup_count"], 1)
+        self.assertEqual(result["ignored_backup_entries"], 1)
+
+    def test_only_future_backup_fails_not_false_pass(self):
+        """A future-only archive leaves no credible valid backup."""
+
+        import os
+
+        future = next(self.backup.iterdir())
+        os.utime(future, (self.now + 3600,) * 2)
+        result = self.inspect(2048)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("backup_missing", result["reasons"])
+        self.assertEqual(result["backup_count"], 0)
+
+    def test_small_clock_skew_remains_tolerated(self):
+        """Allow up to five minutes of normal backup clock skew."""
+
+        import os
+
+        recent = next(self.backup.iterdir())
+        os.utime(recent, (self.now + 240,) * 2)
+        result = self.inspect(2048)
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["latest_backup_age_hours"], 0)
+
+    def test_symlink_with_real_backup_does_not_claim_clean_pass(self):
+        """A symlink entry cannot silently be promoted as valid evidence."""
+
+        (self.backup / "voltage-link.sqlite3.gz").symlink_to(
+            next(self.backup.iterdir())
+        )
+        result = self.inspect(2048)
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(result["backup_count"], 1)
+        self.assertIn("backup_metadata_untrusted", result["reasons"])
+
     def test_invalid_thresholds_fail_early(self):
         """Reject nonsense thresholds before reading disk metadata."""
 

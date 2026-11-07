@@ -49,16 +49,33 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("invalid backup age threshold")
 
 
-def backup_summary(path: Path, now: float) -> tuple[int, float | None]:
-    """Read backup metadata only; never open or modify a backup."""
+def backup_summary(path: Path, now: float) -> tuple[int, float | None, int]:
+    """Count plausible backups without reading their contents."""
 
-    backups = []
+    valid = []
+    ignored = 0
     for file in path.glob("voltage-*.sqlite3.gz"):
-        if file.is_file() and not file.is_symlink():
-            backups.append(file.stat().st_mtime)
-    if not backups:
-        return 0, None
-    return len(backups), max(0.0, (now - max(backups)) / 3600)
+        if file.is_symlink() or not file.is_file():
+            ignored += 1
+            continue
+        metadata = file.stat()
+        if metadata.st_size <= 0 or metadata.st_mtime > now + 300:
+            ignored += 1
+            continue
+        valid.append(metadata.st_mtime)
+    if not valid:
+        return 0, None, ignored
+    return len(valid), max(0.0, (now - max(valid)) / 3600), ignored
+
+
+def storage_status(reasons: list[str]) -> str:
+    """Separate hard capacity failures from warning-only conditions."""
+
+    if any(
+        key in reasons for key in ("insufficient_free_space", "backup_missing")
+    ):
+        return "fail"
+    return "warn" if reasons else "pass"
 
 
 def check_storage(args: argparse.Namespace, now: float | None = None) -> dict:
@@ -66,8 +83,10 @@ def check_storage(args: argparse.Namespace, now: float | None = None) -> dict:
 
     validate_args(args)
     now = time.time() if now is None else now
+    if not math.isfinite(now):
+        raise ValueError("invalid current timestamp")
     usage = shutil.disk_usage(args.data_dir)
-    count, backup_age = backup_summary(args.backup_dir, now)
+    count, backup_age, ignored = backup_summary(args.backup_dir, now)
     free_mib = usage.free / MIB
     reasons = []
     if free_mib < args.fail_free_mib:
@@ -78,19 +97,16 @@ def check_storage(args: argparse.Namespace, now: float | None = None) -> dict:
         reasons.append("backup_missing")
     elif backup_age is not None and backup_age > args.max_backup_age_hours:
         reasons.append("backup_stale")
-    status = (
-        "fail"
-        if "insufficient_free_space" in reasons or "backup_missing" in reasons
-        else "warn"
-        if reasons
-        else "pass"
-    )
+    if ignored:
+        reasons.append("backup_metadata_untrusted")
+    status = storage_status(reasons)
     return {
         "status": status,
         "reasons": reasons,
         "free_mib": round(free_mib, 1),
         "filesystem_used_percent": round(100 * usage.used / usage.total, 1),
         "backup_count": count,
+        "ignored_backup_entries": ignored,
         "latest_backup_age_hours": round(backup_age, 1)
         if backup_age is not None
         else None,
