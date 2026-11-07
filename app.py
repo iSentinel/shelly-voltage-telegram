@@ -1107,6 +1107,13 @@ def validated_meter_numbers(
         raise RuntimeError("non-finite Shelly measurement")
     if any(value < 0 for value in values):
         raise RuntimeError("negative Shelly measurement")
+    measured_voltage, measured_frequency = values
+    if measured_voltage >= 500 or measured_frequency > 70:
+        raise RuntimeError("out-of-range Shelly measurement")
+    if measured_frequency < 40 and not (
+        measured_voltage == 0 and measured_frequency == 0
+    ):
+        raise RuntimeError("out-of-range Shelly measurement")
     return values
 
 
