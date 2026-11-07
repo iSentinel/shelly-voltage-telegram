@@ -542,6 +542,21 @@ def stable_transition_continuity_errors(
     return []
 
 
+def valid_stable_measurement(row: tuple) -> bool:
+    """Reject anomalous readings instead of hiding them in SQL filters."""
+
+    try:
+        voltage, frequency = float(row[1]), float(row[2])
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (
+        math.isfinite(voltage)
+        and math.isfinite(frequency)
+        and 0 < voltage < 500
+        and 40 <= frequency <= 70
+    )
+
+
 def stable_phase_sample_errors(
     db_path: Path, phase: str, started: float, now: float
 ) -> list[str]:
@@ -551,13 +566,13 @@ def stable_phase_sample_errors(
     found = False
     with closing(open_db(db_path)) as db:
         rows = db.execute(
-            "SELECT ts FROM measurements "
-            "WHERE phase=? AND ts>=? AND ts<=? "
-            "AND voltage>0 AND voltage<500 "
-            "AND frequency>=40 AND frequency<=70 ORDER BY ts",
+            "SELECT ts,voltage,frequency FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<=? ORDER BY ts",
             (phase, started, now),
         )
         for row in rows:
+            if not valid_stable_measurement(row):
+                return ["invalid stable phase voltage or frequency sample"]
             stamp = float(row[0])
             if not math.isfinite(stamp):
                 return ["stable phase sample timestamp is invalid"]

@@ -15,6 +15,11 @@ Candidate change:
 - Admit only plausible voltage (strictly between 0 and 500 V)
   and frequency (40 to 70 Hz), with timestamp no later than
   the observation clock.
+- Inspect **every** stored sample for the captured phase in the
+  recovery interval. An impossible voltage, missing numeric field,
+  nonfinite value or implausible frequency is a FAIL even if regular
+  valid samples exist on either side. The previous SQL-level filter
+  hid such rows and could incorrectly return PASS.
 - Require initial and consecutive readings no more than
   **90 seconds apart**, and a final sample no older than
   **45 seconds** at verification.
