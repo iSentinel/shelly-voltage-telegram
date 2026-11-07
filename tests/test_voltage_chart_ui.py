@@ -9,6 +9,7 @@ import tempfile
 import time
 import unittest
 import zlib
+from contextlib import closing
 from pathlib import Path
 
 from test_app import APP
@@ -144,7 +145,7 @@ class VoltageChartUiTests(unittest.TestCase):
     def test_invalid_nonfinite_values_are_excluded_from_chart(self):
         """Old SQLite corruption must not create NaN chart bounds."""
 
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
                 "insert into measurements (ts,voltage,frequency,phase) "
                 "values (?,?,?,?)",
