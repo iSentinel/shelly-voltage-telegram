@@ -81,6 +81,52 @@ def open_readonly(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(uri, uri=True, timeout=5)
 
 
+def valid_phase_sample(row: tuple) -> bool:
+    """Accept only plausible finite readings of the monitored phase."""
+
+    try:
+        voltage, frequency = float(row[1]), float(row[2])
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (
+        math.isfinite(voltage)
+        and math.isfinite(frequency)
+        and 0 < voltage < 500
+        and 40 <= frequency <= 70
+    )
+
+
+def phase_window_samples(
+    db: sqlite3.Connection, phase: str, started: float, ended: float
+) -> tuple[list[float], int]:
+    """Keep every raw sample, including the invalid ones SQL once hid."""
+
+    rows = db.execute(
+        "SELECT ts,voltage,frequency FROM measurements WHERE phase=? "
+        "AND ts>=? AND ts<=? ORDER BY ts",
+        (phase, started, ended),
+    ).fetchall()
+    stamps = [float(row[0]) for row in rows]
+    invalid = sum(not valid_phase_sample(row) for row in rows)
+    return stamps, invalid
+
+
+def last_phase_sample(
+    db: sqlite3.Connection, phase: str, now: float
+) -> tuple[float | None, bool]:
+    """Do not replace an invalid newest reading with an older valid one."""
+
+    row = db.execute(
+        "SELECT ts,voltage,frequency FROM measurements WHERE phase=? "
+        "AND ts<=? ORDER BY ts DESC LIMIT 1",
+        (phase, now),
+    ).fetchone()
+    if row is None:
+        return None, False
+    stamp = float(row[0])
+    return stamp, math.isfinite(stamp) and valid_phase_sample(row)
+
+
 def read_state(path: Path, incident: dict, now: float) -> dict:
     """Capture one consistent read transaction of connectivity data."""
 
@@ -92,22 +138,16 @@ def read_state(path: Path, incident: dict, now: float) -> dict:
             "SELECT id,started_at,ended_at,phase "
             "FROM outages ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        samples = db.execute(
-            "SELECT ts FROM measurements WHERE phase=? "
-            "AND ts>=? AND ts<=? AND voltage>0 AND voltage<500 "
-            "AND frequency>=40 AND frequency<=70 ORDER BY ts",
-            (phase, end, min(now, end + WINDOW_SECONDS)),
-        ).fetchall()
-        latest = db.execute(
-            "SELECT MAX(ts) FROM measurements WHERE phase=? "
-            "AND ts<=? AND voltage>0 AND voltage<500 "
-            "AND frequency>=40 AND frequency<=70",
-            (phase, now),
-        ).fetchone()[0]
+        samples, invalid = phase_window_samples(
+            db, phase, end, min(now, end + WINDOW_SECONDS)
+        )
+        latest, latest_valid = last_phase_sample(db, phase, now)
         return {
             "event": event,
-            "samples": [float(row[0]) for row in samples],
-            "latest": float(latest) if latest is not None else None,
+            "samples": samples,
+            "invalid_window_samples": invalid,
+            "latest": latest,
+            "latest_sample_valid": latest_valid,
             "future_samples": db.execute(
                 "SELECT COUNT(*) FROM measurements WHERE phase=? AND ts>?",
                 (phase, now),
@@ -149,6 +189,17 @@ def sample_window_reason(
     return None, maximum
 
 
+def sample_quality_failures(live: dict) -> list[str]:
+    """Reject anomalous raw samples even when other samples are valid."""
+
+    errors = []
+    if live["invalid_window_samples"]:
+        errors.append("invalid same-phase measurement during recovery window")
+    if not live["latest_sample_valid"]:
+        errors.append("latest same-phase measurement is invalid")
+    return errors
+
+
 def evaluate_failures(
     incident: dict,
     live: dict,
@@ -186,7 +237,9 @@ def evaluate_failures(
         ),
         (sample_reason is not None, sample_reason),
     )
-    return [message for condition, message in checks if condition]
+    return [
+        message for condition, message in checks if condition
+    ] + sample_quality_failures(live)
 
 
 def verdict_reason(status: str, failures: list[str]) -> str:

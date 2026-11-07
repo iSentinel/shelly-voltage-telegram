@@ -167,6 +167,60 @@ class ConnectionRecoveryWindowTests(unittest.TestCase):
         self.execute("insert into measurements values(2100,'L1',230,50)")
         self.assertEqual(self.verify()["status"], "blocked")
 
+    def test_invalid_interleaved_voltage_is_blocked(self):
+        """An impossible 900 V record cannot hide between normal samples."""
+
+        self.execute("insert into measurements values(1555,'L1',900,50)")
+        self.assertEqual(self.verify()["status"], "blocked")
+
+    def test_invalid_interleaved_frequency_is_blocked(self):
+        """Five hertz among ten-second samples invalidates the window."""
+
+        self.execute("insert into measurements values(1555,'L1',230,5)")
+        self.assertEqual(self.verify()["status"], "blocked")
+
+    def test_null_or_nonfinite_voltage_is_blocked(self):
+        """Missing or infinite meter readings cannot be ignored."""
+
+        for value in ("NULL", "1e999"):
+            with self.subTest(value=value):
+                self.execute(
+                    "update measurements set voltage="
+                    + value
+                    + " where ts=1550 and phase='L1'"
+                )
+                self.assertEqual(self.verify()["status"], "blocked")
+                self.execute(
+                    "update measurements set voltage=230 "
+                    "where ts=1550 and phase='L1'"
+                )
+
+    def test_latest_invalid_sample_cannot_use_prior_good_one(self):
+        """The latest 5 Hz report cannot fall back to the earlier poll."""
+
+        self.execute(
+            "update measurements set frequency=5 where phase='L1' and ts=1901"
+        )
+        self.assertEqual(self.verify()["status"], "blocked")
+
+    def test_real_abnormal_but_plausible_voltage_keeps_connection_valid(self):
+        """Connection quality is independent of normal-voltage band."""
+
+        for voltage in (185, 260):
+            with self.subTest(voltage=voltage):
+                self.execute(
+                    "update measurements set voltage="
+                    + str(voltage)
+                    + " where phase='L1' and ts=1550"
+                )
+                self.assertEqual(self.verify()["status"], "pass")
+
+    def test_invalid_other_phase_does_not_affect_l1_verification(self):
+        """An L2 fault cannot replace the captured L1 evidence."""
+
+        self.execute("insert into measurements values(1555,'L2',900,5)")
+        self.assertEqual(self.verify()["status"], "pass")
+
     def test_bad_baseline_status_does_not_authorize_acceptance(self):
         """Only accepted original event baselines may trigger verification."""
 

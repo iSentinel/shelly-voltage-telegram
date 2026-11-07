@@ -17,7 +17,17 @@ connection restoration timestamp, not an approximate timetable.
 
 In that window, physically plausible same-phase readings
 must be at most 90 seconds apart; the current latest reading
-must be no older than 45 seconds.
+must be no older than 45 seconds. **All** recorded same-phase
+samples are checked. An interleaved 900 V, 5 Hz, missing or
+nonfinite reading is BLOCKED rather than silently filtered out.
+The newest recorded same-phase reading must itself be valid;
+the checker must never substitute an older good sample.
+
+This checks *connection stability*, not the separate
+15-minute *normal-voltage* recovery gate. A real, physically
+plausible 185 V or 260 V reading can still establish that
+the meter is reporting, even though it would fail the
+normal-voltage gate if it crosses configured warning bounds.
 
 The result is PENDING before 900 real seconds, BLOCKED when any
 gate fails, and PASS after 900 real seconds with intact evidence.
