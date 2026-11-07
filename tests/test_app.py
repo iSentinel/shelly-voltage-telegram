@@ -2287,10 +2287,14 @@ class ConnectivityStateTests(unittest.TestCase):
         self.assertIn("shelly_outages_total 1", metrics)
         self.assertIn("shelly_outages_today 1", metrics)
         self.assertIn("shelly_outage_duration_today_seconds 30.000", metrics)
+        self.assertIn("Legacy name for Shelly connectivity losses", metrics)
+        self.assertIn("not electricity downtime", metrics)
+        self.assertIn("shelly_connectivity_losses_total 1", metrics)
+        self.assertIn("shelly_connectivity_losses_today 1", metrics)
         self.assertIn(
-            "Confirmed connectivity outages after hysteresis", metrics
+            "shelly_connectivity_loss_duration_today_seconds 30.000",
+            metrics,
         )
-        self.assertIn("not exact mains-loss boundaries", metrics)
 
 
 def shelly_config_values() -> dict[str, object]:

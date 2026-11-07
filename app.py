@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import signal
 import sqlite3
@@ -35,6 +36,7 @@ from advanced_features import (
     weekly_quality_stats,
 )
 from apartment_phases import ApartmentRegistry, apartment_command
+from dtek_schedule import format_schedule
 from notification_features import (
     abnormal_seconds,
     instability_count,
@@ -821,15 +823,19 @@ class Storage:
         with closing(self.connect()) as db, db:
             rows = db.execute(
                 "SELECT started_at, ended_at FROM outages "
-                "WHERE started_at < ? AND COALESCE(ended_at, ?) >= ? "
+                "WHERE started_at <= ? AND COALESCE(ended_at, ?) > ? "
                 "AND phase=?",
-                (end.timestamp(), now, start.timestamp(), phase),
+                (now, now, start.timestamp(), phase),
             ).fetchall()
         count = len(rows)
         duration = sum(
             max(
                 0.0,
-                min(float(row[1] or now), end.timestamp())
+                min(
+                    float(row[1]) if row[1] is not None else now,
+                    now,
+                    end.timestamp(),
+                )
                 - max(float(row[0]), start.timestamp()),
             )
             for row in rows
@@ -1074,8 +1080,34 @@ class ShellyClient:
         )
         response.raise_for_status()
         payload = response.json()
+        faults = em_status_errors(payload)
+        if faults:
+            raise RuntimeError(
+                "EM1.GetStatus meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
-        return float(payload["voltage"]), float(payload["freq"]), rpc_ms
+        voltage, frequency = validated_meter_numbers(
+            payload["voltage"], payload["freq"]
+        )
+        return voltage, frequency, rpc_ms
+
+
+def validated_meter_numbers(
+    voltage: object, frequency: object
+) -> tuple[float, float]:
+    """Reject invalid RPC numbers without echoing untrusted data."""
+
+    if isinstance(voltage, bool) or isinstance(frequency, bool):
+        raise RuntimeError("invalid Shelly numeric measurement")
+    try:
+        values = (float(voltage), float(frequency))
+    except (TypeError, ValueError, OverflowError):
+        raise RuntimeError("invalid Shelly numeric measurement") from None
+    if not all(math.isfinite(value) for value in values):
+        raise RuntimeError("non-finite Shelly measurement")
+    if any(value < 0 for value in values):
+        raise RuntimeError("negative Shelly measurement")
+    return values
 
 
 class RpcMeterClient(ShellyClient):
@@ -1091,6 +1123,11 @@ class RpcMeterClient(ShellyClient):
 
         started = time.perf_counter()
         payload = self.rpc(self.rpc_method, {"id": self.em1_id})
+        faults = em_status_errors(payload)
+        if faults:
+            raise RuntimeError(
+                f"{self.rpc_method} meter errors: " + ", ".join(faults)
+            )
         rpc_ms = (time.perf_counter() - started) * 1000
         voltage = payload.get("voltage")
         frequency = payload.get("freq")
@@ -1098,7 +1135,10 @@ class RpcMeterClient(ShellyClient):
             raise RuntimeError(
                 f"{self.rpc_method} returned no voltage/frequency"
             )
-        return float(voltage), float(frequency), rpc_ms
+        valid_voltage, valid_frequency = validated_meter_numbers(
+            voltage, frequency
+        )
+        return valid_voltage, valid_frequency, rpc_ms
 
 
 EM_ERROR_FIELDS = (
@@ -1164,7 +1204,10 @@ class Pro3EMClient(ShellyClient):
             frequency = payload.get(f"{prefix}_freq")
             if voltage is None or frequency is None:
                 continue
-            result[phase] = (float(voltage), float(frequency), rpc_ms)
+            valid_voltage, valid_frequency = validated_meter_numbers(
+                voltage, frequency
+            )
+            result[phase] = (valid_voltage, valid_frequency, rpc_ms)
         return result
 
 
@@ -1180,6 +1223,36 @@ def telegram_quiet_hours(cfg: Config, now: datetime | None = None) -> bool:
     if start < end:
         return start <= hour < end
     return hour >= start or hour < end
+
+
+def safe_telegram_api_error(payload: object) -> str:
+    """Redact untrusted Telegram details but preserve known status markers."""
+
+    if not isinstance(payload, dict):
+        return "Telegram API invalid response"
+    code = payload.get("error_code")
+    prefix = (
+        f"Telegram API error {code}"
+        if type(code) is int and 400 <= code <= 599
+        else "Telegram API error"
+    )
+    raw = payload.get("description")
+    if not isinstance(raw, str):
+        return prefix
+    text = raw.strip().lower()
+    if text.startswith("bad request: "):
+        text = text[len("bad request: ") :]
+    markers = (
+        "message is not modified",
+        "message to edit not found",
+        "message can't be edited",
+        "message_id_invalid",
+        "message to unpin not found",
+    )
+    for marker in markers:
+        if text == marker or text.startswith(marker + ":"):
+            return f"{prefix}: {marker}"
+    return prefix
 
 
 class Telegram:
@@ -1219,22 +1292,40 @@ class Telegram:
             error = exc.__class__.__name__
             raise RuntimeError(f"Telegram transport error: {error}") from None
         try:
-            return response.json()
+            data = response.json()
         except ValueError:
             raise RuntimeError("Telegram returned invalid JSON") from None
+        if not isinstance(data, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
+        return data
+
+    @staticmethod
+    def rate_limit_delay(data: dict) -> float:
+        """Bound a malformed Telegram 429 retry value without exceptions."""
+
+        params = data.get("parameters")
+        retry = params.get("retry_after", 1) if isinstance(params, dict) else 1
+        if isinstance(retry, bool):
+            return 1.0
+        try:
+            seconds = float(retry)
+        except (TypeError, ValueError, OverflowError):
+            return 1.0
+        if not math.isfinite(seconds) or seconds < 0:
+            return 1.0
+        return min(seconds, 30.0)
 
     def _call_with_retry(self, method: str, payload: dict) -> dict:
-        """Retry one bounded Telegram rate-limit response."""
+        """Retry only a Telegram 429 response, once, with a safe delay."""
 
         data = self._post(method, payload)
         if data.get("error_code") == 429:
-            retry = data.get("parameters", {}).get("retry_after", 1)
-            delay = min(30.0, max(0.0, float(retry)))
+            delay = self.rate_limit_delay(data)
             logger.warning("Telegram rate limited; retry in {:.1f}s", delay)
             time.sleep(delay)
             data = self._post(method, payload)
         if not data.get("ok"):
-            raise RuntimeError(data.get("description", "Telegram API error"))
+            raise RuntimeError(safe_telegram_api_error(data))
         return data["result"]
 
     def call(self, method: str, payload: dict) -> dict:
@@ -1363,10 +1454,10 @@ class Telegram:
             raise RuntimeError(
                 f"Telegram file upload failed: {type(exc).__name__}"
             ) from None
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
         if not payload.get("ok"):
-            raise RuntimeError(
-                payload.get("description", "Telegram API error")
-            )
+            raise RuntimeError(safe_telegram_api_error(payload))
         return int(payload["result"]["message_id"])
 
     def send_photo(self, path: Path, caption: str = "") -> int:
@@ -1975,6 +2066,7 @@ class Monitor:
         self.daily_summary_minute = cfg.daily_summary_minute
         self.pin_status = cfg.telegram_pin_status
         self.alert_dwell = cfg.alert_dwell_sec
+        self.warning_dwell = cfg.alert_dwell_sec
         self.recovery_dwell = cfg.alert_recovery_dwell_sec
 
     def initialize_runtime_counters(self) -> None:
@@ -1992,6 +2084,7 @@ class Monitor:
         ) = None
         self.next_prune = 0.0
         self.last_summary_day: str | None = None
+        self.last_summary_attempt = -300.0
         self.weekly_digest_attempts: dict[str, float] = {}
         self.last_recovery_duration: float | None = None
         self.last_recovery_at: float | None = None
@@ -2001,6 +2094,7 @@ class Monitor:
         self.telegram_consecutive_failures = 0
         self.telegram_last_poll_success: float | None = None
         self.last_db_maintenance = 0.0
+        self.last_db_maintenance_attempt = -300.0
         self.alert_candidate: tuple[str, float] | None = None
         self.phase_alert_levels = {"L2": "normal", "L3": "normal"}
         self.phase_alert_candidates: dict[str, tuple[str, float]] = {}
@@ -2194,7 +2288,7 @@ class Monitor:
         if candidate is None or candidate[0] != level:
             self.phase_alert_candidates[phase] = (level, now)
             return
-        dwell = self.recovery_dwell if level == "normal" else self.alert_dwell
+        dwell = self.level_dwell(level)
         if now - candidate[1] < dwell:
             return
         self.phase_alert_levels[phase] = level
@@ -3026,6 +3120,13 @@ class Monitor:
                 self.low_voltage_active = False
                 self.record_voltage_event("recovered", voltage, frequency)
 
+    def level_dwell(self, level: str) -> float:
+        """Choose warning, critical, or normal-state confirmation time."""
+
+        if level == "warning":
+            return self.warning_dwell
+        return self.recovery_dwell if level == "normal" else self.alert_dwell
+
     def runtime_voltage_level(self, voltage: float) -> str:
         """Classify voltage using live-adjustable alert thresholds."""
 
@@ -3052,7 +3153,7 @@ class Monitor:
         if not self.alert_candidate or self.alert_candidate[0] != level:
             self.alert_candidate = (level, now)
             return
-        dwell = self.recovery_dwell if level == "normal" else self.alert_dwell
+        dwell = self.level_dwell(level)
         if now - self.alert_candidate[1] < dwell:
             return
         self.alert_level = level
@@ -3119,7 +3220,7 @@ class Monitor:
         )
 
     def outage_history_text(self, phase: str = "L1") -> str:
-        """Render localized recent confirmed outage intervals."""
+        """Render Shelly connectivity gaps, not proven power outages."""
 
         try:
             rows = outage_history(self.cfg.database_path, phase, 10)
@@ -3170,7 +3271,11 @@ class Monitor:
     def daily_summary_text(self) -> str:
         """Render localized three-phase daily operational summary."""
 
-        since = time.time() - 86400
+        now = time.time()
+        local = datetime.fromtimestamp(now, ZoneInfo(self.cfg.timezone))
+        since = local.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).timestamp()
         lines = [tr(self.language, "summary_title")]
         for phase in self.active_phases():
             if not self.phase_configured(phase):
@@ -3178,8 +3283,8 @@ class Monitor:
                     tr(self.language, "summary_unconfigured", phase=phase)
                 )
                 continue
-            st = phase_stats(self.cfg.database_path, phase, since)
-            outages = self.storage.outage_stats(time.time(), phase)
+            st = phase_stats(self.cfg.database_path, phase, since, until=now)
+            outages = self.storage.outage_stats(now, phase)
             outage_duration = duration_text(
                 float(outages["duration"]), self.language
             )
@@ -3196,6 +3301,7 @@ class Monitor:
                 )
             )
         lines.append(tr(self.language, "outage_interpretation"))
+        lines.append(tr(self.language, "summary_observation_notice"))
         return "\n".join(lines)
 
     def weekly_summary_text(self) -> str:
@@ -3244,6 +3350,10 @@ class Monitor:
         )
         if not due or day == self.last_summary_day:
             return
+        attempt = time.monotonic()
+        if attempt - self.last_summary_attempt < 300.0:
+            return
+        self.last_summary_attempt = attempt
         self.telegram.send(
             self.daily_summary_text(), chat_id=self.telegram.status_chat_id
         )
@@ -3380,6 +3490,7 @@ class Monitor:
             "daily_minute": str(self.cfg.daily_summary_minute),
             "pin_status": "1" if self.cfg.telegram_pin_status else "0",
             "alert_dwell": str(self.cfg.alert_dwell_sec),
+            "warning_dwell": str(self.cfg.alert_dwell_sec),
             "recovery_dwell": str(self.cfg.alert_recovery_dwell_sec),
         }
 
@@ -3387,7 +3498,11 @@ class Monitor:
         """Read one runtime setting with environment fallback."""
 
         stored = self.storage.get_meta(f"telegram_setting_{name}")
-        return stored if stored is not None else self.setting_defaults()[name]
+        if stored is not None:
+            return stored
+        if name == "warning_dwell":
+            return self.setting_value("alert_dwell")
+        return self.setting_defaults()[name]
 
     def load_runtime_settings(self) -> None:
         """Apply all persisted settings without restarting the service."""
@@ -3419,6 +3534,17 @@ class Monitor:
         )
         self.pin_status = self.setting_value("pin_status") == "1"
 
+    def validated_warning_dwell(self) -> float:
+        """Reject invalid saved warning dwell without disrupting alerts."""
+
+        try:
+            value = float(self.setting_value("warning_dwell"))
+        except (TypeError, ValueError, OverflowError):
+            return self.alert_dwell
+        if not math.isfinite(value) or not 0 <= value <= 600:
+            return self.alert_dwell
+        return value
+
     def load_runtime_alert_settings(self) -> None:
         """Apply voltage thresholds, summaries, and alert timing settings."""
 
@@ -3439,6 +3565,7 @@ class Monitor:
         self.daily_summary_hour = int(self.setting_value("daily_hour"))
         self.daily_summary_minute = int(self.setting_value("daily_minute"))
         self.alert_dwell = float(self.setting_value("alert_dwell"))
+        self.warning_dwell = self.validated_warning_dwell()
         self.recovery_dwell = float(self.setting_value("recovery_dwell"))
 
     def is_admin(self, user_id: str) -> bool:
@@ -3533,6 +3660,7 @@ class Monitor:
                 voltage=self.low_voltage_alert_v,
             ),
             tr(lang, "settings_recovery", voltage=self.low_voltage_recovery_v),
+            tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
             tr(
                 lang,
                 "settings_levels",
@@ -3595,6 +3723,7 @@ class Monitor:
                     state=labels["levels"],
                     range=self.voltage_range_text(),
                 ),
+                tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
                 tr(lang, "settings_outage", state=labels["availability"]),
                 "",
                 tr(lang, "settings_choose"),
@@ -3681,6 +3810,7 @@ class Monitor:
                     state=labels["levels"],
                     range=self.voltage_range_text(),
                 ),
+                tr(lang, "settings_warning_dwell", dwell=self.warning_dwell),
                 tr(
                     lang,
                     "settings_dwell",
@@ -3986,12 +4116,28 @@ class Monitor:
             ],
         ]
 
+    def warning_dwell_setting_rows(self) -> list[list[dict[str, str]]]:
+        """Build localizable warning-only confirmation presets."""
+
+        button = self.setting_button
+        return [
+            [
+                button(
+                    tr(self.language, "button_warning_dwell", seconds=n),
+                    f"warnwait_{n}",
+                )
+                for n in pair
+            ]
+            for pair in ((15, 60), (180, 300))
+        ]
+
     def voltage_setting_rows(self) -> list[list[dict[str, str]]]:
         """Build warning and critical voltage setting rows."""
 
         button = self.setting_button
         return [
             [button("⚠️ Уровни ON/OFF", "alerts_toggle")],
+            *self.warning_dwell_setting_rows(),
             [
                 button("Warn low -5V", "warnlow_dec"),
                 button("Warn low +5V", "warnlow_inc"),
@@ -4575,11 +4721,27 @@ class Monitor:
                 else "alert_dwell"
             )
             step = -5.0 if action.endswith("dec") else 5.0
+            previous = values[key]
             values[key] = (
                 f"{max(0.0, min(300.0, float(values[key]) + step)):g}"
             )
+            if key == "alert_dwell" and values["warning_dwell"] == previous:
+                values["warning_dwell"] = values[key]
             return True
         return False
+
+    def apply_warning_dwell_setting(
+        self, action: str, values: dict[str, str]
+    ) -> bool:
+        """Configure warning-only dwell, keeping critical speed unchanged."""
+
+        if not action.startswith("warnwait_"):
+            return False
+        seconds = action.removeprefix("warnwait_")
+        if seconds not in {"15", "60", "180", "300"}:
+            raise ValueError("unsupported warning dwell choice")
+        values["warning_dwell"] = seconds
+        return True
 
     def apply_level_setting(self, action: str, values: dict[str, str]) -> bool:
         """Adjust ordered warning and critical voltage thresholds."""
@@ -4643,6 +4805,7 @@ class Monitor:
             or self.apply_basic_setting(action, values)
             or self.apply_low_setting(action, values)
             or self.apply_timing_setting(action, values)
+            or self.apply_warning_dwell_setting(action, values)
             or self.apply_level_setting(action, values)
         ):
             raise ValueError("unknown settings action")
@@ -4766,13 +4929,24 @@ class Monitor:
             self.maybe_finalize_voltage_episode()
             self.maybe_rotate_stable_recovery_status()
             self.update_status()
-            try:
-                self.maybe_daily_summary()
-                self.maybe_weekly_private_reports()
-                self.maybe_database_maintenance()
-            except Exception as exc:
-                logger.warning("Periodic maintenance failed: {}", exc)
+            self.run_periodic_tasks()
             STOP.wait(self.cfg.poll_interval)
+
+    def run_periodic_tasks(self) -> None:
+        """Run independent jobs despite one Telegram or SQLite failure."""
+
+        jobs = (
+            ("daily_summary", self.maybe_daily_summary),
+            ("weekly_private", self.maybe_weekly_private_reports),
+            ("database", self.maybe_database_maintenance),
+        )
+        for name, task in jobs:
+            try:
+                task()
+            except Exception as exc:
+                logger.warning(
+                    "Periodic {} failed: {}", name, type(exc).__name__
+                )
 
     def maybe_database_maintenance(self) -> None:
         """Run rollup/checkpoint/optimize no more than once per day."""
@@ -4780,6 +4954,10 @@ class Monitor:
         now = time.time()
         if now - self.last_db_maintenance < 86400:
             return
+        attempt = time.monotonic()
+        if attempt - self.last_db_maintenance_attempt < 300.0:
+            return
+        self.last_db_maintenance_attempt = attempt
         self.storage.rollup_hourly(now - 3600)
         result = self.storage.database_maintenance()
         self.last_db_maintenance = now
@@ -4947,6 +5125,10 @@ class Monitor:
             self.handle_updates_command(sender_id)
         elif command == "/apartments":
             self.handle_apartments_command(sender_id, parts)
+        elif command == "/schedule":
+            self.telegram.send(
+                self.schedule_text(), notify=False, chat_id=sender_id
+            )
         elif command == "/preview":
             self.send_compact_preview(sender_id)
         elif command == "/view":
@@ -5086,6 +5268,8 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
+        if command == "/schedule":
+            return  # Private admin only, never a public-channel reply.
         if command == "/week" and len(parts) != 1:
             return
         if command in {"/chart", "/export"}:
@@ -5300,10 +5484,18 @@ class Monitor:
         except ValueError:
             self.telegram.send(tr(self.language, "maintenance_usage"))
 
+    def schedule_text(self) -> str:
+        """Render an optional, read-only DTEK forecast."""
+
+        return format_schedule(
+            self.language,
+            os.getenv("DTEK_REGION", ""),
+            os.getenv("DTEK_GROUP", ""),
+        )
+
     def command_text(self, command: str) -> str | None:
         """Render localized command responses."""
 
-        snap = self.state.snapshot()
         if command == "/start":
             return tr(self.language, "menu_title")
         if command == "/help":
@@ -5319,13 +5511,14 @@ class Monitor:
             "/week": self.weekly_summary_text,
             "/audit": self.audit_text,
             "/device": self.device_health_text,
+            "/schedule": self.schedule_text,
         }
         if command in reports:
             return reports[command]()
         known = {"/voltage", "/today", "/minmax", "/history", "/outages"}
         if command not in known:
             return None
-        if snap["voltage"] is None:
+        if self.state.snapshot()["voltage"] is None:
             return tr(self.language, "no_current")
         if command == "/voltage":
             return (
@@ -5372,14 +5565,38 @@ class Monitor:
 
 
 OUTAGE_COUNT_HELP = (
-    "# HELP shelly_outages_total "
-    "Confirmed connectivity outages after hysteresis."
+    "# HELP shelly_outages_total Legacy name for Shelly connectivity "
+    "losses after hysteresis; not verified mains outages."
 )
 OUTAGE_DURATION_HELP = (
-    "# HELP shelly_outage_duration_today_seconds "
-    "Confirmed outage duration after hysteresis; "
-    "not exact mains-loss boundaries."
+    "# HELP shelly_outage_duration_today_seconds Legacy name for "
+    "connectivity-loss duration; not electricity downtime."
 )
+
+
+def connectivity_metric_lines(
+    outage_count: int, stats: dict[str, float]
+) -> list[str]:
+    """Keep legacy Prometheus series while adding clear source semantics."""
+
+    count, seconds = stats["count"], stats["duration"]
+    return [
+        "# HELP shelly_connectivity_losses_total "
+        "Shelly connection-loss transitions after hysteresis.",
+        f"shelly_connectivity_losses_total {outage_count}",
+        "# HELP shelly_connectivity_losses_today "
+        "Shelly connection-loss intervals today.",
+        f"shelly_connectivity_losses_today {count}",
+        "# HELP shelly_connectivity_loss_duration_today_seconds "
+        "Connectivity-loss duration, not measured mains downtime.",
+        f"shelly_connectivity_loss_duration_today_seconds {seconds:.3f}",
+        OUTAGE_COUNT_HELP,
+        f"shelly_outages_total {outage_count}",
+        "# HELP shelly_outages_today Legacy connectivity-loss count today.",
+        f"shelly_outages_today {count}",
+        OUTAGE_DURATION_HELP,
+        f"shelly_outage_duration_today_seconds {seconds:.3f}",
+    ]
 
 
 def live_metric_value(snap: dict[str, object], key: str) -> str:
@@ -5409,6 +5626,8 @@ def phase_metrics(monitor: Monitor, phase: str) -> list[str]:
         f'shelly_frequency_hz{{phase="{phase}"}} {frequency}',
         f'shelly_last_success_age_seconds{{phase="{phase}"}} {age:.3f}',
         f'shelly_outages_total{{phase="{phase}"}} {snap["outage_count"]}',
+        f'shelly_connectivity_losses_total{{phase="{phase}"}} '
+        f"{snap['outage_count']}",
         f"shelly_connectivity_state{{{state_labels}}} 1",
     ]
 
@@ -5433,18 +5652,11 @@ def metrics_text(monitor: Monitor) -> str:
     loop_age = time.monotonic() - monitor.last_loop_tick
     poll_age = telegram_poll_success_age(monitor)
     poll_age_metric = "NaN" if poll_age is None else f"{poll_age:.3f}"
-    outage_help = OUTAGE_COUNT_HELP
-    duration_help = OUTAGE_DURATION_HELP
     lines = [
         f"shelly_voltage_volts {voltage}",
         f"shelly_frequency_hz {frequency}",
         f"shelly_last_success_age_seconds {age:.3f}",
-        outage_help,
-        f"shelly_outages_total {snap['outage_count']}",
-        "# HELP shelly_outages_today Confirmed connectivity outages today.",
-        f"shelly_outages_today {outage_stats['count']}",
-        duration_help,
-        f"shelly_outage_duration_today_seconds {outage_stats['duration']:.3f}",
+        *connectivity_metric_lines(snap["outage_count"], outage_stats),
         f"shelly_telegram_enabled {int(monitor.telegram.enabled)}",
         f"shelly_telegram_failures_total {monitor.telegram_failures}",
         "shelly_telegram_consecutive_failures "
@@ -5769,6 +5981,87 @@ def telegram_doctor(telegram: Telegram) -> dict[str, object]:
     }
 
 
+def telegram_destinations_check(cfg: Config) -> int:
+    """Read-only Telegram API check without showing IDs or sending posts."""
+
+    data = safe_telegram_doctor(Telegram(cfg))
+    status = data.get("status")
+    if status == "disabled":
+        print("TELEGRAM_DESTINATIONS=DISABLED")
+        return 0
+    if status != "ok":
+        error = data.get("error_type", "invalid_response")
+        print(f"TELEGRAM_DESTINATIONS=FAIL reason={error}")
+        return 2
+    control = data.get("control_chat_id")
+    target = data.get("status_chat_id")
+    kind = data.get("status_chat_type")
+    valid_type = kind in {"private", "group", "supergroup", "channel"}
+    if not data.get("bot") or control in (None, "", "None"):
+        print("TELEGRAM_DESTINATIONS=FAIL reason=incomplete_api_reply")
+        return 2
+    if target in (None, "", "None") or not valid_type:
+        print("TELEGRAM_DESTINATIONS=FAIL reason=incomplete_api_reply")
+        return 2
+    separate = "yes" if control != target else "no"
+    print(
+        "TELEGRAM_DESTINATIONS=PASS "
+        f"bot=ok control=ok status=ok type={kind} separate={separate}"
+    )
+    print("Subscriber-visible message delivery is not verified.")
+    return 0
+
+
+def channel_membership_permissions(member: object) -> str:
+    """Classify the bot's channel post/edit rights without user data."""
+
+    if not isinstance(member, dict):
+        return "invalid_membership"
+    if member.get("status") == "creator":
+        return "pass"
+    if member.get("status") != "administrator":
+        return "not_administrator"
+    if member.get("can_post_messages") is not True:
+        return "posting_not_allowed"
+    if member.get("can_edit_messages") is not True:
+        return "editing_not_allowed"
+    return "pass"
+
+
+def telegram_channel_rights_check(cfg: Config) -> int:
+    """Check own channel permissions without sending any messages."""
+
+    bot = Telegram(cfg)
+    if not bot.enabled:
+        print("TELEGRAM_CHANNEL_RIGHTS=DISABLED")
+        return 0
+    try:
+        identity = bot.get_me()
+        destination = bot.get_chat(bot.status_chat_id)
+        user_id = identity.get("id") if isinstance(identity, dict) else None
+        if type(user_id) is not int or user_id <= 0:
+            raise ValueError("invalid bot identity")
+        if not isinstance(destination, dict):
+            raise ValueError("invalid status destination")
+        if destination.get("type") != "channel":
+            print("TELEGRAM_CHANNEL_RIGHTS=SKIP reason=not_channel")
+            return 2
+        member = bot.call(
+            "getChatMember",
+            {"chat_id": bot.status_chat_id, "user_id": user_id},
+        )
+        state = channel_membership_permissions(member)
+    except Exception as exc:
+        print(f"TELEGRAM_CHANNEL_RIGHTS=FAIL reason={type(exc).__name__}")
+        return 2
+    if state != "pass":
+        print(f"TELEGRAM_CHANNEL_RIGHTS=FAIL reason={state}")
+        return 2
+    print("TELEGRAM_CHANNEL_RIGHTS=PASS post=yes edit=yes")
+    print("Subscriber-visible message delivery is not verified.")
+    return 0
+
+
 def telegram_chat_rows(updates: list[dict]) -> list[dict[str, object]]:
     """Return unique chat summaries from Telegram updates."""
 
@@ -5844,6 +6137,8 @@ def parser() -> argparse.ArgumentParser:
             "db-check",
             "version",
             "telegram-discover",
+            "telegram-check",
+            "telegram-channel-rights",
         ],
     )
     return cli
@@ -5871,6 +6166,10 @@ def main() -> int:
         return doctor(cfg)
     if args.command == "telegram-discover":
         return telegram_discover(cfg)
+    if args.command == "telegram-check":
+        return telegram_destinations_check(cfg)
+    if args.command == "telegram-channel-rights":
+        return telegram_channel_rights_check(cfg)
     install_signals()
     Monitor(cfg).run()
     return 0

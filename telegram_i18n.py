@@ -11,14 +11,14 @@ _TEXT = {
         "menu_status": "⚡ Статус",
         "menu_settings": "⚙️ Настройки",
         "menu_today": "📊 Сегодня",
-        "menu_outages": "🔌 Отключения",
+        "menu_outages": "🔌 Потери связи",
         "menu_chart": "📉 График",
         "menu_help": "ℹ️ Помощь",
         "menu_apartments": "🏢 Квартиры и фазы",
         "menu_updates": "🔄 Обновления",
         "cmd_help": "Показать команды",
         "cmd_voltage": "Текущее напряжение",
-        "cmd_outages": "Отключения за сегодня",
+        "cmd_outages": "Потери связи за сегодня",
         "cmd_status": "Полный статус",
         "cmd_today": "Статистика за сегодня",
         "cmd_minmax": "Минимум и максимум",
@@ -34,6 +34,7 @@ _TEXT = {
         "cmd_audit": "Журнал настроек",
         "cmd_device": "Состояние Shelly",
         "cmd_updates": "Проверить GitHub Releases",
+        "cmd_schedule": "Плановые отключения ДТЭК",
         "updates_installed": "Установленная версия: {version}",
         "updates_latest": "Последний стабильный релиз GitHub: {version}",
         "updates_available": "Обновление доступно: {answer}",
@@ -75,6 +76,8 @@ _TEXT = {
         "settings_choose": "Выберите раздел:",
         "settings_section_device": "📟 Устройство",
         "settings_section_voltage": "⚡ Напряжение",
+        "settings_warning_dwell": "⏳ Выдержка предупреждения: {dwell:g} с",
+        "button_warning_dwell": "⚠️ {seconds} с",
         "settings_section_notifications": "🔔 Уведомления",
         "settings_section_schedule": "🕒 Расписание",
         "settings_section_service": "🧰 Сервис",
@@ -144,7 +147,7 @@ _TEXT = {
         "settings_error": "Ошибка настройки",
         "phase_sensor_offline": "⚠️ {phase}: датчик недоступен",
         "phase_sensor_recovered": (
-            "✅ {phase}: питание/датчик восстановлены\n⏱ {duration}"
+            "✅ {phase}: связь с датчиком восстановлена\n⏱ {duration}"
         ),
         "availability_offline": (
             "⚠️ Shelly недоступен. Последнее корректное измерение сохранено."
@@ -186,10 +189,10 @@ _TEXT = {
         "no_current": "Нет актуальных данных измерений.",
         "phases_title": "⚡ Фазы",
         "history_title": "🗂 Последние измерения {phase}",
-        "outages_title": "🔌 Последние отключения {phase}",
+        "outages_title": "🔌 Последние потери связи {phase}",
         "outage_now": "идёт сейчас",
-        "no_outages": "{phase}: отключений нет",
-        "outage_count_today": "🔌 Подтверждённых отключений сегодня: {count}",
+        "no_outages": "{phase}: потерь связи нет",
+        "outage_count_today": "🔌 Зафиксировано потерь связи сегодня: {count}",
         "outage_unavailable": "⏱ Подтверждённая недоступность: {duration}",
         "outage_boundaries": (
             "ℹ️ Границы: {failures} ошибок / {successes} успешных опросов"
@@ -199,6 +202,10 @@ _TEXT = {
             "отключение электричества (возможна проблема сети или IP)."
         ),
         "summary_title": "📅 Суточная сводка",
+        "summary_observation_notice": (
+            "ℹ️ Только измерения за сегодня (Киев), не непрерывное "
+            "наблюдение. При потере связи текущее напряжение неизвестно."
+        ),
         "summary_unconfigured": "⚪ {phase}: не настроена",
         "quality_title": "📊 Качество {phase} за {hours}ч",
         "quality_samples": "Измерений: {value}",
@@ -227,7 +234,7 @@ _TEXT = {
         "device_offline": "{phase}: нет связи ({error})",
         "menu_events": "🕘 События",
         "events_title": "🕘 События за 24 часа",
-        "events_empty": "Подтверждённых событий за 24 часа нет",
+        "events_empty": "Событий мониторинга за последние 24 часа нет",
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: потеря связи · {time}",
         "menu_summary": "📅 Сводка",
@@ -293,14 +300,14 @@ _TEXT = {
         "menu_status": "⚡ Статус",
         "menu_settings": "⚙️ Налаштування",
         "menu_today": "📊 Сьогодні",
-        "menu_outages": "🔌 Відключення",
+        "menu_outages": "🔌 Втрати зв’язку",
         "menu_chart": "📉 Графік",
         "menu_help": "ℹ️ Довідка",
         "menu_apartments": "🏢 Квартири та фази",
         "menu_updates": "🔄 Оновлення",
         "cmd_help": "Показати команди",
         "cmd_voltage": "Поточна напруга",
-        "cmd_outages": "Відключення за сьогодні",
+        "cmd_outages": "Втрати зв’язку за сьогодні",
         "cmd_status": "Повний статус",
         "cmd_today": "Статистика за сьогодні",
         "cmd_minmax": "Мінімум і максимум",
@@ -316,6 +323,7 @@ _TEXT = {
         "cmd_audit": "Журнал налаштувань",
         "cmd_device": "Стан Shelly",
         "cmd_updates": "Перевірити GitHub Releases",
+        "cmd_schedule": "Планові відключення ДТЕК",
         "updates_installed": "Встановлена версія: {version}",
         "updates_latest": "Останній стабільний реліз GitHub: {version}",
         "updates_available": "Оновлення доступне: {answer}",
@@ -360,6 +368,8 @@ _TEXT = {
         "settings_choose": "Оберіть розділ:",
         "settings_section_device": "📟 Пристрій",
         "settings_section_voltage": "⚡ Напруга",
+        "settings_warning_dwell": "⏳ Підтвердження попередження: {dwell:g} с",
+        "button_warning_dwell": "⚠️ {seconds} с",
         "settings_section_notifications": "🔔 Сповіщення",
         "settings_section_schedule": "🕒 Розклад",
         "settings_section_service": "🧰 Сервіс",
@@ -440,10 +450,10 @@ _TEXT = {
         "no_current": "Немає актуальних даних вимірювань.",
         "phases_title": "⚡ Фази",
         "history_title": "🗂 Останні вимірювання {phase}",
-        "outages_title": "🔌 Останні відключення {phase}",
+        "outages_title": "🔌 Останні втрати зв'язку {phase}",
         "outage_now": "триває зараз",
-        "no_outages": "{phase}: відключень немає",
-        "outage_count_today": "🔌 Підтверджених відключень сьогодні: {count}",
+        "no_outages": "{phase}: втрат зв'язку немає",
+        "outage_count_today": "🔌 Зафіксовано втрат зв'язку сьогодні: {count}",
         "outage_unavailable": "⏱ Підтверджена недоступність: {duration}",
         "outage_boundaries": (
             "ℹ️ Межі: {failures} помилок / {successes} успішних опитувань"
@@ -453,6 +463,10 @@ _TEXT = {
             "зникнення електрики (можлива проблема мережі або IP)."
         ),
         "summary_title": "📅 Добове зведення",
+        "summary_observation_notice": (
+            "ℹ️ Лише вимірювання за сьогодні (Київ), не безперервний "
+            "моніторинг. Без зв'язку поточна напруга невідома."
+        ),
         "summary_unconfigured": "⚪ {phase}: не налаштована",
         "quality_title": "📊 Якість {phase} за {hours}г",
         "quality_samples": "Вимірювань: {value}",
@@ -512,7 +526,7 @@ _TEXT = {
         "device_offline": "{phase}: немає зв'язку ({error})",
         "menu_events": "🕘 Події",
         "events_title": "🕘 Події за 24 години",
-        "events_empty": "Підтверджених подій за 24 години немає",
+        "events_empty": "Подій моніторингу за останні 24 години немає",
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: втрата зв'язку · {time}",
         "menu_summary": "📅 Зведення",
@@ -578,14 +592,14 @@ _TEXT = {
         "menu_status": "⚡ Status",
         "menu_settings": "⚙️ Settings",
         "menu_today": "📊 Today",
-        "menu_outages": "🔌 Outages",
+        "menu_outages": "🔌 Connection losses",
         "menu_chart": "📉 Chart",
         "menu_help": "ℹ️ Help",
         "menu_apartments": "🏢 Apartments and phases",
         "menu_updates": "🔄 Updates",
         "cmd_help": "Show commands",
         "cmd_voltage": "Current voltage",
-        "cmd_outages": "Today's outages",
+        "cmd_outages": "Today's connection losses",
         "cmd_status": "Full status",
         "cmd_today": "Today's statistics",
         "cmd_minmax": "Minimum and maximum",
@@ -601,6 +615,7 @@ _TEXT = {
         "cmd_audit": "Settings audit",
         "cmd_device": "Shelly health",
         "cmd_updates": "Check GitHub releases",
+        "cmd_schedule": "DTEK outage schedule",
         "updates_installed": "Installed: {version}",
         "updates_latest": "Latest stable GitHub release: {version}",
         "updates_available": "Update available: {answer}",
@@ -641,6 +656,8 @@ _TEXT = {
         "settings_choose": "Choose a section:",
         "settings_section_device": "📟 Device",
         "settings_section_voltage": "⚡ Voltage",
+        "settings_warning_dwell": "⏳ Warning confirmation: {dwell:g}s",
+        "button_warning_dwell": "⚠️ {seconds}s",
         "settings_section_notifications": "🔔 Notifications",
         "settings_section_schedule": "🕒 Schedule",
         "settings_section_service": "🧰 Service",
@@ -717,10 +734,10 @@ _TEXT = {
         "no_current": "No current measurement data.",
         "phases_title": "⚡ Phases",
         "history_title": "🗂 Recent measurements {phase}",
-        "outages_title": "🔌 Recent outages {phase}",
+        "outages_title": "🔌 Recent connection losses {phase}",
         "outage_now": "ongoing now",
-        "no_outages": "{phase}: no outages",
-        "outage_count_today": "🔌 Confirmed outages today: {count}",
+        "no_outages": "{phase}: no connection losses",
+        "outage_count_today": "🔌 Recorded connection losses today: {count}",
         "outage_unavailable": "⏱ Confirmed unavailability: {duration}",
         "outage_boundaries": (
             "ℹ️ Boundaries: {failures} failures / {successes} successful polls"
@@ -730,6 +747,10 @@ _TEXT = {
             "cuts. Network or IP changes can cause them."
         ),
         "summary_title": "📅 Daily summary",
+        "summary_observation_notice": (
+            "ℹ️ Observed samples from today (Kyiv), not continuous "
+            "power evidence. Current voltage is unknown while offline."
+        ),
         "summary_unconfigured": "⚪ {phase}: not configured",
         "quality_title": "📊 Quality {phase} for {hours}h",
         "quality_samples": "Measurements: {value}",
@@ -781,7 +802,7 @@ _TEXT = {
         "device_offline": "{phase}: unreachable ({error})",
         "menu_events": "🕘 Events",
         "events_title": "🕘 Events in last 24 hours",
-        "events_empty": "No confirmed events in the last 24 hours",
+        "events_empty": "No monitoring events in the last 24 hours",
         "events_warning": "⚠️ {phase}: {state} · {time}",
         "events_connection": "🔌 {phase}: connection lost · {time}",
         "menu_summary": "📅 Summary",
@@ -875,6 +896,7 @@ def command_descriptions(language: str) -> dict[str, str]:
         "audit",
         "device",
         "updates",
+        "schedule",
     )
     return {name: tr(language, f"cmd_{name}") for name in names}
 
