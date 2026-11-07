@@ -38,6 +38,11 @@ RPC adapter boundary for Shelly Pro EM-50, EM Gen3, PM Mini,
 - Avoid embedding untrusted payload text in exception messages.
 
 The tests are entirely local with mocked RPC responses and
-temporary SQLite. Physical Pro 3EM/3CT63 acceptance remains
+temporary SQLite. The additional end-to-end regression confirms
+that an invalid reading resets the recovery-success counter, does
+not close an existing connectivity loss and does not partially
+persist a three-phase response. It does not prove real electricity
+restoration or subscriber-visible Telegram delivery.
+Physical Pro 3EM/3CT63 acceptance remains
 unverified until a real device is installed and the operator
 allows testing. Production stays on 0.5.13-hw and is unchanged.
