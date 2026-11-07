@@ -1673,6 +1673,26 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     return f"{icon} {phase}: {voltage:.1f} {tr(lang, 'unit_voltage')}"
 
 
+def voltage_event_title(monitor: Monitor, kind: str, voltage: float) -> str:
+    """Describe the measured level instead of assuming full recovery."""
+
+    if kind != "recovered":
+        return tr(monitor.language, f"event_{kind}")
+    if not math.isfinite(voltage):
+        key = "event_recovered_unknown"
+    elif voltage <= monitor.critical_low:
+        key = "event_recovered_critical_low"
+    elif voltage >= monitor.critical_high:
+        key = "event_recovered_critical_high"
+    elif voltage <= monitor.warning_low:
+        key = "event_recovered_warning_low"
+    elif voltage >= monitor.warning_high:
+        key = "event_recovered_warning_high"
+    else:
+        key = "event_recovered"
+    return tr(monitor.language, key)
+
+
 def voltage_event_lines(monitor: Monitor) -> list[str]:
     """Render the latest localized voltage transition."""
 
@@ -1687,7 +1707,7 @@ def voltage_event_lines(monitor: Monitor) -> list[str]:
         and float(last_success) - happened_at >= 1800
     ):
         return []
-    title = tr(monitor.language, f"event_{kind}")
+    title = voltage_event_title(monitor, kind, voltage)
     if phase != "L1":
         icon, _, rest = title.partition(" ")
         title = f"{icon} {phase}: {rest}"

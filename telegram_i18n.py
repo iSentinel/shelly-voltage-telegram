@@ -65,6 +65,17 @@ _TEXT = {
         "event_warning_high": "⚠️ Повышенное напряжение",
         "event_critical_high": "🚨 Критически повышенное напряжение",
         "event_recovered": "✅ Напряжение восстановилось",
+        "event_recovered_critical_low": (
+            "🚨 Напряжение всё ещё критически низкое"
+        ),
+        "event_recovered_critical_high": (
+            "🚨 Напряжение всё ещё критически высокое"
+        ),
+        "event_recovered_warning_low": "⚠️ Напряжение всё ещё понижено",
+        "event_recovered_warning_high": "⚠️ Напряжение всё ещё повышено",
+        "event_recovered_unknown": (
+            "⚠️ Восстановление напряжения не подтверждено"
+        ),
         "unstable": "⚠️ Нестабильное напряжение: {count} переходов за 15 мин",
         "episode_title": "📋 Итог события",
         "episode_period": "🕐 {start}–{end} · {duration}",
@@ -365,6 +376,11 @@ _TEXT = {
         "event_warning_high": "⚠️ Підвищена напруга",
         "event_critical_high": "🚨 Критично підвищена напруга",
         "event_recovered": "✅ Напруга відновилася",
+        "event_recovered_critical_low": "🚨 Напруга досі критично низька",
+        "event_recovered_critical_high": "🚨 Напруга досі критично висока",
+        "event_recovered_warning_low": "⚠️ Напруга все ще знижена",
+        "event_recovered_warning_high": "⚠️ Напруга все ще підвищена",
+        "event_recovered_unknown": "⚠️ Відновлення напруги не підтверджено",
         "unstable": "⚠️ Нестабільна напруга: {count} переходів за 15 хв",
         "episode_title": "📋 Підсумок події",
         "episode_period": "🕐 {start}–{end} · {duration}",
@@ -661,6 +677,11 @@ _TEXT = {
         "event_warning_high": "⚠️ High voltage",
         "event_critical_high": "🚨 Critically high voltage",
         "event_recovered": "✅ Voltage recovered",
+        "event_recovered_critical_low": "🚨 Voltage is still critically low",
+        "event_recovered_critical_high": "🚨 Voltage is still critically high",
+        "event_recovered_warning_low": "⚠️ Voltage is still low",
+        "event_recovered_warning_high": "⚠️ Voltage is still high",
+        "event_recovered_unknown": "⚠️ Voltage recovery is not confirmed",
         "unstable": "⚠️ Unstable voltage: {count} transitions in 15 min",
         "episode_title": "📋 Event summary",
         "episode_period": "🕐 {start}–{end} · {duration}",

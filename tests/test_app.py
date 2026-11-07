@@ -658,7 +658,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             self.assertEqual(monitor.replace_voltage_status.call_count, 2)
             lines = APP.voltage_event_lines(monitor)
             self.assertTrue(
-                lines[0].startswith("✅ L2: Напряжение восстановилось")
+                lines[0].startswith(
+                    "🚨 L2: Напряжение всё ещё критически низкое"
+                )
             )
 
     def test_low_voltage_event_is_rendered_in_status_header(self):
@@ -676,7 +678,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             stamp, APP.ZoneInfo("Europe/Kyiv")
         ).strftime("%H:%M")
         self.assertTrue(
-            text.startswith(f"✅ Напряжение восстановилось · {when}")
+            text.startswith(
+                f"🚨 Напряжение всё ещё критически низкое · {when}"
+            )
         )
         self.assertIn("186.1 V · 50.00 Гц", text.splitlines()[1])
 
