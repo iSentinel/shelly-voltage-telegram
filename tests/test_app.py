@@ -1591,7 +1591,7 @@ class MonitorRegressionTests(unittest.TestCase):
 
         self.assertFalse(monitor.poll_once())
         monitor.storage.add.assert_not_called()
-        self.assertEqual(monitor.state.snapshot()["last_error"], "unreachable")
+        self.assertEqual(monitor.state.snapshot()["last_error"], "read_error")
 
     def _telegram_monitor(self):
         monitor = APP.Monitor(

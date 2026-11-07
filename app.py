@@ -882,6 +882,24 @@ def db_check(path: Path) -> int:
     return 0 if result == "ok" else 2
 
 
+def safe_meter_error(error: Exception) -> str:
+    """Classify Shelly errors without exposing hosts or untrusted content."""
+
+    if isinstance(error, (requests.exceptions.Timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(error, requests.exceptions.HTTPError):
+        return "http_error"
+    if isinstance(error, requests.exceptions.ConnectionError):
+        return "connection_error"
+    if isinstance(error, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(error, (ConnectionError, OSError)):
+        return "connection_error"
+    if isinstance(error, (ValueError, TypeError, KeyError)):
+        return "invalid_response"
+    return "read_error"
+
+
 class RuntimeState:
     """Thread-safe current service and Shelly connectivity state."""
 
@@ -2257,14 +2275,15 @@ class Monitor:
     ) -> bool:
         """Record an optional-phase failure and its independent outage."""
 
-        changed = state.error(str(exc), self.cfg.offline_after_failures)
+        reason = safe_meter_error(exc)
+        changed = state.error(reason, self.cfg.offline_after_failures)
         snap = state.snapshot()
         if changed and snap["connectivity"] == "offline":
             self.clear_voltage_event(phase)
             started = float(snap["offline_since"] or time.time())
             if self.storage.begin_outage(started, phase):
                 self.maybe_phase_outage(phase)
-        logger.debug("{} poll unavailable: {}", phase, exc)
+        logger.debug("{} poll unavailable: {}", phase, reason)
         return False
 
     def poll_optional_phases(self) -> None:
@@ -2408,7 +2427,8 @@ class Monitor:
     def record_poll_failure(self, exc: Exception) -> None:
         """Record one failed poll and persist an offline transition."""
 
-        changed = self.state.error(str(exc), self.cfg.offline_after_failures)
+        reason = safe_meter_error(exc)
+        changed = self.state.error(reason, self.cfg.offline_after_failures)
         snap = self.state.snapshot()
         now = time.monotonic()
         should_warn = (
@@ -2421,11 +2441,11 @@ class Monitor:
                 "Shelly {} after {} failed poll(s): {}",
                 snap["connectivity"],
                 snap["consecutive_failures"],
-                exc,
+                reason,
             )
             self.last_failure_log = now
         else:
-            logger.debug("Shelly read still unavailable: {}", exc)
+            logger.debug("Shelly read still unavailable: {}", reason)
         if changed and snap["connectivity"] == "offline":
             self.clear_voltage_event()
             started = float(snap["offline_since"] or time.time())
