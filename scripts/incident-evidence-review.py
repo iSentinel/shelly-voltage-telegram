@@ -106,10 +106,11 @@ def query_incident(db_path: Path, incident_id: int) -> tuple:
             raise ValueError("incident is absent from SQLite")
         last = db.execute(
             "select ts,voltage from measurements "
-            "where ts <= ? and voltage > 0 and voltage < 500 "
+            "where phase=? and ts <= ? "
+            "and voltage > 0 and voltage < 500 "
             "and frequency >= 40 and frequency <= 70 "
             "order by ts desc limit 1",
-            (row[0],),
+            (row[2], row[0]),
         ).fetchone()
     return row, last
 
