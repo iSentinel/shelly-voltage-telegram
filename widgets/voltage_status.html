@@ -53,14 +53,14 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
     try{data=JSON.parse(w&&typeof w.publicData==="string"?w.publicData:"null")}catch(e){}
     const fresh=data&&data.schema===1&&data.s==="online"&&
       typeof data.t==="number"&&Date.now()/1000-data.t>=0&&Date.now()/1000-data.t<=60&&
-      typeof data.v==="number"&&Number.isFinite(data.v);
+      typeof data.v==="number"&&Number.isFinite(data.v)&&data.v>=0&&data.v<=400;
     const state=fresh?"online":data&&data.s==="offline"?"offline":
       data&&data.s==="stale"?"stale":"unknown";
     $("state").className="status "+state;
     $("state").textContent=state==="online"?"ОНЛАЙН":state==="offline"?"НЕТ СВЯЗИ":
       state==="stale"?"НЕТ СВЕЖИХ ДАННЫХ":"НЕТ ДАННЫХ";
     $("voltage").textContent=fresh?data.v.toFixed(1):"—";
-    $("frequency").textContent=fresh&&typeof data.f==="number"?data.f.toFixed(1)+" Гц":"—";
+    $("frequency").textContent=fresh&&typeof data.f==="number"&&Number.isFinite(data.f)&&data.f>=40&&data.f<=70?data.f.toFixed(1)+" Гц":"—";
     $("age").textContent=fresh?Math.round(Date.now()/1000-data.t)+" сек":"—";
     $("notice").textContent=fresh?"Реальное измерение":"Неизвестно, есть ли электричество";
     $("group").textContent=data&&typeof data.g==="string"?"Группа "+data.g:"—";
@@ -77,9 +77,11 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
   }
   if(w&&typeof w.onEvent==="function"){
     w.onEvent("publicDataChanged",render);
+    w.onEvent("activated",render);
     if(typeof w.watchPublicData==="function")w.watchPublicData();
   }
   render();
+  setInterval(render,10000);
 })();
 </script>
 </body>
