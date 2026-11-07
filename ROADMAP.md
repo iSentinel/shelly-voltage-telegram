@@ -1,3 +1,29 @@
+## 2026-11-08 QA design: community outage mirror and Telegram widget PoC
+
+- User confirms electricity on. Gateway LXC 110 production remains on
+  0.5.13-hw, online and healthy; /ready 200, SQLite quick_check=ok.
+  Rootfs safely resized 4 GiB -> 12 GiB; available capacity 8.4 GiB.
+- The natural Shelly incident #17 was closed by real connectivity recovery.
+  Its independent baseline verification PASS, 15-minute read-only samples
+  valid; no fabricated 0 V. Subscriber-visible Telegram acceptance remains.
+- Added an offline, size-limited outage-data-ua JSON adapter for Kyiv
+  GPV10.1 and other supported regions. Real public JSON was decoded:
+  community forecast 2026-11-08 04:00–11:30 and 14:30–22:00.
+  It is an UNOFFICIAL MIRROR and never certifies DTEK or observed mains.
+- Added widget state schema 1 and self-contained HTML status design:
+  live measured L1 voltage/frequency if fresh (<=60 s), otherwise dashes;
+  source-labelled 48 half-hour forecast slots kept distinct from Shelly.
+  Prototype zlib-9 2220/4096 bytes; HTML 5473/32768 bytes.
+- QA: 21 new offline Python/static tests PASS; complete 976/976 tests PASS,
+  Ruff + maintainability quality gate PASS. No device or Telegram control.
+- New widget-sandbox transport layer 233 / Bot API 10.4 documented beta;
+  direct sending to channels is not supported in this documented protocol.
+  No Bot API calls, private messaging or production promotion performed.
+- NEXT: independent live widget-sandbox conformance and Telegram client
+  feature detection; optional private-chat beta acceptance with explicit
+  approval, fallback captions; official DTEK provider attestation,
+  multi-meter physical acceptance and peer review. Do not force a release.
+
 ## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
 
 - **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`
