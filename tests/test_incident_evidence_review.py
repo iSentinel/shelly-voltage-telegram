@@ -74,15 +74,15 @@ class IndependentIncidentEvidenceTests(unittest.TestCase):
             )
             connection.execute(
                 "create table measurements (ts real, voltage real, "
-                "frequency real)"
+                "frequency real, phase text)"
             )
             connection.execute(
                 "insert into outages values (?,?,?,?)",
                 (15, epoch(LOSS), None, "L1"),
             )
             connection.execute(
-                "insert into measurements values (?,?,?)",
-                (epoch(SAMPLE), 234.8, 50.0),
+                "insert into measurements values (?,?,?,?)",
+                (epoch(SAMPLE), 234.8, 50.0, "L1"),
             )
 
     def run_review(self):
@@ -249,8 +249,40 @@ class IndependentIncidentEvidenceTests(unittest.TestCase):
 
         with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute(
-                "insert into measurements values (?,?,?)",
-                (epoch("2026-11-06T20:30:55+02:00"), 0.0, 50.0),
+                "insert into measurements values (?,?,?,?)",
+                (epoch("2026-11-06T20:30:55+02:00"), 0.0, 50.0, "L1"),
+            )
+        self.assertEqual(
+            self.run_review()["last_real_voltage_before_loss_v"], 234.8
+        )
+
+    def test_newer_other_phase_sample_does_not_replace_l1(self):
+        """A fresh L2 value must never be labeled L1 evidence."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "insert into measurements values (?,?,?,?)",
+                (epoch("2026-11-06T20:30:55+02:00"), 248.2, 50.0, "L2"),
+            )
+        result = self.run_review()
+        self.assertEqual(result["phase"], "L1")
+        self.assertEqual(result["last_real_voltage_before_loss_v"], 234.8)
+
+    def test_no_l1_sample_fails_even_if_l2_has_a_fresh_value(self):
+        """A measurement from another phase cannot prove L1 history."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("update measurements set phase='L2' where phase='L1'")
+        with self.assertRaisesRegex(ValueError, "sample"):
+            self.run_review()
+
+    def test_other_phase_invalid_sample_does_not_hide_valid_l1(self):
+        """Bad L2 telemetry must not alter the captured phase's history."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "insert into measurements values (?,?,?,?)",
+                (epoch("2026-11-06T20:30:55+02:00"), 900.0, 5.0, "L2"),
             )
         self.assertEqual(
             self.run_review()["last_real_voltage_before_loss_v"], 234.8
