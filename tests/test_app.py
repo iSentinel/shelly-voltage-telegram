@@ -577,7 +577,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.state.restore(APP.time.time(), 179.3, 50.0)
+            monitor.state.success(179.3, 50.0, 1.0, recovery_after=1)
             monitor.storage.day_stats = Mock(
                 return_value={
                     "count": 1,
@@ -658,7 +658,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             self.assertEqual(monitor.replace_voltage_status.call_count, 2)
             lines = APP.voltage_event_lines(monitor)
             self.assertTrue(
-                lines[0].startswith("✅ L2: Напряжение восстановилось")
+                lines[0].startswith(
+                    "🚨 L2: Напряжение всё ещё критически низкое"
+                )
             )
 
     def test_low_voltage_event_is_rendered_in_status_header(self):
@@ -666,7 +668,7 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
 
         monitor = APP.Monitor(config())
         stamp = APP.time.time()
-        monitor.state.restore(stamp, 186.1, 50.0)
+        monitor.state.success(186.1, 50.0, 1.0, recovery_after=1)
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 179.3, "max": 220.0, "avg": 205.0}
         )
@@ -676,7 +678,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             stamp, APP.ZoneInfo("Europe/Kyiv")
         ).strftime("%H:%M")
         self.assertTrue(
-            text.startswith(f"✅ Напряжение восстановилось · {when}")
+            text.startswith(
+                f"🚨 Напряжение всё ещё критически низкое · {when}"
+            )
         )
         self.assertIn("186.1 V · 50.00 Гц", text.splitlines()[1])
 
@@ -2287,10 +2291,14 @@ class ConnectivityStateTests(unittest.TestCase):
         self.assertIn("shelly_outages_total 1", metrics)
         self.assertIn("shelly_outages_today 1", metrics)
         self.assertIn("shelly_outage_duration_today_seconds 30.000", metrics)
+        self.assertIn("Legacy name for Shelly connectivity losses", metrics)
+        self.assertIn("not electricity downtime", metrics)
+        self.assertIn("shelly_connectivity_losses_total 1", metrics)
+        self.assertIn("shelly_connectivity_losses_today 1", metrics)
         self.assertIn(
-            "Confirmed connectivity outages after hysteresis", metrics
+            "shelly_connectivity_loss_duration_today_seconds 30.000",
+            metrics,
         )
-        self.assertIn("not exact mains-loss boundaries", metrics)
 
 
 def shelly_config_values() -> dict[str, object]:
@@ -2433,7 +2441,8 @@ class AdvancedFeatureTests(unittest.TestCase):
         """Keep the recovered label for only thirty minutes."""
 
         monitor = APP.Monitor(config())
-        monitor.state.restore(1000.0, 225.9, 50.0)
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(225.9, 50.0, 1.0, recovery_after=1)
         stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
         monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60
@@ -2451,7 +2460,8 @@ class AdvancedFeatureTests(unittest.TestCase):
         """Keep outages in history without advertising a stale recovery."""
 
         monitor = APP.Monitor(config())
-        monitor.state.restore(1000.0, 225.9, 50.0)
+        with patch.object(APP.time, "time", return_value=1000.0):
+            monitor.state.success(225.9, 50.0, 1.0, recovery_after=1)
         stats = {"count": 5, "min": 117.5, "max": 251.5, "avg": 219.0}
         monitor.storage.day_stats = Mock(return_value=stats)
         monitor.last_recovery_duration = 354 * 60

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sqlite3
 import sys
 import tempfile
 import unittest
-from contextlib import closing
+from contextlib import closing, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,6 +65,8 @@ class SoakReportTests(unittest.TestCase):
             self.assertEqual(report["last_sample_age_seconds"], 90.0)
             self.assertEqual(report["confirmed_outages"], 0)
             self.assertEqual(report["confirmed_outage_seconds"], 0.0)
+            self.assertEqual(report["connectivity_losses"], 0)
+            self.assertEqual(report["connectivity_loss_seconds"], 0.0)
             self.assertEqual(
                 report["voltage_transition_history_status"], "absent"
             )
@@ -98,12 +101,69 @@ class SoakReportTests(unittest.TestCase):
             self.assertEqual(report["confirmed_outages"], 2)
             self.assertEqual(report["confirmed_open_outages"], 1)
             self.assertEqual(report["confirmed_outage_seconds"], 1600.0)
+            self.assertEqual(report["connectivity_loss_seconds"], 1600.0)
+            self.assertEqual(report["open_connectivity_losses"], 1)
             self.assertEqual(report["sample_gaps_over_threshold"], 1)
             self.assertIn(
                 "diagnostic only", report["sample_gap_interpretation"]
             )
             self.assertIn("hysteresis", report["confirmed_outage_semantics"])
             self.assertIn("not exact", report["confirmed_outage_semantics"])
+
+    def test_new_connectivity_aliases_match_legacy_values(self):
+        """Rename semantics without changing historical JSON consumers."""
+
+        rows = [(1000.0, 1100.0), (1400.0, None)]
+        report = SOAK.outage_report(
+            rows, 900.0, 1600.0, ZoneInfo("Europe/Kyiv")
+        )
+        pairs = (
+            ("connectivity_losses", "confirmed_outages"),
+            ("open_connectivity_losses", "confirmed_open_outages"),
+            ("connectivity_loss_seconds", "confirmed_outage_seconds"),
+            ("connectivity_loss_intervals", "confirmed_outage_intervals"),
+        )
+        for modern, legacy in pairs:
+            with self.subTest(field=modern):
+                self.assertEqual(report[modern], report[legacy])
+        self.assertEqual(report["connectivity_losses"], 2)
+        self.assertEqual(report["open_connectivity_losses"], 1)
+        self.assertEqual(report["connectivity_loss_seconds"], 300.0)
+
+    def test_operator_text_excludes_misleading_legacy_keys(self):
+        """Plain text must not imply electricity was proven off."""
+
+        data = {
+            "connectivity_losses": 1,
+            "confirmed_outages": 1,
+            "connectivity_loss_seconds": 100.0,
+            "confirmed_outage_seconds": 100.0,
+            "legacy_confirmed_outage_keys_deprecated": True,
+        }
+        out = io.StringIO()
+        with redirect_stdout(out):
+            SOAK.print_text(data)
+        self.assertIn("connectivity_losses=1", out.getvalue())
+        self.assertNotIn("confirmed_outages=", out.getvalue())
+        self.assertNotIn("confirmed_outage_seconds=", out.getvalue())
+
+    def test_metadata_explicitly_disclaims_mains_causation(self):
+        """Open network gaps cannot verify exact physical power switching."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "empty.sqlite3"
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute(
+                    "create table measurements "
+                    "(ts real,voltage real,frequency real)"
+                )
+            report = SOAK.build_report(args(path), now=2000.0)
+            self.assertTrue(report["legacy_confirmed_outage_keys_deprecated"])
+            self.assertIn(
+                "not proof of mains", report["connectivity_loss_semantics"]
+            )
+            self.assertEqual(report["connectivity_losses"], 0)
+            self.assertEqual(report["confirmed_outages"], 0)
 
     def test_voltage_history_is_windowed_and_sanitized(self):
         """Include only safe, recognized voltage-state transitions."""

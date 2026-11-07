@@ -22,6 +22,11 @@
 </p>
 <p align="center"><em>Telegram voltage status message, cropped to the message boundaries.</em></p>
 
+<p align="center">
+  <img src="docs/assets/telegram-chart-24h-field-20261107.webp" alt="Real Shelly Pro EM-50 24-hour Telegram voltage graph" width="430">
+</p>
+<p align="center"><em>Field screenshot: 24-hour Telegram voltage chart with a 207 V warning line. Historical measurements; not a live voltage display.</em> <a href="docs/TELEGRAM_FIELD_SCREENSHOTS.md">QA context</a></p>
+
 ---
 
 ## Telegram menu / Меню Telegram
@@ -247,6 +252,10 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 
 # Online SQLite backup
 ./scripts/backup.sh
+
+# Offline backup restoration rehearsal (candidate source only)
+python scripts/restore-drill.py --help
+python scripts/restore-drill.py --backup-dir /var/backups/shelly-voltage --count 3 --jsonl
 
 # Redacted support bundle
 ./scripts/support-bundle.sh

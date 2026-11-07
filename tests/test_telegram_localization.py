@@ -103,11 +103,11 @@ class TelegramLocaleTests(unittest.TestCase):
         monitor.storage.outage_stats = Mock(
             return_value={"count": 4, "duration": 48300.0}
         )
-        stats = {"min": 117.5, "max": 251.5, "avg": 219.1}
+        stats = {"min": 117.5, "max": 251.5, "avg": 219.1, "count": 3}
         with patch.object(APP, "phase_stats", return_value=stats):
             message = monitor.daily_summary_text()
         self.assertIn("Добове зведення", message)
-        self.assertIn("перерв зв'язку: 4", message)
+        self.assertIn("втрат зв'язку: 4", message)
         self.assertIn("13г 25хв", message)
         self.assertNotIn("отключений", message)
         self.assertNotIn("avg ", message)
@@ -210,10 +210,10 @@ class TelegramLocaleTests(unittest.TestCase):
         monitor.storage.outage_stats = Mock(
             return_value={"count": 4, "duration": 48300.0}
         )
-        stats = {"min": 117.5, "max": 251.5, "avg": 219.1}
+        stats = {"min": 117.5, "max": 251.5, "avg": 219.1, "count": 3}
         with patch.object(APP, "phase_stats", return_value=stats):
             message = monitor.daily_summary_text()
-        self.assertIn("ср. 219.1 V", message)
+        self.assertIn("ср. 219.1 В", message)
         self.assertIn("потерь связи: 4", message)
         self.assertNotIn("avg ", message)
         self.assertNotIn("отключений 4", message)

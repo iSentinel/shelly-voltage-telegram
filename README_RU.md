@@ -22,6 +22,11 @@
 </p>
 <p align="center"><em>Сообщение бота о напряжении в Telegram. Оставлено только само сообщение.</em></p>
 
+<p align="center">
+  <img src="docs/assets/telegram-chart-24h-field-20261107.webp" alt="График напряжения Shelly Pro EM-50 в Telegram за 24 часа" width="430">
+</p>
+<p align="center"><em>Реальный скриншот 24-часового графика с порогом 207 В. Исторические измерения, не текущее напряжение.</em> <a href="docs/TELEGRAM_FIELD_SCREENSHOTS.md">QA context</a></p>
+
 ---
 
 ## Telegram menu / Меню Telegram
@@ -246,6 +251,10 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 
 # Online backup SQLite
 ./scripts/backup.sh
+
+# Проверка восстановления копий в изоляции (только staging-исходники)
+python scripts/restore-drill.py --help
+python scripts/restore-drill.py --backup-dir /var/backups/shelly-voltage --count 3 --jsonl
 
 # Обезличенный support bundle
 ./scripts/support-bundle.sh
