@@ -87,6 +87,8 @@ def make_stable_recovery(path: Path, started_at: float = 1000.0) -> None:
         )
         db.commit()
     set_meta(path, "voltage_recovery_stable_since", str(started_at))
+    set_meta(path, "telegram_setting_warning_low", "207")
+    set_meta(path, "telegram_setting_warning_high", "253")
     set_meta(path, "last_voltage_event", event)
     set_meta(path, "voltage_episode", RECOVERY.json.dumps({"start_at": 900.0}))
     set_meta(path, "last_voltage_notification_at", "777.0")

@@ -152,6 +152,88 @@ class StableSampleContinuityTests(unittest.TestCase):
         )
         self.assert_sample_failure()
 
+    def test_critical_low_voltage_during_stability_fails(self):
+        """185 V is not normal at configured 207 V warning threshold."""
+
+        self.execute(
+            "UPDATE measurements SET voltage=185 WHERE phase='L1' AND ts=1500"
+        )
+        self.assert_sample_failure()
+
+    def test_warning_high_voltage_during_stability_fails(self):
+        """260 V is not stable recovery under configured 253 V upper band."""
+
+        self.execute(
+            "UPDATE measurements SET voltage=260 WHERE phase='L1' AND ts=1500"
+        )
+        self.assert_sample_failure()
+
+    def test_exact_warning_boundaries_are_not_normal(self):
+        """The stored warning thresholds are inclusive warning bands."""
+
+        for voltage in (207.0, 253.0):
+            with self.subTest(voltage=voltage):
+                self.execute(
+                    "UPDATE measurements SET voltage=? "
+                    "WHERE phase='L1' AND ts=1500",
+                    (voltage,),
+                )
+                self.assert_sample_failure()
+
+    def test_subwarning_observation_does_not_change_healthy_samples(self):
+        """Ordinary values remain valid even with strict range checking."""
+
+        for voltage in (207.1, 252.9):
+            with self.subTest(voltage=voltage):
+                self.execute(
+                    "UPDATE measurements SET voltage=? "
+                    "WHERE phase='L1' AND ts=1500",
+                    (voltage,),
+                )
+                self.assertEqual(self.verify()["status"], "pass")
+
+    def test_changed_operator_thresholds_invalidate_baseline(self):
+        """Do not silently move the normal window after capturing it."""
+
+        self.execute(
+            "UPDATE meta SET value='185' "
+            "WHERE key='telegram_setting_warning_low'"
+        )
+        verdict = self.verify()
+        self.assertEqual(verdict["status"], "fail")
+        self.assertIn(
+            "normal voltage thresholds changed during recovery",
+            verdict["errors"],
+        )
+
+    def test_missing_thresholds_cannot_give_false_pass(self):
+        """Fail closed if the deployment's actual boundaries are unknown."""
+
+        self.execute(
+            "DELETE FROM meta WHERE key='telegram_setting_warning_high'"
+        )
+        verdict = self.verify()
+        self.assertEqual(verdict["status"], "fail")
+        self.assertIn(
+            "normal voltage thresholds unavailable", verdict["errors"]
+        )
+
+    def test_custom_normal_band_is_honored(self):
+        """Narrow administrator-configured boundaries supersede defaults."""
+
+        self.execute(
+            "UPDATE meta SET value='225' "
+            "WHERE key='telegram_setting_warning_low'"
+        )
+        self.execute(
+            "UPDATE meta SET value='240' "
+            "WHERE key='telegram_setting_warning_high'"
+        )
+        with closing(RECOVERY.sqlite3.connect(self.db_path)) as db, db:
+            db.execute("UPDATE measurements SET voltage=230 WHERE phase='L1'")
+        verdict = self.verify()
+        self.assertEqual(verdict["status"], "fail")
+
     def test_future_dated_sample_does_not_fill_missing_interval(self):
         """Future timestamps must not make a missing final minute fresh."""
 

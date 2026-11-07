@@ -20,6 +20,17 @@ Candidate change:
   nonfinite value or implausible frequency is a FAIL even if regular
   valid samples exist on either side. The previous SQL-level filter
   hid such rows and could incorrectly return PASS.
+- Capture the **operator-saved warning-low/high limits** from SQLite
+  at baseline creation (never guess host or container defaults).
+  Require every recovered-phase voltage strictly inside that normal
+  band for the full 15-minute interval. Physically possible 185 V or
+  260 V values are **not** a stable normal-voltage recovery when the
+  active thresholds are 207–253 V.
+- Fail closed if saved limits are missing, malformed or changed
+  after the baseline. The source-only acceptance tool is intentionally
+  stricter than accepting arbitrary voltage just because the status
+  message changed; configure persisted limits before attempting this
+  particular gate.
 - Require initial and consecutive readings no more than
   **90 seconds apart**, and a final sample no older than
   **45 seconds** at verification.
