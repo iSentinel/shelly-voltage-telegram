@@ -21,6 +21,7 @@ HOST_DB = Path("/var/lib/shelly-voltage/voltage.sqlite3")
 DEFAULT_HEALTH = "http://127.0.0.1:8080/health"
 DEFAULT_READY = "http://127.0.0.1:8080/ready"
 STABLE_RECOVERY_SECONDS = 15 * 60
+MAX_RECOVERY_SAMPLE_AGE_SECONDS = 45
 
 
 def default_db_path() -> Path:
@@ -68,10 +69,28 @@ def stored_event_kind(raw: object) -> str | None:
     return str(kind) if kind else None
 
 
+def valid_phase_sample_ts(
+    db: sqlite3.Connection, outage: tuple | None
+) -> float | None:
+    """Find recent valid voltage for the same phase as a tracked gap."""
+
+    if outage is None:
+        return None
+    row = db.execute(
+        "SELECT ts FROM measurements WHERE phase=? "
+        "AND voltage>0 AND voltage<500 "
+        "AND frequency>=40 AND frequency<=70 "
+        "ORDER BY ts DESC LIMIT 1",
+        (outage[3],),
+    ).fetchone()
+    return float(row[0]) if row is not None else None
+
+
 def current_db_state(path: Path) -> dict[str, object]:
     """Read recovery-relevant database state without modifying it."""
 
     with closing(open_db(path)) as db:
+        db.execute("BEGIN")
         outage = db.execute(
             "SELECT id,started_at,ended_at,phase FROM outages "
             "ORDER BY id DESC LIMIT 1"
@@ -85,6 +104,7 @@ def current_db_state(path: Path) -> dict[str, object]:
             "measurement_count": scalar(
                 db, "SELECT COUNT(*) FROM measurements"
             ),
+            "last_valid_phase_sample_ts": valid_phase_sample_ts(db, outage),
             "status_message_id": meta_value(db, "telegram_status_message_id"),
             "recovery_stable_since": meta_value(
                 db, "voltage_recovery_stable_since"
@@ -257,12 +277,33 @@ def safe_verification_state(
     return safe
 
 
+def recovery_sample_errors(state: dict, now: float) -> list[str]:
+    """Require a fresh valid same-phase sample around actual recovery."""
+
+    event = state.get("outage")
+    if not event or event.get("ended_at") is None:
+        return []
+    phase = str(event.get("phase"))
+    stamp = state.get("last_valid_phase_sample_ts")
+    if stamp is None or not math.isfinite(stamp):
+        return [f"no valid {phase} measurement since recovery"]
+    ended = float(event["ended_at"])
+    if not math.isfinite(ended) or ended > now:
+        return ["invalid recovery timestamp"]
+    if stamp > now or now - stamp > MAX_RECOVERY_SAMPLE_AGE_SECONDS:
+        return ["no fresh same-phase voltage after recovery"]
+    if stamp < ended - 15:
+        return ["no measurement near the connection recovery"]
+    return []
+
+
 def recovery_errors(
     baseline: dict[str, object],
     state: dict[str, object],
     health: dict[str, object],
+    observed_at: float | None = None,
 ) -> list[str]:
-    """Compare current state with one outage baseline."""
+    """Compare recovery with fresh same-phase measurement evidence."""
 
     errors = []
     old_state = baseline["state"]
@@ -278,6 +319,8 @@ def recovery_errors(
         errors.append("stable Telegram status message was not rotated")
     if state["measurement_count"] <= old_state["measurement_count"]:
         errors.append("no new valid measurements were stored after baseline")
+    observed = time.time() if observed_at is None else observed_at
+    errors.extend(recovery_sample_errors(state, observed))
     if health.get("connectivity") != "online":
         errors.append("Shelly connectivity is not online")
     return errors
@@ -290,7 +333,7 @@ def verify_payload(args: argparse.Namespace) -> dict[str, object]:
     state = current_db_state(args.db)
     health_code, health = fetch_json(args.health_url, args.timeout)
     ready_code, ready = fetch_json(args.ready_url, args.timeout)
-    errors = recovery_errors(baseline, state, health)
+    errors = recovery_errors(baseline, state, health, time.time())
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200 or ready.get("ready") is not True:
