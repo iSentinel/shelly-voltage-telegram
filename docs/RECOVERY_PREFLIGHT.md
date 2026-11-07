@@ -18,6 +18,13 @@ A CANDIDATE means **only** a preliminary readiness condition. It is
 not proof of Telegram delivery, 15-minute status stabilization, or
 an independently established physical mains restoration time.
 
+The preflight checks the **actual latest saved measurement for the
+captured phase** (not the most recent SQL-filtered valid row). If a
+newer reading is 900 V, 5 Hz, missing or nonfinite, the result is
+PENDING, never CANDIDATE based on an older normal reading. Legitimate
+abnormal grid voltage can still be a connectivity candidate; the
+separate 15-minute normal-voltage gate checks configured thresholds.
+
 The project remains on the existing production runtime until human
 release review. For full acceptance use the existing
 scripts/recovery-acceptance.py with --db, --health-url, --ready-url
