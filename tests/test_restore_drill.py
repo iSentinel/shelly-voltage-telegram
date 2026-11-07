@@ -6,8 +6,10 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -50,6 +52,56 @@ class RestoreDrillTests(unittest.TestCase):
 
         archive = self.archive("good")
         self.assertTrue(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+
+    def legacy_archive(self, version: int) -> Path:
+        """Create an authentic v1/v2-shaped compressed SQLite fixture."""
+
+        source = self.root / "legacy.sqlite3"
+        with closing(sqlite3.connect(source)) as db, db:
+            db.execute(
+                "CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)"
+            )
+            db.execute(
+                "INSERT INTO meta VALUES('schema_version',?)", (str(version),)
+            )
+            db.execute(
+                "CREATE TABLE measurements(id INTEGER PRIMARY KEY,"
+                "ts REAL NOT NULL,voltage REAL NOT NULL,"
+                "frequency REAL NOT NULL)"
+            )
+            db.execute("INSERT INTO measurements VALUES(1,1000,219.5,50)")
+            if version == 2:
+                db.execute(
+                    "CREATE TABLE outages(id INTEGER PRIMARY KEY,"
+                    "started_at REAL NOT NULL,ended_at REAL)"
+                )
+        target = self.root / f"voltage-legacy-v{version}.sqlite3.gz"
+        target.write_bytes(gzip.compress(source.read_bytes()))
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        Path(f"{target}.sha256").write_text(f"{digest}  {target.name}\n")
+        return target
+
+    def test_legacy_v1_restores_via_disposable_migration(self):
+        """Old v1 backup without phase/outages must restore L1 offline."""
+
+        archive = self.legacy_archive(1)
+        self.assertTrue(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+
+    def test_legacy_v2_restores_via_disposable_migration(self):
+        """Old v2 backup without phase is migratable for physical L1."""
+
+        archive = self.legacy_archive(2)
+        self.assertTrue(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+
+    def test_legacy_migration_preserves_original_archive_checksum(self):
+        """Migration of a temp database must never alter its gzip source."""
+
+        archive = self.legacy_archive(1)
+        before = hashlib.sha256(archive.read_bytes()).hexdigest()
+        self.assertTrue(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+        self.assertEqual(
+            before, hashlib.sha256(archive.read_bytes()).hexdigest()
+        )
 
     def test_checksum_mismatch_is_rejected(self):
         """Do not restore a modified or incomplete archive."""
