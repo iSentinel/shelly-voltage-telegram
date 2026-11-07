@@ -41,3 +41,18 @@ Check Telegram client rollout and Bot API availability before any live test.
 - Run the official widget-sandbox conformance harness before rollout.
 - Actual Bot API beta/private-chat send and recipient-visible acceptance are
   NOT covered by these static and Python tests.
+
+
+## QA follow-up (8 Nov): stale schedules and fallback captions
+- Public-state schema 1 carries \`l\` (RU/UK/EN) and \`e\` (end of the
+  corresponding Europe/Kyiv local calendar day).
+- The client revalidates measured voltage after 60 seconds and the community
+  forecast after two hours **or** the next local midnight. An expired schedule
+  disappears instead of being mistaken for a current grid outage.
+- Widget captions use \`telegram_widget_fallback.widget_fallback_text\`:
+  offline/stale voltage and old community windows cannot be displayed as live.
+  This is a pure formatter, not a Bot API send operation.
+- The HTML uses bot language and Telegram theme colors. Other clients retain
+  the existing status text; no silent production or channel changes.
+- Live Telegram widget runtime compatibility and Bot API beta still require
+  explicit sandbox acceptance; these changes are Python/static QA only.

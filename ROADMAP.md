@@ -1,3 +1,24 @@
+## 2026-11-08 QA follow-up: multilingual, expiring Telegram widget + caption
+
+- Gateway: LXC110 remains 12 GiB, live container `0.5.13-hw` healthy,
+  /ready 200, real voltage online, SQLite integrity OK; no production writes.
+- Community outage-data-ua and widget PR #202 remains Draft. Extended
+  widget state with RU/UK/EN language code and next Kyiv midnight expiry.
+- Widget hides stale L1 after 60 seconds and unofficial forecast after
+  2 hours or midnight. Its 48-slot display is redrawn only when changed,
+  reducing animation/flicker in Telegram chat.
+- Added networkless, stale-safe Telegram caption fallback; it never
+  publishes messages. Real read-only preview: Shelly 222.8 V / 50.0 Hz;
+  community GPV10.1 schedule 04:00–11:30 and 14:30–22:00, labelled
+  unofficial and not conflated with observed mains.
+- All 987/987 tests PASS, Ruff 0.14.2, strict quality gate PASS. Widget
+  HTML zlib9=3205/4096 bytes. New code included in quality gate.
+- NEXT: widget-sandbox actual client conformance (Node >=22 absent
+  on Proxmox and LXC), opt-in private chat beta and fallback UI,
+  actual recipient visibility, official DTEK source verification,
+  physical alternate Shelly meter tests and release approval.
+- Production status messages, controls, SQLite and secrets unchanged.
+
 ## 2026-11-08 QA design: community outage mirror and Telegram widget PoC
 
 - User confirms electricity on. Gateway LXC 110 production remains on

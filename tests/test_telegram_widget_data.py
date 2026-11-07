@@ -40,7 +40,7 @@ class WidgetStateTests(unittest.TestCase):
             "last_success": NOW - 20,
         }
         result = json.loads(WIDGET.widget_public_data(health, now=NOW))
-        self.assertEqual(result, {"schema": 1, "s": "offline"})
+        self.assertEqual(result, {"schema": 1, "l": "uk", "s": "offline"})
         self.assertNotIn("v", result)
 
     def test_old_sample_hides_voltage(self):
@@ -95,8 +95,22 @@ class WidgetStateTests(unittest.TestCase):
         )
         self.assertEqual(data["s"], "offline")
         self.assertEqual(data["src"], "community")
+        midnight = datetime(2026, 11, 9, tzinfo=ZoneInfo("Europe/Kyiv"))
+        self.assertEqual(data["e"], int(midnight.timestamp()))
         self.assertNotIn("v", data)
         self.assertLessEqual(len(json.dumps(data).encode()), 1024)
+
+    def test_language_selection(self):
+        """Use the bot's RU, UK or EN setting, not the client locale."""
+
+        for language in ("ru", "uk", "en"):
+            with self.subTest(language=language):
+                result = json.loads(
+                    WIDGET.widget_public_data({}, language=language, now=NOW)
+                )
+                self.assertEqual(result["l"], language)
+        with self.assertRaisesRegex(ValueError, "language"):
+            WIDGET.widget_public_data({}, language="xx", now=NOW)
 
     def test_forecast_invalid_day_size_or_unknown_state(self):
         """Reject untrustworthy schedule input without hiding the problem."""

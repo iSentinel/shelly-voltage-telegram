@@ -64,6 +64,31 @@ class WidgetMarkupTests(unittest.TestCase):
         self.assertIn("setInterval(render,10000)", html)
         self.assertIn('onEvent("activated",render)', html)
 
+    def test_schedule_expires_with_age_and_midnight(self):
+        """Stop showing an expired schedule even when the bubble stays open."""
+
+        html = HTML.read_text(encoding="utf-8")
+        self.assertIn("now-data.u>7200", html)
+        self.assertIn("now>=data.e", html)
+        self.assertIn("data.schema!==1", html)
+        self.assertIn("if(bars===drawn)return", html)
+
+    def test_all_three_bot_languages_have_ui_strings(self):
+        """Translate the card by the chosen bot language, not by assumption."""
+
+        html = HTML.read_text(encoding="utf-8")
+        for item in (
+            "Напруга",
+            "Напряжение",
+            "Voltage",
+            "Неофіційний",
+            "Неофициальный",
+            "Unofficial",
+        ):
+            with self.subTest(item=item):
+                self.assertIn(item, html)
+        self.assertIn('data.l==="string"', html)
+
     def test_preview_never_claims_power_from_a_schedule(self):
         """Forecast source and live-measurement disclaimer stay visible."""
 

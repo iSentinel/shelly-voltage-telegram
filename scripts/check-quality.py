@@ -42,6 +42,9 @@ def python_files(root: Path) -> list[Path]:
         root / "telegram_i18n.py",
         root / "notification_features.py",
         root / "manual_dtek_forecast.py",
+        root / "outage_data_ua.py",
+        root / "telegram_widget_data.py",
+        root / "telegram_widget_fallback.py",
     ]
     files.extend(sorted((root / "scripts").glob("*.py")))
     files.extend(sorted((root / "tests").glob("*.py")))

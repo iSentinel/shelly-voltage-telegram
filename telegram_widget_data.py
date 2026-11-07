@@ -6,7 +6,8 @@ import json
 import math
 import re
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -68,7 +69,15 @@ def forecast_state(
     fresh = numeric(updated, 1, now + 2)
     if fresh is None or not 0 <= now - fresh <= MAX_FORECAST_AGE:
         raise ValueError("community forecast is stale")
-    return {"b": bars, "d": day, "u": round(fresh), "src": "community"}
+    next_day = date.fromisoformat(day) + timedelta(days=1)
+    expires = datetime.combine(next_day, dt_time.min, KYIV).timestamp()
+    return {
+        "b": bars,
+        "d": day,
+        "u": round(fresh),
+        "e": round(expires),
+        "src": "community",
+    }
 
 
 def widget_public_data(
@@ -78,11 +87,18 @@ def widget_public_data(
     day: str | None = None,
     forecast_updated: float | None = None,
     now: float | None = None,
+    language: str = "uk",
 ) -> str:
     """Encode an opaque per-widget state fitting Bot API widget limits."""
 
+    if language not in ("ru", "uk", "en"):
+        raise ValueError("unsupported widget language")
     clock = now if now is not None else time.time()
-    state = {"schema": STATE_VERSION, **health_state(health, clock)}
+    state = {
+        "schema": STATE_VERSION,
+        "l": language,
+        **health_state(health, clock),
+    }
     if group:
         if not re.fullmatch(r"\d{1,2}\.\d", group):
             raise ValueError("unsupported outage group")

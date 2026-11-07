@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -34,46 +34,76 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
 .key{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px}
 .onkey{background:#24a967}.offkey{background:#e35b4f}.maybekey{background:#d8a133}
 .footer{font-size:10px;color:var(--tg-theme-hint-color,#aeb8c5);margin-top:12px;line-height:1.35}
+@media(max-width:300px){.value{font-size:38px}.legend{flex-wrap:wrap;justify-content:flex-start}}
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="header"><span><span class="icon">⚡</span> Электросеть · Shelly</span><span id="state" class="status">НЕТ ДАННЫХ</span></div>
-  <div class="hero"><div class="label">Напряжение · L1</div><div class="value"><span id="voltage">—</span> <span class="unit">В</span></div><div id="notice" class="sub">Ожидание свежих измерений</div></div>
-  <div class="metrics"><div class="tile"><span class="hint">Частота</span><strong id="frequency">—</strong></div><div class="tile"><span class="hint">Последний опрос</span><strong id="age">—</strong></div></div>
-  <div class="section"><div class="line"><span class="label">Прогноз отключений</span><span id="group" class="hint">—</span></div><div id="timeline" class="timeline"></div><div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div class="legend"><span><i class="key onkey"></i>По плану свет есть</span><span><i class="key offkey"></i>Нет</span><span><i class="key maybekey"></i>Возможно</span></div></div>
-  <div class="footer"><span id="source">График не загружен</span><div>План не подтверждает наличие электричества. Факт — только свежие данные Shelly.</div></div>
+ <div class="header"><span><span class="icon">⚡</span> <span id="brand">Електромережа · Shelly</span></span><span id="state" class="status">НЕМАЄ ДАНИХ</span></div>
+ <div class="hero"><div class="label"><span id="voltageLabel">Напруга</span> · L1</div><div class="value"><span id="voltage">—</span> <span id="unit" class="unit">В</span></div><div id="notice" class="sub">Очікування свіжого вимірювання</div></div>
+ <div class="metrics"><div class="tile"><span class="hint" id="frequencyLabel">Частота</span><strong id="frequency">—</strong></div><div class="tile"><span id="ageLabel" class="hint">Останній запит</span><strong id="age">—</strong></div></div>
+ <div class="section"><div class="line"><span id="forecastLabel" class="label">Прогноз відключень</span><span id="group" class="hint">—</span></div><div id="timeline" class="timeline"></div><div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div class="legend"><span><i class="key onkey"></i><span id="hasLight">Світло за планом</span></span><span><i class="key offkey"></i><span id="noLight">Відключення</span></span><span><i class="key maybekey"></i><span id="maybeLight">Можливо</span></span></div></div>
+ <div class="footer"><span id="source">Графік недоступний</span><div id="disclaimer">Прогноз не підтверджує наявність електрики. Факт — лише свіжі дані Shelly.</div></div>
 </div>
 <script>
 (function(){
   const w=window.TelegramWidget;
   const $=id=>document.getElementById(id);
-  function render(){
-    let data=null;
-    try{data=JSON.parse(w&&typeof w.publicData==="string"?w.publicData:"null")}catch(e){}
-    const fresh=data&&data.schema===1&&data.s==="online"&&
-      typeof data.t==="number"&&Date.now()/1000-data.t>=0&&Date.now()/1000-data.t<=60&&
-      typeof data.v==="number"&&Number.isFinite(data.v)&&data.v>=0&&data.v<=400;
-    const state=fresh?"online":data&&data.s==="offline"?"offline":
-      data&&data.s==="stale"?"stale":"unknown";
-    $("state").className="status "+state;
-    $("state").textContent=state==="online"?"ОНЛАЙН":state==="offline"?"НЕТ СВЯЗИ":
-      state==="stale"?"НЕТ СВЕЖИХ ДАННЫХ":"НЕТ ДАННЫХ";
-    $("voltage").textContent=fresh?data.v.toFixed(1):"—";
-    $("frequency").textContent=fresh&&typeof data.f==="number"&&Number.isFinite(data.f)&&data.f>=40&&data.f<=70?data.f.toFixed(1)+" Гц":"—";
-    $("age").textContent=fresh?Math.round(Date.now()/1000-data.t)+" сек":"—";
-    $("notice").textContent=fresh?"Реальное измерение":"Неизвестно, есть ли электричество";
-    $("group").textContent=data&&typeof data.g==="string"?"Группа "+data.g:"—";
+  const words={
+    uk:["Електромережа · Shelly","НА ЗВ'ЯЗКУ","НЕМАЄ ЗВ'ЯЗКУ","ЗАСТАРІЛО","НЕМАЄ ДАНИХ","Напруга","Частота","Останній запит","Вимір Shelly","Стан живлення невідомий","Прогноз відключень","Група ","Світло за планом","Відключення","Можливо","Графік недоступний","Неофіційний прогноз · outage-data-ua","Графік застарів","Прогноз не підтверджує наявність електрики. Факт — лише свіжі дані Shelly.","с","В","Гц"],
+    ru:["Электросеть · Shelly","НА СВЯЗИ","НЕТ СВЯЗИ","УСТАРЕЛО","НЕТ ДАННЫХ","Напряжение","Частота","Последний опрос","Измерено Shelly","Неизвестно, есть ли электричество","Прогноз отключений","Группа ","По плану свет есть","Отключение","Возможно","График не загружен","Неофициальный прогноз · outage-data-ua","График устарел","План не подтверждает наличие электричества. Факт — только свежие данные Shelly.","с","В","Гц"],
+    en:["Power monitor · Shelly","CONNECTED","DISCONNECTED","STALE","NO DATA","Voltage","Frequency","Last sample","Shelly measurement","Actual mains status unknown","Outage forecast","Group ","Scheduled power","Outage","Possible","Schedule unavailable","Unofficial forecast · outage-data-ua","Schedule expired","A forecast is not proof of power. Only fresh Shelly readings are measured.","s","V","Hz"]
+  };
+  let drawn=null;
+  function validBars(data,now){
+    if(!data||data.schema!==1||data.src!=="community"||typeof data.b!=="string"||
+       !/^[OX?]{48}$/.test(data.b))return "";
+    if(typeof data.u!=="number"||!Number.isFinite(data.u)||
+       typeof data.e!=="number"||!Number.isFinite(data.e))return "";
+    if(now<data.u||now-data.u>7200||now>=data.e)return "";
+    return data.b;
+  }
+  function drawBars(bars){
+    if(bars===drawn)return;
     const chart=$("timeline");
     chart.textContent="";
-    const bars=data&&typeof data.b==="string"&&/^[OX?]{48}$/.test(data.b)?data.b:"";
     for(const symbol of bars){
       const cell=document.createElement("i");
       cell.className=symbol==="O"?"on":symbol==="X"?"off":"maybe";
       chart.appendChild(cell);
     }
-    $("source").textContent=bars&&data.src==="community"?
-      "Неофициальный прогноз · outage-data-ua":"График не загружен";
+    drawn=bars;
+  }
+  function render(){
+    let data=null;
+    try{data=JSON.parse(w&&typeof w.publicData==="string"?w.publicData:"null")}catch(e){}
+    const lang=data&&typeof data.l==="string"&&words[data.l]?data.l:"uk";
+    const T=words[lang];
+    const now=Date.now()/1000;
+    const fresh=data&&data.schema===1&&data.s==="online"&&
+      typeof data.t==="number"&&now-data.t>=0&&now-data.t<=60&&
+      typeof data.v==="number"&&Number.isFinite(data.v)&&data.v>=0&&data.v<=400;
+    const state=fresh?"online":data&&data.s==="offline"?"offline":
+      data&&(data.s==="stale"||data.s==="online")?"stale":"unknown";
+    $("brand").textContent=T[0];
+    $("state").className="status "+state;
+    $("state").textContent=state==="online"?T[1]:state==="offline"?T[2]:
+      state==="stale"?T[3]:T[4];
+    $("voltageLabel").textContent=T[5]; $("frequencyLabel").textContent=T[6];
+    $("ageLabel").textContent=T[7]; $("forecastLabel").textContent=T[10];
+    $("voltage").textContent=fresh?data.v.toFixed(1):"—";
+    $("unit").textContent=T[20];
+    $("frequency").textContent=fresh&&typeof data.f==="number"&&
+      Number.isFinite(data.f)&&data.f>=40&&data.f<=70?
+      data.f.toFixed(1)+" "+T[21]:"—";
+    $("age").textContent=fresh?Math.floor(now-data.t)+" "+T[19]:"—";
+    $("notice").textContent=fresh?T[8]:T[9];
+    $("group").textContent=data&&typeof data.g==="string"?T[11]+data.g:"—";
+    $("hasLight").textContent=T[12];$("noLight").textContent=T[13];
+    $("maybeLight").textContent=T[14];$("disclaimer").textContent=T[18];
+    const bars=validBars(data,now);
+    drawBars(bars);
+    $("source").textContent=bars?T[16]:data&&data.b?T[17]:T[15];
   }
   if(w&&typeof w.onEvent==="function"){
     w.onEvent("publicDataChanged",render);
@@ -81,6 +111,7 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
     if(typeof w.watchPublicData==="function")w.watchPublicData();
   }
   render();
+  if(w&&typeof w.ready==="function")w.ready();
   setInterval(render,10000);
 })();
 </script>
