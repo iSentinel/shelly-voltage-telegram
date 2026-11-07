@@ -399,6 +399,37 @@ def stable_baseline_errors(
     return errors
 
 
+def configured_normal_bounds(path: Path) -> tuple[float, float] | None:
+    """Read actual saved normal-voltage limits without guessing defaults."""
+
+    try:
+        with closing(open_db(path)) as db:
+            values = (
+                meta_value(db, "telegram_setting_warning_low"),
+                meta_value(db, "telegram_setting_warning_high"),
+            )
+        low, high = (float(value) for value in values)
+    except (OSError, TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(value) for value in (low, high)):
+        return None
+    return (low, high) if 0 < low < high < 500 else None
+
+
+def stable_normal_bounds_errors(
+    baseline: dict[str, object], path: Path
+) -> list[str]:
+    """Reject changed or missing voltage limits since stable capture."""
+
+    captured = baseline["state"].get("normal_voltage_bounds")
+    now = configured_normal_bounds(path)
+    if not isinstance(captured, list) or len(captured) != 2 or now is None:
+        return ["normal voltage thresholds unavailable"]
+    if captured != list(now):
+        return ["normal voltage thresholds changed during recovery"]
+    return []
+
+
 def stable_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
     """Capture read-only state while the 15-minute recovery timer is active."""
 
@@ -406,6 +437,11 @@ def stable_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
     health_code, health = fetch_json(args.health_url, args.timeout)
     ready_code, ready = fetch_json(args.ready_url, args.timeout)
     errors = stable_baseline_errors(state, health, ready)
+    bounds = configured_normal_bounds(args.db)
+    if bounds is None:
+        errors.append("normal voltage thresholds unavailable")
+    else:
+        state["normal_voltage_bounds"] = list(bounds)
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:
@@ -559,7 +595,11 @@ def valid_stable_measurement(row: tuple) -> bool:
 
 
 def stable_phase_sample_errors(
-    db_path: Path, phase: str, started: float, now: float
+    db_path: Path,
+    phase: str,
+    started: float,
+    now: float,
+    bounds: tuple[float, float],
 ) -> list[str]:
     """Require plausible, regular readings throughout stable recovery."""
 
@@ -574,6 +614,8 @@ def stable_phase_sample_errors(
         for row in rows:
             if not valid_stable_measurement(row):
                 return ["invalid stable phase voltage or frequency sample"]
+            if not bounds[0] < float(row[1]) < bounds[1]:
+                return ["stable phase voltage left configured normal range"]
             stamp = float(row[0])
             if not math.isfinite(stamp):
                 return ["stable phase sample timestamp is invalid"]
@@ -602,8 +644,16 @@ def stable_sample_continuity_errors(
     outage = old.get("outage")
     if not isinstance(outage, dict) or not outage.get("phase"):
         return ["stable baseline has no outage phase"]
+    raw = old.get("normal_voltage_bounds")
+    if not isinstance(raw, list) or len(raw) != 2:
+        return ["stable phase normal-voltage limits are unavailable"]
+    bounds = tuple(raw)
+    if not all(type(v) in (int, float) and math.isfinite(v) for v in bounds):
+        return ["stable phase normal-voltage limits are invalid"]
+    if not 0 < bounds[0] < bounds[1] < 500:
+        return ["stable phase normal-voltage limits are invalid"]
     return stable_phase_sample_errors(
-        db_path, str(outage["phase"]), started, now
+        db_path, str(outage["phase"]), started, now, bounds
     )
 
 
@@ -618,6 +668,7 @@ def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     errors = stable_verify_errors(baseline, state, health, ready, now)
     errors.extend(stable_transition_continuity_errors(args.db, baseline, now))
     errors.extend(stable_sample_continuity_errors(args.db, baseline, now))
+    errors.extend(stable_normal_bounds_errors(baseline, args.db))
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:
