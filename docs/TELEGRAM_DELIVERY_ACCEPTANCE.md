@@ -1,3 +1,52 @@
+## 2026-11-07 — channel API rights and subscriber visibility gates
+
+Draft PRs #168 and #169 introduce independent read-only CLI checks for
+Telegram destinations and the bot's channel permissions. **These commands
+are candidate features**; do not run them on an older deployed build before
+the relevant PRs have been reviewed, merged, and deployed.
+
+After deployment, use the existing Docker service, with no test messages:
+
+```bash
+docker exec shelly-voltage-bot python /app/app.py telegram-check
+docker exec shelly-voltage-bot python /app/app.py telegram-channel-rights
+```
+
+The first check calls `getMe` and `getChat` to verify the bot and its
+configured control/status destinations. The second calls `getMe`,
+`getChat`, and `getChatMember` to verify **the bot's own**
+`can_post_messages` and `can_edit_messages` rights when the status
+destination is a channel. Both commands are non-posting, do not
+initialize SQLite, and do not print tokens, chat IDs, or raw API errors.
+The channel-specific check reports `SKIP` for other chat types.
+They require the configured Telegram API to be accessible.
+
+**These checks do not prove delivery to a subscriber**. When an operator
+can open the actual status channel from an ordinary Telegram client:
+
+1. Observe an existing status message, without creating a test outage or
+   sending an artificial alert. Confirm the displayed timestamp/state
+   against a fresh Shelly/SQLite observation, allowing normal refresh lag.
+2. After the next *natural* connectivity or voltage event, inspect whether
+   the status message was edited or safely replaced according to the
+   configured edit window. Verify there are no unexpected duplicate posts.
+3. Check pin behavior against the saved preference. Pinning is **off by
+   default**; a previously pinned old message must be unpinned before
+   deletion. Do not alter pin settings merely to manufacture evidence.
+4. Record `PASS`, `FAIL`, or `NOT FOUND` with the local time and the
+   observed state. Screenshots, if needed, must redact subscriber names,
+   identifiers, chat links, and other private details.
+
+The operator's visible check establishes *that client's observation*,
+not universal delivery to all subscribers. API success, a persisted
+status-message ID, and successful message rotation are **not** delivery
+receipts. If the visual acceptance remains pending, do not mark the
+release gate complete. A missing visual check must not be fabricated.
+
+Other independent release gates remain: physical testing of additional
+Shelly models, independently verified official DTEK schedule input, and
+explicit approval before promoting an integrated candidate to release.
+
 ## 2026-11-06 — removing old status without spurious unpin failures
 
 The default channel status is **not pinned**. On replacement,
