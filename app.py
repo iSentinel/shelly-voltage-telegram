@@ -5769,6 +5769,56 @@ def telegram_doctor(telegram: Telegram) -> dict[str, object]:
     }
 
 
+def channel_membership_permissions(member: object) -> str:
+    """Classify the bot's channel post/edit rights without user data."""
+
+    if not isinstance(member, dict):
+        return "invalid_membership"
+    if member.get("status") == "creator":
+        return "pass"
+    if member.get("status") != "administrator":
+        return "not_administrator"
+    if member.get("can_post_messages") is not True:
+        return "posting_not_allowed"
+    if member.get("can_edit_messages") is not True:
+        return "editing_not_allowed"
+    return "pass"
+
+
+def telegram_channel_rights_check(cfg: Config) -> int:
+    """Check own channel permissions without sending any messages."""
+
+    bot = Telegram(cfg)
+    if not bot.enabled:
+        print("TELEGRAM_CHANNEL_RIGHTS=DISABLED")
+        return 0
+    try:
+        identity = bot.get_me()
+        destination = bot.get_chat(bot.status_chat_id)
+        user_id = identity.get("id") if isinstance(identity, dict) else None
+        if type(user_id) is not int or user_id <= 0:
+            raise ValueError("invalid bot identity")
+        if not isinstance(destination, dict):
+            raise ValueError("invalid status destination")
+        if destination.get("type") != "channel":
+            print("TELEGRAM_CHANNEL_RIGHTS=SKIP reason=not_channel")
+            return 2
+        member = bot.call(
+            "getChatMember",
+            {"chat_id": bot.status_chat_id, "user_id": user_id},
+        )
+        state = channel_membership_permissions(member)
+    except Exception as exc:
+        print(f"TELEGRAM_CHANNEL_RIGHTS=FAIL reason={type(exc).__name__}")
+        return 2
+    if state != "pass":
+        print(f"TELEGRAM_CHANNEL_RIGHTS=FAIL reason={state}")
+        return 2
+    print("TELEGRAM_CHANNEL_RIGHTS=PASS post=yes edit=yes")
+    print("Subscriber-visible message delivery is not verified.")
+    return 0
+
+
 def telegram_chat_rows(updates: list[dict]) -> list[dict[str, object]]:
     """Return unique chat summaries from Telegram updates."""
 
@@ -5844,6 +5894,7 @@ def parser() -> argparse.ArgumentParser:
             "db-check",
             "version",
             "telegram-discover",
+            "telegram-channel-rights",
         ],
     )
     return cli
@@ -5871,6 +5922,8 @@ def main() -> int:
         return doctor(cfg)
     if args.command == "telegram-discover":
         return telegram_discover(cfg)
+    if args.command == "telegram-channel-rights":
+        return telegram_channel_rights_check(cfg)
     install_signals()
     Monitor(cfg).run()
     return 0
