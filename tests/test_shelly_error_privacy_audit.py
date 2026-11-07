@@ -102,10 +102,56 @@ class ShellyPrivacyAuditTests(unittest.TestCase):
         response.__enter__ = Mock(return_value=response)
         response.__exit__ = Mock(return_value=False)
         response.read.return_value = json.dumps(snapshot()).encode()
-        with patch.object(AUDIT, "urlopen", return_value=response) as get:
+        opener = Mock()
+        opener.open.return_value = response
+        with patch.object(AUDIT, "build_opener", return_value=opener) as build:
             result = AUDIT.audit_live("http://127.0.0.1:8080/health", 1)
         self.assertEqual(result["status"], "pass")
-        get.assert_called_once()
+        self.assertEqual(build.call_count, 1)
+        self.assertEqual(len(build.call_args.args), 2)
+        self.assertIsInstance(build.call_args.args[0], AUDIT.ProxyHandler)
+        self.assertIsInstance(build.call_args.args[1], AUDIT.RejectRedirects)
+        opener.open.assert_called_once_with(
+            "http://127.0.0.1:8080/health", timeout=1
+        )
+        response.read.assert_called_once_with(65537)
+
+    def test_redirect_to_remote_destination_is_rejected(self):
+        """A local HTTP redirect cannot authorize any remote fetch."""
+
+        handler = AUDIT.RejectRedirects()
+        follow = handler.redirect_request(
+            Mock(),
+            None,
+            302,
+            "redirect",
+            {},
+            "https://private-device.invalid/health",
+        )
+        self.assertIsNone(follow)
+
+    def test_untrusted_json_type_is_fail_not_exception(self):
+        """Dicts or lists in error fields fail without leaking contents."""
+
+        for raw in ({"private": "secret"}, ["192.0.2.10"], True):
+            with self.subTest(type=type(raw).__name__):
+                report = AUDIT.audit_snapshot(snapshot(raw))
+                self.assertEqual(report["status"], "fail")
+                self.assertNotIn("192.0.2.10", json.dumps(report))
+
+    def test_oversized_health_document_fails_closed(self):
+        """A local server cannot force unbounded JSON buffering."""
+
+        stream = Mock()
+        stream.__enter__ = Mock(return_value=stream)
+        stream.__exit__ = Mock(return_value=False)
+        stream.read.return_value = b"x" * 65537
+        opener = Mock()
+        opener.open.return_value = stream
+        with patch.object(AUDIT, "build_opener", return_value=opener):
+            report = AUDIT.audit_live("http://127.0.0.1:8080/health", 1)
+        self.assertEqual(report["status"], "fail")
+        self.assertEqual(report["reason"], "oversized_health")
 
     def test_dry_run_does_not_fetch_health(self):
         """Dry run is safe even if the monitor is powered off."""
@@ -115,7 +161,7 @@ class ShellyPrivacyAuditTests(unittest.TestCase):
             patch.object(sys, "argv", ["privacy", "--dry-run", "--json"]),
             patch.object(
                 AUDIT,
-                "urlopen",
+                "build_opener",
                 side_effect=AssertionError("network unexpected"),
             ),
             redirect_stdout(output),
