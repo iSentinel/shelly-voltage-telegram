@@ -80,6 +80,12 @@ def make_stable_recovery(path: Path, started_at: float = 1000.0) -> None:
             "phase": "L1",
         }
     )
+    with closing(sqlite3.connect(path)) as db:
+        db.execute(
+            "INSERT INTO measurements VALUES(?, 'L1', 230, 50, 1)",
+            (started_at,),
+        )
+        db.commit()
     set_meta(path, "voltage_recovery_stable_since", str(started_at))
     set_meta(path, "last_voltage_event", event)
     set_meta(path, "voltage_episode", RECOVERY.json.dumps({"start_at": 900.0}))
@@ -106,6 +112,10 @@ def complete_stable_rotation(path: Path) -> None:
         )
         db.execute("DELETE FROM meta WHERE key='last_voltage_event'")
         db.execute("DELETE FROM meta WHERE key='voltage_episode'")
+        db.executemany(
+            "INSERT INTO measurements VALUES(?, 'L1', 230, 50, 1)",
+            [(ts,) for ts in range(1010, 1901, 10)],
+        )
         db.execute("INSERT INTO measurements VALUES(1901,'L1',230,50,1)")
         db.commit()
 

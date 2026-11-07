@@ -21,6 +21,8 @@ HOST_DB = Path("/var/lib/shelly-voltage/voltage.sqlite3")
 DEFAULT_HEALTH = "http://127.0.0.1:8080/health"
 DEFAULT_READY = "http://127.0.0.1:8080/ready"
 STABLE_RECOVERY_SECONDS = 15 * 60
+MAX_STABLE_SAMPLE_GAP_SECONDS = 90
+MAX_STABLE_LAST_SAMPLE_AGE_SECONDS = 45
 
 
 def default_db_path() -> Path:
@@ -497,6 +499,55 @@ def stable_transition_continuity_errors(
     return []
 
 
+def stable_phase_sample_errors(
+    db_path: Path, phase: str, started: float, now: float
+) -> list[str]:
+    """Require plausible, regular readings throughout stable recovery."""
+
+    previous = started
+    found = False
+    with closing(open_db(db_path)) as db:
+        rows = db.execute(
+            "SELECT ts FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<=? "
+            "AND voltage>0 AND voltage<500 "
+            "AND frequency>=40 AND frequency<=70 ORDER BY ts",
+            (phase, started, now),
+        )
+        for row in rows:
+            stamp = float(row[0])
+            if not math.isfinite(stamp):
+                return ["stable phase sample timestamp is invalid"]
+            if stamp - previous > MAX_STABLE_SAMPLE_GAP_SECONDS:
+                return ["stable phase sample gap exceeds allowed interval"]
+            previous = stamp
+            found = True
+    if not found:
+        return ["no valid stable phase samples were observed"]
+    if now - previous > MAX_STABLE_LAST_SAMPLE_AGE_SECONDS:
+        return ["latest stable phase sample is stale"]
+    return []
+
+
+def stable_sample_continuity_errors(
+    db_path: Path, baseline: dict[str, object], now: float
+) -> list[str]:
+    """Validate sample coverage for the baseline outage phase."""
+
+    old = baseline["state"]
+    started = stable_since_value(old)
+    if started is None or now < started:
+        return ["stable phase sample interval is invalid"]
+    if now - started > 3600:
+        return ["stable phase sample evidence is outside one hour"]
+    outage = old.get("outage")
+    if not isinstance(outage, dict) or not outage.get("phase"):
+        return ["stable baseline has no outage phase"]
+    return stable_phase_sample_errors(
+        db_path, str(outage["phase"]), started, now
+    )
+
+
 def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     """Verify the 15-minute silent recovery-status replacement."""
 
@@ -507,6 +558,7 @@ def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     now = time.time()
     errors = stable_verify_errors(baseline, state, health, ready, now)
     errors.extend(stable_transition_continuity_errors(args.db, baseline, now))
+    errors.extend(stable_sample_continuity_errors(args.db, baseline, now))
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:
