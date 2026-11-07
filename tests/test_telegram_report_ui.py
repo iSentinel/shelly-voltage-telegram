@@ -99,6 +99,22 @@ class TelegramReportLayoutTests(unittest.TestCase):
         self.assertIn("unknown", rendered.lower())
         self.monitor.telegram.send.assert_not_called()
 
+    def test_weekly_voltage_units_follow_ru_uk_en_locale(self):
+        """Weekly voltage labels must use Cyrillic В for RU/UK only."""
+
+        self.monitor.storage.add(self.today, 225.5, 50.0)
+        for language in ("ru", "uk", "en"):
+            with self.subTest(language=language):
+                rendered = self.render(language, "weekly")
+                measured = next(
+                    row for row in rendered.splitlines() if "225.5" in row
+                )
+                unit = " V" if language == "en" else " В"
+                self.assertIn(f"225.5{unit}", measured)
+                if language != "en":
+                    self.assertNotIn(" V", measured)
+        self.monitor.telegram.send.assert_not_called()
+
     def test_report_uses_configured_timezone_not_hardcoded_kyiv(self):
         """A non-Kyiv setup must not describe its interval as Kyiv."""
 
