@@ -1861,6 +1861,38 @@ def primary_day_lines(monitor: Monitor, ts: float) -> list[str]:
     ]
 
 
+def report_period_line(
+    language: str, key: str, since: float, now: float, timezone: str
+) -> str:
+    """Label the actual local observation interval without extrapolating."""
+
+    zone = ZoneInfo(timezone)
+    start = datetime.fromtimestamp(since, zone).strftime("%d.%m.%Y %H:%M")
+    end = datetime.fromtimestamp(now, zone).strftime("%d.%m.%Y %H:%M")
+    return tr(language, key, start=start, end=end, zone=timezone)
+
+
+def daily_phase_report_line(
+    monitor: Monitor, phase: str, since: float, now: float
+) -> tuple[str, bool]:
+    """Format only actual local-day phase samples and connection losses."""
+
+    data = phase_stats(monitor.cfg.database_path, phase, since, until=now)
+    outages = monitor.storage.outage_stats(now, phase)
+    line = tr(
+        monitor.language,
+        "summary_phase",
+        phase=monitor.phase_label(phase),
+        minimum=fmt(data["min"]),
+        maximum=fmt(data["max"]),
+        average=fmt(data["avg"]),
+        samples=data["count"],
+        count=outages["count"],
+        duration=duration_text(float(outages["duration"]), monitor.language),
+    )
+    return line, bool(outages["count"])
+
+
 def weekly_measurement_line(
     monitor: Monitor, phase: str, data: dict[str, float | int | None]
 ) -> str:
@@ -3276,31 +3308,30 @@ class Monitor:
         since = local.replace(
             hour=0, minute=0, second=0, microsecond=0
         ).timestamp()
-        lines = [tr(self.language, "summary_title")]
+        lines = [
+            tr(self.language, "summary_title"),
+            report_period_line(
+                self.language, "summary_period", since, now, self.cfg.timezone
+            ),
+        ]
+        has_loss = False
         for phase in self.active_phases():
             if not self.phase_configured(phase):
                 lines.append(
                     tr(self.language, "summary_unconfigured", phase=phase)
                 )
                 continue
-            st = phase_stats(self.cfg.database_path, phase, since, until=now)
-            outages = self.storage.outage_stats(now, phase)
-            outage_duration = duration_text(
-                float(outages["duration"]), self.language
+            phase_line, phase_loss = daily_phase_report_line(
+                self, phase, since, now
             )
-            lines.append(
-                tr(
-                    self.language,
-                    "summary_phase",
-                    phase=self.phase_label(phase),
-                    minimum=fmt(st["min"]),
-                    maximum=fmt(st["max"]),
-                    average=fmt(st["avg"]),
-                    count=outages["count"],
-                    duration=outage_duration,
-                )
-            )
-        lines.append(tr(self.language, "outage_interpretation"))
+            lines.append(phase_line)
+            has_loss = has_loss or phase_loss
+        key = (
+            "outage_interpretation"
+            if has_loss
+            else "summary_connection_notice"
+        )
+        lines.append(tr(self.language, key))
         lines.append(tr(self.language, "summary_observation_notice"))
         return "\n".join(lines)
 
@@ -3310,6 +3341,11 @@ class Monitor:
         now = time.time()
         since = now - 7 * 86400
         lines = [tr(self.language, "weekly_title")]
+        lines.append(
+            report_period_line(
+                self.language, "weekly_period", since, now, self.cfg.timezone
+            )
+        )
         for phase in self.active_phases():
             if not self.phase_configured(phase):
                 lines.append(

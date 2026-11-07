@@ -173,8 +173,8 @@ _TEXT = {
             "Использование: /maintenance 60 или /maintenance off"
         ),
         "summary_phase": (
-            "{phase}: {minimum}–{maximum} V, ср. {average} V; "
-            "потерь связи: {count}, {duration}"
+            "⚡ {phase}: {minimum}–{maximum} В · ср. {average} В\n"
+            "📍 Измерений: {samples} · потерь связи: {count}, {duration}"
         ),
         "test_loud": "🔔 Тест громкого уведомления",
         "test_silent": "🔕 Тест тихого уведомления",
@@ -202,9 +202,14 @@ _TEXT = {
             "отключение электричества (возможна проблема сети или IP)."
         ),
         "summary_title": "📅 Суточная сводка",
+        "summary_connection_notice": (
+            "ℹ️ Потеря связи с Shelly не доказывает отключение электричества. "
+            "Причиной могут быть сеть или IP."
+        ),
+        "summary_period": "🗓 {start} — {end} · {zone}",
         "summary_observation_notice": (
-            "ℹ️ Только измерения за сегодня (Киев), не непрерывное "
-            "наблюдение. При потере связи текущее напряжение неизвестно."
+            "ℹ️ Только измерения за указанный местный день, не "
+            "непрерывное наблюдение. При потере связи напряжение неизвестно."
         ),
         "summary_unconfigured": "⚪ {phase}: не настроена",
         "quality_title": "📊 Качество {phase} за {hours}ч",
@@ -252,6 +257,7 @@ _TEXT = {
         "button_cooldown_min": "{value} мин",
         "cmd_week": "Статистика за 7 дней",
         "weekly_title": "📅 Качество электросети · 7 дней",
+        "weekly_period": "🗓 {start} — {end} · {zone}",
         "weekly_phase": (
             "{phase}: {minimum}–{maximum} V, ср. "
             "{average} V · измерений {count}"
@@ -463,9 +469,14 @@ _TEXT = {
             "зникнення електрики (можлива проблема мережі або IP)."
         ),
         "summary_title": "📅 Добове зведення",
+        "summary_connection_notice": (
+            "ℹ️ Втрата зв’язку із Shelly не доводить вимкнення живлення. "
+            "Можлива проблема мережі або IP."
+        ),
+        "summary_period": "🗓 {start} — {end} · {zone}",
         "summary_observation_notice": (
-            "ℹ️ Лише вимірювання за сьогодні (Київ), не безперервний "
-            "моніторинг. Без зв'язку поточна напруга невідома."
+            "ℹ️ Лише вимірювання за вказаний місцевий день, не "
+            "безперервний моніторинг. Без зв'язку напруга невідома."
         ),
         "summary_unconfigured": "⚪ {phase}: не налаштована",
         "quality_title": "📊 Якість {phase} за {hours}г",
@@ -502,8 +513,8 @@ _TEXT = {
             "Використання: /maintenance 60 або /maintenance off"
         ),
         "summary_phase": (
-            "{phase}: {minimum}–{maximum} В, сер. {average} "
-            "В; перерв зв'язку: {count}, {duration}"
+            "⚡ {phase}: {minimum}–{maximum} В · сер. {average} В\n"
+            "📍 Вимірювань: {samples} · втрат зв'язку: {count}, {duration}"
         ),
         "status_online": "🟢 Зв'язок із Shelly є",
         "status_recovering": "🟡 Shelly відновлює з'єднання",
@@ -544,6 +555,7 @@ _TEXT = {
         "button_cooldown_min": "{value} хв",
         "cmd_week": "Статистика за 7 днів",
         "weekly_title": "📅 Якість електромережі · 7 днів",
+        "weekly_period": "🗓 {start} — {end} · {zone}",
         "weekly_phase": (
             "{phase}: {minimum}–{maximum} В, сер. "
             "{average} В · вимірювань {count}"
@@ -747,9 +759,14 @@ _TEXT = {
             "cuts. Network or IP changes can cause them."
         ),
         "summary_title": "📅 Daily summary",
+        "summary_connection_notice": (
+            "ℹ️ A lost Shelly connection does not prove a power cut. "
+            "Network or IP issues may be responsible."
+        ),
+        "summary_period": "🗓 {start} — {end} · {zone}",
         "summary_observation_notice": (
-            "ℹ️ Observed samples from today (Kyiv), not continuous "
-            "power evidence. Current voltage is unknown while offline."
+            "ℹ️ Observed samples for the displayed local day, not "
+            "continuous power evidence. Voltage is unknown while offline."
         ),
         "summary_unconfigured": "⚪ {phase}: not configured",
         "quality_title": "📊 Quality {phase} for {hours}h",
@@ -782,8 +799,8 @@ _TEXT = {
         "maintenance_status": "🛠 Maintenance: {value}",
         "maintenance_usage": "Usage: /maintenance 60 or /maintenance off",
         "summary_phase": (
-            "{phase}: {minimum}–{maximum} V, avg {average} V; "
-            "connection losses: {count}, {duration}"
+            "⚡ {phase}: {minimum}–{maximum} V · avg {average} V\n"
+            "📍 Samples: {samples} · connection losses: {count}, {duration}"
         ),
         "status_online": "🟢 Shelly is connected",
         "status_recovering": "🟡 Shelly connection recovering",
@@ -820,6 +837,7 @@ _TEXT = {
         "button_cooldown_min": "{value} min",
         "cmd_week": "Seven-day quality report",
         "weekly_title": "📅 Grid quality · past 7 days",
+        "weekly_period": "🗓 {start} — {end} · {zone}",
         "weekly_phase": (
             "{phase}: {minimum}–{maximum} V, avg {average} V · samples {count}"
         ),
