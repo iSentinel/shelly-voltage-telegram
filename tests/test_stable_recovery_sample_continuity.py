@@ -118,6 +118,40 @@ class StableSampleContinuityTests(unittest.TestCase):
         self.execute("update measurements set frequency=20 where ts>=1000")
         self.assert_sample_failure()
 
+    def test_interleaved_overvoltage_cannot_be_filtered_out(self):
+        """One 900 V reading invalidates otherwise complete 15-minute data."""
+
+        self.add_samples([1505], "L1")
+        self.execute(
+            "update measurements set voltage=900 where phase='L1' and ts=1505"
+        )
+        self.assert_sample_failure()
+
+    def test_interleaved_invalid_frequency_cannot_be_filtered_out(self):
+        """A brief 5 Hz reading must not disappear behind normal samples."""
+
+        self.add_samples([1505], "L1", frequency=5.0)
+        self.assert_sample_failure()
+
+    def test_interleaved_missing_voltage_cannot_be_filtered_out(self):
+        """Null voltage during monitored stability must fail closed."""
+
+        self.add_samples([1505], "L1")
+        self.execute(
+            "update measurements set voltage=NULL where phase='L1' and ts=1505"
+        )
+        self.assert_sample_failure()
+
+    def test_interleaved_nonfinite_voltage_cannot_be_filtered_out(self):
+        """An infinite voltage sample must fail the physical-range gate."""
+
+        self.add_samples([1505], "L1")
+        self.execute(
+            "update measurements set voltage=? where phase='L1' and ts=1505",
+            (float("inf"),),
+        )
+        self.assert_sample_failure()
+
     def test_future_dated_sample_does_not_fill_missing_interval(self):
         """Future timestamps must not make a missing final minute fresh."""
 
