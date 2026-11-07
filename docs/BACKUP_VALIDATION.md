@@ -104,6 +104,14 @@ python scripts/restore-drill.py \
 
 The command validates each archive's SHA-256 sidecar, enforces a maximum
 decompressed size, and creates a separate disposable SQLite copy.
+When a v1/v2 backup predates the three-phase `phase` column, the
+restore drill first verifies the original restored SQLite and then
+runs the application's supported schema migration **inside that
+disposable copy only**. It verifies the row count and most recent
+L1 timestamp/voltage after migration; the source gzip and live
+database remain unchanged. Old archives with verified checksums
+are not falsely rejected just because their schema predates v3.
+
 The disconnected monitor uses the reserved test address `192.0.2.1`,
 empty Telegram credentials and no administrators. It restores the
 last valid L1 timestamp and voltage and requires `/ready` semantics

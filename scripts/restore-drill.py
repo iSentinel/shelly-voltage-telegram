@@ -87,21 +87,35 @@ def isolated_config(database: Path) -> app.Config:
 
 
 def exercise_restored_copy(database: Path) -> tuple[int, str]:
-    """Load valid historic data without opening network connections."""
+    """Migrate a disposable copy, then validate restored offline state."""
 
     with closing(sqlite3.connect(database)) as db:
         quick_check = db.execute("PRAGMA quick_check").fetchone()[0]
         if quick_check != "ok":
             raise ValueError("restored SQLite failed quick_check")
         count = db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0]
+        old_columns = {
+            row[1] for row in db.execute("PRAGMA table_info(measurements)")
+        }
+        old_latest = db.execute(
+            "SELECT ts,voltage FROM measurements ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+        if not old_latest or count < 1:
+            raise ValueError("restored measurements missing")
+    monitor = app.Monitor(isolated_config(database))
+    monitor.storage.initialize()
+    with closing(sqlite3.connect(database)) as db:
+        new_count = db.execute("SELECT COUNT(*) FROM measurements").fetchone()[
+            0
+        ]
         latest = db.execute(
             "SELECT ts,voltage FROM measurements WHERE phase='L1' "
             "ORDER BY ts DESC LIMIT 1"
         ).fetchone()
-        if not latest or count < 1:
-            raise ValueError("restored L1 measurements missing")
-    monitor = app.Monitor(isolated_config(database))
-    monitor.storage.initialize()
+    if new_count != count or not latest:
+        raise ValueError("migration lost historic readings")
+    if "phase" not in old_columns and latest != old_latest:
+        raise ValueError("legacy L1 history changed during migration")
     monitor.restore_phase("L1")
     state = monitor.state.snapshot()
     status, ready = app.readiness(monitor)
