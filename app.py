@@ -5469,7 +5469,14 @@ class Monitor:
         """Create and send one localized chart file."""
 
         path = Path(f"/tmp/shelly-{phase.lower()}-{hours}h.png")
-        count = chart_png(self.cfg.database_path, phase, hours, path)
+        count = chart_png(
+            self.cfg.database_path,
+            phase,
+            hours,
+            path,
+            warning_low=self.warning_low,
+            timezone=self.cfg.timezone,
+        )
         caption = tr(
             self.language,
             "chart_caption",
