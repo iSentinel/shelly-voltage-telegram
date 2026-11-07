@@ -112,6 +112,14 @@ L1 timestamp/voltage after migration; the source gzip and live
 database remain unchanged. Old archives with verified checksums
 are not falsely rejected just because their schema predates v3.
 
+The restore drill explicitly discards all inherited environment
+variables when creating its test monitor. A user's live Shelly
+address, password-file path, Telegram token, chat ID, and phase hosts
+can never affect this test configuration; `SHELLY_HOST` is replaced
+with the reserved documentation address. A backup with a
+future/unsupported schema is classified as FAIL without a crash
+or attempting a downgrade, while the source archive remains intact.
+
 The disconnected monitor uses the reserved test address `192.0.2.1`,
 empty Telegram credentials and no administrators. It restores the
 last valid L1 timestamp and voltage and requires `/ready` semantics
