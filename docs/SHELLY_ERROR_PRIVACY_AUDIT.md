@@ -20,7 +20,10 @@ python scripts/shelly-error-privacy-audit.py --json
 ```
 
 The URL is restricted to a local HTTP `/health` endpoint, never an
-arbitrary target. The request is read-only and times out after a
+arbitrary target. Redirects are explicitly blocked, and proxy
+environment variables are ignored for the local check. An oversized
+health payload (over 64 KiB) fails closed rather than being buffered
+without limit. The request is read-only and times out after a
 bounded delay. Exit codes: 0 = PASS/dry run, 2 = FAIL, 3 =
 INCONCLUSIVE when no error is currently present in the snapshot.
 Do not interpret an inconclusive result as proof of privacy.

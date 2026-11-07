@@ -8,7 +8,7 @@ import json
 import math
 from urllib.error import URLError
 from urllib.parse import urlsplit
-from urllib.request import urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
 
 SAFE_REASONS = frozenset(
     {
@@ -20,6 +20,15 @@ SAFE_REASONS = frozenset(
         "read_error",
     }
 )
+
+
+class RejectRedirects(HTTPRedirectHandler):
+    """Never follow a response from loopback to another URL."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        """Reject 30x responses instead of contacting a new destination."""
+
+        return None
 
 
 def parser() -> argparse.ArgumentParser:
@@ -70,7 +79,11 @@ def audit_snapshot(snapshot: object) -> dict:
             return verdict("fail", "malformed_phase")
         if phase_status.get("connectivity") != "not_configured":
             errors.append(phase_status.get("last_error"))
-    if any(item is not None and item not in SAFE_REASONS for item in errors):
+    if any(
+        item is not None
+        and (not isinstance(item, str) or item not in SAFE_REASONS)
+        for item in errors
+    ):
         return verdict("fail", "untrusted_error_detail")
     if not any(item is not None for item in errors):
         return verdict("inconclusive", "no_error_observed")
@@ -96,9 +109,12 @@ def audit_live(url: str, timeout: float) -> dict:
     validate_url(url)
     if not math.isfinite(timeout) or not 0.1 <= timeout <= 5:
         raise ValueError("timeout must be 0.1 to 5 seconds")
-    with urlopen(url, timeout=timeout) as response:
-        payload = json.load(response)
-    return audit_snapshot(payload)
+    opener = build_opener(ProxyHandler({}), RejectRedirects())
+    with opener.open(url, timeout=timeout) as response:
+        raw = response.read(65537)
+    if len(raw) > 65536:
+        return verdict("fail", "oversized_health")
+    return audit_snapshot(json.loads(raw))
 
 
 def main() -> int:
