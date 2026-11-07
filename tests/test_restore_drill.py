@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from test_app import APP
 
@@ -184,6 +184,50 @@ class RestoreDrillTests(unittest.TestCase):
             )
         self.assertEqual(code, 2)
         self.assertEqual(json.loads(output.getvalue())["status"], "fail")
+
+    def test_insufficient_temp_space_fails_before_decompression(self):
+        """Do not fill the LXC if scratch space cannot fit the size cap."""
+
+        archive = self.archive("headroom-fail")
+        limit = 64 * 1024 * 1024
+        with (
+            patch.object(
+                DRILL.shutil,
+                "disk_usage",
+                return_value=Mock(
+                    free=limit + 32 * 1024 * 1024 - 1,
+                ),
+            ),
+            patch.object(
+                DRILL.VERIFY,
+                "unpack_archive",
+                side_effect=AssertionError("archive unexpectedly extracted"),
+            ) as unpack,
+        ):
+            self.assertFalse(DRILL.restore_one(1, archive, limit))
+        unpack.assert_not_called()
+
+    def test_scratch_headroom_accepts_exact_safety_boundary(self):
+        """The configured cap and reserved margin must both fit."""
+
+        limit = 64 * 1024 * 1024
+        with patch.object(
+            DRILL.shutil,
+            "disk_usage",
+            return_value=Mock(free=limit + 32 * 1024 * 1024),
+        ):
+            DRILL.ensure_scratch_headroom(self.root, limit)
+
+    def test_scratch_space_read_failure_is_clean_restore_failure(self):
+        """Unreadable temporary filesystem metadata must fail safely."""
+
+        archive = self.archive("headroom-stat-error")
+        with patch.object(
+            DRILL.shutil,
+            "disk_usage",
+            side_effect=OSError("private scratch details"),
+        ):
+            self.assertFalse(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
 
     def test_checksum_mismatch_is_rejected(self):
         """Do not restore a modified or incomplete archive."""
