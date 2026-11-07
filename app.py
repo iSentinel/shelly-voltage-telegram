@@ -1198,7 +1198,7 @@ def safe_telegram_api_error(payload: object) -> str:
         return prefix
     text = raw.strip().lower()
     if text.startswith("bad request: "):
-        text = text[len("bad request: "):]
+        text = text[len("bad request: ") :]
     markers = (
         "message is not modified",
         "message to edit not found",
