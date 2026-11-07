@@ -154,6 +154,55 @@ class RecoveryAcceptanceFreshnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertTrue(any("fresh" in text for text in result["errors"]))
 
+    def test_newer_invalid_frequency_never_uses_previous_good_sample(self):
+        """Fresh good L1 cannot hide the latest impossible L1 frequency."""
+
+        self.close_and_rotate()
+        self.insert_sample("L1", "2026-11-07T00:40:03+02:00")
+        self.assertEqual(self.verify()["status"], "pass")
+        self.insert_sample("L1", "2026-11-07T00:40:06+02:00", frequency=5.0)
+        result = self.verify()
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any("fresh" in e for e in result["errors"]))
+
+    def test_newer_overvoltage_never_uses_previous_good_sample(self):
+        """A 900 V latest sample makes the recovery unverified."""
+
+        self.close_and_rotate()
+        self.insert_sample("L1", "2026-11-07T00:40:03+02:00")
+        self.insert_sample("L1", "2026-11-07T00:40:06+02:00")
+        with closing(RECOVERY.sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "update measurements set voltage=900 "
+                "where phase='L1' and ts=?",
+                (timestamp("2026-11-07T00:40:06+02:00"),),
+            )
+        result = self.verify()
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(any("fresh" in e for e in result["errors"]))
+
+    def test_newer_missing_voltage_never_uses_previous_good_sample(self):
+        """A null latest meter voltage cannot be treated as recovery."""
+
+        self.close_and_rotate()
+        self.insert_sample("L1", "2026-11-07T00:40:03+02:00")
+        self.insert_sample("L1", "2026-11-07T00:40:06+02:00")
+        with closing(RECOVERY.sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "update measurements set voltage=NULL "
+                "where phase='L1' and ts=?",
+                (timestamp("2026-11-07T00:40:06+02:00"),),
+            )
+        self.assertEqual(self.verify()["status"], "fail")
+
+    def test_other_phase_invalid_latest_does_not_hide_valid_l1(self):
+        """The captured phase, not unrelated L2 data, determines recovery."""
+
+        self.close_and_rotate()
+        self.insert_sample("L1", "2026-11-07T00:40:03+02:00")
+        self.insert_sample("L2", "2026-11-07T00:40:06+02:00", frequency=5.0)
+        self.assertEqual(self.verify()["status"], "pass")
+
     def test_genuine_recent_same_phase_can_pass_local_gates(self):
         """A fresh L1 reading makes a candidate, not subscriber proof."""
 

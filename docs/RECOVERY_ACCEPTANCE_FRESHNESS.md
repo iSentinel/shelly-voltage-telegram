@@ -15,8 +15,12 @@ and requires a physically plausible sample (0 < V < 500 and
 40 <= Hz <= 70) from the **same phase** as the captured outage.
 Its timestamp must be within 45 seconds of observation, not in
 the future, and at most 15 seconds before the recorded connection
-recovery. This parallels recovery-preflight and does not alter its
-PENDING decision while incident 15 is open.
+recovery. Importantly, the **newest stored reading of that phase**
+must itself be valid: an invalid newer 900 V, 5 Hz or null reading
+cannot be hidden by falling back to a previous good sample. A valid
+reading from another phase does not replace the required phase.
+This parallels recovery-preflight and does not alter its PENDING
+decision while the captured incident remains open.
 
 The guard does not infer supply from group 10.1 schedules, never
 creates sample rows and never sends Telegram messages. A PASS
