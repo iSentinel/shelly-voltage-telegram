@@ -54,7 +54,7 @@ def load_baseline(path: Path) -> dict:
 
 
 def read_live(path: Path, phase: str) -> dict:
-    """Read event and last valid phase sample from existing SQLite only."""
+    """Read event and actual latest phase sample from existing SQLite."""
 
     if path.is_symlink() or not path.is_file():
         raise ValueError("database is missing or a symlink")
@@ -66,14 +66,12 @@ def read_live(path: Path, phase: str) -> dict:
         ).fetchone()
         sample = db.execute(
             "select ts,voltage,frequency from measurements "
-            "where phase=? and voltage>0 and voltage<500 "
-            "and frequency>=40 and frequency<=70 "
-            "order by ts desc limit 1",
+            "where phase=? order by ts desc limit 1",
             (phase,),
         ).fetchone()
         return {
             "event": event,
-            "last_valid_sample": sample,
+            "latest_phase_sample": sample,
             "quick_check": db.execute("pragma quick_check").fetchone()[0],
             "zero_rows": db.execute(
                 "select count(*) from measurements where voltage=0"
@@ -134,7 +132,7 @@ def classify(old: dict, live: dict, now: float, max_age: int) -> dict:
     if live["samples"] <= old["measurement_count"]:
         return pending("no_new_samples_after_baseline", identifier)
     return evaluate_measurement(
-        live["last_valid_sample"], ended, now, max_age, identifier
+        live["latest_phase_sample"], ended, now, max_age, identifier
     )
 
 
@@ -149,7 +147,16 @@ def evaluate_measurement(
 
     if sample is None:
         return pending("no_valid_voltage_sample", identifier)
-    ts, voltage, frequency = sample
+    try:
+        ts, voltage, frequency = (float(value) for value in sample)
+    except (ValueError, TypeError, OverflowError):
+        return pending("latest_phase_sample_invalid", identifier)
+    if not (
+        all(math.isfinite(value) for value in (ts, voltage, frequency))
+        and 0 < voltage < 500
+        and 40 <= frequency <= 70
+    ):
+        return pending("latest_phase_sample_invalid", identifier)
     age = now - ts
     if not math.isfinite(age) or age < 0 or age > max_age:
         return pending("recent_sample_missing", identifier)
