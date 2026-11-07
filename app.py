@@ -1182,6 +1182,36 @@ def telegram_quiet_hours(cfg: Config, now: datetime | None = None) -> bool:
     return hour >= start or hour < end
 
 
+def safe_telegram_api_error(payload: object) -> str:
+    """Redact untrusted Telegram details but preserve known status markers."""
+
+    if not isinstance(payload, dict):
+        return "Telegram API invalid response"
+    code = payload.get("error_code")
+    prefix = (
+        f"Telegram API error {code}"
+        if type(code) is int and 400 <= code <= 599
+        else "Telegram API error"
+    )
+    raw = payload.get("description")
+    if not isinstance(raw, str):
+        return prefix
+    text = raw.strip().lower()
+    if text.startswith("bad request: "):
+        text = text[len("bad request: "):]
+    markers = (
+        "message is not modified",
+        "message to edit not found",
+        "message can't be edited",
+        "message_id_invalid",
+        "message to unpin not found",
+    )
+    for marker in markers:
+        if text == marker or text.startswith(marker + ":"):
+            return f"{prefix}: {marker}"
+    return prefix
+
+
 class Telegram:
     """Small Telegram Bot API client with isolated long polling."""
 
@@ -1234,7 +1264,7 @@ class Telegram:
             time.sleep(delay)
             data = self._post(method, payload)
         if not data.get("ok"):
-            raise RuntimeError(data.get("description", "Telegram API error"))
+            raise RuntimeError(safe_telegram_api_error(data))
         return data["result"]
 
     def call(self, method: str, payload: dict) -> dict:
@@ -1363,10 +1393,10 @@ class Telegram:
             raise RuntimeError(
                 f"Telegram file upload failed: {type(exc).__name__}"
             ) from None
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
         if not payload.get("ok"):
-            raise RuntimeError(
-                payload.get("description", "Telegram API error")
-            )
+            raise RuntimeError(safe_telegram_api_error(payload))
         return int(payload["result"]["message_id"])
 
     def send_photo(self, path: Path, caption: str = "") -> int:
