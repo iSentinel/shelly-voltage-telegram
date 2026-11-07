@@ -252,6 +252,10 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 # Online backup SQLite
 ./scripts/backup.sh
 
+# Перевірка відновлення копій ізольовано (лише staging-вихідні коди)
+python scripts/restore-drill.py --help
+python scripts/restore-drill.py --backup-dir /var/backups/shelly-voltage --count 3 --jsonl
+
 # Знеособлений support bundle
 ./scripts/support-bundle.sh
 
