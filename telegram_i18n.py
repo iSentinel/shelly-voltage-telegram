@@ -162,7 +162,9 @@ _TEXT = {
         "device_unconfigured": "{phase}: не настроена",
         "phase_invalid": "Фаза должна быть L1, L2 или L3",
         "phase_not_configured": "{phase}: датчик ещё не настроен",
-        "chart_caption": "{phase} · {hours}ч · {count} точек",
+        "chart_caption": (
+            "📈 {phase} · {hours} ч · {count} точек графика (весь период)"
+        ),
         "export_caption": "{phase} · {hours}ч · {count} строк",
         "command_error": "Ошибка: {error}",
         "maintenance_admin_only": (
@@ -502,7 +504,9 @@ _TEXT = {
         "device_unconfigured": "{phase}: не налаштована",
         "phase_invalid": "Фаза має бути L1, L2 або L3",
         "phase_not_configured": "{phase}: датчик ще не налаштовано",
-        "chart_caption": "{phase} · {hours} год · {count} точок",
+        "chart_caption": (
+            "📈 {phase} · {hours} год · {count} точок графіка (увесь період)"
+        ),
         "export_caption": "{phase} · {hours} год · {count} рядків",
         "command_error": "Помилка: {error}",
         "maintenance_admin_only": (
@@ -790,7 +794,9 @@ _TEXT = {
         "device_unconfigured": "{phase}: not configured",
         "phase_invalid": "Phase must be L1, L2 or L3",
         "phase_not_configured": "{phase}: sensor is not configured",
-        "chart_caption": "{phase} · {hours} h · {count} points",
+        "chart_caption": (
+            "📈 {phase} · {hours} h · {count} plotted points (full period)"
+        ),
         "export_caption": "{phase} · {hours} h · {count} rows",
         "command_error": "Error: {error}",
         "maintenance_admin_only": (

@@ -14,6 +14,7 @@ from pathlib import Path
 from test_app import APP
 
 from advanced_features import chart_png, series
+from telegram_i18n import tr
 
 
 def read_png_pixels(path: Path) -> tuple[int, int, bytes]:
@@ -120,6 +121,25 @@ class VoltageChartUiTests(unittest.TestCase):
         self.assertEqual((width, height), (1000, 560))
         self.assertNotIn(b"\x25\x63\xeb", pixels)
         self.assertIn(b"\x94\xa3\xb8", pixels)
+
+    def test_caption_describes_plotted_points_not_total_samples(self):
+        """A downsampled chart caption must not imply raw sample count."""
+
+        for language, wording in (
+            ("ru", "точек графика (весь период)"),
+            ("uk", "точок графіка (увесь період)"),
+            ("en", "plotted points (full period)"),
+        ):
+            with self.subTest(language=language):
+                caption = tr(
+                    language,
+                    "chart_caption",
+                    phase="L1",
+                    hours=24,
+                    count=1018,
+                )
+                self.assertIn("1018", caption)
+                self.assertIn(wording, caption)
 
     def test_invalid_nonfinite_values_are_excluded_from_chart(self):
         """Old SQLite corruption must not create NaN chart bounds."""
