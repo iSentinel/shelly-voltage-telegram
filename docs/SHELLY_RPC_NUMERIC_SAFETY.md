@@ -19,6 +19,19 @@ RPC adapter boundary for Shelly Pro EM-50, EM Gen3, PM Mini,
 - Keep valid finite numeric strings compatible with RPC APIs.
 - Preserve a real device-reported zero without manufacturing
   extra zero rows. This patch does not fabricate a voltage.
+- Require nonnegative, finite voltage below 500 V. Real low/high
+  readings remain available as measured; a 900 V payload is an
+  invalid RPC sample rather than a confirmed grid event.
+- For a nonzero voltage, require a plausible frequency from
+  40 to 70 Hz inclusive. A 5 Hz or 0 Hz payload alongside nonzero
+  voltage is invalid. If the meter explicitly returns 0 V,
+  both 0 Hz and a plausible grid frequency remain representable
+  without fabricating data or claiming the device is unreachable.
+- Apply these checks **before** updating connectivity, saving
+  measurements, or sending a recovered-status notification.
+  Malformed RPC values are treated as a failed poll, not a
+  successful recovery. The 15-minute acceptance guards separately
+  require valid positive samples across the observed time window.
 - Reject an entire Pro 3EM atomic response if a present phase
   contains invalid numeric fields, rather than persisting a
   partial misleading set of phase readings.
