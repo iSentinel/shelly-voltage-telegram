@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import signal
 import sqlite3
@@ -1075,7 +1076,28 @@ class ShellyClient:
         response.raise_for_status()
         payload = response.json()
         rpc_ms = (time.perf_counter() - started) * 1000
-        return float(payload["voltage"]), float(payload["freq"]), rpc_ms
+        voltage, frequency = validated_meter_numbers(
+            payload["voltage"], payload["freq"]
+        )
+        return voltage, frequency, rpc_ms
+
+
+def validated_meter_numbers(
+    voltage: object, frequency: object
+) -> tuple[float, float]:
+    """Reject invalid RPC numbers without echoing untrusted data."""
+
+    if isinstance(voltage, bool) or isinstance(frequency, bool):
+        raise RuntimeError("invalid Shelly numeric measurement")
+    try:
+        values = (float(voltage), float(frequency))
+    except (TypeError, ValueError, OverflowError):
+        raise RuntimeError("invalid Shelly numeric measurement") from None
+    if not all(math.isfinite(value) for value in values):
+        raise RuntimeError("non-finite Shelly measurement")
+    if any(value < 0 for value in values):
+        raise RuntimeError("negative Shelly measurement")
+    return values
 
 
 class RpcMeterClient(ShellyClient):
@@ -1098,7 +1120,10 @@ class RpcMeterClient(ShellyClient):
             raise RuntimeError(
                 f"{self.rpc_method} returned no voltage/frequency"
             )
-        return float(voltage), float(frequency), rpc_ms
+        valid_voltage, valid_frequency = validated_meter_numbers(
+            voltage, frequency
+        )
+        return valid_voltage, valid_frequency, rpc_ms
 
 
 EM_ERROR_FIELDS = (
@@ -1164,7 +1189,10 @@ class Pro3EMClient(ShellyClient):
             frequency = payload.get(f"{prefix}_freq")
             if voltage is None or frequency is None:
                 continue
-            result[phase] = (float(voltage), float(frequency), rpc_ms)
+            valid_voltage, valid_frequency = validated_meter_numbers(
+                voltage, frequency
+            )
+            result[phase] = (valid_voltage, valid_frequency, rpc_ms)
         return result
 
 
