@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -102,6 +103,87 @@ class RestoreDrillTests(unittest.TestCase):
         self.assertEqual(
             before, hashlib.sha256(archive.read_bytes()).hexdigest()
         )
+
+    def test_restore_config_cannot_inherit_live_credentials(self):
+        """Production tokens, file paths and phase hosts stay isolated."""
+
+        archive = self.archive("isolation")
+        secret = self.root / "secret-token"
+        secret.write_text("fake-token")
+        hostile = {
+            "SHELLY_HOST": "10.0.0.77",
+            "SHELLY_PASSWORD_FILE": str(secret),
+            "TELEGRAM_BOT_TOKEN_FILE": str(secret),
+            "TELEGRAM_CHAT_ID": "123",
+            "SHELLY_METER_TYPE": "invalid-live-device-type",
+            "PHASE_L2_HOST": "10.0.0.78",
+            "PHASE_L3_HOST": "10.0.0.79",
+        }
+        with (
+            patch.dict(os.environ, hostile),
+            patch.object(
+                Path,
+                "read_text",
+                side_effect=AssertionError("live secret unexpectedly read"),
+            ),
+        ):
+            cfg = DRILL.isolated_config(self.root / "scratch.sqlite3")
+            self.assertEqual(cfg.shelly_host, "192.0.2.1")
+            self.assertEqual(cfg.shelly_meter_type, "pro_em50")
+            self.assertEqual(cfg.shelly_password, "")
+            self.assertEqual(cfg.telegram_token, "")
+            self.assertEqual(cfg.telegram_chat_id, "")
+            self.assertEqual(cfg.phase_l2_host, "")
+            self.assertEqual(cfg.phase_l3_host, "")
+            self.assertTrue(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+
+    def test_unsupported_future_schema_fails_cleanly(self):
+        """Future schema must FAIL with stable CLI code, not a traceback."""
+
+        archive = self.archive("future-schema")
+        source = self.root / "source.sqlite3"
+        with closing(sqlite3.connect(source)) as db, db:
+            db.execute(
+                "INSERT OR REPLACE INTO meta(key,value) "
+                "VALUES('schema_version','999')"
+            )
+        archive.write_bytes(gzip.compress(source.read_bytes()))
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(f"{archive}.sha256").write_text(f"{digest}  {archive.name}\n")
+        before = hashlib.sha256(archive.read_bytes()).hexdigest()
+        self.assertFalse(DRILL.restore_one(1, archive, 64 * 1024 * 1024))
+        self.assertEqual(
+            before, hashlib.sha256(archive.read_bytes()).hexdigest()
+        )
+
+    def test_future_version_cli_returns_exit_two(self):
+        """Unknown future migrations must not abort a batch trace."""
+
+        archive = self.archive("future-cli")
+        source = self.root / "source.sqlite3"
+        with closing(sqlite3.connect(source)) as db, db:
+            db.execute(
+                "UPDATE meta SET value='999' WHERE key='schema_version'"
+            )
+        archive.write_bytes(gzip.compress(source.read_bytes()))
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        Path(f"{archive}.sha256").write_text(f"{digest}  {archive.name}\n")
+        from contextlib import redirect_stdout
+        from io import StringIO
+
+        output = StringIO()
+        with redirect_stdout(output):
+            code = DRILL.main(
+                [
+                    "--backup-dir",
+                    str(self.root),
+                    "--count",
+                    "1",
+                    "--jsonl",
+                ]
+            )
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(output.getvalue())["status"], "fail")
 
     def test_checksum_mismatch_is_rejected(self):
         """Do not restore a modified or incomplete archive."""

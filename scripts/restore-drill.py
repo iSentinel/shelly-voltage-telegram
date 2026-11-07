@@ -72,7 +72,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def isolated_config(database: Path) -> app.Config:
     """Build an explicitly disconnected monitor with no Telegram access."""
 
-    with patch.dict(os.environ, {"SHELLY_HOST": "192.0.2.1"}):
+    with patch.dict(os.environ, {"SHELLY_HOST": "192.0.2.1"}, clear=True):
         source = app.load_config()
     return replace(
         source,
@@ -138,7 +138,7 @@ def restore_one(index: int, archive: Path, limit: int) -> bool:
             VERIFY.unpack_archive(archive, target, limit)
             target.chmod(0o600)
             rows, state = exercise_restored_copy(target)
-    except (OSError, EOFError, ValueError, sqlite3.Error) as exc:
+    except (OSError, EOFError, ValueError, RuntimeError, sqlite3.Error) as exc:
         logger.error("FAIL copy {}: {}", index, type(exc).__name__)
         return False
     logger.info(
