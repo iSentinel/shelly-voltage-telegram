@@ -124,6 +124,8 @@ echo "RELEASE_INVALID_VERSION=REJECTED"
 
 
 # Private directories at arbitrary depth must never enter public archives.
+# Remove links deliberately kept by the preceding negative fixture.
+rm -f "$FIXTURE/linked-env" "$FIXTURE/linked-private-directory"
 cp "$PROJECT/VERSION" "$FIXTURE/VERSION"
 mkdir -p "$FIXTURE/nested/deeper/secrets" \
     "$FIXTURE/nested/deeper/validation" \
