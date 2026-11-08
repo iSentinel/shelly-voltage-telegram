@@ -8,10 +8,11 @@ RESCUE_ROOT="${RESCUE_ROOT:-/var/backups/shelly-voltage}"
 SNAPSHOT=""
 DRY_RUN=false
 NO_START=false
+CONFIRM_DB_REPLACEMENT=false
 
 usage() {
     cat <<'EOF'
-Usage: rollback.sh [--snapshot DIR] [--dry-run] [--no-start] [-h|--help]
+Usage: rollback.sh [--snapshot DIR] [--dry-run] [--no-start] [--confirm-db-replacement] [-h|--help]
 
 Restore source and SQLite from a pre-upgrade snapshot.
 By default the newest snapshot under /var/backups/shelly-voltage/upgrades is used.
@@ -20,6 +21,7 @@ Options:
   --snapshot DIR  Restore this snapshot instead of the newest one.
   --dry-run       Validate and print planned actions only.
   --no-start      Restore files/database but do not start Docker/systemd.
+  --confirm-db-replacement  Explicitly approve replacing an existing live SQLite DB.
   -h, --help      Show this help.
 EOF
 }
@@ -30,6 +32,7 @@ parse_args() {
             --snapshot) SNAPSHOT="$2"; shift ;;
             --dry-run) DRY_RUN=true ;;
             --no-start) NO_START=true ;;
+            --confirm-db-replacement) CONFIRM_DB_REPLACEMENT=true ;;
             -h|--help) usage; exit 0 ;;
             *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
         esac
@@ -84,6 +87,21 @@ except (OSError, ValueError, tarfile.TarError) as error:
     print(f"ERROR: invalid source archive: {error}", file=sys.stderr)
     raise SystemExit(3) from error
 PY_CHECK
+}
+
+require_db_replacement_approval() {
+    [[ -f "$DB" ]] || return 0
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN WARNING: restore will replace the current SQLite DB."
+        echo "DRY-RUN: real rollback requires --confirm-db-replacement."
+        return
+    fi
+    if [[ "$CONFIRM_DB_REPLACEMENT" != true ]]; then
+        echo "ERROR: would overwrite existing SQLite history." >&2
+        echo "Run --dry-run; then explicitly pass --confirm-db-replacement." >&2
+        exit 4
+    fi
+    echo "WARNING: explicitly approved replacing existing SQLite history."
 }
 
 rescue_current_db() {
@@ -161,6 +179,7 @@ main() {
     select_snapshot
     validate_snapshot
     echo "Rollback snapshot: $SNAPSHOT"
+    require_db_replacement_approval
     rescue_current_db
     stop_service
     restore_source
