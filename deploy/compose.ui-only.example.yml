@@ -1,0 +1,5 @@
+# Candidate-only configuration example; never deploy without review.
+services:
+  shelly-voltage:
+    environment:
+      TELEGRAM_YASNO_STATUS_ENABLED: "0"
