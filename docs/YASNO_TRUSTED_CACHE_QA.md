@@ -9,11 +9,15 @@ before installing any cache file.
 
 ```bash
 python3 yasno_cache.py --help
-python3 yasno_cache.py --output /tmp/shelly-yasno-trusted-20261108.json --group 10.1
+mkdir -p /tmp/shelly-yasno-qa-private
+chmod 0700 /tmp/shelly-yasno-qa-private
+python3 yasno_cache.py --output /tmp/shelly-yasno-qa-private/yasno.json --group 10.1
 PYTHONPATH=.:tests python3 -m unittest tests/test_yasno_cache.py -v
 ```
 
-The cache is installed by a temporary file in the same existing
+The parent directory must not be group/world writable and must
+not use symlinked parent paths. The cache is installed by a
+temporary file in the same existing
 directory and atomically replaced only after validation. It is
 mode 0600; the writer fsyncs both the new file and directory.
 The reader rejects symlinks, unsafe writable files, schema

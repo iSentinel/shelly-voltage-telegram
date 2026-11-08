@@ -1,3 +1,25 @@
+## 2026-11-08 QA: secure parent-directory guard for YASNO cache
+
+- Follow-up hardening of Draft PR #212: the trusted local cache
+  reader/writer now requires a protected parent directory,
+  rejects group/world-writable parents and symlinked parent
+  path segments, in addition to the 0600 file itself.
+- Added explicit negative tests for world-writable parent and
+  symlinked directory. Full integrated QA 1059/1059 PASS;
+  Ruff and maintainability gate PASS.
+- Direct public HTTPS fetch to protected QA location
+  /tmp/shelly-yasno-qa-private/yasno.json succeeded;
+  parent mode 0700, file 0600, 27079 bytes, group 10.1
+  day 2026-11-08 has all 48 slots and definite windows
+  04:00–11:30 / 14:30–22:00.
+- A previous test-only file in shared /tmp was validated as
+  this QA fixture and removed *after* a valid protected
+  replacement existed. No application or backup files deleted.
+- Still no scheduled refresh service nor promotion; production
+  0.5.13-hw /ready 200, Telegram and Shelly untouched.
+- NEXT: GitHub CI for the hardened cache stage, then a
+  restricted/observed refresh policy and actual client QA.
+
 ## 2026-11-08 QA: provenance-labelled atomic YASNO cache
 
 - Built yasno_cache.py for explicit direct public HTTPS retrieval

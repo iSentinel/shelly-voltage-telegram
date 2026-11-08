@@ -62,10 +62,14 @@ def build_cache(data: dict, captured: datetime) -> dict:
 def assert_safe_path(path: Path, writing: bool = False) -> None:
     """Reject links, unsafe existing files and missing parent folders."""
 
-    if path.is_symlink() or path.parent.is_symlink():
+    if path.is_symlink() or any(
+        parent.is_symlink() for parent in (path.parent, *path.parent.parents)
+    ):
         raise ValueError("YASNO cache path may not be a symlink")
     if not path.parent.is_dir():
         raise ValueError("YASNO cache parent directory missing")
+    if path.parent.stat().st_mode & 0o022:
+        raise ValueError("YASNO cache parent is writable by other users")
     if path.exists():
         info = path.lstat()
         if not stat.S_ISREG(info.st_mode):

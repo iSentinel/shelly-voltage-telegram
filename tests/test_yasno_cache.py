@@ -75,6 +75,29 @@ class YasnoCacheTests(unittest.TestCase):
                 C.read_verified_cache(str(path))
             path.chmod(0o600)
 
+    def test_world_writable_parent_directory_is_rejected(self):
+        """A private file is unsafe in a shared writable parent."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "shared"
+            parent.mkdir()
+            parent.chmod(0o777)
+            target = parent / "yasno.json"
+            with self.assertRaisesRegex(ValueError, "parent is writable"):
+                C.atomic_write(str(target), C.build_cache(response(), FETCHED))
+
+    def test_symlinked_parent_directory_is_rejected(self):
+        """Do not trust a protected-looking symlinked parent path."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            actual = Path(tmp) / "actual"
+            actual.mkdir()
+            link = Path(tmp) / "alias"
+            link.symlink_to(actual, target_is_directory=True)
+            target = link / "yasno.json"
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                C.atomic_write(str(target), C.build_cache(response(), FETCHED))
+
     def test_schema_and_malformed_envelope_rejected(self):
         """A valid JSON file is not necessarily a valid YASNO cache."""
 
