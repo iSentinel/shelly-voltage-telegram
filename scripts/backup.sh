@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
     printf '%b\n' 'Usage: backup.sh [-h|--help]\nCreate an online SQLite backup and retain the newest BACKUP_KEEP copies.'
     exit 0
+fi
+if [[ $# -ne 0 ]]; then
+    echo "ERROR: unknown backup argument; see --help." >&2
+    echo "Use em50-predeploy-snapshot.py --dry-run for no-write checks." >&2
+    exit 2
 fi
 
 DB="${DATABASE_PATH:-/var/lib/shelly-voltage/voltage.sqlite3}"

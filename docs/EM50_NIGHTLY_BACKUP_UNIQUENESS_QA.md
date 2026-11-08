@@ -34,3 +34,19 @@ retention settings, and BACKUP_KEEP=1 rollback-rescue semantics.
 This is candidate code in a Draft PR, not deployed to the nightly
 production service. The current live-history predeploy backup remains
 unmatched, and this improvement does not authorize a deployment.
+
+
+## Strict backup command-line behavior
+
+The nightly and rollback-rescue backup.sh intentionally accepts
+no positional or operation arguments; only a single -h or
+--help exits successfully without doing work. Previously,
+backup.sh --dry-run silently performed a real snapshot and
+retention cleanup, creating unexpected backup files.
+
+Unsupported arguments, including --dry-run, --unknown or a
+second token after --help, now fail before any file or
+SQLite operation. For read-only operator validation, use
+python3 scripts/em50-predeploy-snapshot.py --dry-run instead.
+A synthetic RED/GREEN test requires zero output changes for
+mistaken invocations.
