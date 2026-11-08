@@ -23,6 +23,12 @@ path is /var/lib/shelly-yasno-reader/yasno.json. This path is **not**
 currently installed. With the default on an unprepared live system,
 the reader-cache check is expected to FAIL.
 
+A mandatory predeploy_backup_parity check now requires the newest
+existing backup to be no more than 30 minutes old and match critical
+live measurements, incident and status-message metadata. A SHA256-valid
+nightly backup that lags production is not predeployment-ready. See
+docs/EM50_INTEGRATED_BACKUP_PARITY_RELEASE_QA.md.
+
 The tool makes only bounded GET requests to localhost /health and
 /ready; redirects, non-loopback hosts and credentials in URLs are
 forbidden. It checks production SQLite using SQLite URI mode=ro,

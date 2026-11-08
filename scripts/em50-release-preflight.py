@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import sqlite3
@@ -14,6 +15,7 @@ import urllib.request
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -190,6 +192,34 @@ def acceptance_status(path: str | None, now: float) -> str:
     return "PASS"
 
 
+def predeploy_backup_status(
+    database: str, backup_dir: str, now: float
+) -> dict[str, str]:
+    """Apply strict backup parity without changing the running database."""
+
+    source = ROOT / "scripts/em50-predeploy-backup-guard.py"
+    spec = importlib.util.spec_from_file_location("em50_backup_parity", source)
+    if spec is None or spec.loader is None:
+        return {"status": "FAIL", "detail": "backup_guard_unavailable"}
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+        result = module.inspect(
+            SimpleNamespace(
+                db=database, backup_dir=backup_dir, max_age_minutes=30
+            ),
+            now,
+        )
+    except (OSError, ValueError, TypeError, sqlite3.DatabaseError):
+        return {"status": "FAIL", "detail": "backup_guard_error"}
+    if result["status"] == "PASS":
+        return {"status": "PASS", "detail": "fresh_backup_parity=true"}
+    return {
+        "status": "FAIL",
+        "detail": ",".join(result["reason_codes"]),
+    }
+
+
 def check(action) -> dict[str, str]:
     """Run one isolated check with a clear non-secret status."""
 
@@ -224,6 +254,9 @@ def inspect(args: argparse.Namespace) -> dict:
             lambda: backup_check(
                 Path(args.backup_dir), now, args.max_age_hours
             ),
+        ),
+        "predeploy_backup_parity": predeploy_backup_status(
+            args.db, args.backup_dir, now
         ),
         "recipient_cache": check(
             lambda: reader_cache_check(

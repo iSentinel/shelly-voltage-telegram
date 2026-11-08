@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from test_em50_predeploy_backup_guard import make_db, snapshot
 from test_yasno_handoff import fixture
 
 from yasno_handoff import handoff
@@ -186,6 +187,63 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "mode"):
                 GATE.reader_cache_check(target, "10.1", gid)
 
+    def test_integrated_guard_reports_stale_backup_without_secrets(self):
+        """A valid nightly backup must not pass as a current rollback point."""
+
+        with patch.object(
+            GATE.importlib.util, "spec_from_file_location"
+        ) as spec_for:
+            spec_for.return_value = None
+            result = GATE.predeploy_backup_status(
+                "/nonexistent/live.sqlite3",
+                "/nonexistent/backups",
+                time.time(),
+            )
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["detail"], "backup_guard_unavailable")
+
+    def test_release_preflight_includes_backup_parity_as_automatic_gate(self):
+        """Predeploy parity failure must override five other green checks."""
+
+        parameters = acceptance_arguments("")
+        with (
+            patch.object(GATE, "health_check", return_value="PASS"),
+            patch.object(GATE, "sqlite_check", return_value="PASS"),
+            patch.object(GATE, "backup_check", return_value="PASS"),
+            patch.object(GATE, "reader_cache_check", return_value="PASS"),
+            patch.object(
+                GATE,
+                "predeploy_backup_status",
+                return_value={"status": "FAIL", "detail": "backup_stale"},
+            ),
+        ):
+            report = GATE.inspect(parameters)
+        self.assertFalse(report["automated_pass"])
+        self.assertEqual(
+            report["checks"]["predeploy_backup_parity"]["detail"],
+            "backup_stale",
+        )
+        self.assertFalse(report["release_authorized"])
+
+    def test_complete_history_change_fails_main_release_gate(self):
+        """An older edited sample must fail the integrated preflight."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            live = root / "live.sqlite3"
+            source = root / "source.sqlite3"
+            make_db(live)
+            make_db(source)
+            snapshot(source, root)
+            with contextlib.closing(sqlite3.connect(live)) as db:
+                db.execute("UPDATE measurements SET voltage=243 WHERE id=1")
+                db.commit()
+            result = GATE.predeploy_backup_status(
+                str(live), str(root), time.time()
+            )
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("measurements_not_equal", result["detail"])
+
     def test_candidate_must_remain_unpublished(self):
         """Do not confuse stable releases and unapproved source candidates."""
 
@@ -212,6 +270,11 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             patch.object(GATE, "health_check", return_value="PASS"),
             patch.object(GATE, "sqlite_check", return_value="PASS"),
             patch.object(GATE, "backup_check", return_value="PASS"),
+            patch.object(
+                GATE,
+                "predeploy_backup_status",
+                return_value={"status": "PASS", "detail": "parity"},
+            ),
             patch.object(GATE, "reader_cache_check", return_value="PASS"),
         ):
             report = GATE.inspect(args)
@@ -244,6 +307,11 @@ class Em50ReleasePreflightTests(unittest.TestCase):
                 patch.object(GATE, "health_check", return_value="PASS"),
                 patch.object(GATE, "sqlite_check", return_value="PASS"),
                 patch.object(GATE, "backup_check", return_value="PASS"),
+                patch.object(
+                    GATE,
+                    "predeploy_backup_status",
+                    return_value={"status": "PASS", "detail": "parity"},
+                ),
                 patch.object(GATE, "reader_cache_check", return_value="PASS"),
             ):
                 report = GATE.inspect(arguments)
