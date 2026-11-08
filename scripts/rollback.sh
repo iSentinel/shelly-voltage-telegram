@@ -90,7 +90,14 @@ unique_snapshot_backup() {
 }
 
 validate_snapshot() {
-    [[ -f "$SNAPSHOT/source.tar.gz" ]] || { echo "ERROR: source archive missing." >&2; exit 3; }
+    [[ -d "$SNAPSHOT" && ! -L "$SNAPSHOT" ]] || {
+        echo "ERROR: snapshot directory is missing or linked." >&2
+        exit 3
+    }
+    [[ -f "$SNAPSHOT/source.tar.gz" && ! -L "$SNAPSHOT/source.tar.gz" ]] || {
+        echo "ERROR: source archive must be a regular nonlinked file." >&2
+        exit 3
+    }
     local backup
     backup="$(unique_snapshot_backup)"
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
