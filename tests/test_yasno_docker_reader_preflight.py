@@ -37,6 +37,8 @@ def inspection(enabled: str = "0") -> dict:
             "ReadonlyRootfs": True,
             "Privileged": False,
             "CapDrop": ["ALL"],
+            "CapAdd": [],
+            "SecurityOpt": ["no-new-privileges:true"],
         },
         "Mounts": [
             {
@@ -127,6 +129,20 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
             ("writable_root", "HostConfig", "ReadonlyRootfs", False),
             ("privileged", "HostConfig", "Privileged", True),
             ("missing_cap_drop", "HostConfig", "CapDrop", []),
+            ("added_capability", "HostConfig", "CapAdd", ["SYS_ADMIN"]),
+            ("missing_nnp", "HostConfig", "SecurityOpt", []),
+            (
+                "unconfined_seccomp",
+                "HostConfig",
+                "SecurityOpt",
+                ["no-new-privileges:true", "seccomp=unconfined"],
+            ),
+            (
+                "unconfined_apparmor",
+                "HostConfig",
+                "SecurityOpt",
+                ["no-new-privileges:true", "apparmor=unconfined"],
+            ),
         ]
         for label, parent, key, value in variants:
             document = inspection()
