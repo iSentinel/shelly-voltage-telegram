@@ -90,6 +90,101 @@ class AccountGuardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "single regular"):
                 QA.file(path, os.geteuid(), os.getegid(), 0o600)
 
+    def test_bootstrap_checks_directories_without_initial_files(self):
+        """Clean installation can pass before the first YASNO refresh."""
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(QA, "service_account", return_value=(10002, 10002)),
+            patch.object(QA, "directory") as directories,
+            patch.object(QA, "file") as files,
+        ):
+            result = QA.verify(
+                "shelly-yasno",
+                Path(tmp) / "producer",
+                Path(tmp) / "reader",
+                10001,
+                "bootstrap",
+            )
+        self.assertIn("phase=bootstrap", result)
+        self.assertIn("cache_files_optional=true", result)
+        self.assertNotIn("cache_modes_ok=true", result)
+        self.assertEqual(directories.call_count, 2)
+        files.assert_not_called()
+
+    def test_live_phase_requires_both_cache_files(self):
+        """No missing initial cache may pass as live readiness."""
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(QA, "service_account", return_value=(10002, 10002)),
+            patch.object(QA, "directory"),
+            self.assertRaisesRegex(ValueError, "not been provisioned"),
+        ):
+            QA.verify(
+                "shelly-yasno",
+                Path(tmp) / "producer",
+                Path(tmp) / "reader",
+                10001,
+                "live",
+            )
+
+    def test_bootstrap_rejects_present_but_insecure_file(self):
+        """Bootstrap must never ignore an existing unsafe cache file."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            producer = Path(tmp) / "producer"
+            producer.mkdir()
+            reader = Path(tmp) / "reader"
+            reader.mkdir()
+            cached = producer / "yasno.json"
+            cached.write_text("synthetic", encoding="utf-8")
+            cached.chmod(0o666)
+            with (
+                patch.object(
+                    QA,
+                    "service_account",
+                    return_value=(os.geteuid(), os.getegid()),
+                ),
+                patch.object(QA, "directory"),
+                self.assertRaisesRegex(ValueError, "mode"),
+            ):
+                QA.verify("shelly-yasno", producer, reader, 10001, "bootstrap")
+
+    def test_bootstrap_rejects_dangling_symlinks(self):
+        """Missing target of a symlink cannot count as missing cache."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            producer = Path(tmp) / "producer"
+            producer.mkdir()
+            reader = Path(tmp) / "reader"
+            reader.mkdir()
+            (producer / "yasno.json").symlink_to("/nonexistent/yasno")
+            with (
+                patch.object(
+                    QA, "service_account", return_value=(10002, 10002)
+                ),
+                patch.object(QA, "directory"),
+                self.assertRaisesRegex(ValueError, "not been provisioned"),
+            ):
+                QA.verify("shelly-yasno", producer, reader, 10001, "bootstrap")
+
+    def test_unknown_phase_rejected_before_account_lookup(self):
+        """Typos must not weaken the cache verification policy."""
+
+        with (
+            patch.object(QA, "service_account") as account,
+            self.assertRaisesRegex(ValueError, "phase"),
+        ):
+            QA.verify(
+                "shelly-yasno",
+                Path("/producer"),
+                Path("/reader"),
+                10001,
+                "skip",
+            )
+        account.assert_not_called()
+
     def test_missing_cache_file_is_not_a_green_release_gate(self):
         """A provisioned directory without data is insufficient."""
 
@@ -148,6 +243,7 @@ class AccountGuardTests(unittest.TestCase):
             producer="/var/lib/shelly-yasno",
             recipient="/var/lib/shelly-yasno-reader",
             reader_gid=10001,
+            phase="live",
         )
         with (
             patch.object(

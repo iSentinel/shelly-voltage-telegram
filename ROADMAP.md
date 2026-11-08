@@ -1,3 +1,26 @@
+## 2026-11-08 QA: two-phase systemd first-install readiness
+
+- Real Gateway temp /run/systemd/system QA: successful producer
+  OnSuccess launched the protected exporter, failed producer
+  did NOT launch its exporter. Nonroot UID10001 read-only
+  Docker consumed the resulting synthetic YASNO cache.
+  All temporary unit files were removed after test.
+- Fixed a clean-install deadlock: systemd-account-preflight
+  previously required both cache files to exist BEFORE first
+  scheduled refresh. Explicit --phase bootstrap checks
+  account and secure directories, allowing absent files
+  but rejecting any unsafe existing file; --phase live
+  requires both cache files 0600/0640, default remains live.
+- Real isolated Gateway commissioning: bootstrap PASS with
+  empty protected dirs; live FAIL before first refresh;
+  synthetic source+handoff PASS; live PASS afterward.
+- Current production still lacks shelly-yasno account and
+  no unit was installed/enabled. Production 0.5.13-hw
+  unchanged. Private Telegram client acceptance remains.
+- Full local 1146/1146 Python tests PASS with warning checks,
+  Ruff/quality and source-release privacy/reproducibility PASS.
+  Draft only, no release or message sends.
+
 ## 2026-11-08 QA: systemd account preflight blocks uninstalled user
 
 - Actual Gateway transient unit using raw User=10002 failed at
