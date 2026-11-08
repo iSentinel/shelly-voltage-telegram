@@ -160,3 +160,20 @@ fixture demonstrates the previous acceptance of two SHA256-valid
 SQLite backups; its GREEN counterpart requires failure before
 Docker/source/SQLite changes. All five existing local upgrade
 snapshots contain exactly one matching archive.
+
+
+## Refuse source TAR symlinks outside the selected snapshot
+
+A source.tar.gz link pointing to an external archive previously
+passed the SHA256 manifest gate when the manifest was generated
+for the linked path. That could make a rollback read application
+code from outside the inspected snapshot directory.
+
+Preflight now requires the selected snapshot directory and
+source.tar.gz to be non-symlinked, with the TAR a regular file.
+The SQLite archive selector already excludes symlinks and
+the SHA256 manifest validator rejects linked checksum files.
+A synthetic RED fixture with a valid external TAR symlink
+was accepted before the fix; GREEN must reject it before
+service changes. The five real upgrade snapshots use
+regular nonlinked source TAR files.
