@@ -242,6 +242,28 @@ test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
 test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
 echo "ROLLBACK_MULTIPLE_SQLITE_BACKUPS=REJECTED"
 
+# A source.tar.gz symlink can point outside the approved snapshot tree.
+linked="$TMP/linked-source-archive"
+mkdir -p "$linked"
+cp "$SNAP/source.tar.gz" "$TMP/external-source.tar.gz"
+ln -s "$TMP/external-source.tar.gz" "$linked/source.tar.gz"
+sha256sum "$linked/source.tar.gz" > "$linked/source.tar.gz.sha256"
+cp "$SNAP/voltage-old.sqlite3.gz" "$linked/voltage-old.sqlite3.gz"
+sha256sum "$linked/voltage-old.sqlite3.gz" \
+    > "$linked/voltage-old.sqlite3.gz.sha256"
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$linked" \
+        --dry-run --no-start > "$TMP/linked-source.log" 2>&1; then
+    echo "ERROR: linked external source TAR was accepted" >&2
+    exit 1
+fi
+grep -q "ERROR: source archive must be a regular nonlinked file" \
+    "$TMP/linked-source.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+echo "ROLLBACK_LINKED_SOURCE_ARCHIVE=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
