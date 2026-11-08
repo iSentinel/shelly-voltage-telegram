@@ -37,6 +37,17 @@ def read_archive(path: Path, directory: Path) -> str:
         return str(db.execute("SELECT label FROM readings").fetchone()[0])
 
 
+def fixed_clock(root: Path) -> Path:
+    """Create a fake date binary pinned to one second."""
+
+    folder = root / "bin"
+    folder.mkdir()
+    clock = folder / "date"
+    clock.write_text("#!/bin/sh\necho 20261109-002700\n")
+    clock.chmod(0o700)
+    return folder
+
+
 class BackupUniquenessTests(unittest.TestCase):
     """No two snapshots may replace each other within one clock second."""
 
@@ -48,11 +59,7 @@ class BackupUniquenessTests(unittest.TestCase):
             destination = root / "backups"
             destination.mkdir(mode=0o700)
             database = root / "measurements.sqlite3"
-            fixture_bin = root / "bin"
-            fixture_bin.mkdir()
-            clock = fixture_bin / "date"
-            clock.write_text("#!/bin/sh\necho 20261109-002700\n")
-            clock.chmod(0o700)
+            fixture_bin = fixed_clock(root)
             env = os.environ | {
                 "DATABASE_PATH": str(database),
                 "BACKUP_DIR": str(destination),
@@ -78,6 +85,46 @@ class BackupUniquenessTests(unittest.TestCase):
                 sidecar = Path(f"{archive}.sha256")
                 self.assertEqual(stat.S_IMODE(sidecar.stat().st_mode), 0o600)
             self.assertEqual(list(destination.glob(".voltage-*")), [])
+
+    def test_parallel_backups_never_share_public_names(self) -> None:
+        """Concurrent snapshots with one timestamp keep distinct archives."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            db = root / "source.sqlite3"
+            make_db(db, "shared")
+            output = root / "backups"
+            clock_dir = fixed_clock(root)
+            env = os.environ | {
+                "DATABASE_PATH": str(db),
+                "BACKUP_DIR": str(output),
+                "BACKUP_KEEP": "14",
+                "PATH": f"{clock_dir}:{os.environ['PATH']}",
+            }
+            with (
+                subprocess.Popen(
+                    ["bash", str(SCRIPT)],
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                ) as first,
+                subprocess.Popen(
+                    ["bash", str(SCRIPT)],
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                ) as second,
+            ):
+                a, err_a = first.communicate(timeout=30)
+                b, err_b = second.communicate(timeout=30)
+                self.assertEqual(first.returncode, 0, (a, err_a))
+                self.assertEqual(second.returncode, 0, (b, err_b))
+            archives = list(output.glob("voltage-*.sqlite3.gz"))
+            self.assertEqual(len(archives), 2)
+            self.assertEqual(
+                [read_archive(p, root) for p in archives], ["shared", "shared"]
+            )
+            self.assertEqual(list(output.glob(".voltage-*")), [])
 
     def test_rescue_retains_newest_with_keep_one(self) -> None:
         """Rollback's BACKUP_KEEP=1 retains only the latest valid history."""
