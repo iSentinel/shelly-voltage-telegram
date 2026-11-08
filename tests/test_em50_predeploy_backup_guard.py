@@ -138,6 +138,37 @@ class PredeployBackupGuardTests(unittest.TestCase):
         self.assertEqual(report["record_gap"], 0)
         self.assertIn("measurements_not_equal", report["reason_codes"])
 
+    def test_changed_older_reading_blocks_same_count_same_last(self):
+        """Full history hash must detect changes hidden before last sample."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE measurements SET voltage=232 WHERE id=1")
+            db.commit()
+        result = GATE.inspect(self.args, self.now)
+        self.assertEqual(result["record_gap"], 0)
+        self.assertTrue(result["latest_measurement_matches"])
+        self.assertFalse(result["all_measurements_match"])
+        self.assertIn("measurements_not_equal", result["reason_codes"])
+
+    def test_changed_older_outage_blocks_same_latest_event(self):
+        """A modified historical outage cannot be hidden by a newer event."""
+
+        for file in (self.db, self.backup_source):
+            with contextlib.closing(sqlite3.connect(file)) as db:
+                db.execute(
+                    "INSERT INTO outages VALUES (0,?,?,?)",
+                    (0.1, 0.2, "L1"),
+                )
+                db.commit()
+        snapshot(self.backup_source, self.backups)
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=0.3 WHERE id=0")
+            db.commit()
+        result = GATE.inspect(self.args, self.now)
+        self.assertTrue(result["outage_state_matches"])
+        self.assertFalse(result["all_outages_match"])
+        self.assertIn("outage_state_not_equal", result["reason_codes"])
+
     def test_outage_closure_after_backup_fails(self):
         """Recovered incident records must exist in the new backup."""
 
