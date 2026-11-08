@@ -101,6 +101,11 @@ def read_state(db_path: Path, grace: int) -> dict:
             raise ValueError("no recorded Shelly connectivity incident")
         ident, start, ended, phase = outage
         counts = sample_counts(db, phase, start, ended, grace)
+        latest_phase = db.execute(
+            "SELECT ts,voltage,frequency FROM measurements "
+            "WHERE phase=? ORDER BY ts DESC LIMIT 1",
+            (phase,),
+        ).fetchone()
         active = db.execute(
             "SELECT COUNT(*) FROM outages WHERE ended_at IS NULL"
         ).fetchone()[0]
@@ -114,10 +119,29 @@ def read_state(db_path: Path, grace: int) -> dict:
         "start": start,
         "end": ended,
         "phase": phase,
+        "latest_phase_sample": latest_phase,
         **counts,
         "active": active,
         "status_saved": bool(status_saved),
     }
+
+
+def require_latest_phase_sample(state: dict, now: float) -> None:
+    """Reject a stale, future or nonphysical latest same-phase reading."""
+
+    latest = state.get("latest_phase_sample")
+    try:
+        stamp, voltage, frequency = (float(value) for value in latest)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("latest same-phase sample unavailable") from exc
+    if (
+        not all(math.isfinite(v) for v in (stamp, voltage, frequency))
+        or not 0 < voltage < 500
+        or not 40 <= frequency <= 70
+        or not float(state["end"]) - 15 <= stamp <= now
+        or now - stamp > 45
+    ):
+        raise ValueError("latest same-phase sample invalid or stale")
 
 
 def check_recovery(
@@ -153,6 +177,7 @@ def check_recovery(
         or not 0 < voltage < 500
     ):
         raise ValueError("fresh Shelly voltage is not physically valid")
+    require_latest_phase_sample(state, now)
 
 
 def report(state: dict, health: dict, now: float, grace: int) -> dict:
