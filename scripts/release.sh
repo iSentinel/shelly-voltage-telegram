@@ -92,9 +92,15 @@ copy_public_tree() {
         --exclude='./.env*' \
         --exclude='*/.env*' \
         --exclude='./secrets' \
+        --exclude='*/secrets' \
         --exclude='./dist' \
+        --exclude='*/dist' \
+        --exclude='./dist-audit' \
+        --exclude='*/dist-audit' \
         --exclude='./dist-publish' \
+        --exclude='*/dist-publish' \
         --exclude='./validation' \
+        --exclude='*/validation' \
         --exclude='./ROADMAP.md.pre-*' \
         --exclude='./ROADMAP.md' \
         --exclude='*/ROADMAP.md' \
@@ -106,12 +112,16 @@ copy_public_tree() {
         --exclude='*.token' \
         --exclude='*.secret' \
         --exclude='./.git' \
+        --exclude='*/.git' \
         --exclude='./.github-main-sha' \
         --exclude='./__pycache__' \
         --exclude='*/__pycache__' \
         --exclude='./.ruff_cache' \
+        --exclude='*/.ruff_cache' \
         --exclude='./.pytest_cache' \
+        --exclude='*/.pytest_cache' \
         --exclude='./.mypy_cache' \
+        --exclude='*/.mypy_cache' \
         --exclude='*.pyc' \
         --exclude='*.pyo' \
         --exclude='*.sqlite' \
@@ -138,6 +148,16 @@ assert_public_tree() {
     # Manifests hash regular files only; never ship unresolved symlinks.
     if [[ -n "$(find "$destination" -type l -print -quit)" ]]; then
         echo "ERROR: public release cannot contain symbolic links." >&2
+        exit 4
+    fi
+    # Check the staged tree as well as tar excludes, including nested paths.
+    if [[ -n "$(find "$destination" -type d \( \
+        -name secrets -o -name validation -o -name dist -o \
+        -name dist-audit -o -name dist-publish -o -name .work-state -o \
+        -name .git -o -name __pycache__ -o \
+        -name .ruff_cache -o -name .pytest_cache -o \
+        -name .mypy_cache \) -print -quit)" ]]; then
+        echo "ERROR: private/generated directory entered release tree." >&2
         exit 4
     fi
     forbidden="$(
