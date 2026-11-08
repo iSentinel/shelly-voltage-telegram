@@ -90,11 +90,18 @@ def secure_container(document: dict) -> dict[str, str]:
     config = document["Config"]
     host = document["HostConfig"]
     dropped = host.get("CapDrop") or []
+    security = host.get("SecurityOpt") or []
+    unconfined = {"seccomp=unconfined", "apparmor=unconfined"}
     if (
         config.get("User") != EXPECTED_UID
         or host.get("ReadonlyRootfs") is not True
         or host.get("Privileged") is not False
+        or not isinstance(dropped, list)
         or "ALL" not in dropped
+        or bool(host.get("CapAdd"))
+        or not isinstance(security, list)
+        or "no-new-privileges:true" not in security
+        or bool(unconfined.intersection(security))
     ):
         raise ValueError("Docker user or isolation policy invalid")
     return restricted_env(config)
