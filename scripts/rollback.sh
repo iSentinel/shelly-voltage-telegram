@@ -80,8 +80,10 @@ try:
     count = 0
     size = 0
     required = {
-        "VERSION", "app.py", "Dockerfile",
-        "compose.yaml", "requirements.txt", "scripts/backup.sh",
+        "VERSION", "app.py", "Dockerfile", "compose.yaml",
+        "requirements.txt", "scripts/backup.sh",
+        "systemd/shelly-voltage-compose.service",
+        "systemd/shelly-voltage-backup.service",
     }
     present = set()
     with tarfile.open(sys.argv[1], "r:gz") as archive:
