@@ -23,8 +23,15 @@ private Telegram client receipt and version-marker checks. It omits
 the YASNO cache **only from the candidate's diagnostic eligibility**;
 the full release preflight still reports its cache as FAIL.
 An independent read-only posthoc audit must confirm 15 minutes of
-real Shelly phase readings after the closed incident. All manual release
-and rollback authorization remains blocked.
+real Shelly phase readings after the closed incident. A separate
+configured-normal-voltage gate checks the latest complete rolling
+15-minute same-phase window using the existing bounded stability
+verifier (at least 60 samples, maximum gap 30 seconds), and compares
+its minimum and maximum strictly inside the persisted operator
+warning limits. Connection stability can PASS during a brownout:
+such a window must stay BLOCKED. The normal-band threshold/capture
+baseline still requires independent operator review. All manual
+release and rollback authorization remains blocked.
 
 Example read-only command (not a deployment):
 
