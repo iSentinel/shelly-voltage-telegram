@@ -59,16 +59,26 @@ def require_directory(path: Path) -> None:
 
 
 def online_copy(source: Path, destination: Path) -> None:
-    """Use SQLite's consistent online backup from a read-only source."""
+    """Create a mode-0600 backup from a read-only SQLite source."""
 
-    url = "file:" + quote(str(source.resolve())) + "?mode=ro"
-    with (
-        closing(sqlite3.connect(url, uri=True, timeout=5)) as current,
-        closing(sqlite3.connect(destination)) as snapshot,
-    ):
-        current.backup(snapshot, pages=128, sleep=0.03)
-        if snapshot.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-            raise ValueError("online copy failed SQLite integrity")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    descriptor = os.open(destination, flags, 0o600)
+    os.close(descriptor)
+    source_url = "file:" + quote(str(source.resolve())) + "?mode=ro"
+    target_url = "file:" + quote(str(destination.resolve())) + "?mode=rw"
+    try:
+        with (
+            closing(
+                sqlite3.connect(source_url, uri=True, timeout=5)
+            ) as current,
+            closing(sqlite3.connect(target_url, uri=True)) as snapshot,
+        ):
+            current.backup(snapshot, pages=128, sleep=0.03)
+            if snapshot.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                raise ValueError("online copy failed SQLite integrity")
+    except (OSError, ValueError, sqlite3.Error):
+        destination.unlink(missing_ok=True)
+        raise
 
 
 def equivalent(current: dict, saved: dict) -> bool:
@@ -76,6 +86,7 @@ def equivalent(current: dict, saved: dict) -> bool:
 
     return all(
         (
+            current["whole_digest"] == saved["whole_digest"],
             current["measurements_digest"] == saved["measurements_digest"],
             current["outages_digest"] == saved["outages_digest"],
             current["rows"] == saved["rows"],

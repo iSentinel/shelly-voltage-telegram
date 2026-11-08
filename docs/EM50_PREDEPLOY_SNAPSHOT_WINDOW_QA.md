@@ -35,8 +35,9 @@ versioned files:
 - matching .sha256 with an exact absolute archive path
 
 Both files are created with mode 0600 in an existing 0700 directory.
-The intermediate SQLite snapshot is temporary and deleted upon
-completion or failure. The complete measurements history, full outage
+The intermediate SQLite snapshot is created with exclusive mode 0600
+before SQLite opens it in existing-file (mode=rw) mode. It is
+temporary and deleted upon completion or failure. The complete measurements history, full outage
 history, latest measurement and current Telegram status message
 metadata are read from the snapshot and from the live database.
 A difference either immediately after copy or after compression
@@ -69,3 +70,19 @@ approval and a separate recovery plan remain mandatory.
 
 The snapshot test creates only synthetic disposable SQLite files,
 never a copy of the real user's database.
+
+
+## Whole SQLite state in the snapshot capture window
+
+The predeployment backup parity checker hashes the complete logical
+SQLite schema and rows. The capture-window equivalent() guard must
+use this fingerprint as well, not only measurement/outage/status
+fields. Otherwise a nonstatus setting, aggregate or schema mutation
+after the online copy or after compression could be silently
+accepted as equivalent, even when the backup is already stale.
+
+The capture-window checks now compare whole_digest before and
+after gzip. Synthetic regression fixtures change only one
+unrelated metadata key after each stage and require rejection
+without leaving a published archive. A successful QA snapshot
+is not a signed predeployment rollback or release authorization.
