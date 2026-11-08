@@ -29,6 +29,7 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
 .timeline .on{background:#24a967}
 .timeline .off{background:#e35b4f}
 .timeline .maybe{background:#d8a133}
+.timeline[hidden],.axis[hidden],.legend[hidden]{display:none}
 .axis{font-size:10px;color:var(--tg-theme-hint-color,#aeb8c5)}
 .legend{font-size:10px;color:var(--tg-theme-hint-color,#aeb8c5);margin-top:11px}
 .key{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:3px}
@@ -43,7 +44,7 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
  <div class="hero"><div class="label"><span id="voltageLabel">Напруга</span> · L1</div><div class="value"><span id="voltage">—</span> <span id="unit" class="unit">В</span></div><div id="notice" class="sub">Очікування свіжого вимірювання</div></div>
  <div class="metrics"><div class="tile"><span class="hint" id="frequencyLabel">Частота</span><strong id="frequency">—</strong></div><div class="tile"><span id="ageLabel" class="hint">Останній запит</span><strong id="age">—</strong></div></div>
  <div id="extraPhases" class="metrics secondary" hidden><div class="tile"><span class="hint">L2</span><strong id="phaseL2">—</strong></div><div class="tile"><span class="hint">L3</span><strong id="phaseL3">—</strong></div></div>
- <div class="section"><div class="line"><span id="forecastLabel" class="label">Прогноз відключень</span><span id="group" class="hint">—</span></div><div id="timeline" class="timeline"></div><div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div class="legend"><span><i class="key onkey"></i><span id="hasLight">Світло за планом</span></span><span><i class="key offkey"></i><span id="noLight">Відключення</span></span><span><i class="key maybekey"></i><span id="maybeLight">Можливо</span></span></div></div>
+ <div class="section"><div class="line"><span id="forecastLabel" class="label">Прогноз відключень</span><span id="group" class="hint" hidden>—</span></div><div id="timeline" class="timeline" hidden></div><div id="axis" class="axis" hidden><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div><div id="legend" class="legend" hidden><span><i class="key onkey"></i><span id="hasLight">Світло за планом</span></span><span><i class="key offkey"></i><span id="noLight">Відключення</span></span><span><i class="key maybekey"></i><span id="maybeLight">Можливо</span></span></div></div>
  <div class="footer"><span id="source">Графік недоступний</span><div id="disclaimer">Прогноз не підтверджує наявність електрики. Факт — лише свіжі дані Shelly.</div></div>
 </div>
 <script>
@@ -112,11 +113,18 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
         $("phase"+phase).textContent=valid?item.v.toFixed(1)+" "+T[20]:"—";
       }
     }
-    $("group").textContent=data&&typeof data.g==="string"?T[11]+data.g:"—";
     $("hasLight").textContent=T[12];$("noLight").textContent=T[13];
     $("maybeLight").textContent=T[14];$("disclaimer").textContent=T[18];
     const bars=validBars(data,now);
     drawBars(bars);
+    const scheduleVisible=Boolean(bars);
+    $("timeline").hidden=!scheduleVisible;
+    $("axis").hidden=!scheduleVisible;
+    $("legend").hidden=!scheduleVisible;
+    const hasGroup=scheduleVisible&&typeof data.g==="string"&&
+      /^\d{1,2}\.\d$/.test(data.g);
+    $("group").hidden=!hasGroup;
+    $("group").textContent=hasGroup?T[11]+data.g:"—";
     $("source").textContent=bars?T[16]:data&&data.b?T[17]:T[15];
   }
   if(w&&typeof w.onEvent==="function"){

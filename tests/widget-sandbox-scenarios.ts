@@ -31,6 +31,12 @@ interface Visible {
   l3: string;
   hidden: boolean;
   label: string;
+  axisHidden: boolean;
+  legendHidden: boolean;
+  timelineHidden: boolean;
+  groupHidden: boolean;
+  source: string;
+  timelineCells: number;
 }
 
 function decodeProbe(raw: string | undefined): Visible {
@@ -49,7 +55,7 @@ async function verify(
   const result = await runWidget(html, {
     data: { publicData: JSON.stringify(data) },
     probes: [
-      "JSON.stringify({voltage:document.getElementById('voltage').textContent,l2:document.getElementById('phaseL2').textContent,l3:document.getElementById('phaseL3').textContent,hidden:document.getElementById('extraPhases').hidden,label:document.getElementById('voltageLabel').textContent})",
+      "JSON.stringify({voltage:document.getElementById('voltage').textContent,l2:document.getElementById('phaseL2').textContent,l3:document.getElementById('phaseL3').textContent,hidden:document.getElementById('extraPhases').hidden,label:document.getElementById('voltageLabel').textContent,axisHidden:document.getElementById('axis').hidden,legendHidden:document.getElementById('legend').hidden,timelineHidden:document.getElementById('timeline').hidden,groupHidden:document.getElementById('group').hidden,source:document.getElementById('source').textContent,timelineCells:document.getElementById('timeline').children.length})",
     ],
     timerRounds: 0,
   });
@@ -67,6 +73,8 @@ async function verify(
 
 await verify('single-phase', state(false), {
   voltage: '224.4', hidden: true, label: 'Voltage',
+  axisHidden: true, legendHidden: true, timelineHidden: true,
+  groupHidden: true, timelineCells: 0,
 });
 await verify('mixed-secondary', state(true), {
   voltage: '224.4', l2: '223.3 V', l3: '—', hidden: false,
@@ -87,4 +95,21 @@ await verify('offline-primary', state(true, {
 }), {
   voltage: '—', l2: '222.1 V', l3: '—', hidden: false,
 });
-console.log('PASS Telegram QuickJS three-phase DOM scenarios');
+const now = Math.floor(Date.now() / 1000);
+await verify('current-community-forecast', state(false, {
+  g: '10.1', src: 'community', b: 'OX?O'.repeat(12),
+  d: '2026-11-08', u: now - 30, e: now + 3600,
+}), {
+  axisHidden: false, legendHidden: false,
+  timelineHidden: false, groupHidden: false, timelineCells: 48,
+  source: 'Unofficial forecast · outage-data-ua',
+});
+await verify('expired-community-forecast', state(false, {
+  g: '10.1', src: 'community', b: 'XO'.repeat(24),
+  d: '2026-11-08', u: now - 8000, e: now + 3600,
+}), {
+  axisHidden: true, legendHidden: true,
+  timelineHidden: true, groupHidden: true, timelineCells: 0,
+  source: 'Schedule expired',
+});
+console.log('PASS Telegram QuickJS three-phase and schedule DOM scenarios');

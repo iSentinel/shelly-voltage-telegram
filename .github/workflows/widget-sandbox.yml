@@ -15,7 +15,7 @@ permissions:
 jobs:
   widget-quickjs:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -74,3 +74,11 @@ jobs:
         run: |
           cp "${GITHUB_WORKSPACE}/tests/widget-sandbox-scenarios.ts" packages/core/scripts/shelly-widget-acceptance.ts
           SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-acceptance.ts
+      - name: Install headless browser for official renderer layout
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Check narrow and wide Telegram bubble layouts
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-layout-scenarios.ts" packages/core/scripts/shelly-widget-layout.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-layout.ts
