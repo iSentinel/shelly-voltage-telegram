@@ -1,3 +1,27 @@
+## 2026-11-08 QA: private Telegram receipt reconciled in release gate
+
+- The operator has already confirmed seeing the exact
+  private admin QA message AFTER its edit. Protected
+  root-owned 0600 local JSON evidence exists only on
+  the server, with no Telegram user or chat IDs in PR.
+- Candidate scripts/em50-release-preflight.py now accepts
+  OPTIONAL --acceptance-evidence. It requires a direct
+  owner-matched 0600 nonlinked file, completed send/edit
+  and recipient-visible PASS, private-chat delivery,
+  no public/pinned changes and timezone-aware timestamp
+  at most 30 days old. Invalid/unprovided evidence
+  keeps the manual recipient gate PENDING.
+- Valid Gateway evidence marked only the private send/edit
+  requirement manual_completed; the systemd commissioning
+  and explicit signed release/rollback gates remain PENDING.
+  release_authorized remains ALWAYS false.
+- During the real Shelly power cut the live_health automatic
+  test fails and the preflight still exits 1. Production
+  0.5.13-hw, SQLite, Docker, Telegram, Shelly and systemd
+  configuration are unchanged by this source-only QA.
+- Full 1172/1172 Python tests PASS, Ruff/quality and source
+  archive reproducibility/privacy PASS, Draft only.
+
 ## 2026-11-08 QA: fail-closed Docker YASNO reader mount
 
 - Shelly runtime 0.5.13-hw remains offline during a real
