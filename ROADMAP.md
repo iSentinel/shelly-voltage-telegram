@@ -1,3 +1,26 @@
+## 2026-11-08 QA: private Telegram send/edit acceptance guarded
+
+- New QA-only scripts/telegram-private-acceptance.py provides
+  --dry-run with zero network/writes, --check with getMe and
+  getChat only, and opt-in --execute requiring explicit
+  confirmation for ONE silent synthetic message followed by
+  editing only its returned ID.
+- Requires positive matching recipient/admin numeric IDs,
+  membership in configured TELEGRAM_ADMIN_USER_IDS, and
+  Telegram getChat type=private with exact ID. Group,
+  channel and unapproved recipients fail closed.
+  Protected token file 0600, bounded nonredirecting API,
+  no delete/pin methods. Never output sensitive identifiers.
+- Gateway live --check through running Docker verified exact
+  private admin destination (getMe/getChat), writes=0.
+  No Telegram messages were sent or edited.
+- 12 new tests, full 1132/1132 local Python tests PASS with
+  -W default, no ResourceWarning, Ruff/quality PASS,
+  source archive reproducibility and private env exclusion PASS.
+- Future real private client send/edit and human-visible
+  acceptance remain PENDING and require explicit approval.
+  No production rollout or 0.5.14-hw release authorized.
+
 ## 2026-11-08 QA: read-only EM-50 release preflight gate
 
 - New scripts/em50-release-preflight.py checks candidate marker,
