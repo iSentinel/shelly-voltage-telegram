@@ -45,3 +45,13 @@ stale-secondary suppression and L1-offline isolation.
 The matching workflow is `.github/workflows/widget-sandbox.yml`.
 This verifies sandbox DOM behavior only; real Telegram iOS/Android
 clients and recipient-visible delivery are still release blockers.
+
+## Responsive Telegram bubble layout acceptance
+
+`tests/widget-layout-scenarios.ts` runs the upstream official widget
+renderer core through Playwright in an isolated GitHub Action.
+It measures live layout height at 200/320/430/600 CSS px, light
+and dark themes, ordinary and larger text, and one/three phase
+states. The rendered bubble must fit Telegram's 600px maximum.
+A failure is a QA defect and blocks release; it is **not**
+evidence of native client acceptance on the user's Android/iOS.
