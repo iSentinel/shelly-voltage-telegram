@@ -125,6 +125,24 @@ class ReleaseScopeTests(unittest.TestCase):
         finally:
             AUDIT.MAX_CHANGED_FILES = original
 
+    def test_untracked_candidate_files_fail_released_scope(self):
+        """Uncommitted new files must not disappear from review manifests."""
+
+        self.add_source("app.py", "committed")
+        self.commit()
+        self.add_source("scripts/new_untracked_runtime.py", "untracked")
+        with self.assertRaisesRegex(ValueError, "uncommitted"):
+            AUDIT.audit(self.repo, "main", "candidate")
+
+    def test_modified_tracked_files_fail_released_scope(self):
+        """Changes after commit must not be omitted from review evidence."""
+
+        self.add_source("app.py", "committed")
+        self.commit()
+        self.add_source("app.py", "modified afterwards")
+        with self.assertRaisesRegex(ValueError, "uncommitted"):
+            AUDIT.audit(self.repo, "main", "candidate")
+
     def test_cli_exit_codes_never_approve_release(self):
         """Normal scope report is readable; enforced review is blocked."""
 

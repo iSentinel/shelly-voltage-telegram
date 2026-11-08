@@ -24,3 +24,18 @@ release-approval override or bypass physical acceptance.
 
 No Git push, PR merge, Docker update, systemd activation, Telegram send,
 Shelly operation, or production SQLite access is performed by this tool.
+
+## Clean-tree prerequisite
+
+A review of committed changes alone is incomplete if the QA tree has
+local edits or new untracked source files. The audit now checks the
+complete Git working tree before collecting a release manifest,
+including staged, unstaged and untracked files. Any such change
+returns exit code 1 without disclosing private filenames; the
+candidate must first be committed to a reviewable branch.
+
+A deliberately uncommitted multi-PR integration worktree can still
+run Python tests and quality checks, but **must not** be presented
+as having a complete source-scope manifest. Use a clean, reviewed
+candidate Git commit for authoritative release-scope evidence.
+Neither the normal audit nor --enforce approves a release.
