@@ -68,3 +68,24 @@ rollback permission. No release is authorized by this check alone.
     PYTHONPATH=.:tests python3 -W default -m unittest discover -s tests -q
     scripts/quality.sh
     bash tests/test_release.sh
+
+## Mount-shadowing defense
+
+An exact approved read-only mount on /run/yasno does **not** prove
+isolation if a second bind mount targets /run, /run/yasno/yasno.json,
+a nested directory, or the filesystem root. Such mounts can hide the
+protected reader cache or make an alternate file visible to Telegram.
+
+The stage gate now checks every Docker mount destination with path
+segment boundaries. Parent/child overlap, ambiguous alternate spellings,
+parent traversal, malformed destination entries and duplicate approved
+binds fail closed. Unrelated mounts outside the reader subtree are
+still allowed. This gate reads Docker inspect metadata only and does
+not recreate, stop or restart any production container.
+
+Run the synthetic fixture regression without the production Docker:
+
+    PYTHONPATH=.:tests python3 -W default -m unittest tests/test_yasno_docker_reader_preflight.py -q
+
+Operator approval of the protected producer account, handoff cache
+and a staged container recreation remains a separate release blocker.
