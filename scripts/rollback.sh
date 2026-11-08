@@ -144,14 +144,15 @@ assert_writer_stopped() {
 
 stop_service() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: stop Compose service"; return; }
+    # A missing Compose file is not proof that the Docker SQLite writer stopped.
+    WRITER_REQUIRED=true
     if [[ -f "$TARGET/compose.yaml" ]]; then
-        WRITER_REQUIRED=true
         if ! docker compose -f "$TARGET/compose.yaml" stop; then
             echo "ERROR: Docker Compose failed to stop the writer." >&2
             exit 5
         fi
-        assert_writer_stopped
     fi
+    assert_writer_stopped
 }
 
 restore_source() {

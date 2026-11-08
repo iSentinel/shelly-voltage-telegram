@@ -45,3 +45,20 @@ inspect the output file descriptor before gzip writes. Another
 fixture simulates a partial gzip write followed by an error and
 checks both deletion and preservation of the prior database.
 No live rollback or database replacement is authorized by QA.
+
+
+## Missing Compose file must not disable writer inspection
+
+The rollback previously enabled its Docker writer check only if
+the source tree still contained compose.yaml. When that file was
+missing but shelly-voltage-bot remained running, rollback could
+skip stopping and checking the writer and proceed to overwrite
+SQLite. Synthetic RED fixtures reproduced this problem.
+
+The fixed stop gate always requires a verified stopped Docker
+writer before touching source files or the database. If the
+Compose file exists, stop it first. If it is missing, require
+the existing container to already report stopped; missing Docker
+inspection or an unknown state is a blocker, not authorization.
+The same stopped-state check remains active through database
+replacement. No real Docker lifecycle action is done in QA.
