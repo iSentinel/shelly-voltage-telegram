@@ -132,6 +132,11 @@ write_file_manifest() {
 assert_public_tree() {
     local destination="$1"
     local forbidden
+    # Manifests hash regular files only; never ship unresolved symlinks.
+    if [[ -n "$(find "$destination" -type l -print -quit)" ]]; then
+        echo "ERROR: public release cannot contain symbolic links." >&2
+        exit 4
+    fi
     forbidden="$(
         cd "$destination"
         find . -type f \( \
