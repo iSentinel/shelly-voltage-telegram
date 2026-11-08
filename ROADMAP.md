@@ -1,3 +1,25 @@
+## 2026-11-08 QA: 3-phase Telegram widget and preview
+
+- New dependent QA branch from PR #206 adds independently stale-safe
+  Pro 3EM L2 and L3 measurements to Telegram widget public_data,
+  fallback caption and admin-only /widget_preview.
+- Pro 3EM always specifies both secondary phases in the payload.
+  Each phase's online/offline/stale state uses a separate timestamp:
+  a stale or missing L2/L3 value is "—", not 0 V or L1 voltage.
+  L1 failure never masks fresh L2/L3 values.
+- Non-three-phase devices such as live Pro EM-50 still render only
+  L1, keeping their existing UI and messages unchanged.
+- No secret/request metadata is serialized. The entire widget HTML
+  is 9256 bytes raw / 3430 of 4096 bytes zlib9. Source remains
+  unofficial for community forecast, separate from real measurements.
+- Local full QA: 1018/1018 PASS, Ruff 0.14.2 and quality gate PASS.
+  No physical Pro3EM/3CT63 hardware or Telegram recipient acceptance;
+  production 0.5.13-hw has not been redeployed.
+- NEXT: independent GitHub Actions CI and QuickJS smoke on this
+  integrated QA branch; later physical multi-meter acceptance,
+  supported Telegram client checks, direct official DTEK provenance
+  and explicit release approval.
+
 ## 2026-11-08 QA: admin-only widget fallback preview and precise timestamps
 
 - Dependent on combined QA source branch PR #205. Added an optional

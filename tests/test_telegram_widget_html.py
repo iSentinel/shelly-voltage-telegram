@@ -64,6 +64,23 @@ class WidgetMarkupTests(unittest.TestCase):
         self.assertIn("setInterval(render,10000)", html)
         self.assertIn('onEvent("activated",render)', html)
 
+    def test_multiphase_tiles_hide_for_single_phase_meters(self):
+        """Only Pro 3EM previews display L2 and L3 in the HTML card."""
+
+        html = HTML.read_text(encoding="utf-8")
+        for marker in (
+            'id="extraPhases"',
+            'id="phaseL2"',
+            'id="phaseL3"',
+            'class="metrics secondary" hidden',
+            "data.p.L2",
+            "data.p.L3",
+            "now-item.t<=60",
+            ".metrics[hidden]{display:none}",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+
     def test_schedule_expires_with_age_and_midnight(self):
         """Stop showing an expired schedule even when the bubble stays open."""
 
