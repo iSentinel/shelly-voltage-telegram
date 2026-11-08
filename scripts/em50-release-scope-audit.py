@@ -113,11 +113,27 @@ def changed_paths(repo: Path, base: str, head: str) -> list[str]:
     return sorted(names)
 
 
+def require_clean_tree(repo: Path) -> None:
+    """Exclude uncommitted and untracked sources from release evidence."""
+
+    changed = run_git(
+        repo,
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+    if changed:
+        raise ValueError("uncommitted source files require a new commit")
+
+
 def audit(repo: Path, base: str, head: str) -> dict:
     """Classify changes and always require human approval."""
 
     if not repo.is_dir():
         raise ValueError("repository directory unavailable")
+    require_clean_tree(repo)
     names = changed_paths(repo, base, head)
     areas = Counter(area_for(path) for path in names)
     critical = [
