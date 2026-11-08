@@ -192,6 +192,23 @@ class PrivateTelegramAcceptanceTests(unittest.TestCase):
             QA.api("token", "deleteMessage", {"chat_id": 1234})
         opener.assert_not_called()
 
+    def test_docs_keep_private_stdin_and_explicit_confirmation(self):
+        """The documented live path must never require token exporting."""
+
+        doc = (ROOT / "docs/EM50_PRIVATE_TELEGRAM_ACCEPTANCE_QA.md").read_text(
+            encoding="utf-8"
+        )
+        for requirement in (
+            "docker exec -i shelly-voltage-bot",
+            "python3 - --check",
+            "python3 - --execute",
+            "PRIVATE_EM50_SEND_EDIT_TEST",
+            "NOT executed",
+        ):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, doc)
+        self.assertNotIn("docker cp", doc)
+
     def test_reports_do_not_print_private_ids(self):
         """Invalid inputs report only safe exception types."""
 

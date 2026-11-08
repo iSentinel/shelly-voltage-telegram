@@ -74,3 +74,38 @@ the existing EM-50-only text-card release.
     PYTHONPATH=.:tests python3 -W default -m unittest tests/test_telegram_private_acceptance.py -v
     PYTHONPATH=.:tests python3 -W default -m unittest discover -s tests -q
     scripts/quality.sh
+
+
+## Safe access through the existing container (no installation)
+
+The production token is mode 0600 and remains inside the existing bot
+container. Do not copy the token to the host or put it on the command
+line. The host QA script can be supplied as stdin, with the private
+admin ID resolved inside the container from its existing allowlist.
+No identifier is printed on successful execution.
+
+Read-only check, already performed on Gateway:
+
+    cd /opt/shelly-voltage-em50-private-telegram-qa-20261108
+    docker exec -i shelly-voltage-bot sh -c '
+      set -eu
+      target="$(printf "%s" "$TELEGRAM_ADMIN_USER_IDS" | cut -d, -f1 | tr -d " ")"
+      [ -n "$target" ]
+      python3 - --check --recipient-id "$target" --admin-id "$target"
+    ' < scripts/telegram-private-acceptance.py
+
+ONLY after the private recipient accepts an actual test send/edit:
+
+    cd /opt/shelly-voltage-em50-private-telegram-qa-20261108
+    docker exec -i shelly-voltage-bot sh -c '
+      set -eu
+      target="$(printf "%s" "$TELEGRAM_ADMIN_USER_IDS" | cut -d, -f1 | tr -d " ")"
+      [ -n "$target" ]
+      python3 - --execute --recipient-id "$target" --admin-id "$target" --confirm PRIVATE_EM50_SEND_EDIT_TEST
+    ' < scripts/telegram-private-acceptance.py
+
+The latter command is deliberately NOT executed by these QA tests.
+It is a Telegram write, not a harmless health check. Confirm in the
+actual private Telegram client that the message content was changed,
+then explicitly record the outcome. Even a successful Bot API edit
+is not a client display receipt.
