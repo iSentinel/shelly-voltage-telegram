@@ -1,3 +1,24 @@
+## 2026-11-08 QA: EM-50 standard Bot API YASNO status card
+
+- Dedicated QA worktree implements optional (default OFF)
+  TELEGRAM_YASNO_STATUS_ENABLED=1 text enhancement.
+  It preserves the existing pinned message ID, sendMessage/
+  editMessageText, buttons, event stats and recovery logic.
+- Only YASNO_TRUSTED_CACHE_FILE with verified private
+  provenance metadata can add a short RU/UK/EN forecast.
+  The formatter does not call the provider or Telegram API.
+  Possible/definite schedules remain separate from measured
+  Shelly power; invalid/stale cache shows an unavailable line.
+- Current Telegram text remains byte-for-byte unchanged
+  without the explicit feature flag. A conservative UTF-16
+  length guard refuses additions over 4096 code units.
+- 12 dedicated tests and 1084/1084 full Python tests PASS,
+  Ruff + quality gate PASS. No live Telegram send or rollout.
+- EM-50-only production release remains gated by recipient
+  client acceptance, protected cache read-only mount/UID,
+  versioned image/rollback review and explicit approval.
+  Pro3EM/3CT63 physical testing is a separate follow-up.
+
 ## 2026-11-08 QA: guarded YASNO cache refresh and systemd examples
 
 - Gateway 03:18 Kyiv: live Shelly Pro EM-50 0.5.13-hw remains
