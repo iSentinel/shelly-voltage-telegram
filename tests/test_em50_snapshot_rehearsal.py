@@ -156,6 +156,54 @@ class SnapshotRehearsalTests(unittest.TestCase):
         with patch.object(QA, "compress_snapshot", side_effect=inspect):
             self.assertEqual(QA.rehearsal(self.source)["status"], "PASS")
 
+    def test_private_archive_and_checksum_from_creation(self):
+        """Archive and checksum must start private, not be chmodded later."""
+
+        created = []
+        original = QA.private_output
+
+        def inspect(path: Path):
+            """Observe permissions before the first write."""
+
+            stream = original(path)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            created.append(path.name)
+            return stream
+
+        with patch.object(QA, "private_output", side_effect=inspect):
+            self.assertEqual(QA.rehearsal(self.source)["status"], "PASS")
+        self.assertEqual(len(created), 2)
+        self.assertTrue(any(name.endswith(".sha256") for name in created))
+
+    def test_archive_sha256_streams_without_read_bytes(self):
+        """Avoid loading an entire future production archive into RAM."""
+
+        with patch.object(
+            Path, "read_bytes", side_effect=AssertionError("unbounded read")
+        ):
+            self.assertEqual(QA.rehearsal(self.source)["status"], "PASS")
+
+    def test_partial_compression_failure_cleans_private_sandbox(self):
+        """An interrupted protected archive may never remain on disk."""
+
+        locations = []
+        original = QA.private_output
+
+        def fail(path: Path):
+            """Simulate an interrupted archive writer."""
+
+            with original(path):
+                locations.append(path.parent)
+            raise OSError("injected private archive failure")
+
+        with (
+            patch.object(QA, "private_output", side_effect=fail),
+            self.assertRaises(OSError),
+        ):
+            QA.rehearsal(self.source)
+        self.assertEqual(len(locations), 1)
+        self.assertFalse(locations[0].exists())
+
     def test_dry_run_reads_no_database_or_files(self):
         """Dry-run must never even instantiate an online backup."""
 

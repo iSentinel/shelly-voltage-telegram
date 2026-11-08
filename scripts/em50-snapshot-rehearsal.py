@@ -62,18 +62,29 @@ def online_snapshot(source: Path, destination: Path) -> None:
         os.umask(previous)
 
 
+def private_output(path: Path):
+    """Create a strictly private new output before writing any bytes."""
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    return os.fdopen(os.open(path, flags, 0o600), "wb")
+
+
 def compress_snapshot(source: Path, folder: Path) -> None:
-    """Write a 0600 gzip archive with a pinned-path SHA256 sidecar."""
+    """Stream gzip and SHA256 into files private from their creation."""
 
     archive = folder / "voltage-qa-online.sqlite3.gz"
-    with source.open("rb") as reading, gzip.open(archive, "wb") as writing:
+    with (
+        source.open("rb") as reading,
+        private_output(archive) as raw,
+        gzip.GzipFile(fileobj=raw, mode="wb") as writing,
+    ):
         while chunk := reading.read(1024 * 1024):
             writing.write(chunk)
-    archive.chmod(0o600)
-    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    with archive.open("rb") as reading:
+        digest = hashlib.file_digest(reading, "sha256").hexdigest()
     manifest = Path(str(archive) + ".sha256")
-    manifest.write_text(f"{digest}  {archive}\n", encoding="utf-8")
-    manifest.chmod(0o600)
+    with private_output(manifest) as writing:
+        writing.write(f"{digest}  {archive}\n".encode())
 
 
 def rehearsal(database: Path, after_snapshot=None) -> dict:
