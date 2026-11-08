@@ -70,3 +70,6 @@ jobs:
           docker compose config -q
       - name: Build container
         run: docker build -t shelly-voltage-telegram:ci .
+      - name: Smoke-test real container imports without network
+        run: |
+          docker run --rm --network none --entrypoint python shelly-voltage-telegram:ci -c "import app; import yasno_cache; import telegram_channel_yasno; print('PASS: container module imports')"
