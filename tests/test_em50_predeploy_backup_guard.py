@@ -193,6 +193,59 @@ class PredeployBackupGuardTests(unittest.TestCase):
         )
         self.assertNotIn("private_new_identifier", json.dumps(report))
 
+    def test_changed_non_status_meta_blocks_complete_backup(self):
+        """A missing setting must not be hidden by matching outage data."""
+
+        for file in (self.db, self.backup_source):
+            with contextlib.closing(sqlite3.connect(file)) as db:
+                db.execute(
+                    "INSERT INTO meta VALUES (?,?)", ("ui_language", "uk")
+                )
+                db.commit()
+        snapshot(self.backup_source, self.backups)
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key=?",
+                ("ru", "ui_language"),
+            )
+            db.commit()
+        result = GATE.inspect(self.args, time.time() + 1)
+        self.assertIn("sqlite_state_not_equal", result["reason_codes"])
+        self.assertNotIn("ui_language", json.dumps(result))
+
+    def test_auxiliary_aggregate_changes_block_complete_backup(self):
+        """Preserve all historical aggregate rows across an upgrade."""
+
+        for file in (self.db, self.backup_source):
+            with contextlib.closing(sqlite3.connect(file)) as db:
+                db.execute(
+                    "CREATE TABLE hourly_aggregates "
+                    "(phase TEXT,hour_ts REAL,samples INTEGER)"
+                )
+                db.execute(
+                    "INSERT INTO hourly_aggregates VALUES (?,?,?)",
+                    ("L1", 10.0, 123),
+                )
+                db.commit()
+        snapshot(self.backup_source, self.backups)
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE hourly_aggregates SET samples=124")
+            db.commit()
+        result = GATE.inspect(self.args, time.time() + 1)
+        self.assertIn("sqlite_state_not_equal", result["reason_codes"])
+
+    def test_missing_settings_audit_schema_blocks_complete_backup(self):
+        """Backup must contain all persisted user configuration tables."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "CREATE TABLE settings_audit "
+                "(id INTEGER PRIMARY KEY,ts REAL,setting TEXT)"
+            )
+            db.commit()
+        result = GATE.inspect(self.args, self.now)
+        self.assertIn("sqlite_state_not_equal", result["reason_codes"])
+
     def test_checksum_tampering_is_rejected(self):
         """Never unpack an archive whose digest does not match."""
 
