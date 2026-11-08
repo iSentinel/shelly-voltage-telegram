@@ -124,11 +124,27 @@ grep -q "ROLLBACK PASS" "$TMP/missing-db-dry-run.log"
 test ! -e "$MISSING_DB"
 echo "ROLLBACK_MISSING_DB_DRY_RUN=PASS"
 
+# A real rollback without explicit DB-replacement approval MUST fail
+# before touching the active source, DB or Docker service.
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start \
+        > "$TMP/unapproved-rollback.log" 2>&1; then
+    echo "ERROR: unapproved SQLite rewind was accepted" >&2
+    exit 1
+fi
+grep -q "ERROR: would overwrite existing SQLite history" \
+    "$TMP/unapproved-rollback.log"
+test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
+test "$(find "$RESCUE" -type f 2>/dev/null | wc -l)" -eq 0
+echo "ROLLBACK_UNAPPROVED_DB_REWIND=BLOCKED"
+
 SVT_ROOT="$TARGET" \
 DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
 SNAPSHOT_ROOT="$SNAP_ROOT" \
 RESCUE_ROOT="$RESCUE" \
-    "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start
+    "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start \
+        --confirm-db-replacement
 
 test "$(cat "$TARGET/VERSION")" = "0.4.1-hw"
 test -f "$TARGET/OLD_ONLY"

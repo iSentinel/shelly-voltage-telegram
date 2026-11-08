@@ -1,3 +1,27 @@
+## 2026-11-08 QA: reject silent SQLite rewind during rollback
+
+- Gateway dry-run against preserved Nov 6 0.5.13-hw
+  upgrade snapshot confirms 21413 archived measurements
+  while current running database holds over 26000.
+  Existing rollback restored the old database by default
+  and could overwrite newly collected power history.
+- New candidate rollback.sh requires explicit
+  --confirm-db-replacement if a live SQLite file exists.
+  Without it, REAL restore is BLOCKED BEFORE rescue
+  backup, Docker stop, source or SQLite replacement.
+  Dry-run stays read-only and prints clear warning.
+- Confirmed rollback accepts the history-loss risk;
+  it does not claim automatic old/new schema compatibility.
+- Artificial recovery fixture tested denied real restore
+  with zero state mutations, explicit confirmed test restore
+  PASS and unsafe archive checks PASS. Live rollback never run.
+- Full local 1146/1146 Python tests PASS, Ruff/quality and
+  reproducible secret-free source archive PASS. Candidate
+  0.5.14-hw still unpublished; current 0.5.13-hw healthy.
+- Human gates: private Telegram recipient-visible send/edit,
+  shelly-yasno account & service/volume review, signed
+  release and explicit rollback authorization.
+
 ## 2026-11-08 QA: two-phase systemd first-install readiness
 
 - Real Gateway temp /run/systemd/system QA: successful producer
