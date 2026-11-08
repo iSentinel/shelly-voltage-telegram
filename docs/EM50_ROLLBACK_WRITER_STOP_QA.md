@@ -105,3 +105,19 @@ systemd/shelly-voltage-backup.service. The optional historical
 scripts/start-compose.sh exists in only one of five and is not
 required. Negative fixtures now remove each of the eight required
 paths individually; all must fail before Docker or SQLite changes.
+
+
+## Reject duplicate logical TAR paths before source replacement
+
+The earlier required-file check only collected nonempty file names.
+An otherwise complete TAR could include a second empty ./app.py
+entry after a valid ./app.py entry. Python counted the valid file,
+but GNU tar would later extract the empty duplicate over the first.
+
+The pre-stop verifier now rejects all repeated normalized member
+names, including a path represented with or without an initial
+./. This also protects optional source files from duplicate
+replacement. A synthetic, SHA256-consistent TAR with a second
+empty app.py entry must be rejected before Docker or SQLite
+actions. Historical snapshot names were checked and have no
+duplicate entries.
