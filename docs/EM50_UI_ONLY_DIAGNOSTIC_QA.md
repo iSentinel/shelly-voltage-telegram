@@ -9,8 +9,13 @@ TELEGRAM_YASNO_STATUS_ENABLED=0. The diagnostic resolves the prospective
 candidate's base Compose plus this one overlay using Docker Compose's
 read-only config --format json; it processes resolved environment variables
 in memory and emits only PASS/FAIL. It refuses a flag that is missing,
-enabled or has any value other than string zero. It also refuses a
-YASNO reader-cache mount. Do not print or persist docker compose config:
+enabled or has any value other than string zero. Because private
+administrative previews may read YASNO cache independently of the public
+channel feature flag, the overlay also forces YASNO_CACHE_FILE,
+YASNO_TRUSTED_CACHE_FILE and YASNO_GROUP to empty strings.
+The diagnostic rejects effective nonempty or missing preview controls
+and refuses any YASNO reader-cache mount.
+Do not print or persist docker compose config:
 it may contain passwords and tokens.
 
 This is **not** proof of an approved deployment command; every future
