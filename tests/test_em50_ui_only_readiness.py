@@ -177,7 +177,9 @@ class UiOnlyReadinessTests(unittest.TestCase):
             UI.effective_configuration(self.source, self.runtime)
         run.assert_not_called()
 
-    def diagnostic(self, *, parity="PASS", recovery="pass", config="PASS"):
+    def diagnostic(
+        self, *, parity="PASS", recovery="pass", config="PASS", normal="PASS"
+    ):
         """Run the report with synthetic release/recovery providers."""
 
         release = SimpleNamespace(
@@ -189,6 +191,7 @@ class UiOnlyReadinessTests(unittest.TestCase):
         with (
             patch.object(UI, "load_script", side_effect=[release, telemetry]),
             patch.object(UI, "effective_configuration", return_value=config),
+            patch.object(UI, "normal_voltage_status", return_value=normal),
         ):
             return UI.inspect(self.args)
 
@@ -227,7 +230,7 @@ class UiOnlyReadinessTests(unittest.TestCase):
             report = base_release_report()
             report["checks"][missing]["status"] = "FAIL"
             with self.subTest(missing=missing):
-                result = UI.diagnostic_result(report, "PASS", "pass")
+                result = UI.diagnostic_result(report, "PASS", "pass", "PASS")
                 self.assertEqual(result["status"], "BLOCKED")
                 self.assertFalse(result["release_authorized"])
 
@@ -258,6 +261,54 @@ class UiOnlyReadinessTests(unittest.TestCase):
 
         result = self.diagnostic(config="FAIL")
         self.assertEqual(result["status"], "BLOCKED")
+
+    def test_abnormal_voltage_blocks_even_with_valid_connection(self):
+        """Connection telemetry PASS never makes undervoltage normal."""
+
+        report = base_release_report()
+        result = UI.diagnostic_result(report, "PASS", "pass", "FAIL")
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertFalse(result["release_authorized"])
+
+    def test_normal_band_failures_are_detected(self):
+        """A whole window at 201 V cannot be considered normal."""
+
+        for minimum, maximum, outage, limits, expected in (
+            (201.0, 206.0, 19, (207.0, 253.0), "FAIL"),
+            (207.0, 245.0, 19, (207.0, 253.0), "FAIL"),
+            (212.0, 253.0, 19, (207.0, 253.0), "FAIL"),
+            (212.0, 253.1, 19, (207.0, 253.0), "FAIL"),
+            (212.0, 240.0, 18, (207.0, 253.0), "FAIL"),
+            (212.0, 240.0, 19, None, "FAIL"),
+            (212.0, 240.0, 19, (207.0, 253.0), "PASS"),
+        ):
+            stability = SimpleNamespace(
+                inspect=lambda *_: {
+                    "status": "PASS",
+                    "outage_id": outage,
+                    "voltage_min": minimum,
+                    "voltage_max": maximum,
+                }
+            )
+            acceptance = SimpleNamespace(
+                configured_normal_bounds=lambda _: limits
+            )
+            with (
+                self.subTest(minimum=minimum, maximum=maximum, outage=outage),
+                patch.object(
+                    UI, "load_script", side_effect=[stability, acceptance]
+                ),
+            ):
+                self.assertEqual(UI.normal_voltage_status(self.args), expected)
+
+    def test_missing_real_normal_window_blocks_diagnostic(self):
+        """A connection PASS with brownout samples cannot grant readiness."""
+
+        result = self.diagnostic(normal="FAIL")
+        self.assertEqual(result["natural_recovery_15min"], "pass")
+        self.assertEqual(result["normal_voltage_15min"], "FAIL")
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertFalse(result["release_authorized"])
 
     def test_cli_never_exits_zero_or_claims_release(self):
         """No green technical result may be used as a deploy command."""
