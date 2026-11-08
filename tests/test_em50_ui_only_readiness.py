@@ -317,6 +317,7 @@ class UiOnlyReadinessTests(unittest.TestCase):
                     "outage_id": outage,
                     "voltage_min": minimum,
                     "voltage_max": maximum,
+                    "sample_count": 90,
                 }
             )
             acceptance = SimpleNamespace(
@@ -327,8 +328,36 @@ class UiOnlyReadinessTests(unittest.TestCase):
                 patch.object(
                     UI, "load_script", side_effect=[stability, acceptance]
                 ),
+                patch.object(UI, "exact_normal_window", return_value=True),
             ):
                 self.assertEqual(UI.normal_voltage_status(self.args), expected)
+
+    def test_fractional_threshold_uses_unrounded_samples(self):
+        """A 207.06 V reading fails a 207.07 V low threshold."""
+
+        db = self.root / "fractional.sqlite3"
+        import sqlite3
+
+        with contextlib.closing(sqlite3.connect(db)) as conn:
+            conn.execute(
+                "CREATE TABLE outages "
+                "(id INTEGER, phase TEXT, started_at REAL, ended_at REAL)"
+            )
+            conn.execute("INSERT INTO outages VALUES (19, 'L1', 1, 2)")
+            conn.execute(
+                "CREATE TABLE measurements (ts REAL, phase TEXT, voltage REAL)"
+            )
+            conn.executemany(
+                "INSERT INTO measurements VALUES (?,?,?)",
+                [
+                    (float(i * 10), "L1", 207.06 if i == 20 else 220.0)
+                    for i in range(90)
+                ],
+            )
+            conn.commit()
+        self.assertFalse(
+            UI.exact_normal_window(db, 19, 0.0, 900.0, 207.07, 253.0, 90)
+        )
 
     def test_missing_real_normal_window_blocks_diagnostic(self):
         """A connection PASS with brownout samples cannot grant readiness."""
