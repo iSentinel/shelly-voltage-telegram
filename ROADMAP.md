@@ -1,3 +1,32 @@
+## 2026-11-08 QA: protected EM-50 predeploy snapshot window
+
+- Real Shelly 0.5.13-hw recovered and is healthy; actual
+  15-minute incident #18 recovery has 89 valid samples,
+  max 11-second interval and zero synthetic zero-voltage.
+- Stacked PR #233 full-history integrated release parity
+  has push+PR GitHub CI SUCCESS, but live 6-check preflight
+  returns 5/6 PASS; nightly backup differs in measurement
+  and outage histories and Telegram status metadata.
+  This correctly blocks release (exit 1, authorized=false).
+- New scripts/em50-predeploy-snapshot.py provides no-write
+  --dry-run and a separate explicitly confirmed --capture.
+  Source SQLite is opened mode=ro, online backup snapshot
+  taken into a temporary owner-only directory, complete
+  history/status parity checked before and after compression.
+  New archive and checksum use 0600 from creation, unique
+  versioned filenames, no overwrite or backup pruning.
+  Writer activity during capture makes it fail closed.
+- Only synthetic SQLite fixture captures were performed:
+  10 targeted tests PASS, full 1243/1243 Python tests PASS,
+  Ruff/quality and reproducible secret-free archive PASS.
+  Actual production LXC dry-run PASS; no production backup
+  capture or systemd/Docker writes.
+- A new snapshot can immediately become out of date while
+  physical polling continues: real rollout still requires
+  explicit writer-quiescence review and immediately-before-
+  install strict parity, dedicated YASNO account/mount,
+  stacked PR scope review and signed release/rollback approval.
+
 ## 2026-11-08 QA: mandatory full-history parity in EM-50 release preflight
 
 - Draft PR #232 full-history backup parity has independent
