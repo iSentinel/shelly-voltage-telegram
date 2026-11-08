@@ -27,3 +27,21 @@ Verification with synthetic temporary filesystem fixtures:
 
 No actual Docker container, live SQLite database, secrets, Telegram
 message or Shelly device is changed by these tests.
+
+
+## Private on-disk SQLite restore temporary files
+
+The rollback path previously used predictable DB.restore.PID names
+and a shell redirection which could create a readable mode-0644
+SQLite copy when the invoking shell had umask 022. Changing the mode
+after extraction does not protect the contents while gzip runs.
+
+Rollback now creates a unique exclusive mode-0600 temporary file
+with mktemp on the target filesystem. The EXIT trap deletes it on
+decompression or validation failure, and the target DB is renamed
+only after SQLite integrity verification and the writer guard.
+Synthetic rollback fixtures explicitly run with umask 022 and
+inspect the output file descriptor before gzip writes. Another
+fixture simulates a partial gzip write followed by an error and
+checks both deletion and preservation of the prior database.
+No live rollback or database replacement is authorized by QA.
