@@ -35,8 +35,9 @@ versioned files:
 - matching .sha256 with an exact absolute archive path
 
 Both files are created with mode 0600 in an existing 0700 directory.
-The intermediate SQLite snapshot is temporary and deleted upon
-completion or failure. The complete measurements history, full outage
+The intermediate SQLite snapshot is created with exclusive mode 0600
+before SQLite opens it in existing-file (mode=rw) mode. It is
+temporary and deleted upon completion or failure. The complete measurements history, full outage
 history, latest measurement and current Telegram status message
 metadata are read from the snapshot and from the live database.
 A difference either immediately after copy or after compression
