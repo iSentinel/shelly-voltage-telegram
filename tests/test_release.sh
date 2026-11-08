@@ -121,3 +121,31 @@ grep -q "ERROR: VERSION must be a release version" \
     "$TMP/invalid-version.log"
 test ! -e "$TMP/version-dist"
 echo "RELEASE_INVALID_VERSION=REJECTED"
+
+
+# Private directories at arbitrary depth must never enter public archives.
+cp "$PROJECT/VERSION" "$FIXTURE/VERSION"
+mkdir -p "$FIXTURE/nested/deeper/secrets" \
+    "$FIXTURE/nested/deeper/validation" \
+    "$FIXTURE/nested/deeper/dist-publish" \
+    "$FIXTURE/nested/deeper/.work-state"
+printf "%s\n" "synthetic_nested_private" \
+    > "$FIXTURE/nested/deeper/secrets/notes.txt"
+printf "%s\n" "synthetic_nested_qa" \
+    > "$FIXTURE/nested/deeper/validation/evidence.json"
+printf "%s\n" "synthetic_nested_output" \
+    > "$FIXTURE/nested/deeper/dist-publish/output.tar.gz"
+printf "%s\n" "synthetic_nested_checkpoint" \
+    > "$FIXTURE/nested/deeper/.work-state/checkpoint.json"
+"$FIXTURE/scripts/release.sh" \
+    --output-dir "$TMP/nested-private-dist" \
+    --source-date-epoch "$EPOCH" \
+    > "$TMP/nested-private-release.log"
+tar -tzf "$TMP/nested-private-dist/$NAME.tar.gz" \
+    > "$TMP/nested-private-list.txt"
+if grep -E '/(secrets|validation|dist-publish|[.]work-state)/' \
+    "$TMP/nested-private-list.txt"; then
+    echo "ERROR: nested private directory leaked into public release" >&2
+    exit 1
+fi
+echo "RELEASE_NESTED_PRIVATE_PATHS=EXCLUDED"
