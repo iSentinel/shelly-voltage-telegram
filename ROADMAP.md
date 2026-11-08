@@ -1,3 +1,27 @@
+## 2026-11-08 QA: verified YASNO handoff to read-only EM-50 bot
+
+- On isolated 0.5.14-hw source candidate, added a manual,
+  opt-in yasno_handoff.py: no provider HTTP, Telegram send,
+  Shelly RPC, SQLite write, production volume change or restart.
+- The producer original remains 0700/0600. The exporter
+  validates pinned provider metadata, SHA256 integrity, Kyiv
+  day, valid ScheduleApplies 48-slot plan and age. It preserves
+  source capture time and refuses older data over newer output.
+- Recipient directory owner:bot-group mode 0750 and file
+  owner:bot-group mode 0640; symlink/hardlink/unsafe paths and
+  parallel writers are rejected. Atomic fsync and replace,
+  idempotent identical-copy SKIP.
+- Real QA read-only check in isolated container (UID 10001,
+  --network none, --read-only, read-only mount): READ PASS
+  and write rights denied. No production Docker changes.
+- New default-OFF Compose override example, CI merged-config
+  syntax check and 14 targeted safety tests. Complete local
+  1106/1106 Python tests PASS, Ruff/quality and private-env/
+  reproducible source release PASS.
+- Next: independent CI, operator-approved private Telegram
+  recipient-visible testing, rollout mount/service review,
+  stable release approval and rollback. Draft only.
+
 ## 2026-11-08 QA: unpublished candidate 0.5.14-hw for EM-50
 
 - VERSION=0.5.14-hw in source-only QA candidate; no stable

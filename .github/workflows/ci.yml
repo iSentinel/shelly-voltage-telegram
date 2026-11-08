@@ -68,6 +68,9 @@ jobs:
           mkdir -p secrets
           touch secrets/telegram_token secrets/telegram_chat_id secrets/shelly_password
           docker compose config -q
+      - name: Validate optional disabled YASNO reader override
+        run: |
+          docker compose -f compose.yaml -f deploy/compose.yasno-reader.example.yml config -q
       - name: Build container
         run: docker build -t shelly-voltage-telegram:ci .
       - name: Smoke-test real container imports without network

@@ -1,3 +1,13 @@
+## 2026-11-08 — safe YASNO handoff QA
+
+- Unpublished 0.5.14-hw candidate now has a verified exporter
+  for protected producer cache to a bot-group read-only volume.
+  Actual isolated Gateway UID10001 read/no-write PASS.
+- Tests: 1106/1106 PASS and Compose validation PASS.
+  Independent GitHub CI remains to be checked.
+- Production 0.5.13-hw still runs unchanged. Release awaits
+  private Telegram recipient verification and authorized rollout.
+
 ## 2026-11-08 — unpublished 0.5.14-hw EM-50 YASNO candidate
 
 - Separate source-only QA candidate, not installed/published.
