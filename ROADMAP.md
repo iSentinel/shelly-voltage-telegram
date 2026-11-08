@@ -1,3 +1,19 @@
+## 2026-11-08 QA: numeric Linux UID YASNO handoff acceptance
+
+- On Gateway LXC110 tested protected YASNO producer cache with
+  numeric UID10002 (0700/0600), bounded exporter CAP_CHOWN+
+  CAP_DAC_OVERRIDE, and UID10001 read-only container. PASS.
+- New test_yasno_role_isolation.py reproduces the same real
+  Linux identity boundary in an isolated temporary path using
+  synthetic current-day source data; no Telegram sends, no
+  provider HTTP, no production files touched. It skips
+  privileged path on unprivileged CI workers.
+- Full 1111/1111 tests PASS, Ruff/quality gate PASS, source
+  archive reproducibility/private .env exclusion PASS.
+- No production systemd units, bind mounts or release promotion.
+  Native Telegram recipient/client visibility and explicit
+  production rollout approval remain mandatory.
+
 ## 2026-11-08 QA: inactive systemd YASNO refresh-to-reader handoff
 
 - Added a separate UNINSTALLED handoff.service.example,
