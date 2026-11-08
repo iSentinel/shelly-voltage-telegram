@@ -96,3 +96,16 @@ if grep -E '(^|/)(ROADMAP[.]md|[.]roadmap-update[.]lock|[.]telegram-private-acce
     exit 1
 fi
 echo "RELEASE_PRIVATE_ENV_EXCLUSION PASS"
+
+# The final release must not bundle a link into private runtime files.
+ln -s '.env' "$FIXTURE/linked-env"
+ln -s 'secrets' "$FIXTURE/linked-private-directory"
+if "$FIXTURE/scripts/release.sh" --output-dir "$TMP/linked-dist" \
+    --source-date-epoch "$EPOCH" >"$TMP/linked-release.log" 2>&1; then
+    echo "ERROR: final release accepted symbolic links" >&2
+    exit 1
+fi
+grep -q "ERROR: public release cannot contain symbolic links" \
+    "$TMP/linked-release.log"
+test ! -e "$TMP/linked-dist/$NAME.tar.gz"
+echo "RELEASE_SYMLINKED_PRIVATE_PATHS=REJECTED"
