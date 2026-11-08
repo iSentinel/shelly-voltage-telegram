@@ -1,3 +1,25 @@
+## 2026-11-08 QA: unpublished candidate 0.5.14-hw for EM-50
+
+- VERSION=0.5.14-hw in source-only QA candidate; no stable
+  GitHub release or production deployment. RELEASE_VERSION
+  stays 0.5.12-hw and historical LIVE_VERSION stays
+  0.5.6-hw. Actual production /health currently 0.5.13-hw.
+- This source includes opt-in standard Bot API text/YASNO
+  status, protected cache and refresh, full image module
+  packaging and networkless Docker import smoke.
+- README in EN/RU/UA, CHANGELOG and release status reflect
+  the UNPUBLISHED candidate without changing published
+  release history or physical hardware checkpoint.
+- Full local 1092/1092 Python tests PASS, Ruff/quality PASS,
+  reproducible archive and private .env exclusion PASS.
+  QA-only 602KB source tarball validated via SHA256SUMS.
+  Manual QA image policy PASS; stable tag policy BLOCKED.
+- GitHub PR #214 and #215 CI SUCCESS. Next: independent
+  GitHub CI for candidate, recipient-visible Telegram,
+  protected cache mount/UID, rollback and approval.
+- No Telegram sends, Shelly writes, SQLite modifications,
+  production restarts, or new systemd jobs.
+
 ## 2026-11-08 QA: Docker and release module completeness
 
 - Identified that the old Dockerfile omitted new app dependencies

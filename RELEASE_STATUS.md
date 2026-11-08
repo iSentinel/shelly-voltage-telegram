@@ -1,3 +1,15 @@
+## 2026-11-08 — unpublished 0.5.14-hw EM-50 YASNO candidate
+
+- Separate source-only QA candidate, not installed/published.
+  Public release remains 0.5.12-hw; installed runtime 0.5.13-hw.
+- QA: 1092/1092 tests PASS; Ruff/quality PASS;
+  reproducible 602KB source archive with SHA256 verified.
+- New default-OFF standard Telegram status/YASNO forecast,
+  safe refresh cache, image module smoke and rollback docs.
+- Pending: approved private recipient Telegram acceptance,
+  secure mounted cache, release image + rollback review,
+  explicit authorized production promotion. No actual deploy.
+
 ## 2026-11-06 — no-cache monitoring HTTP candidate
 
 - Read-only HTTP monitoring endpoints now send explicit
