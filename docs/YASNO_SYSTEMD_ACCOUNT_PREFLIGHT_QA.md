@@ -1,3 +1,16 @@
+## Clean first-install commissioning phases
+
+The default --check behavior remains strict live verification. On
+initial installation use --check --phase bootstrap to check that the
+NSS service account exists and that 0700 producer / root:10001 0750
+reader directories are correct BEFORE any cache file exists. Existing
+cache files must already be protected; no unsafe file is skipped.
+
+After the first successful YASNO refresh and read-only handoff,
+rerun --check --phase live. It requires source 0600 and recipient
+0640 files. See docs/YASNO_BOOTSTRAP_LIVE_QA.md for the complete
+Gateway acceptance and no-write installation sequence.
+
 # YASNO systemd service-account prerequisite (QA)
 
 Live Gateway acceptance, November 8 2026, LXC 110.

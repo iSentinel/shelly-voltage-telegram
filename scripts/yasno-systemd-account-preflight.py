@@ -47,18 +47,31 @@ def file(path: Path, uid: int, gid: int, mode: int) -> None:
 
 
 def verify(
-    account: str, producer: Path, recipient: Path, reader_gid: int
+    account: str,
+    producer: Path,
+    recipient: Path,
+    reader_gid: int,
+    phase: str = "live",
 ) -> str:
-    """Validate required on-disk identities without mutation."""
+    """Check setup without files, or require complete live cache files."""
 
     if reader_gid < 1 or reader_gid > 65535:
         raise ValueError("reader group outside allowed range")
+    if phase not in {"bootstrap", "live"}:
+        raise ValueError("unsupported account verification phase")
     uid, gid = service_account(account)
     directory(producer, uid, gid, 0o700)
     directory(recipient, 0, reader_gid, 0o750)
-    file(producer / "yasno.json", uid, gid, 0o600)
-    file(recipient / "yasno.json", 0, reader_gid, 0o640)
-    return "producer_nologin=true reader_nonroot=true cache_modes_ok=true"
+    for path, owner, group, mode in (
+        (producer / "yasno.json", uid, gid, 0o600),
+        (recipient / "yasno.json", 0, reader_gid, 0o640),
+    ):
+        if phase == "live" or path.exists() or path.is_symlink():
+            file(path, owner, group, mode)
+    return (
+        "producer_nologin=true reader_nonroot=true "
+        f"cache_modes_ok=true phase={phase}"
+    )
 
 
 def main() -> int:
@@ -72,6 +85,12 @@ def main() -> int:
     parser.add_argument("--producer", default="/var/lib/shelly-yasno")
     parser.add_argument("--recipient", default="/var/lib/shelly-yasno-reader")
     parser.add_argument("--reader-gid", type=int, default=10001)
+    parser.add_argument(
+        "--phase",
+        choices=("bootstrap", "live"),
+        default="live",
+        help="bootstrap: check directories; live: require cache files",
+    )
     args = parser.parse_args()
     if args.dry_run:
         print("PASS DRY_RUN no_network=true no_files_changed=true")
@@ -82,6 +101,7 @@ def main() -> int:
             Path(args.producer),
             Path(args.recipient),
             args.reader_gid,
+            args.phase,
         )
         print("PASS SYSTEMD_ACCOUNT", result)
         return 0
