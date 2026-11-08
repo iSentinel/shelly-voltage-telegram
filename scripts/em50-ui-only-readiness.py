@@ -147,6 +147,30 @@ def real_recovery_status(args: argparse.Namespace) -> str:
         return "blocked"
 
 
+def unchanged_normal_bounds(
+    db: sqlite3.Connection, low: float, high: float
+) -> bool:
+    """Ensure both persisted warning limits match in this SQL snapshot."""
+
+    rows = dict(
+        db.execute(
+            "SELECT key,value FROM meta WHERE key IN (?,?)",
+            ("telegram_setting_warning_low", "telegram_setting_warning_high"),
+        ).fetchall()
+    )
+    try:
+        actual = (
+            float(rows["telegram_setting_warning_low"]),
+            float(rows["telegram_setting_warning_high"]),
+        )
+    except (KeyError, ValueError, TypeError, OverflowError):
+        return False
+    return all(math.isfinite(value) for value in actual) and actual == (
+        low,
+        high,
+    )
+
+
 def exact_normal_window(
     path: Path,
     incident: int,
@@ -167,6 +191,8 @@ def exact_normal_window(
             "SELECT id,phase FROM outages ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if event is None or event[0] != incident:
+            return False
+        if not unchanged_normal_bounds(db, low, high):
             return False
         values = db.execute(
             "SELECT COUNT(*),MIN(voltage),MAX(voltage) "
