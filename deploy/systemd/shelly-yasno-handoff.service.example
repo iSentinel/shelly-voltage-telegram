@@ -1,0 +1,27 @@
+# EXAMPLE ONLY: not installed, enabled or started in production.
+# A successful one-shot refresh triggers this root-owned recipient handoff.
+[Unit]
+Description=Copy verified YASNO forecast to read-only bot cache
+After=shelly-yasno-refresh.service
+RequiresMountsFor=/var/lib/shelly-yasno /var/lib/shelly-yasno-reader
+ConditionPathExists=/var/lib/shelly-yasno/yasno.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/shelly-voltage
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/shelly-voltage/yasno_handoff.py --install --source /var/lib/shelly-yasno/yasno.json --output /var/lib/shelly-yasno-reader/yasno.json --recipient-gid 10001 --group 10.1
+TimeoutStartSec=25s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/shelly-yasno
+ReadWritePaths=/var/lib/shelly-yasno-reader
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE

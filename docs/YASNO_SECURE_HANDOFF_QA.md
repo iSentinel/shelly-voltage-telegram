@@ -62,3 +62,23 @@ source file world-readable or run the bot as root.
 
 An approved real private-recipient Telegram send/edit acceptance is
 still mandatory. Unit and filesystem tests do not prove delivery.
+
+
+## ON_SUCCESS systemd chain (examples, NOT installed)
+
+The opt-in refresh.service.example runs as the dedicated shelly-yasno
+user. Only after that job reports success, systemd's
+OnSuccess=shelly-yasno-handoff.service schedules a separate oneshot
+exporter. This exporter runs with narrowly bounded CAP_CHOWN + CAP_DAC_OVERRIDE capabilities
+to copy the verified source into an owner-root, group-10001
+read-only file. The bot itself continues as nonroot UID 10001.
+
+On source update failure, the handoff is not triggered; last valid
+recipient data remains but expires naturally after two hours.
+The exporter requires a preexisting root:10001 directory 0750.
+Neither service nor timer is installed or enabled by this QA work.
+An explicit operator-approved installation and actual LXC systemd
+sandbox compatibility test are required before production use.
+
+The service name is shelly-yasno-handoff.service and its source
+is deploy/systemd/shelly-yasno-handoff.service.example.

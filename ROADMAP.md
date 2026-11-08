@@ -1,3 +1,23 @@
+## 2026-11-08 QA: inactive systemd YASNO refresh-to-reader handoff
+
+- Added a separate UNINSTALLED handoff.service.example,
+  triggered only on successful refresh.service via OnSuccess.
+  Source producer user is shelly-yasno; recipient exporter
+  is root with only CAP_CHOWN + CAP_DAC_OVERRIDE to read
+  private source and change recipient group 10001.
+- Handed-off cache is read-only to nonroot bot 10001, source
+  stays private; no Bot API or Shelly controls from exporter.
+- All files remain .example and have NOT been installed,
+  started, enabled or promoted to production.
+- Full local 1110/1110 tests PASS, Ruff/quality PASS,
+  static systemd-analyze verify PASS and reproducible source
+  archive/private .env exclusion PASS.
+- PR #217 verified handoff CI SUCCESS; this stage needs
+  independent CI and review, real LXC systemd sandbox
+  acceptance and private Telegram recipient test.
+- Production still 0.5.13-hw with no Docker restart or
+  channel message change. Candidate 0.5.14-hw unpublished.
+
 ## 2026-11-08 QA: verified YASNO handoff to read-only EM-50 bot
 
 - On isolated 0.5.14-hw source candidate, added a manual,
