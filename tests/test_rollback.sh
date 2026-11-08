@@ -209,6 +209,58 @@ echo "ROLLBACK_writer_restarted=BLOCKED"
 rm -rf "$RESCUE"
 rm "$TARGET/compose.yaml"
 
+# The existing Docker writer must block replacement even if compose.yaml
+# is missing. Use a fresh synthetic copy so a RED test cannot harm state.
+MISSING_COMPOSE_TARGET="$TMP/target-missing-compose"
+MISSING_COMPOSE_DB="$TMP/missing-compose.sqlite3"
+cp -a "$TARGET" "$MISSING_COMPOSE_TARGET"
+cp "$DB_DIR/voltage.sqlite3" "$MISSING_COMPOSE_DB"
+before_missing_db="$(sha256sum "$MISSING_COMPOSE_DB" | cut -d' ' -f1)"
+cat > "$TMP/mock-bin/docker" <<'MOCK_MISSING_COMPOSE_DOCKER'
+#!/usr/bin/env bash
+if [[ $1 == inspect ]]; then
+    [[ "$MOCK_INSPECTION_ERROR" == 1 ]] && exit 17
+    printf 'true\n'
+    exit 0
+fi
+exit 98
+MOCK_MISSING_COMPOSE_DOCKER
+chmod 0755 "$TMP/mock-bin/docker"
+for case_name in running_writer unknown_writer; do
+    inspect_error=0
+    [[ "$case_name" == unknown_writer ]] && inspect_error=1
+    if env PATH="$TMP/mock-bin:$PATH" \
+        MOCK_INSPECTION_ERROR="$inspect_error" \
+        SVT_ROOT="$MISSING_COMPOSE_TARGET" \
+        DATABASE_PATH="$MISSING_COMPOSE_DB" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" \
+        RESCUE_ROOT="$TMP/missing-compose-rescue" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" \
+            --no-start --confirm-db-replacement \
+            > "$TMP/missing-compose-$case_name.log" 2>&1; then
+        echo "ERROR: rollback accepted absent compose with $case_name" >&2
+        exit 1
+    fi
+    grep -q 'ERROR: Docker writer' \
+        "$TMP/missing-compose-$case_name.log"
+    test "$(cat "$MISSING_COMPOSE_TARGET/VERSION")" = "0.4.2-hw"
+    test "$(sha256sum "$MISSING_COMPOSE_DB" | cut -d' ' -f1)" \
+        = "$before_missing_db"
+    test ! -e "$TMP/missing-compose-rescue"
+    echo "ROLLBACK_missing_compose_$case_name=BLOCKED"
+done
+
+# A deliberately stopped synthetic Docker writer permits the test rollback.
+cat > "$TMP/mock-bin/docker" <<'MOCK_STOPPED_DOCKER'
+#!/usr/bin/env bash
+if [[ $1 == inspect ]]; then
+    printf 'false\n'
+    exit 0
+fi
+exit 98
+MOCK_STOPPED_DOCKER
+chmod 0755 "$TMP/mock-bin/docker"
+
 # Check restored SQLite is private BEFORE gzip writes its first byte.
 cat > "$TMP/mock-bin/gzip" <<'MOCK_PRIVATE_GZIP'
 #!/usr/bin/env bash
