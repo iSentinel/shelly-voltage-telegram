@@ -28,6 +28,7 @@ WORDS = {
         "Це прогноз, не вимірювання",
         "В",
         "Гц",
+        "Джерело",
     ),
     "ru": (
         "Напряжение",
@@ -44,6 +45,7 @@ WORDS = {
         "Это прогноз, не измерение",
         "В",
         "Гц",
+        "Источник",
     ),
     "en": (
         "Voltage",
@@ -60,6 +62,7 @@ WORDS = {
         "Forecast, not measurement",
         "V",
         "Hz",
+        "Source",
     ),
 }
 
@@ -135,7 +138,10 @@ def valid_forecast(data: dict, now: float) -> bool:
         expires, now, now + 30 * 3600
     ):
         return False
-    if not 0 <= now - updated <= 7200 or data.get("src") != "community":
+    if not 0 <= now - updated <= 7200 or data.get("src") not in {
+        "community",
+        "yasno",
+    }:
         return False
     local_date = datetime.fromtimestamp(now, KYIV).date().isoformat()
     return data.get("d") == local_date
@@ -159,7 +165,10 @@ def forecast_lines(
     lines = [f"📅 {words[6]} · {words[7]} {group}"]
     lines.extend(f"🪫 {words[8]} {a}–{b}" for a, b in certain[:6])
     lines.extend(f"⚠️ {words[9]} {a}–{b}" for a, b in possible[:6])
-    lines.append(f"{words[10]}: outage-data-ua")
+    if data.get("src") == "yasno":
+        lines.append(f"{words[14]}: YASNO · DTEK Kyiv")
+    else:
+        lines.append(f"{words[10]}: outage-data-ua")
     lines.append(words[11] + " (Shelly).")
     return lines
 

@@ -92,3 +92,16 @@ forecast. The final state must recover the complete 48-cell graph.
 The runtime must never stop, exceed Telegram's 2,000 DOM-node
 limit, or make network requests. This complements the five-stage
 lifecycle test without needing real Telegram messages.
+
+## YASNO source attribution (QA)
+
+The opt-in `YASNO_CACHE_FILE` + `YASNO_GROUP` source accepts
+only validated local JSON under the public Kyiv/DTEK schema.
+The command handler never queries the network. The state envelope
+uses `src=yasno`, separate from `src=community`, and clients
+display a YASNO/DTEK Kyiv attribution, not outage-data-ua.
+
+If YASNO data is stale or fails validation, a separately configured
+community cache may be considered; otherwise only measured Shelly
+telemetry remains. The local cache modification time is not
+sufficient independent evidence of provider provenance.

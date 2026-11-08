@@ -112,4 +112,20 @@ await verify('expired-community-forecast', state(false, {
   timelineHidden: true, groupHidden: true, timelineCells: 0,
   source: 'Schedule expired',
 });
-console.log('PASS Telegram QuickJS three-phase and schedule DOM scenarios');
+await verify('YASNO Kyiv published', state(false, {
+  g: '10.1', src: 'yasno', b: 'OX?O'.repeat(12),
+  d: '2026-11-08', u: now - 20, e: now + 3600,
+}), {
+  axisHidden: false, legendHidden: false,
+  timelineHidden: false, groupHidden: false, timelineCells: 48,
+  source: 'YASNO · DTEK Kyiv forecast',
+});
+await verify('YASNO Kyiv stale', state(false, {
+  g: '10.1', src: 'yasno', b: 'OX?O'.repeat(12),
+  d: '2026-11-08', u: now - 8000, e: now + 3600,
+}), {
+  axisHidden: true, legendHidden: true,
+  timelineHidden: true, groupHidden: true, timelineCells: 0,
+  source: 'Schedule expired',
+});
+console.log('PASS Telegram QuickJS three-phase, YASNO and schedule DOM scenarios');

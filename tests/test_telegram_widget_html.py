@@ -90,7 +90,19 @@ class WidgetMarkupTests(unittest.TestCase):
         self.assertIn("data.schema!==1", html)
         self.assertIn("if(bars===drawn)return", html)
 
-    def test_no_false_schedule_when_community_data_is_missing(self):
+    def test_distinct_yasno_source_in_all_bot_languages(self):
+        """A YASNO forecast must never be labelled as a community mirror."""
+
+        html = HTML.read_text(encoding="utf-8")
+        for expected in (
+            "YASNO · графік ДТЕК Київ",
+            "YASNO · график ДТЭК Киев",
+            "YASNO · DTEK Kyiv forecast",
+            'data.src==="yasno"?T[22]:T[16]',
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, html)
+
         """Hide the grid, time labels, and group unless bars are valid."""
 
         html = HTML.read_text(encoding="utf-8")

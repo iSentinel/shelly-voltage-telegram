@@ -51,12 +51,18 @@ def health_state(health: object, now: float) -> dict:
 
 
 def forecast_state(
-    bars: str | None, day: str | None, updated: float | None, now: float
+    bars: str | None,
+    day: str | None,
+    updated: float | None,
+    now: float,
+    source: str = "community",
 ) -> dict:
-    """Include a distinct community forecast only when verified fresh."""
+    """Include a source-labelled forecast only when verified fresh."""
 
     if bars is None:
         return {}
+    if source not in ("community", "yasno"):
+        raise ValueError("unknown forecast source")
     if not isinstance(bars, str) or len(bars) != 48:
         raise ValueError("forecast must have 48 half-hour slots")
     if any(char not in BARS for char in bars):
@@ -65,10 +71,10 @@ def forecast_state(
         raise ValueError("forecast day is missing")
     expected = datetime.fromtimestamp(now, KYIV).date().isoformat()
     if day != expected:
-        raise ValueError("community forecast day differs from today")
+        raise ValueError("forecast day differs from today")
     fresh = numeric(updated, 1, now + 2)
     if fresh is None or not 0 <= now - fresh <= MAX_FORECAST_AGE:
-        raise ValueError("community forecast is stale")
+        raise ValueError("forecast is stale")
     next_day = date.fromisoformat(day) + timedelta(days=1)
     expires = datetime.combine(next_day, dt_time.min, KYIV).timestamp()
     return {
@@ -76,7 +82,7 @@ def forecast_state(
         "d": day,
         "u": int(fresh),
         "e": round(expires),
-        "src": "community",
+        "src": source,
     }
 
 
@@ -89,6 +95,7 @@ def widget_public_data(
     now: float | None = None,
     language: str = "uk",
     phases: dict[str, dict] | None = None,
+    forecast_source: str = "community",
 ) -> str:
     """Encode an opaque per-widget state fitting Bot API widget limits."""
 
@@ -112,7 +119,9 @@ def widget_public_data(
         if not re.fullmatch(r"\d{1,2}\.\d", group):
             raise ValueError("unsupported outage group")
         state["g"] = group
-    state.update(forecast_state(bars, day, forecast_updated, clock))
+    state.update(
+        forecast_state(bars, day, forecast_updated, clock, forecast_source)
+    )
     encoded = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
     if len(encoded.encode("utf-8")) > PUBLIC_DATA_LIMIT:
         raise ValueError("widget state exceeds Telegram size limit")
