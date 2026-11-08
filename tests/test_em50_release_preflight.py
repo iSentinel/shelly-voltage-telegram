@@ -33,7 +33,7 @@ SPEC.loader.exec_module(GATE)
 def sqlite_fixture(path: Path) -> None:
     """Create a small private stand-in with status metadata."""
 
-    with sqlite3.connect(path) as db:
+    with contextlib.closing(sqlite3.connect(path)) as db:
         db.execute("CREATE TABLE measurements (voltage REAL)")
         db.execute("INSERT INTO measurements VALUES (220.0)")
         db.execute("CREATE TABLE meta (key TEXT, value TEXT)")

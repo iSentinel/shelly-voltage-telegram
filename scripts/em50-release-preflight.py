@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import time
 import urllib.request
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -80,7 +81,7 @@ def sqlite_check(path: Path) -> str:
 
     if not path.is_file():
         raise ValueError("database missing")
-    with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as db:
+    with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
         integrity = db.execute("PRAGMA quick_check").fetchone()[0]
         count = db.execute("SELECT count(*) FROM measurements").fetchone()[0]
         keys = {"telegram_status_message_id", "telegram_message_id"}
