@@ -90,10 +90,18 @@ previously passed initial validation and could cause the rollback
 to erase installed application code before discovering the issue.
 
 The pre-stop TAR validation now requires nonempty VERSION,
-app.py, Dockerfile, compose.yaml, requirements.txt and
-scripts/backup.sh entries. The check happens before writer
+app.py, Dockerfile, compose.yaml, requirements.txt,
+scripts/backup.sh and the Compose/backup systemd unit entries. The check happens before writer
 shutdown, source removal or SQLite replacement. It complements
 archive member type, traversal and expansion-size checks.
 A synthetic negative fixture supplies a checksum-valid
 VERSION-only TAR and verifies fail-closed behavior; a complete
 synthetic archive retains the original successful rollback path.
+
+
+All five local upgrade source snapshots include both
+systemd/shelly-voltage-compose.service and
+systemd/shelly-voltage-backup.service. The optional historical
+scripts/start-compose.sh exists in only one of five and is not
+required. Negative fixtures now remove each of the eight required
+paths individually; all must fail before Docker or SQLite changes.
