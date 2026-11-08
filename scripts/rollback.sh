@@ -158,12 +158,19 @@ stop_service() {
 restore_source() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore source -> $TARGET"; return; }
     mkdir -p "$TARGET"
+    # Keep locally created checkpoints/locks that do not belong to releases.
     find "$TARGET" -mindepth 1 -maxdepth 1 \
         ! -name '.env*' ! -name 'secrets' ! -name 'validation' \
+        ! -name 'ROADMAP.md' ! -name 'ROADMAP.md.pre-*' \
+        ! -name '.work-state' ! -name '.roadmap-update.lock' \
+        ! -name '.telegram-private-acceptance.lock' \
         -exec rm -rf -- {} +
     tar -xzf "$SNAPSHOT/source.tar.gz" -C "$TARGET" \
         --exclude="./.env" --exclude="./.env.*" \
-        --exclude="./secrets" --exclude="./validation"
+        --exclude="./secrets" --exclude="./validation" \
+        --exclude="./ROADMAP.md" --exclude="./ROADMAP.md.pre-*" \
+        --exclude="./.work-state" --exclude="./.roadmap-update.lock" \
+        --exclude="./.telegram-private-acceptance.lock"
 }
 
 restore_database() {

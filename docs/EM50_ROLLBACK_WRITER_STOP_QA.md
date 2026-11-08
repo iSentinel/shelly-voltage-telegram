@@ -62,3 +62,20 @@ the existing container to already report stopped; missing Docker
 inspection or an unknown state is a blocker, not authorization.
 The same stopped-state check remains active through database
 replacement. No real Docker lifecycle action is done in QA.
+
+
+## Preserve local checkpoints while restoring application sources
+
+The source packagers deliberately exclude active ROADMAP, local
+checkpoint backups, private QA progress and lock files. Restoring
+a release must not delete them from the installed project or
+overwrite their current content with obsolete entries in an old
+archive.
+
+The rollback source cleanup and tar extraction both preserve
+ROADMAP.md, ROADMAP.md.pre-* checkpoints, the .work-state
+directory and the two private operator/Telegram acceptance locks,
+alongside existing .env, secrets and validation protections.
+Synthetic rollback regression fixtures seed different current
+and archived values and require that the current values survive
+both cleanup and extraction. No real rollback is executed in QA.

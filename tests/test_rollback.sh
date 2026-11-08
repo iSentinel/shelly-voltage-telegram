@@ -21,6 +21,12 @@ printf 'BACKUP_KEEP_ME=1\n' > "$TARGET/.env.pre-upgrade"
 mkdir -p "$TARGET/validation"
 printf 'keep private QA results\n' > "$TARGET/validation/acceptance.txt"
 printf 'secret-preserved\n' > "$TARGET/secrets/token"
+printf 'local operator checkpoint\n' > "$TARGET/ROADMAP.md"
+printf 'local prior checkpoint\n' > "$TARGET/ROADMAP.md.pre-test"
+printf 'local protected lock\n' > "$TARGET/.roadmap-update.lock"
+printf 'local acceptance lock\n' > "$TARGET/.telegram-private-acceptance.lock"
+mkdir -p "$TARGET/.work-state"
+printf 'local progress\n' > "$TARGET/.work-state/firmware-progress.json"
 
 python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
 import sqlite3
@@ -52,6 +58,12 @@ printf 'snapshot-overwrite\n' > "$OLD_SRC/.env.pre-upgrade"
 mkdir -p "$OLD_SRC/validation" "$OLD_SRC/secrets"
 printf 'snapshot-overwrite\n' > "$OLD_SRC/validation/acceptance.txt"
 printf 'snapshot-overwrite\n' > "$OLD_SRC/secrets/token"
+printf 'stale operator checkpoint\n' > "$OLD_SRC/ROADMAP.md"
+printf 'stale prior checkpoint\n' > "$OLD_SRC/ROADMAP.md.pre-test"
+printf 'stale lock\n' > "$OLD_SRC/.roadmap-update.lock"
+printf 'stale acceptance lock\n' > "$OLD_SRC/.telegram-private-acceptance.lock"
+mkdir -p "$OLD_SRC/.work-state"
+printf 'stale progress\n' > "$OLD_SRC/.work-state/firmware-progress.json"
 tar -C "$OLD_SRC" -czf "$SNAP/source.tar.gz" .
 sha256sum "$SNAP/source.tar.gz" > "$SNAP/source.tar.gz.sha256"
 
@@ -298,6 +310,12 @@ grep -qx 'KEEP_ME=1' "$TARGET/.env"
 grep -qx 'BACKUP_KEEP_ME=1' "$TARGET/.env.pre-upgrade"
 grep -qx 'keep private QA results' "$TARGET/validation/acceptance.txt"
 grep -qx 'secret-preserved' "$TARGET/secrets/token"
+grep -qx 'local operator checkpoint' "$TARGET/ROADMAP.md"
+grep -qx 'local prior checkpoint' "$TARGET/ROADMAP.md.pre-test"
+grep -qx 'local protected lock' "$TARGET/.roadmap-update.lock"
+grep -qx 'local acceptance lock' "$TARGET/.telegram-private-acceptance.lock"
+grep -qx 'local progress' "$TARGET/.work-state/firmware-progress.json"
+echo "ROLLBACK_OPERATOR_STATE_PRESERVED=PASS"
 
 python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
 import sqlite3
