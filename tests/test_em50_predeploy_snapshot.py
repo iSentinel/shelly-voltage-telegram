@@ -174,6 +174,61 @@ class SnapshotWindowTests(unittest.TestCase):
             QA.create_snapshot(self.database, self.output)
         self.assertEqual(list(self.output.iterdir()), [])
 
+    def test_nonstatus_setting_changed_during_online_copy_fails_closed(self):
+        """An unrelated changed meta key must invalidate the snapshot."""
+
+        with contextlib.closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "INSERT INTO meta VALUES (?,?)", ("qa_preference", "original")
+            )
+            db.commit()
+        real_copy = QA.online_copy
+
+        def advance(source: Path, destination: Path) -> None:
+            """Change only metadata after the consistent SQLite copy."""
+
+            real_copy(source, destination)
+            with contextlib.closing(sqlite3.connect(self.database)) as db:
+                db.execute(
+                    "UPDATE meta SET value='changed' WHERE key='qa_preference'"
+                )
+                db.commit()
+
+        with (
+            patch.object(QA, "online_copy", side_effect=advance),
+            self.assertRaisesRegex(ValueError, "advanced"),
+        ):
+            QA.create_snapshot(self.database, self.output)
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_nonstatus_setting_changed_during_gzip_fails_closed(self):
+        """Never publish a snapshot after unrelated metadata advances."""
+
+        with contextlib.closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "INSERT INTO meta VALUES (?,?)", ("qa_preference", "original")
+            )
+            db.commit()
+        real_gzip = QA.gzip_copy
+
+        def advance(source: Path, destination: Path) -> str:
+            """Simulate one setting change while gzip runs."""
+
+            digest = real_gzip(source, destination)
+            with contextlib.closing(sqlite3.connect(self.database)) as db:
+                db.execute(
+                    "UPDATE meta SET value='changed' WHERE key='qa_preference'"
+                )
+                db.commit()
+            return digest
+
+        with (
+            patch.object(QA, "gzip_copy", side_effect=advance),
+            self.assertRaisesRegex(ValueError, "compression"),
+        ):
+            QA.create_snapshot(self.database, self.output)
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_source_symlink_and_hardlink_rejected(self):
         """Do not trust a symbolic or multiply linked source file."""
 
