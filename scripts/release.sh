@@ -81,6 +81,14 @@ validate_inputs() {
     fi
 }
 
+assert_no_hardlinked_sources() {
+    # Tar preserves regular-file data from hard-linked private inodes.
+    if [[ -n "$(find "$PROJECT" -type f -links +1 -print -quit)" ]]; then
+        echo "ERROR: public release cannot contain hard-linked source files." >&2
+        exit 4
+    fi
+}
+
 release_name() {
     local version
     version="$(tr -d '\r\n' < "$PROJECT/VERSION")"
@@ -234,6 +242,7 @@ build_archive() {
 main() {
     parse_args "$@"
     validate_inputs
+    assert_no_hardlinked_sources
     local name archive stage
     name="$(release_name)"
     archive="$OUTPUT_DIR/$name.tar.gz"

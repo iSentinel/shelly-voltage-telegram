@@ -3294,24 +3294,32 @@ class OutageInterpretationTests(unittest.TestCase):
                 config(database_path=Path(directory) / "outage.sqlite3")
             )
             monitor.storage.initialize()
-            now = APP.time.time()
-            monitor.storage.add(now, 223.0, 50.0)
-            monitor.storage.begin_outage(now - 70)
-            monitor.storage.end_outage(now - 30)
-            phrases = {
-                "ru": "недоступность Shelly",
-                "uk": "недоступність Shelly",
-                "en": "Shelly connectivity gaps",
-            }
-            for language, phrase in phrases.items():
-                with self.subTest(language=language):
-                    monitor.language = language
-                    for report in (
-                        monitor.outage_history_text(),
-                        monitor.outage_fallback_text("L1"),
-                        monitor.daily_summary_text(),
-                    ):
-                        self.assertIn(phrase, report)
+            # Freeze at local noon: a real midnight moves the outage to
+            # yesterday while the daily summary starts a new local day.
+            local = APP.datetime.fromtimestamp(
+                APP.time.time(), APP.ZoneInfo(monitor.cfg.timezone)
+            )
+            now = local.replace(
+                hour=12, minute=0, second=0, microsecond=0
+            ).timestamp()
+            with patch.object(APP.time, "time", return_value=now):
+                monitor.storage.add(now, 223.0, 50.0)
+                monitor.storage.begin_outage(now - 70)
+                monitor.storage.end_outage(now - 30)
+                phrases = {
+                    "ru": "недоступность Shelly",
+                    "uk": "недоступність Shelly",
+                    "en": "Shelly connectivity gaps",
+                }
+                for language, phrase in phrases.items():
+                    with self.subTest(language=language):
+                        monitor.language = language
+                        for report in (
+                            monitor.outage_history_text(),
+                            monitor.outage_fallback_text("L1"),
+                            monitor.daily_summary_text(),
+                        ):
+                            self.assertIn(phrase, report)
 
 
 if __name__ == "__main__":

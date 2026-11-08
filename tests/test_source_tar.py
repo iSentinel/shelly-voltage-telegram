@@ -143,6 +143,27 @@ class SourceTarTests(unittest.TestCase):
                 self.assertIsNotNone(template)
                 self.assertEqual(template.read(), b"TELEGRAM_TOKEN=")
 
+    def test_rejects_hardlinked_private_source(self):
+        """Never archive a public-looking hard link into private contents."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_fixture(root)
+            (root / "nested/public-looking.txt").hardlink_to(
+                root / "secrets/telegram_token"
+            )
+            result = subprocess.run(
+                ["bash", str(SCRIPT), str(root)],
+                check=False,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, b"")
+            self.assertIn(
+                b"ERROR: source archive cannot contain hard-linked files",
+                result.stderr,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
