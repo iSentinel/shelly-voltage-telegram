@@ -26,7 +26,7 @@ backup (RED), destroying the earlier copy.
 
 ## Synthetic tests
 
-The same-second test restores both SQLite archives and checks SHA256,
+The same-second sequential and simultaneous-process tests both verify\nunique private archives. The sequential fixture restores each SQLite\narchive and checks SHA256,
 permissions, independent data and no leftover staging directory.
 Other negative tests cover failed sidecar publication, invalid
 retention settings, and BACKUP_KEEP=1 rollback-rescue semantics.
