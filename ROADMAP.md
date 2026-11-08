@@ -1,3 +1,33 @@
+## 2026-11-08 QA: disposable online backup history-parity rehearsal
+
+- Shelly EM-50 recovered ONLINE after incident #18, installed
+  0.5.13-hw healthy /ready 200. Nightly predeployment
+  archive is old and correctly FAILS complete live SQLite
+  measurement/outage/Telegram status metadata parity.
+- New scripts/em50-snapshot-rehearsal.py uses a SQLite
+  mode=ro source and official online backup API inside a
+  unique protected 0700 disposable QA directory.
+  Temporary SQLite/gzip/sha256 are private 0600, all removed.
+  No production SQLite writes or rollback archives replaced.
+- The SAME full-history parity guard from PR #232 verifies
+  all measurements/outages and Telegram status metadata.
+  Real live rehearsal PASS: record_gap=0, all match,
+  no production writes and temporary_copies_removed=true.
+- Eight tests cover a clean snapshot PASS and the expected
+  FAIL for post-snapshot append, old-row edit with unchanged
+  count, outage modification, Telegram status metadata
+  modification. Also tests symlink refusal, protected
+  transient modes and no-op dry-run.
+- Full 1241/1241 Python regression tests PASS with
+  -W default and no ResourceWarnings; Ruff/quality PASS;
+  private-safe reproducible release archive PASS.
+- QA snapshot PASS is NOT a durable predeployment backup
+  and never authorizes release. Versioned persistent
+  operator-approved snapshot plus immediate parity before
+  cutover, dedicated shelly-yasno account and protected
+  reader mount, PR review, signed release and rollback
+  approval are still required. Draft only, no deployment.
+
 ## 2026-11-08 QA: mandatory full-history parity in EM-50 release preflight
 
 - Draft PR #232 full-history backup parity has independent
