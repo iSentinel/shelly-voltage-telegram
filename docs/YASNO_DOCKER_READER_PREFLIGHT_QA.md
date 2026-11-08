@@ -11,8 +11,10 @@ installed. This script is source-only prerelease work for 0.5.14-hw.
 
 **staging** (feature DISABLED): require a running hardened Docker
 configuration with user 10001:10001, read-only root filesystem,
-no privileged flag and CAP_DROP=ALL. Require exactly one
-read-only bind mount from /var/lib/shelly-yasno-reader to /run/yasno,
+no privileged flag, CAP_DROP=ALL, no additional capabilities, explicit
+no-new-privileges:true and no unconfined seccomp/AppArmor opt-outs.
+These checks prevent CAP_ADD from undoing the dropped-capability policy.
+Require exactly one read-only bind mount from /var/lib/shelly-yasno-reader to /run/yasno,
 plus a trusted file setting for /run/yasno/yasno.json, YASNO_GROUP=10.1
 and TELEGRAM_YASNO_STATUS_ENABLED=0. Staging may happen only after an
 explicitly approved container recreation. It cannot publish YASNO yet.
