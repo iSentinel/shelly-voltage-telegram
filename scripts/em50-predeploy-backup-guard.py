@@ -69,6 +69,17 @@ def digest_rows(db: sqlite3.Connection, query: str) -> bytes:
     return digest.digest()
 
 
+def whole_sqlite_digest(db: sqlite3.Connection) -> bytes:
+    """Fingerprint all user tables and schema without exposing their rows."""
+
+    digest = hashlib.sha256()
+    for statement in db.iterdump():
+        raw = statement.encode("utf-8")
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.digest()
+
+
 def sqlite_state(db_path: Path) -> dict:
     """Read selected critical state without exposing Telegram IDs."""
 
@@ -97,7 +108,9 @@ def sqlite_state(db_path: Path) -> dict:
             db,
             "SELECT id,started_at,ended_at,phase FROM outages ORDER BY id",
         )
+        whole_digest = whole_sqlite_digest(db)
     return {
+        "whole_digest": whole_digest,
         "measurements_digest": measurements_digest,
         "outages_digest": outages_digest,
         "rows": rows,
@@ -145,6 +158,8 @@ def parity_reasons(
         issues.append("outage_state_not_equal")
     if not saved["status"] or saved["status"] != live["status"]:
         issues.append("status_message_metadata_not_equal")
+    if saved["whole_digest"] != live["whole_digest"]:
+        issues.append("sqlite_state_not_equal")
     return issues, measurements_equal, outages_equal
 
 
@@ -176,6 +191,9 @@ def inspect(args: argparse.Namespace, now: float) -> dict:
         "all_measurements_match": measurements_equal,
         "outage_state_matches": saved["outage"] == live["outage"],
         "all_outages_match": outages_equal,
+        "all_sqlite_state_matches": (
+            saved["whole_digest"] == live["whole_digest"]
+        ),
         "status_metadata_matches": bool(
             saved["status"] and saved["status"] == live["status"]
         ),
