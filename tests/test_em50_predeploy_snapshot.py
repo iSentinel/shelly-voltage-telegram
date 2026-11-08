@@ -275,6 +275,45 @@ class SnapshotWindowTests(unittest.TestCase):
             QA.create_snapshot(self.database, self.output)
         self.assertEqual(list(self.output.iterdir()), [])
 
+    def test_user_version_changed_during_copy_blocks_snapshot(self):
+        """Reject a migration marker changed immediately after backup."""
+
+        real_copy = QA.online_copy
+
+        def change_header(source: Path, destination: Path) -> None:
+            """Change only the SQLite header, not any user table."""
+
+            real_copy(source, destination)
+            with contextlib.closing(sqlite3.connect(self.database)) as db:
+                db.execute("PRAGMA user_version=18")
+
+        with (
+            patch.object(QA, "online_copy", side_effect=change_header),
+            self.assertRaisesRegex(ValueError, "advanced"),
+        ):
+            QA.create_snapshot(self.database, self.output)
+        self.assertEqual(list(self.output.iterdir()), [])
+
+    def test_application_id_changed_during_gzip_blocks_snapshot(self):
+        """Reject a changed app marker during snapshot compression."""
+
+        real_gzip = QA.gzip_copy
+
+        def change_header(source: Path, destination: Path) -> str:
+            """Modify only the SQLite application marker during gzip."""
+
+            digest = real_gzip(source, destination)
+            with contextlib.closing(sqlite3.connect(self.database)) as db:
+                db.execute("PRAGMA application_id=123456")
+            return digest
+
+        with (
+            patch.object(QA, "gzip_copy", side_effect=change_header),
+            self.assertRaisesRegex(ValueError, "compression"),
+        ):
+            QA.create_snapshot(self.database, self.output)
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_source_symlink_and_hardlink_rejected(self):
         """Do not trust a symbolic or multiply linked source file."""
 
