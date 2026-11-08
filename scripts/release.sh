@@ -93,6 +93,15 @@ copy_public_tree() {
         --exclude='./dist-publish' \
         --exclude='./validation' \
         --exclude='./ROADMAP.md.pre-*' \
+        --exclude='./ROADMAP.md' \
+        --exclude='*/ROADMAP.md' \
+        --exclude='./.work-state' \
+        --exclude='*/.work-state' \
+        --exclude='.*.lock' \
+        --exclude='*.pem' \
+        --exclude='*.key' \
+        --exclude='*.token' \
+        --exclude='*.secret' \
         --exclude='./.git' \
         --exclude='./.github-main-sha' \
         --exclude='./__pycache__' \
@@ -130,7 +139,10 @@ assert_public_tree() {
             -path './dist-publish/*' -o -path './validation/*' -o \
             -path './.ruff_cache/*' -o -path './.pytest_cache/*' -o \
             -path './.mypy_cache/*' -o -name '.github-main-sha' -o \
-            -name 'ROADMAP.md.pre-*' -o \
+            -name 'ROADMAP.md' -o -name 'ROADMAP.md.pre-*' -o \
+            -name '.work-state' -o -name '.*.lock' -o \
+            -name '*.pem' -o -name '*.key' -o \
+            -name '*.token' -o -name '*.secret' -o \
             -name '*.pyc' -o -name '*.pyo' -o \
             -name '*.sqlite' -o -name '*.sqlite3' -o \
             -name '*.sqlite3-*' -o -name '*.log' \

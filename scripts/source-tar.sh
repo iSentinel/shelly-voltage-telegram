@@ -26,6 +26,9 @@ find . \( -type l -o -name ".git" -o -name "secrets" -o \
     -name ".pytest_cache" -o -name ".mypy_cache" -o \
     -name "__pycache__" -o -name "*.pyc" -o -name "*.pyo" -o \
     -name "*.sqlite" -o -name "*.sqlite3*" -o -name "*.log" -o \
-    -name "ROADMAP.md.pre-*" -o \
+    -name "ROADMAP.md" -o -name "ROADMAP.md.pre-*" -o \
+    -name ".work-state" -o -name ".*.lock" -o \
+    -name "*.pem" -o -name "*.key" -o -name "*.token" -o \
+    -name "*.secret" -o \
     \( -name ".env*" ! -name ".env.example" \) \) -prune -o -print0 |
     tar --null --no-recursion -cf - -T -
