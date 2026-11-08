@@ -1,0 +1,8 @@
+# Candidate-only configuration example; never deploy without review.
+services:
+  shelly-voltage:
+    environment:
+      TELEGRAM_YASNO_STATUS_ENABLED: "0"
+      YASNO_CACHE_FILE: ""
+      YASNO_TRUSTED_CACHE_FILE: ""
+      YASNO_GROUP: ""
