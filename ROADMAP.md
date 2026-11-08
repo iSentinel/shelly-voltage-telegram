@@ -1,3 +1,35 @@
+## 2026-11-08 QA: fail-closed Docker YASNO reader mount
+
+- Shelly runtime 0.5.13-hw remains offline during a real
+  power cut: LXC110 and healthy Docker are running, /ready
+  HTTP 503 and historic voltage is NOT current. Live SQLite
+  has one open L1 incident and zero fabricated samples
+  after its start. No device commands or Telegram writes.
+- New scripts/yasno-docker-reader-preflight.py checks
+  actual Docker inspect metadata without exposing env secrets.
+  --dry-run makes no Docker call. --check --phase staging
+  requires UID10001:10001, read-only rootfs, no privileged
+  mode, cap_drop ALL, exact read-only bind from protected
+  reader directory to /run/yasno, trusted filename,
+  group 10.1 and TELEGRAM_YASNO_STATUS_ENABLED=0.
+- --phase active additionally requires feature=1 and a
+  verified protected cache with pinned source, freshness
+  and valid full-day forecast; default phase is active.
+  No install, restart or secret access is performed.
+- Current live staging correctly FAILS because the
+  protected YASNO reader bind is not installed. This
+  remains a reviewed release-blocking requirement.
+- New 11 isolated tests including writable/duplicate/missing
+  mount, root/privileged Docker, wrong flags and cache,
+  safe no-op dry-run and non-secret failure outputs.
+  Full local 1167/1167 Python tests PASS with -W default,
+  Ruff/quality and reproducible private-safe source
+  archive PASS. Draft only pending independent GitHub CI.
+- Prior private admin Telegram send/edit was visible
+  in client and accepted PASS. Still require dedicated
+  nonlogin account, mount/activation and approval for
+  scoped versioned release/rollback.
+
 ## 2026-11-08 QA follow-up: outage recovery cannot be inferred from YASNO
 
 - Expanded PR #225 offline channel/YASNO acceptance from
