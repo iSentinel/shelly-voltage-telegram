@@ -9,6 +9,7 @@ SNAPSHOT=""
 DRY_RUN=false
 NO_START=false
 CONFIRM_DB_REPLACEMENT=false
+WRITER_REQUIRED=false
 
 usage() {
     cat <<'EOF'
@@ -118,10 +119,28 @@ rescue_current_db() {
     echo "Rescue backup: $rescue"
 }
 
+assert_writer_stopped() {
+    [[ "$WRITER_REQUIRED" == true ]] || return 0
+    local running
+    if ! running="$(docker inspect --format '{{.State.Running}}' shelly-voltage-bot 2>/dev/null)"; then
+        echo "ERROR: Docker writer state could not be verified." >&2
+        exit 5
+    fi
+    if [[ "$running" != false ]]; then
+        echo "ERROR: Docker writer is still running or state is unknown." >&2
+        exit 5
+    fi
+}
+
 stop_service() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: stop Compose service"; return; }
     if [[ -f "$TARGET/compose.yaml" ]]; then
-        docker compose -f "$TARGET/compose.yaml" stop || true
+        WRITER_REQUIRED=true
+        if ! docker compose -f "$TARGET/compose.yaml" stop; then
+            echo "ERROR: Docker Compose failed to stop the writer." >&2
+            exit 5
+        fi
+        assert_writer_stopped
     fi
 }
 
@@ -154,6 +173,7 @@ if result != "ok":
 PY
     chown 10001:10001 "$tmp"
     chmod 0640 "$tmp"
+    assert_writer_stopped
     rm -f "${DB}-wal" "${DB}-shm"
     mv -f "$tmp" "$DB"
 }
@@ -180,8 +200,9 @@ main() {
     validate_snapshot
     echo "Rollback snapshot: $SNAPSHOT"
     require_db_replacement_approval
-    rescue_current_db
     stop_service
+    rescue_current_db
+    assert_writer_stopped
     restore_source
     restore_database
     start_service
