@@ -142,3 +142,21 @@ block before any target source or SQLite changes.
 All five historical on-host upgrade snapshots were found
 to have exact manifests for their selected source TAR and
 SQLite archive. This check does not authorize their restoration.
+
+
+## Require one unambiguous SQLite backup per snapshot
+
+The previous rollback selected the first matching voltage SQLite gzip
+using find piped to head, independently at validation and restoration.
+A snapshot containing two individually valid archived databases was
+accepted, leaving the selected history dependent on filesystem order,
+and potentially changing between the two phases.
+
+Both validation and decompression now use a shared selection function.
+It refuses zero or multiple regular SQLite archives before source
+removal or database replacement. Names are transferred as NUL-delimited
+paths so whitespace cannot change the selection. A synthetic RED
+fixture demonstrates the previous acceptance of two SHA256-valid
+SQLite backups; its GREEN counterpart requires failure before
+Docker/source/SQLite changes. All five existing local upgrade
+snapshots contain exactly one matching archive.

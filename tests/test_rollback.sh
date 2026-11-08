@@ -217,6 +217,31 @@ for wrong in source database; do
     echo "ROLLBACK_FOREIGN_MANIFEST_$wrong=REJECTED"
 done
 
+# Multiple checksum-valid backups must never permit arbitrary first-file picks.
+ambiguous="$TMP/ambiguous-sqlite-backup"
+mkdir -p "$ambiguous"
+cp "$SNAP/source.tar.gz" "$ambiguous/source.tar.gz"
+sha256sum "$ambiguous/source.tar.gz" \
+    > "$ambiguous/source.tar.gz.sha256"
+for suffix in old newer; do
+    cp "$SNAP/voltage-old.sqlite3.gz" \
+        "$ambiguous/voltage-$suffix.sqlite3.gz"
+    sha256sum "$ambiguous/voltage-$suffix.sqlite3.gz" \
+        > "$ambiguous/voltage-$suffix.sqlite3.gz.sha256"
+done
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$ambiguous" \
+        --dry-run --no-start > "$TMP/ambiguous-sqlite.log" 2>&1; then
+    echo "ERROR: ambiguous source of historical SQLite accepted" >&2
+    exit 1
+fi
+grep -q "ERROR: snapshot must contain exactly one SQLite backup" \
+    "$TMP/ambiguous-sqlite.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+echo "ROLLBACK_MULTIPLE_SQLITE_BACKUPS=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
