@@ -184,6 +184,39 @@ test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
 test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
 echo "ROLLBACK_DUPLICATE_TAR_ENTRY=REJECTED"
 
+# A successful checksum of an unrelated file cannot verify selected archives.
+for wrong in source database; do
+    snapshot="$TMP/foreign-manifest-$wrong"
+    mkdir -p "$snapshot"
+    cp "$SNAP/source.tar.gz" "$snapshot/source.tar.gz"
+    cp "$SNAP/voltage-old.sqlite3.gz" "$snapshot/voltage-old.sqlite3.gz"
+    sha256sum "$snapshot/source.tar.gz" \
+        > "$snapshot/source.tar.gz.sha256"
+    sha256sum "$snapshot/voltage-old.sqlite3.gz" \
+        > "$snapshot/voltage-old.sqlite3.gz.sha256"
+    if [[ $wrong == source ]]; then
+        cp "$snapshot/source.tar.gz" "$TMP/decoy-source.tar.gz"
+        sha256sum "$TMP/decoy-source.tar.gz" \
+            > "$snapshot/source.tar.gz.sha256"
+    else
+        cp "$snapshot/voltage-old.sqlite3.gz" "$TMP/decoy-sqlite.gz"
+        sha256sum "$TMP/decoy-sqlite.gz" \
+            > "$snapshot/voltage-old.sqlite3.gz.sha256"
+    fi
+    if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$snapshot" \
+            --dry-run --no-start > "$TMP/foreign-$wrong.log" 2>&1; then
+        echo "ERROR: checksum bound to foreign $wrong was accepted" >&2
+        exit 1
+    fi
+    grep -q "ERROR: archive manifest not bound to selected file" \
+        "$TMP/foreign-$wrong.log"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+    echo "ROLLBACK_FOREIGN_MANIFEST_$wrong=REJECTED"
+done
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
@@ -476,7 +509,8 @@ echo "ROLLBACK_PARTIAL_SQLITE_TEMP_CLEANUP=PASS"
 # A SHA256-valid gzip must be verified as SQLite before any service stop.
 INVALID_DB="$TMP/invalid-sqlite-snapshot"
 mkdir -p "$INVALID_DB"
-cp "$SNAP/source.tar.gz" "$SNAP/source.tar.gz.sha256" "$INVALID_DB/"
+cp "$SNAP/source.tar.gz" "$INVALID_DB/"
+sha256sum "$INVALID_DB/source.tar.gz" > "$INVALID_DB/source.tar.gz.sha256"
 printf "%s" "a corrupt SQLite database" | gzip -c \
     > "$INVALID_DB/voltage-corrupt.sqlite3.gz"
 sha256sum "$INVALID_DB/voltage-corrupt.sqlite3.gz" \
