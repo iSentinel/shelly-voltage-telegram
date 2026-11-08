@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pwd
 import stat
 import sys
 from pathlib import Path
 
 
-def service_account(name: str) -> tuple[int, int]:
-    """Require a configured, unprivileged non-login producer identity."""
+def service_account(name: str, reader_gid: int) -> tuple[int, int]:
+    """Reject login, privileged, or reader-group producer identities."""
 
     entry = pwd.getpwnam(name)
-    if entry.pw_uid in {0, 10001} or entry.pw_gid == 0:
+    if entry.pw_uid in {0, 10001} or entry.pw_gid in {0, reader_gid}:
         raise ValueError("producer account has forbidden privileges")
     if not entry.pw_shell.endswith(("/nologin", "/false")):
         raise ValueError("producer account is interactive")
+    groups = os.getgrouplist(name, entry.pw_gid)
+    if reader_gid in groups:
+        raise ValueError("producer account belongs to reader group")
     return entry.pw_uid, entry.pw_gid
 
 
@@ -53,7 +57,7 @@ def verify(
 
     if reader_gid < 1 or reader_gid > 65535:
         raise ValueError("reader group outside allowed range")
-    uid, gid = service_account(account)
+    uid, gid = service_account(account, reader_gid)
     directory(producer, uid, gid, 0o700)
     directory(recipient, 0, reader_gid, 0o750)
     file(producer / "yasno.json", uid, gid, 0o600)

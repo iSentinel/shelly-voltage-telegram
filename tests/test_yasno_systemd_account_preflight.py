@@ -32,7 +32,7 @@ class AccountGuardTests(unittest.TestCase):
             patch.object(QA.pwd, "getpwnam", side_effect=KeyError),
             self.assertRaises(KeyError),
         ):
-            QA.service_account("shelly-yasno")
+            QA.service_account("shelly-yasno", 10001)
 
     def test_account_requires_unprivileged_non_login(self):
         """Reject root, the consumer UID and interactive logins."""
@@ -46,16 +46,60 @@ class AccountGuardTests(unittest.TestCase):
             with (
                 self.subTest(uid=uid, shell=shell),
                 patch.object(QA.pwd, "getpwnam", return_value=entry),
+                patch.object(QA.os, "getgrouplist", return_value=[10002]),
                 self.assertRaises(ValueError),
             ):
-                QA.service_account("shelly-yasno")
+                QA.service_account("shelly-yasno", 10001)
         valid = SimpleNamespace(
             pw_uid=10002, pw_gid=10002, pw_shell="/usr/sbin/nologin"
         )
-        with patch.object(QA.pwd, "getpwnam", return_value=valid):
+        with (
+            patch.object(QA.pwd, "getpwnam", return_value=valid),
+            patch.object(QA.os, "getgrouplist", return_value=[10002]),
+        ):
             self.assertEqual(
-                QA.service_account("shelly-yasno"), (10002, 10002)
+                QA.service_account("shelly-yasno", 10001), (10002, 10002)
             )
+
+    def test_producer_primary_group_cannot_be_reader_group(self):
+        """Identical primary producer/recipient group breaks isolation."""
+
+        entry = SimpleNamespace(
+            pw_uid=10002, pw_gid=10001, pw_shell="/usr/sbin/nologin"
+        )
+        with (
+            patch.object(QA.pwd, "getpwnam", return_value=entry),
+            self.assertRaisesRegex(ValueError, "forbidden"),
+        ):
+            QA.service_account("shelly-yasno", 10001)
+
+    def test_producer_supplemental_reader_group_fails_closed(self):
+        """A producer with supplemental reader membership is not isolated."""
+
+        entry = SimpleNamespace(
+            pw_uid=10002, pw_gid=10002, pw_shell="/usr/sbin/nologin"
+        )
+        with (
+            patch.object(QA.pwd, "getpwnam", return_value=entry),
+            patch.object(QA.os, "getgrouplist", return_value=[10002, 10001]),
+            self.assertRaisesRegex(ValueError, "reader group"),
+        ):
+            QA.service_account("shelly-yasno", 10001)
+
+    def test_producer_group_lookup_error_blocks_release(self):
+        """NSS membership lookup failures cannot silently pass."""
+
+        entry = SimpleNamespace(
+            pw_uid=10002, pw_gid=10002, pw_shell="/usr/sbin/nologin"
+        )
+        with (
+            patch.object(QA.pwd, "getpwnam", return_value=entry),
+            patch.object(
+                QA.os, "getgrouplist", side_effect=OSError("NSS unavailable")
+            ),
+            self.assertRaises(OSError),
+        ):
+            QA.service_account("shelly-yasno", 10001)
 
     def test_directory_checks_mode_and_symlinks(self):
         """A writable or linked producer directory must fail."""
