@@ -6,6 +6,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import sqlite3
 import stat
 import sys
@@ -22,19 +23,19 @@ def newest_backup(directory: Path) -> Path:
 
     if not directory.is_dir() or directory.is_symlink():
         raise ValueError("backup directory missing or linked")
-    files = sorted(
-        directory.glob("voltage-*.sqlite3.gz"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
+    files = list(directory.glob("voltage-*.sqlite3.gz"))
     if not files:
         raise ValueError("no existing SQLite backups")
-    path = files[0]
-    sidecar = Path(str(path) + ".sha256")
-    for item in (path, sidecar):
+    for item in files:
         info = item.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise ValueError("backup or checksum is not an ordinary file")
+    files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    path = files[0]
+    sidecar = Path(str(path) + ".sha256")
+    info = sidecar.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("backup or checksum is not an ordinary file")
     return path
 
 
@@ -88,6 +89,7 @@ def unpack_state(archive: Path) -> dict:
         target = Path(tmp) / "recovered.sqlite3"
         expanded = 0
         with gzip.open(archive, "rb") as source, target.open("xb") as out:
+            os.fchmod(out.fileno(), 0o600)
             while chunk := source.read(1024 * 1024):
                 expanded += len(chunk)
                 if expanded > LIMIT_BYTES:
