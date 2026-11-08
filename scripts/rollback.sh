@@ -77,10 +77,22 @@ verify_archive_manifest() {
     fi
 }
 
+unique_snapshot_backup() {
+    local -a candidates=()
+    mapfile -d '' -t candidates < <(
+        find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' -print0
+    )
+    if [[ ${#candidates[@]} -ne 1 ]]; then
+        echo "ERROR: snapshot must contain exactly one SQLite backup." >&2
+        return 3
+    fi
+    printf '%s\n' "${candidates[0]}"
+}
+
 validate_snapshot() {
     [[ -f "$SNAPSHOT/source.tar.gz" ]] || { echo "ERROR: source archive missing." >&2; exit 3; }
     local backup
-    backup="$(find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' | head -n1)"
+    backup="$(unique_snapshot_backup)"
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
     verify_archive_manifest "$SNAPSHOT/source.tar.gz"
     verify_archive_manifest "$backup"
@@ -206,7 +218,7 @@ restore_source() {
 
 restore_database() {
     local backup
-    backup="$(find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' | head -n1)"
+    backup="$(unique_snapshot_backup)"
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore DB $backup -> $DB"; return; }
     # mktemp uses an unpredictable, exclusive mode-0600 file on this filesystem.
     RESTORE_TMP="$(mktemp -- "${DB}.restore.XXXXXXXX")"
