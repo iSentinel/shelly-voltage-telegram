@@ -139,6 +139,76 @@ test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
 test "$(find "$RESCUE" -type f 2>/dev/null | wc -l)" -eq 0
 echo "ROLLBACK_UNAPPROVED_DB_REWIND=BLOCKED"
 
+
+# A failed Docker stop or still-running container must block restoration.
+mkdir -p "$TMP/mock-bin"
+cat > "$TMP/mock-bin/docker" <<'MOCK_DOCKER'
+#!/usr/bin/env bash
+if [[ $1 == compose && $4 == stop ]]; then
+    [[ $MOCK_STOP_FAIL == 1 ]] && exit 17
+    exit 0
+fi
+if [[ $1 == inspect ]]; then
+    printf '%s\n' "$MOCK_CONTAINER_RUNNING"
+    exit 0
+fi
+exit 98
+MOCK_DOCKER
+chmod 0755 "$TMP/mock-bin/docker"
+touch "$TARGET/compose.yaml"
+before_db="$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"
+for case_name in command_failed writer_running; do
+    mock_fail=0
+    [[ "$case_name" == command_failed ]] && mock_fail=1
+    if env PATH="$TMP/mock-bin:$PATH" MOCK_STOP_FAIL="$mock_fail" \
+        MOCK_CONTAINER_RUNNING=true SVT_ROOT="$TARGET" \
+        DATABASE_PATH="$DB_DIR/voltage.sqlite3" SNAPSHOT_ROOT="$SNAP_ROOT" \
+        RESCUE_ROOT="$RESCUE" "$PROJECT/scripts/rollback.sh" \
+        --snapshot "$SNAP" --no-start --confirm-db-replacement \
+        > "$TMP/rollback-$case_name.log" 2>&1; then
+        echo "ERROR: unsafe rollback accepted $case_name" >&2
+        exit 1
+    fi
+    grep -Eq 'ERROR:.*(Docker|writer)' "$TMP/rollback-$case_name.log"
+    test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$before_db"
+    test "$(find "$RESCUE" -type f 2>/dev/null | wc -l)" -eq 0
+    echo "ROLLBACK_$case_name=BLOCKED"
+done
+# Even a successful stop must not allow a writer that restarts later.
+cat > "$TMP/mock-bin/docker" <<'MOCK_DOCKER'
+#!/usr/bin/env bash
+if [[ $1 == compose && $4 == stop ]]; then
+    exit 0
+fi
+if [[ $1 == inspect ]]; then
+    if [[ -e "$MOCK_INSPECT_MARKER" ]]; then
+        printf 'true\n'
+    else
+        touch "$MOCK_INSPECT_MARKER"
+        printf 'false\n'
+    fi
+    exit 0
+fi
+exit 98
+MOCK_DOCKER
+chmod 0755 "$TMP/mock-bin/docker"
+if env PATH="$TMP/mock-bin:$PATH" \
+    MOCK_INSPECT_MARKER="$TMP/inspect-marker" SVT_ROOT="$TARGET" \
+    DATABASE_PATH="$DB_DIR/voltage.sqlite3" SNAPSHOT_ROOT="$SNAP_ROOT" \
+    RESCUE_ROOT="$RESCUE" "$PROJECT/scripts/rollback.sh" \
+    --snapshot "$SNAP" --no-start --confirm-db-replacement \
+    > "$TMP/rollback-restarted.log" 2>&1; then
+    echo "ERROR: restarted writer was accepted" >&2
+    exit 1
+fi
+grep -q "ERROR: Docker writer is still running" "$TMP/rollback-restarted.log"
+test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$before_db"
+echo "ROLLBACK_writer_restarted=BLOCKED"
+rm -rf "$RESCUE"
+rm "$TARGET/compose.yaml"
+
 SVT_ROOT="$TARGET" \
 DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
 SNAPSHOT_ROOT="$SNAP_ROOT" \
