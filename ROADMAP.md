@@ -1,3 +1,25 @@
+## 2026-11-08 QA: systemd account preflight blocks uninstalled user
+
+- Actual Gateway transient unit using raw User=10002 failed at
+  systemd step USER (217/USER) before Python ran, because the
+  account did not exist in passwd/NSS. Earlier setpriv UID10002
+  acceptance did not cover systemd's identity resolution.
+- Separate transient producer using existing nobody account
+  (65534), bounded root exporter and UID10001 read-only Docker
+  consumer succeeded on isolated QA synthetic YASNO data.
+- New scripts/yasno-systemd-account-preflight.py checks that
+  a real non-login shelly-yasno account exists and required
+  producer (0700/0600) and root:10001 reader (0750/0640)
+  ownership/permissions are correct. Dry-run is no-write.
+- The current LXC expectedly FAILS the account check, since
+  the permanent identity has NOT been provisioned.
+- Local 1141/1141 tests PASS with -W default, no ResourceWarnings,
+  Ruff/quality and source-release reproducibility/privacy PASS.
+- No permanent systemd jobs, users, Telegram sends, Shelly
+  control, SQLite writes or 0.5.14-hw rollout performed.
+  The account and real recipient visibility remain release
+  blockers requiring explicit approval.
+
 ## 2026-11-08 QA: private Telegram send/edit acceptance guarded
 
 - New QA-only scripts/telegram-private-acceptance.py provides
