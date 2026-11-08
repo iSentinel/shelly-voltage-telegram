@@ -47,6 +47,7 @@ from notification_features import (
     update_history,
 )
 from outage_data_ua import read_snapshot
+from telegram_channel_yasno import append_yasno_forecast
 from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
 from telegram_widget_fallback import widget_fallback_text
@@ -1921,6 +1922,20 @@ def compact_preview_text(monitor: Monitor) -> str:
         return "\n".join(lines)
 
 
+def channel_status_text(monitor: Monitor) -> str:
+    """Preserve the standard status unless a verified YASNO card is enabled."""
+
+    original = multiphase_status_text(monitor)
+    if os.getenv("TELEGRAM_YASNO_STATUS_ENABLED") != "1":
+        return original
+    path = os.getenv("YASNO_TRUSTED_CACHE_FILE")
+    if not path:
+        return original
+    return append_yasno_forecast(
+        original, path, os.getenv("YASNO_GROUP", "10.1"), monitor.language
+    )
+
+
 def render_voltage_status(
     monitor: Monitor, include_event_context: bool
 ) -> str:
@@ -2745,7 +2760,7 @@ class Monitor:
             return
         key = self.status_message_key()
         if not self.upsert_status_message(
-            multiphase_status_text(self), key, self.telegram.status_chat_id
+            channel_status_text(self), key, self.telegram.status_chat_id
         ):
             return
         latest_id = self.storage.get_meta(key)
