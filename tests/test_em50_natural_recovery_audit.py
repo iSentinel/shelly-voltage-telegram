@@ -198,6 +198,60 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
                     60,
                 )
 
+    def test_latest_same_phase_voltage_and_frequency_are_real(self):
+        """A good health response cannot hide a corrupt L1 SQLite row."""
+
+        for voltage, frequency in ((900, 50), (216, 5), (-5, 50)):
+            with contextlib.closing(sqlite3.connect(self.db)) as db:
+                db.execute(
+                    "UPDATE measurements SET voltage=?,frequency=? "
+                    "WHERE phase='L1'",
+                    (voltage, frequency),
+                )
+                db.commit()
+            current = AUDIT.read_state(self.db, 60)
+            with (
+                self.subTest(voltage=voltage, frequency=frequency),
+                self.assertRaisesRegex(ValueError, "same-phase"),
+            ):
+                AUDIT.check_recovery(
+                    current, health(self.now), {"ready": True},
+                    self.now, 60,
+                )
+
+    def test_stale_same_phase_sample_is_not_fresh_health(self):
+        """A new HTTP health timestamp cannot refresh an old L1 row."""
+
+        later = self.now + 150
+        with self.assertRaisesRegex(ValueError, "same-phase"):
+            AUDIT.check_recovery(
+                self.state, health(later), {"ready": True}, later, 60
+            )
+
+    def test_future_same_phase_sample_is_not_recovery(self):
+        """Reject a future-dated SQLite row as physical recovery evidence."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "UPDATE measurements SET ts=? WHERE phase='L1'",
+                (self.now + 100,),
+            )
+            db.commit()
+        current = AUDIT.read_state(self.db, 60)
+        with self.assertRaisesRegex(ValueError, "same-phase"):
+            AUDIT.check_recovery(
+                current, health(self.now), {"ready": True}, self.now, 60
+            )
+
+    def test_latest_same_phase_field_never_reports_private_id(self):
+        """Return physical tuple without leaking saved Telegram metadata."""
+
+        self.assertEqual(len(self.state["latest_phase_sample"]), 3)
+        self.assertEqual(self.state["latest_phase_sample"][1], 216.3)
+        self.assertNotIn("latest_phase_sample", AUDIT.report(
+            self.state, health(self.now), self.now, 60
+        ))
+
     def test_missing_status_id_fails(self):
         """A missing status message cannot be treated as delivered."""
 
