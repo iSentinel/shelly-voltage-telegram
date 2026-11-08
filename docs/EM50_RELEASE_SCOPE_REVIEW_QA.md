@@ -39,3 +39,19 @@ run Python tests and quality checks, but **must not** be presented
 as having a complete source-scope manifest. Use a clean, reviewed
 candidate Git commit for authoritative release-scope evidence.
 Neither the normal audit nor --enforce approves a release.
+
+
+## Private operator files in source releases
+
+Release packaging previously copied the live ROADMAP and local
+dot-lock files as ordinary project files. Synthetic RED fixtures
+showed that a source tar and the reproducible release archive could
+include a local ROADMAP, hidden runtime work-state data,
+private .pem/.key files, or .token/.secret files.
+
+Both packaging entrypoints now exclude these local-only files and
+directories. The public .env.example template remains included,
+but production .env and all private evidence remain excluded.
+The release assertion and negative tests also reject these entries
+if an exclusion regresses. These are source-only safeguards;
+nothing invokes Docker, SQLite writes, or Telegram operations.
