@@ -347,6 +347,14 @@ class UiOnlyReadinessTests(unittest.TestCase):
             conn.execute(
                 "CREATE TABLE measurements (ts REAL, phase TEXT, voltage REAL)"
             )
+            conn.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+            conn.executemany(
+                "INSERT INTO meta VALUES (?,?)",
+                [
+                    ("telegram_setting_warning_low", "207.07"),
+                    ("telegram_setting_warning_high", "253"),
+                ],
+            )
             conn.executemany(
                 "INSERT INTO measurements VALUES (?,?,?)",
                 [
@@ -357,6 +365,44 @@ class UiOnlyReadinessTests(unittest.TestCase):
             conn.commit()
         self.assertFalse(
             UI.exact_normal_window(db, 19, 0.0, 900.0, 207.07, 253.0, 90)
+        )
+
+    def test_changed_saved_threshold_cannot_use_stale_normal_band(self):
+        """A live threshold change must invalidate prior range criteria."""
+
+        import sqlite3
+
+        path = self.root / "changed-threshold.sqlite3"
+        with contextlib.closing(sqlite3.connect(path)) as db:
+            db.execute("CREATE TABLE outages (id INTEGER, phase TEXT)")
+            db.execute("INSERT INTO outages VALUES (19, 'L1')")
+            db.execute(
+                "CREATE TABLE measurements (ts REAL, phase TEXT, voltage REAL)"
+            )
+            db.execute("CREATE TABLE meta (key TEXT, value TEXT)")
+            db.executemany(
+                "INSERT INTO meta VALUES (?,?)",
+                [
+                    ("telegram_setting_warning_low", "207"),
+                    ("telegram_setting_warning_high", "253"),
+                ],
+            )
+            db.executemany(
+                "INSERT INTO measurements VALUES (?,?,?)",
+                [(float(i * 10), "L1", 220.0) for i in range(90)],
+            )
+            db.commit()
+        self.assertTrue(
+            UI.exact_normal_window(path, 19, 0.0, 900.0, 207.0, 253.0, 90)
+        )
+        with contextlib.closing(sqlite3.connect(path)) as db:
+            db.execute(
+                "UPDATE meta SET value='225' "
+                "WHERE key='telegram_setting_warning_low'"
+            )
+            db.commit()
+        self.assertFalse(
+            UI.exact_normal_window(path, 19, 0.0, 900.0, 207.0, 253.0, 90)
         )
 
     def test_missing_real_normal_window_blocks_diagnostic(self):
