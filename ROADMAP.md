@@ -1,3 +1,22 @@
+## 2026-11-08 Combined QA acceptance (not a release)
+
+- Three independent staged changes are combined *only* in a new
+  disposable QA worktree: widget/community schedule PR #202;
+  DTEK numeric-day compatibility PR #203; exact Shelly identity
+  read-only preflight PR #204. Source baseline b7016e8.
+- Python comprehensive combined regression: 1000/1000 PASS,
+  Ruff 0.14.2 PASS, project maintainability quality gate PASS.
+  HTML widget 8439 bytes raw and 3205/4096 bytes zlib-9.
+- This is source-level coexistence testing, not a completed merge
+  of individual GitHub PRs, nor physical/recipient acceptance.
+- Actual Shelly EM-50 identity was confirmed read-only against
+  selected pro_em50; hardware 3EM and 3CT63 are NOT physically
+  connected/tested. Official DTEK returns a challenge page.
+- No Telegram API writes, no service restarts, no production
+  SQLite writes. Continue independent cross-version GitHub CI,
+  real-client widget checks, hardware acceptance, DTEK provenance,
+  and approved promotion before release.
+
 ## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
 
 - **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`
