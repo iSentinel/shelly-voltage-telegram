@@ -34,6 +34,14 @@ def make_fixture(root: Path) -> None:
         "nested/local.sqlite3": "hidden",
         "nested/debug.log": "hidden",
         "ROADMAP.md.pre-0.5.3": "hidden",
+        "ROADMAP.md": "private incident and credentials context",
+        ".roadmap-update.lock": "private",
+        ".telegram-private-acceptance.lock": "private",
+        ".work-state/deploy-state.json": "private",
+        "nested/identity.pem": "private",
+        "nested/admin.key": "private",
+        "nested/local.token": "private",
+        "nested/local.secret": "private",
     }
     for name, content in files.items():
         path = root / name
@@ -89,6 +97,14 @@ class SourceTarTests(unittest.TestCase):
                     "./nested/local.sqlite3",
                     "./nested/debug.log",
                     "./ROADMAP.md.pre-0.5.3",
+                    "./ROADMAP.md",
+                    "./.roadmap-update.lock",
+                    "./.telegram-private-acceptance.lock",
+                    "./.work-state/deploy-state.json",
+                    "./nested/identity.pem",
+                    "./nested/admin.key",
+                    "./nested/local.token",
+                    "./nested/local.secret",
                 ):
                     self.assertNotIn(value, names)
                 self.assertIn("./scripts/run.py", names)
