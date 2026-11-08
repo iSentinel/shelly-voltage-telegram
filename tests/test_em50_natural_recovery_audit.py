@@ -215,8 +215,11 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "same-phase"),
             ):
                 AUDIT.check_recovery(
-                    current, health(self.now), {"ready": True},
-                    self.now, 60,
+                    current,
+                    health(self.now),
+                    {"ready": True},
+                    self.now,
+                    60,
                 )
 
     def test_stale_same_phase_sample_is_not_fresh_health(self):
@@ -248,9 +251,10 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
 
         self.assertEqual(len(self.state["latest_phase_sample"]), 3)
         self.assertEqual(self.state["latest_phase_sample"][1], 216.3)
-        self.assertNotIn("latest_phase_sample", AUDIT.report(
-            self.state, health(self.now), self.now, 60
-        ))
+        self.assertNotIn(
+            "latest_phase_sample",
+            AUDIT.report(self.state, health(self.now), self.now, 60),
+        )
 
     def test_missing_status_id_fails(self):
         """A missing status message cannot be treated as delivered."""
