@@ -1,3 +1,48 @@
+## 2026-11-08 QA follow-up: outage recovery cannot be inferred from YASNO
+
+- Expanded PR #225 offline channel/YASNO acceptance from
+  8 to 10 targeted tests. Source-only synthetic recovery
+  requires three actual fresh Shelly successful samples
+  before the online state returns; refreshed YASNO forecast
+  alone never establishes restored mains or connectivity.
+- A fully published no-outage YASNO day still leaves a
+  disconnected Shelly visibly OFFLINE and never displays
+  hours-old stored voltage as current.
+- Full combined 1156/1156 Python tests PASS with warnings
+  enabled, Ruff/quality and release source privacy/
+  reproducibility checks PASS. No network/Telegram sends,
+  live DB writes, new timers or deployment.
+- During the real outage, last measured sample stayed
+  historical, one L1 incident remained open, and three
+  latest SQLite backups restored in disposable QA sandboxes
+  with 3/3 PASS and zero network calls.
+- Actual future reconnection requires live hardware evidence;
+  production remains 0.5.13-hw and 0.5.14-hw unpublished.
+
+## 2026-11-08 QA: outage-safe standard Telegram/YASNO card
+
+- A real long EM-50 outage left Proxmox/LXC online while
+  Shelly was unreachable for over two hours. The running
+  bot 0.5.13-hw reported offline /ready 503 and retained
+  the last sample, which must not be represented as current.
+- New test_em50_offline_yasno_acceptance.py validates the
+  real 0.5.14-hw channel status compositor with isolated
+  SQLite, mocked Telegram, and synthetic trusted GPV10.1
+  YASNO schedule. Covers no stale voltage/frequency, forecast
+  explicitly separate from measurement, RU/UK/EN, expired/
+  corrupted/missing cache, disabled feature, Kyiv midnight
+  rollover, and zero side effects.
+- Tests 1154/1154 PASS, Ruff/quality PASS, source release
+  reproducibility/private .env exclusion PASS.
+- Public QA docs omit private LAN/device identifiers.
+- Human private Telegram delivery/edit acceptance previously
+  confirmed PASS. This branch remains Draft with production
+  0.5.13-hw and candidate 0.5.14-hw unpublished. No
+  new Telegram messages, bot restart, systemd or DB writes.
+- Remaining release gates: reviewed secure service account
+  and reader mount; broad PR integration scope; explicitly
+  authorized signing, deployment and safe rollback.
+
 ## 2026-11-08 QA: reject silent SQLite rewind during rollback
 
 - Gateway dry-run against preserved Nov 6 0.5.13-hw
