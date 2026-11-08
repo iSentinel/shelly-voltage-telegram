@@ -86,11 +86,13 @@ try:
         "systemd/shelly-voltage-backup.service",
     }
     present = set()
+    seen = set()
     with tarfile.open(sys.argv[1], "r:gz") as archive:
         for entry in archive:
             count += 1
             size += entry.size
-            parts = PurePosixPath(entry.name).parts
+            member_path = PurePosixPath(entry.name)
+            parts = member_path.parts
             safe_type = entry.isfile() or entry.isdir()
             if (
                 entry.name.startswith("/")
@@ -101,8 +103,11 @@ try:
                 or size > 512 * 1024 * 1024
             ):
                 raise ValueError("unsafe source archive member")
+            if str(member_path) in seen:
+                raise ValueError("duplicate source archive member")
+            seen.add(str(member_path))
             if entry.isfile() and entry.size > 0:
-                present.add(str(PurePosixPath(entry.name)))
+                present.add(str(member_path))
     if not required.issubset(present):
         raise ValueError("source archive missing required application files")
 except (OSError, ValueError, tarfile.TarError) as error:
