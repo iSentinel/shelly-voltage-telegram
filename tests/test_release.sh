@@ -109,3 +109,15 @@ grep -q "ERROR: public release cannot contain symbolic links" \
     "$TMP/linked-release.log"
 test ! -e "$TMP/linked-dist/$NAME.tar.gz"
 echo "RELEASE_SYMLINKED_PRIVATE_PATHS=REJECTED"
+
+# Untrusted VERSION must never insert slash or path traversal into archive names.
+printf "%s\n" "0.5.14-hw/../../outside" > "$FIXTURE/VERSION"
+if "$FIXTURE/scripts/release.sh" --dry-run \
+    --output-dir "$TMP/version-dist" > "$TMP/invalid-version.log" 2>&1; then
+    echo "ERROR: release dry-run accepted unsafe version" >&2
+    exit 1
+fi
+grep -q "ERROR: VERSION must be a release version" \
+    "$TMP/invalid-version.log"
+test ! -e "$TMP/version-dist"
+echo "RELEASE_INVALID_VERSION=REJECTED"
