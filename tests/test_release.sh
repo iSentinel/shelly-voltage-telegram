@@ -180,3 +180,23 @@ grep -q "ERROR: public release template must be an independent regular file" \
     "$TMP/hardlinked-template.log"
 test ! -e "$TMP/hardlinked-template-dist/$NAME.tar.gz"
 echo "RELEASE_HARDLINKED_ENV_TEMPLATE=REJECTED"
+
+
+# A public-looking hard link to a private file must not enter public TARs.
+rm -f "$FIXTURE/.env.example"
+cp "$PROJECT/.env.example" "$FIXTURE/.env.example"
+printf "%s\n" "SYNTHETIC_HARDLINK_SECRET_NOT_REAL" \
+    > "$FIXTURE/secrets/unlisted-private-fixture.txt"
+ln "$FIXTURE/secrets/unlisted-private-fixture.txt" \
+    "$FIXTURE/nested/public-looking.txt"
+if "$FIXTURE/scripts/release.sh" \
+    --output-dir "$TMP/hardlinked-private-dist" \
+    --source-date-epoch "$EPOCH" \
+    > "$TMP/hardlinked-private.log" 2>&1; then
+    echo "ERROR: release accepted hardlinked private contents" >&2
+    exit 1
+fi
+grep -q "ERROR: public release cannot contain hard-linked source files" \
+    "$TMP/hardlinked-private.log"
+test ! -e "$TMP/hardlinked-private-dist/$NAME.tar.gz"
+echo "RELEASE_PRIVATE_HARDLINK=REJECTED"
