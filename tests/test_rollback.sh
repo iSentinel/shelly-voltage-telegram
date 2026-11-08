@@ -51,8 +51,12 @@ with sqlite3.connect(sys.argv[1]) as db:
     """)
 PY
 
-mkdir -p "$OLD_SRC/scripts"
+mkdir -p "$OLD_SRC/scripts" "$OLD_SRC/systemd"
 cp "$PROJECT/scripts/backup.sh" "$OLD_SRC/scripts/backup.sh"
+for unit in shelly-voltage-compose.service shelly-voltage-backup.service; do
+    printf '[Unit]\nDescription=synthetic %s\n' "$unit" \
+        > "$OLD_SRC/systemd/$unit"
+done
 for file in app.py compose.yaml Dockerfile requirements.txt; do
     printf 'synthetic rollback source\n' > "$OLD_SRC/$file"
 done
@@ -119,7 +123,9 @@ echo "ROLLBACK_INCOMPLETE_SOURCE_ARCHIVE=REJECTED"
 
 # Every mandatory runtime path must be individually present in the TAR.
 for required_path in VERSION app.py Dockerfile compose.yaml \
-    requirements.txt scripts/backup.sh; do
+    requirements.txt scripts/backup.sh \
+    systemd/shelly-voltage-compose.service \
+    systemd/shelly-voltage-backup.service; do
     label="${required_path//\//_}"
     missing="$TMP/missing-source-$label"
     src="$TMP/missing-source-data-$label"
