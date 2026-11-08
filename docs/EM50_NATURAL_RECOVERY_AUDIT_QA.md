@@ -29,6 +29,11 @@ PASS requires all of the following conditions:
   The allowance is configurable within 0..120 seconds.
 - At least one **real** nonzero measurement after the outage closed.
   No zero-voltage rows have appeared since this outage began.
+- The **newest SQLite measurement for the recovering phase** must itself
+  have a physically plausible voltage (0–500 V, exclusive) and frequency
+  (40–70 Hz), a timestamp no older than 45 seconds, not in the future,
+  and no more than 15 seconds before incident closure. A fresh HTTP
+  health status or another phase cannot hide stale/corrupt phase data.
 - Shelly currently online with /ready=true, a fresh successful poll
   no more than 120 seconds old and a positive realistic voltage.
 - The saved Telegram status-message ID exists, **without disclosing
