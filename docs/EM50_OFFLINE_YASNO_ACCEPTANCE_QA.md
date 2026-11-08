@@ -16,7 +16,7 @@ tests/test_em50_offline_yasno_acceptance.py tests the actual
 channel_status_text function with a private disposable database and
 mocked Telegram transport. It never sends, edits or pins a message.
 
-The eight scenarios include:
+The ten scenarios include:
 - Offline + an independently source-labelled, current YASNO group 10.1
   planned schedule. The old Shelly voltage/frequency are never
   displayed as currently measured; the schedule is explicitly labelled
@@ -26,6 +26,11 @@ The eight scenarios include:
   outage windows can be shown as current.
 - Disabled YASNO feature: preserve the original status byte-for-byte.
 - Kyiv midnight rollover: yesterday's schedule cannot be today's.
+- A published day with no planned outages cannot make an offline
+  Shelly appear physically online.
+- Following long offline, recovery requires three fresh successful
+  Shelly observations before the connected state returns. An updated
+  external forecast cannot accelerate the recovery transition.
 - All render paths are free of Telegram and SQLite mutations.
 
 The YASNO schedule is a *forecast* even when it overlaps a physical

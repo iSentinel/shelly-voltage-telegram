@@ -163,6 +163,44 @@ class OfflineYasnoAcceptanceTests(unittest.TestCase):
         self.assertIn("График недоступен или устарел", result)
         self.assertNotIn("04:00–11:30", result)
 
+    def test_yasno_no_planned_outage_cannot_prove_power_online(self):
+        """An empty plan must not override a physically unreachable Shelly."""
+
+        cache = Path(self.cache_file())
+        now = datetime.now(KYIV)
+        published = response(now)
+        published["10.1"]["today"]["slots"] = [
+            {"start": 0, "end": 1440, "type": "NotPlanned"}
+        ]
+        atomic_write(
+            str(cache),
+            build_cache(published, now - timedelta(seconds=45)),
+        )
+        result = self.render("ru", str(cache))
+        self.assertIn(APP.tr("ru", "status_offline"), result)
+        self.assertIn("Плановых отключений нет", result)
+        self.assertIn("Прогноз, а не измерение", result)
+        self.assert_no_stale_voltage(result)
+
+    def test_recovery_waits_for_three_fresh_shelly_samples(self):
+        """A refreshed external forecast cannot accelerate meter recovery."""
+
+        cache = self.cache_file()
+        for expected in ("recovering", "recovering", "online"):
+            self.monitor.state.success(226.1, 50.0, 1.0, recovery_after=3)
+            self.assertEqual(
+                self.monitor.state.snapshot()["connectivity"], expected
+            )
+            text = self.render("ru", cache)
+            self.assertIn(APP.tr("ru", "status_" + expected), text)
+            self.assertIn("Прогноз, а не измерение", text)
+            if expected != "online":
+                self.assertNotIn(APP.tr("ru", "status_online"), text)
+        self.assertIn("226.1", text)
+        self.assertNotIn("229.3", text)
+        self.monitor.telegram.send.assert_not_called()
+        self.monitor.telegram.edit.assert_not_called()
+
     def test_rendering_never_writes_telegram_or_sqlite(self):
         """Building the message is side-effect-free during a power outage."""
 
