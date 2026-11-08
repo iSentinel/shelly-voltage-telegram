@@ -149,6 +149,41 @@ for required_path in VERSION app.py Dockerfile compose.yaml \
 done
 echo "ROLLBACK_MISSING_EACH_REQUIRED_SOURCE_FILE=REJECTED"
 
+# The second TAR entry must not overwrite an earlier valid required file.
+duplicate="$TMP/duplicate-archive"
+mkdir -p "$duplicate"
+cp "$SNAP/voltage-old.sqlite3.gz" "$duplicate/"
+sha256sum "$duplicate/voltage-old.sqlite3.gz" \
+    > "$duplicate/voltage-old.sqlite3.gz.sha256"
+python3 - "$SNAP/source.tar.gz" "$duplicate/source.tar.gz" <<'PY_DUPLICATE'
+import sys
+import tarfile
+
+with (
+    tarfile.open(sys.argv[1], "r:gz") as original,
+    tarfile.open(sys.argv[2], "w:gz") as corrupted,
+):
+    for member in original:
+        payload = original.extractfile(member) if member.isfile() else None
+        corrupted.addfile(member, payload)
+    empty = tarfile.TarInfo("./app.py")
+    empty.size = 0
+    corrupted.addfile(empty)
+PY_DUPLICATE
+sha256sum "$duplicate/source.tar.gz" \
+    > "$duplicate/source.tar.gz.sha256"
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$duplicate" \
+        --dry-run --no-start > "$TMP/duplicate-archive.log" 2>&1; then
+    echo "ERROR: TAR with duplicated app.py was accepted" >&2
+    exit 1
+fi
+grep -q "duplicate source archive member" "$TMP/duplicate-archive.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+echo "ROLLBACK_DUPLICATE_TAR_ENTRY=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
