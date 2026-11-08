@@ -143,7 +143,6 @@ class SourceTarTests(unittest.TestCase):
                 self.assertIsNotNone(template)
                 self.assertEqual(template.read(), b"TELEGRAM_TOKEN=")
 
-
     def test_rejects_hardlinked_private_source(self):
         """Never archive a public-looking hard link into private contents."""
 
