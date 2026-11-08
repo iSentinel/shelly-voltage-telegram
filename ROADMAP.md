@@ -1,3 +1,37 @@
+## 2026-11-08 QA: provenance-labelled atomic YASNO cache
+
+- Built yasno_cache.py for explicit direct public HTTPS retrieval
+  from pinned YASNO Kyiv region 25 / DTEK DSO 902 endpoint.
+  It validates source data and schedule before writing a private
+  cache envelope with pinned URL, region/operator IDs, retrieved_at,
+  payload and SHA-256 corruption checksum. It is not a digital
+  signature and cannot defend against a compromised writer.
+- Cache writes are restricted to an existing directory, no symlink,
+  mode 0600, atomic rename + fsync file/directory. Invalid
+  or unpublished fetched schedule never replaces the prior cache.
+  Strict reads enforce file type/permissions, schema, provider IDs
+  and checksum. Schedule still needs fresh actual capture <=2h,
+  publication <=36h and today's Europe/Kyiv slots.
+- Private QA /widget_preview now prefers explicitly configured
+  YASNO_TRUSTED_CACHE_FILE over legacy YASNO_CACHE_FILE and
+  refuses any silent downgrade to raw YASNO on failure.
+  Separate community fallback remains labelled independently.
+  No network request is made by the Telegram command handler.
+- New local tests: 12 more; full integrated QA 1057/1057 PASS,
+  Ruff and maintainability quality gate PASS. Real read-only
+  YASNO API to /tmp/shelly-yasno-trusted-20261108.json succeeded;
+  27079-byte cache 0600, group10.1 48 slots, windows
+  04:00–11:30 and 14:30–22:00. Read-only preview from
+  Shelly health: 219.7 V / 50.0 Hz and separately labelled
+  YASNO graph. /ready remained HTTP 200.
+- Production 0.5.13-hw not redeployed, no Telegram sends,
+  no Shelly configuration changes, no production SQLite writes.
+  No automatic trusted cache refresh or cron configured.
+- NEXT: GitHub CI review of this cache stage; restricted
+  scheduled cache refresh, monitoring/staleness diagnostics,
+  real Telegram client acceptance, physical Pro3EM/3CT63,
+  DTEK attribution review and explicit release approval.
+
 ## 2026-11-08 QA: YASNO source in private Telegram widget preview
 
 - Direct YASNO provider source Draft PR #210 independently passed
