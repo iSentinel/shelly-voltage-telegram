@@ -59,3 +59,12 @@ independent review of exact pinned source, real Telegram text/chart
 visual sign-off, matching quiesced backup and rollback rehearsal,
 verified effective Compose for the signed release and signed approval.
 A Telegram HTML widget beta is not required for text/PNG designs.
+
+
+The exact comparison also reads both saved operator warning
+limits inside the **same read-only SQLite transaction** as
+the inspected measurements and incident. It refuses a changed,
+missing, malformed or nonfinite threshold rather than accepting
+the previous limits from an earlier transaction. A disposable
+SQLite RED/GREEN test reproduces the prior false PASS when the
+configured low threshold changed from 207 to 225 V.
