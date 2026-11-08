@@ -27,7 +27,12 @@ SPEC.loader.exec_module(UI)
 def compose_fixture(flag: str | None = "0", reader: bool = False) -> dict:
     """Build a fake Compose config containing an unprintable secret."""
 
-    environment = {"TELEGRAM_TOKEN": "PRIVATE_SYNTHETIC_TOKEN"}
+    environment = {
+        "TELEGRAM_TOKEN": "PRIVATE_SYNTHETIC_TOKEN",
+        "YASNO_CACHE_FILE": "",
+        "YASNO_TRUSTED_CACHE_FILE": "",
+        "YASNO_GROUP": "",
+    }
     if flag is not None:
         environment["TELEGRAM_YASNO_STATUS_ENABLED"] = flag
     mounts = [{"target": "/run/yasno/yasno.json"}] if reader else []
@@ -106,10 +111,14 @@ class UiOnlyReadinessTests(unittest.TestCase):
         """Compose input must force the application feature off."""
 
         overlay = ROOT / "deploy/compose.ui-only.example.yml"
-        self.assertIn(
-            'TELEGRAM_YASNO_STATUS_ENABLED: "0"',
-            overlay.read_text(encoding="utf-8"),
-        )
+        text = overlay.read_text(encoding="utf-8")
+        self.assertIn('TELEGRAM_YASNO_STATUS_ENABLED: "0"', text)
+        for key in (
+            "YASNO_CACHE_FILE",
+            "YASNO_TRUSTED_CACHE_FILE",
+            "YASNO_GROUP",
+        ):
+            self.assertIn(f'{key}: ""', text)
 
     def test_only_explicit_zero_is_accepted(self):
         """Missing, enabled and incorrectly typed values fail closed."""
@@ -142,6 +151,26 @@ class UiOnlyReadinessTests(unittest.TestCase):
         self.assertEqual(command[-3:], ["config", "--format", "json"])
         self.assertNotIn("up", command)
         self.assertNotIn("PRIVATE_SYNTHETIC_TOKEN", output.getvalue())
+
+    def test_private_preview_cache_configuration_must_be_blank(self):
+        """Public YASNO off must not leave private preview cache enabled."""
+
+        keys = ("YASNO_CACHE_FILE", "YASNO_TRUSTED_CACHE_FILE", "YASNO_GROUP")
+        for name in keys:
+            config = compose_fixture()
+            config["services"]["shelly-voltage"]["environment"][name] = (
+                "/run/yasno/pending.json" if name.endswith("FILE") else "10.1"
+            )
+            with (
+                self.subTest(name=name),
+                patch.object(
+                    UI.subprocess,
+                    "run",
+                    return_value=self.fake_result(config),
+                ),
+                self.assertRaisesRegex(ValueError, "preview"),
+            ):
+                UI.effective_configuration(self.source, self.runtime)
 
     def test_reader_mount_is_rejected(self):
         """Do not permit a YASNO mount in the UI-only release candidate."""
