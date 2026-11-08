@@ -1,3 +1,13 @@
+## 2026-11-08 — staged systemd handoff examples for EM-50
+
+- Optional OnSuccess refresh-to-reader handoff remains
+  disabled and packaged as .example files only.
+- Root exporter has limited CAP_CHOWN + CAP_DAC_OVERRIDE;
+  bot stays nonroot 10001; no user-visible Telegram sends.
+- Local QA: 1110/1110 PASS; systemd static parse PASS.
+  Real service activation and Telegram recipient acceptance
+  require separate operator approval.
+
 ## 2026-11-08 — safe YASNO handoff QA
 
 - Unpublished 0.5.14-hw candidate now has a verified exporter

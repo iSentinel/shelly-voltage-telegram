@@ -4,6 +4,7 @@
 Description=YASNO Kyiv DTEK forecast refresh (read-only public API)
 Wants=network-online.target
 After=network-online.target
+OnSuccess=shelly-yasno-handoff.service
 
 [Service]
 Type=oneshot

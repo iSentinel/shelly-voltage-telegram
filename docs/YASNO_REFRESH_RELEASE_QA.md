@@ -83,3 +83,16 @@ hide expired forecasts.
 
 This feature does not make experimental Telegram HTML widgets
 publishable to public channels via normal Bot API.
+
+
+## Root-owned recipient handoff (optional, pending review)
+
+The refresh service runs as shelly-yasno and cannot alter a
+root-owned bot-group reader directory. Successful refreshes may
+trigger an independent OnSuccess=shelly-yasno-handoff.service
+oneshot that validates source integrity and freshness, then
+atomically installs the recipient copy as root:10001 0640.
+The protected recipient directory is root:10001 0750.
+A read-only Docker bind exposes only that directory to UID10001.
+These templates remain uninstalled; validate systemd permission
+constraints inside the target LXC before activating.
