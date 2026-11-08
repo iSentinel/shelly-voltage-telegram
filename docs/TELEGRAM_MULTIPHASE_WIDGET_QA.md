@@ -32,3 +32,16 @@ scripts/quality.sh
 Result: 1018/1018 offline tests PASS. This is not evidence of physical
 Pro 3EM or Pro 3EM-3CT63 testing, recipient-visible Telegram rendering,
 or approval to change production.
+
+
+## QuickJS runtime acceptance (in GitHub Actions)
+
+`tests/widget-sandbox-scenarios.ts` is copied inside a pinned upstream
+Telegram widget-sandbox checkout and executed with its real QuickJS
+`runWidget` runner, not a browser DOM mock. It probes the resulting DOM
+for single-phase presentation, independent L2/L3 readings,
+stale-secondary suppression and L1-offline isolation.
+
+The matching workflow is `.github/workflows/widget-sandbox.yml`.
+This verifies sandbox DOM behavior only; real Telegram iOS/Android
+clients and recipient-visible delivery are still release blockers.

@@ -69,3 +69,8 @@ jobs:
               raise SystemExit("FAIL: no validated widget renderer output")
           print("PASS: official QuickJS widget sandbox executed")
           PY
+      - name: Exercise L1-L2-L3 rendering in official QuickJS
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-sandbox-scenarios.ts" packages/core/scripts/shelly-widget-acceptance.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-acceptance.ts
