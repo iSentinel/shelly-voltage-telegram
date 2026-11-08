@@ -76,6 +76,7 @@ def equivalent(current: dict, saved: dict) -> bool:
 
     return all(
         (
+            current["whole_digest"] == saved["whole_digest"],
             current["measurements_digest"] == saved["measurements_digest"],
             current["outages_digest"] == saved["outages_digest"],
             current["rows"] == saved["rows"],
