@@ -78,6 +78,13 @@ def effective_configuration(candidate: Path, runtime: Path) -> str:
         raise ValueError("effective service environment is not a mapping")
     if environment.get("TELEGRAM_YASNO_STATUS_ENABLED") != "0":
         raise ValueError("YASNO must be explicitly disabled")
+    preview_keys = (
+        "YASNO_CACHE_FILE",
+        "YASNO_TRUSTED_CACHE_FILE",
+        "YASNO_GROUP",
+    )
+    if any(environment.get(key) != "" for key in preview_keys):
+        raise ValueError("YASNO private preview cache must be disabled")
     volumes = service.get("volumes", [])
     if not isinstance(volumes, list):
         raise ValueError("candidate mounts cannot be verified")
