@@ -79,3 +79,21 @@ alongside existing .env, secrets and validation protections.
 Synthetic rollback regression fixtures seed different current
 and archived values and require that the current values survive
 both cleanup and extraction. No real rollback is executed in QA.
+
+
+## Incomplete source archive must fail before stopping Docker
+
+A source archive can have valid SHA-256 checksums, a valid TAR
+format and a valid archived SQLite database while omitting the
+files needed to run the restored application. Such a snapshot
+previously passed initial validation and could cause the rollback
+to erase installed application code before discovering the issue.
+
+The pre-stop TAR validation now requires nonempty VERSION,
+app.py, Dockerfile, compose.yaml, requirements.txt and
+scripts/backup.sh entries. The check happens before writer
+shutdown, source removal or SQLite replacement. It complements
+archive member type, traversal and expansion-size checks.
+A synthetic negative fixture supplies a checksum-valid
+VERSION-only TAR and verifies fail-closed behavior; a complete
+synthetic archive retains the original successful rollback path.
