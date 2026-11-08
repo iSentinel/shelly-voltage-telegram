@@ -78,3 +78,22 @@ the measurements and outages tables, not just counts and the latest
 records. This detects changes to old data despite an unchanged last
 event. Digests are used only in memory and never logged.
 See docs/EM50_FULL_HISTORY_BACKUP_PARITY_QA.md.
+
+
+## Full SQLite state parity
+
+A measurement/outage-only comparison can miss changes in
+meta, hourly_aggregates, settings_audit, apartment_phases,
+or later schema additions. Before a release, the read-only
+predeployment guard now hashes the complete SQLite logical dump
+(including tables, other persisted rows and schema definitions)
+for both live database and archive. Any difference fails closed
+with reason sqlite_state_not_equal, even if measurements,
+outages and the stable Telegram message ID still match.
+
+Only a boolean parity result and generic reason codes are printed.
+No full database dump, credentials, subscriber identifiers or
+Telegram message IDs are saved in public QA artifacts.
+This is an additional source-consistency gate; a successful
+comparison alone cannot authorize deployment, skip an approved
+writer stop, or replace the actual rollback capture.
