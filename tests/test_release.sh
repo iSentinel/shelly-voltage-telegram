@@ -37,6 +37,9 @@ FORBIDDEN="$(
 }
 grep -q '/.env.example$' "$LIST"
 ! grep -q '/ROADMAP.md.pre-' "$LIST"
+! grep -q '/ROADMAP.md$' "$LIST"
+! grep -q '/.work-state/' "$LIST"
+! grep -q '/.roadmap-update.lock$' "$LIST"
 ! grep -q '/validation/' "$LIST"
 ! grep -q '/dist-publish/' "$LIST"
 ! grep -q '/.ruff_cache/' "$LIST"
@@ -71,6 +74,15 @@ printf "%s\n" "TELEGRAM_BOT_TOKEN=fake-private-value" > "$FIXTURE/.env.pre-ip-fi
 printf "%s\n" "SHELLY_PASSWORD=fake-private-value" > "$FIXTURE/.env.bak"
 printf "%s\n" "PRIVATE_CREDENTIAL=fake-value" > "$FIXTURE/nested/.env.secret"
 printf "%s\n" "fake-private-value" > "$FIXTURE/secrets/token"
+printf "%s\n" "sensitive incident timeline" > "$FIXTURE/ROADMAP.md"
+printf "%s\n" "private lock" > "$FIXTURE/.roadmap-update.lock"
+printf "%s\n" "private lock" > "$FIXTURE/.telegram-private-acceptance.lock"
+mkdir -p "$FIXTURE/.work-state"
+printf "%s\n" "synthetic_private" > "$FIXTURE/.work-state/firmware-progress.json"
+printf "%s\n" "synthetic_private" > "$FIXTURE/nested/identity.pem"
+printf "%s\n" "synthetic_private" > "$FIXTURE/nested/owner.key"
+printf "%s\n" "synthetic_private" > "$FIXTURE/nested/private.token"
+printf "%s\n" "synthetic_private" > "$FIXTURE/nested/private.secret"
 "$FIXTURE/scripts/release.sh" --output-dir "$TMP/private-dist" --source-date-epoch "$EPOCH" > "$TMP/private-release.log"
 tar -tzf "$TMP/private-dist/$NAME.tar.gz" > "$TMP/private-list.txt"
 grep -q "/.env.example$" "$TMP/private-list.txt"
@@ -79,4 +91,8 @@ if grep -E "/\\.env" "$TMP/private-list.txt" | grep -v "/\\.env.example$"; then
     exit 1
 fi
 ! grep -q "/secrets/" "$TMP/private-list.txt"
+if grep -E '(^|/)(ROADMAP[.]md|[.]roadmap-update[.]lock|[.]telegram-private-acceptance[.]lock)(/|$)|(^|/)[.]work-state/|[.](pem|key|token|secret)$' "$TMP/private-list.txt"; then
+    echo "ERROR: local operator evidence entered release archive" >&2
+    exit 1
+fi
 echo "RELEASE_PRIVATE_ENV_EXCLUSION PASS"
