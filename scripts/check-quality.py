@@ -44,6 +44,7 @@ def python_files(root: Path) -> list[Path]:
         root / "manual_dtek_forecast.py",
         root / "outage_data_ua.py",
         root / "yasno_schedule.py",
+        root / "yasno_cache.py",
         root / "telegram_widget_data.py",
         root / "telegram_widget_fallback.py",
     ]

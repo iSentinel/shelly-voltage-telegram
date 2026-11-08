@@ -18,6 +18,7 @@ from test_yasno_schedule import response
 
 from telegram_widget_data import widget_public_data
 from telegram_widget_fallback import widget_fallback_text
+from yasno_cache import atomic_write, build_cache
 
 KYIV = ZoneInfo("Europe/Kyiv")
 
@@ -35,6 +36,7 @@ def settings(path: str) -> dict[str, str]:
 
     return {
         "YASNO_CACHE_FILE": path,
+        "YASNO_TRUSTED_CACHE_FILE": "",
         "YASNO_GROUP": "10.1",
         "COMMUNITY_OUTAGE_CACHE_FILE": "",
         "COMMUNITY_OUTAGE_REGION": "",
@@ -141,6 +143,64 @@ class YasnoWidgetPreviewTests(unittest.TestCase):
         self.assertIn("L2: 222.2 V", caption)
         self.assertIn("L3: —", caption)
         self.assertIn("Source: YASNO", caption)
+
+    def test_trusted_cache_takes_priority_over_raw(self):
+        """An explicit sealed cache is preferred over legacy raw JSON."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            trusted = Path(tmp) / "verified.json"
+            raw = Path(tmp) / "raw.json"
+            raw.write_text("broken json", encoding="utf-8")
+            now = datetime.now(KYIV)
+            atomic_write(str(trusted), build_cache(response(now), now))
+            env = settings(str(raw))
+            env["YASNO_TRUSTED_CACHE_FILE"] = str(trusted)
+            monitor = make_monitor("ru")
+            monitor.state.success(221.7, 50.0, 3.0, 1)
+            with patch.dict(os.environ, env):
+                text = APP.private_widget_preview_text(monitor)
+        self.assertIn("Источник: YASNO", text)
+        self.assertIn("04:00–11:30", text)
+
+    def test_corrupt_trusted_cache_does_not_downgrade_to_raw(self):
+        """A configured trusted source cannot silently become raw data."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            trusted = Path(tmp) / "verified.json"
+            raw = Path(tmp) / "raw.json"
+            now = datetime.now(KYIV)
+            write_yasno(raw)
+            data = build_cache(response(now), now)
+            data["source_url"] = "https://spoofed.example/"
+            atomic_write(str(trusted), data)
+            env = settings(str(raw))
+            env["YASNO_TRUSTED_CACHE_FILE"] = str(trusted)
+            monitor = make_monitor("en")
+            monitor.state.success(226.0, 50.0, 3.0, 1)
+            with patch.dict(os.environ, env):
+                text = APP.private_widget_preview_text(monitor)
+        self.assertIn("Voltage: 226.0 V", text)
+        self.assertNotIn("YASNO", text)
+        self.assertNotIn("04:00", text)
+
+    def test_trusted_read_does_not_fetch_in_telegram_handler(self):
+        """No live provider request is permitted during private preview."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            trusted = Path(tmp) / "verified.json"
+            now = datetime.now(KYIV)
+            atomic_write(str(trusted), build_cache(response(now), now))
+            env = settings("")
+            env["YASNO_TRUSTED_CACHE_FILE"] = str(trusted)
+            monitor = make_monitor("en")
+            monitor.state.success(219.9, 50.0, 2.0, 1)
+            with (
+                patch.dict(os.environ, env),
+                patch("yasno_cache.fetch_live") as fetcher,
+            ):
+                text = APP.private_widget_preview_text(monitor)
+            fetcher.assert_not_called()
+        self.assertIn("Source: YASNO", text)
 
     def test_unknown_source_is_rejected(self):
         """Prevent arbitrary untrusted forecast source labels."""

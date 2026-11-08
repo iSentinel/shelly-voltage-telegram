@@ -54,3 +54,30 @@ scripts/quality.sh
 Local combined acceptance 2026-11-08: 1045/1045 tests PASS,
 Ruff and quality gate PASS. Telegram QuickJS and actual
 recipient-visible tests remain mandatory release gates.
+
+
+## Provenance-labelled cache (next QA stage)
+
+Use `yasno_cache.py --output /existing/directory/yasno.json`
+to fetch and validate YASNO from the pinned public HTTPS
+endpoint, then atomically install a private `0600` cache.
+The envelope includes the pinned URL, Kyiv region 25, DTEK
+operator 902, capture timestamp and a SHA-256 checksum to
+detect accidental corruption. SHA-256 is **not** a digital
+signature and does not authenticate an attacker-controlled
+local file; protect the writer account and filesystem.
+
+```shell
+python3 yasno_cache.py --help
+python3 yasno_cache.py --output /existing/directory/yasno.json --group 10.1
+```
+
+An explicitly configured `YASNO_TRUSTED_CACHE_FILE` takes
+priority over the legacy `YASNO_CACHE_FILE`. If the trusted
+cache is invalid, the preview does **not** silently downgrade
+to the legacy raw file. It can still use a separately verified
+community source, or show only the fresh Shelly measurements.
+
+This writer has no scheduled service, no Telegram sender and
+no production deployment. Before activation, secure the
+destination directory and configure a bounded refresh cadence.

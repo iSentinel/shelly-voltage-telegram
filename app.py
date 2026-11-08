@@ -51,6 +51,7 @@ from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
 from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
+from yasno_cache import read_verified_cache as read_yasno_verified_cache
 from yasno_schedule import parse_schedule as parse_yasno_schedule
 from yasno_schedule import read_cached as read_yasno_cache
 
@@ -1821,12 +1822,14 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
 def cached_yasno_preview_args() -> dict | None:
     """Read a configured local YASNO cache; never make a network request."""
 
-    path = os.getenv("YASNO_CACHE_FILE")
+    trusted = os.getenv("YASNO_TRUSTED_CACHE_FILE")
+    path = trusted or os.getenv("YASNO_CACHE_FILE")
     group = os.getenv("YASNO_GROUP")
     if not path or not group:
         return None
     try:
-        data, fetched_at = read_yasno_cache(path)
+        reader = read_yasno_verified_cache if trusted else read_yasno_cache
+        data, fetched_at = reader(path)
         result = parse_yasno_schedule(
             data, group, datetime.now(ZoneInfo("UTC")), fetched_at
         )
