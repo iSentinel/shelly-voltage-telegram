@@ -26,11 +26,11 @@ def args(model: str = "pro_em50", samples: int = 2, interval: float = 0.0):
     return argparse.Namespace(model=model, samples=samples, interval=interval)
 
 
-def identity():
+def identity(model: str = "SPEM-002CEBEU50"):
     """Return public fixture identity and a private MAC that must not leak."""
 
     return {
-        "model": "SPEM-002CEBEU50",
+        "model": model,
         "firmware": "2.1.1",
         "mac": "private-do-not-serialize",
         "uptime": 1000,
@@ -52,6 +52,7 @@ class HardwarePreflightTests(unittest.TestCase):
         self.assertEqual(len(report["samples"]), 2)
         self.assertEqual(report["samples"][0]["L1"]["voltage_v"], 184.9)
         self.assertNotIn("mac", str(report).lower())
+        self.assertTrue(report["model_identity_verified"])
         self.assertFalse(report["physical_family_independently_verified"])
         self.assertEqual(report["production_writes"], 0)
         self.assertEqual(report["telegram_writes"], 0)
@@ -60,7 +61,7 @@ class HardwarePreflightTests(unittest.TestCase):
         """Only a three-phase complete atomic report can pass."""
 
         client = Mock()
-        client.device_health.return_value = identity()
+        client.device_health.return_value = identity("SPEM-003CEBEU")
         client.read_phases.return_value = {
             "L1": (220.0, 50.0, 6.3),
             "L2": (222.0, 50.0, 6.3),
@@ -69,11 +70,67 @@ class HardwarePreflightTests(unittest.TestCase):
         report = PROBE.run_probe(client, args("pro3em", 1))
         self.assertEqual(set(report["samples"][0]), {"L1", "L2", "L3"})
 
+    def test_model_mismatch_fails_before_any_phase_reads(self):
+        """Pro EM-50 identity cannot pass a selected Pro 3EM adapter."""
+
+        client = Mock()
+        client.device_health.return_value = identity()
+        with self.assertRaisesRegex(RuntimeError, "model differs"):
+            PROBE.run_probe(client, args("pro3em", 1))
+        client.read_phases.assert_not_called()
+        client.read.assert_not_called()
+
+    def test_em50_rejects_pro3em_device(self):
+        """Selecting a single-phase adapter must not accept a Pro 3EM."""
+
+        client = Mock()
+        client.device_health.return_value = identity("SPEM-003CEBEU")
+        with self.assertRaisesRegex(RuntimeError, "model differs"):
+            PROBE.run_probe(client, args("pro_em50", 1))
+        client.read.assert_not_called()
+
+    def test_pro3em_3ct63_identity_is_supported(self):
+        """The documented Pro 3EM 3CT63 is part of the same RPC family."""
+
+        client = Mock()
+        client.device_health.return_value = identity("SPEM-003CEBEU63")
+        client.read_phases.return_value = {
+            "L1": (222.0, 50.0, 6.1),
+            "L2": (223.0, 50.0, 6.1),
+            "L3": (221.0, 50.0, 6.1),
+        }
+        result = PROBE.run_probe(client, args("pro3em", 1))
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["model_identity_verified"])
+        self.assertFalse(result["physical_family_independently_verified"])
+
+    def test_spoofed_model_suffix_and_prefix_fail(self):
+        """Do not trust loosely matched text in RPC model identifiers."""
+
+        for model in ("SPEM-003CEBEU63-anything", "SPEM-003", "pro3em"):
+            with self.subTest(model=model):
+                client = Mock()
+                client.device_health.return_value = identity(model)
+                with self.assertRaisesRegex(RuntimeError, "model differs"):
+                    PROBE.run_probe(client, args("pro3em", 1))
+                client.read_phases.assert_not_called()
+
+    def test_other_model_identity_remains_unattested(self):
+        """Do not label unknown model families independently verified."""
+
+        client = Mock()
+        client.device_health.return_value = identity("unknown-firmware")
+        client.read.return_value = (223.0, 50.0, 5.0)
+        result = PROBE.run_probe(client, args("em_gen3", 1))
+        self.assertEqual(result["status"], "pass")
+        self.assertFalse(result["model_identity_verified"])
+        self.assertFalse(result["physical_family_independently_verified"])
+
     def test_missing_phase_is_failure(self):
         """Do not certify incomplete physical three-phase polling."""
 
         client = Mock()
-        client.device_health.return_value = identity()
+        client.device_health.return_value = identity("SPEM-003CEBEU")
         client.read_phases.return_value = {
             "L1": (220.0, 50.0, 6.3),
             "L3": (221.0, 50.0, 6.3),

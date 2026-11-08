@@ -67,26 +67,59 @@ def extract_schedule(html: str) -> dict:
     return data
 
 
-def published_groups(fact: dict, now: datetime) -> dict:
-    """Return only today's published groups, rejecting a wrong source date."""
+def parse_source_day(value: object):
+    """Interpret a DTEK day label or an exact Kyiv-midnight Unix second."""
 
+    if isinstance(value, bool):
+        raise ValueError("DTEK source date is invalid")
+    if isinstance(value, int) or (
+        isinstance(value, str) and re.fullmatch(r"\d{10}", value)
+    ):
+        stamp = int(value)
+        if not 1_000_000_000 <= stamp <= 4_102_444_800:
+            raise ValueError("DTEK Unix source date is out of range")
+        try:
+            local = datetime.fromtimestamp(stamp, ZoneInfo("Europe/Kyiv"))
+        except (ValueError, OSError, OverflowError) as exc:
+            raise ValueError("DTEK source date is invalid") from exc
+        if local.hour or local.minute or local.second:
+            raise ValueError("DTEK timestamp is not Kyiv local midnight")
+        return local.date()
+    if not isinstance(value, str):
+        raise ValueError("DTEK source date is invalid")
+    for pattern in ("%Y-%m-%d", "%d.%m.%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(value, pattern).date()
+        except ValueError:
+            continue
+    raise ValueError("DTEK source date has unknown format")
+
+
+def published_groups(fact: dict, now: datetime) -> dict:
+    """Accept only one exact local-day record, including Unix day keys."""
+
+    if now.tzinfo is None or not isinstance(fact, dict):
+        raise ValueError("DTEK source date requires timezone and fact")
     today = now.astimezone(ZoneInfo("Europe/Kyiv")).date()
-    allowed = (
-        today.isoformat(),
-        today.strftime("%d.%m.%Y"),
-        today.strftime("%d-%m-%Y"),
-    )
     source_day = fact.get("today")
-    if source_day is not None and source_day not in allowed:
+    if source_day is not None and parse_source_day(source_day) != today:
         raise ValueError("DTEK source date differs from today")
     days = fact.get("data", fact)
     if not isinstance(days, dict):
         raise ValueError("DTEK days missing")
-    for day in allowed:
-        groups = days.get(day)
-        if isinstance(groups, dict) and groups:
-            return groups
-    raise ValueError("DTEK schedule for today missing")
+    matches = []
+    for day, groups in days.items():
+        try:
+            local_day = parse_source_day(day)
+        except ValueError:
+            continue
+        if local_day == today:
+            if not isinstance(groups, dict) or not groups:
+                raise ValueError("DTEK schedule groups are missing")
+            matches.append(groups)
+    if len(matches) != 1:
+        raise ValueError("DTEK schedule for today missing or ambiguous")
+    return matches[0]
 
 
 def outage_periods(hours: dict) -> list[tuple[str, str]]:
