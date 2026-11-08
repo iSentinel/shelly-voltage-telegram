@@ -1,3 +1,28 @@
+## 2026-11-08 QA: mandatory full-history parity in EM-50 release preflight
+
+- Draft PR #232 full-history backup parity has independent
+  push and PR CI SUCCESS. The guard hashes all ordered
+  measurements/outages under one read-only transaction.
+- This stage integrates the guard into the MAIN source
+  scripts/em50-release-preflight.py as a mandatory check;
+  it cannot report automated_pass=true with old/mismatched
+  snapshot history, even if Shelly is online and /ready 200.
+- One new synthetic integration test proves an earlier
+  modified measurement blocks the overall release check;
+  1233/1233 Python tests PASS with -W default, Ruff/quality
+  and secret-free reproducible release archive PASS.
+- Real online Shelly read-only candidate results:
+  5 automated checks PASS, predeploy_backup_parity FAIL
+  with stale nightly backup, different measurements,
+  outage state and Telegram metadata. Private admin
+  recipient-visible send/edit was previously confirmed.
+  2 manual gates remain, release_authorized=false.
+- Dedicated shelly-yasno account and Docker reader mount,
+  fresh approved backup and explicit signed deployment/
+  rollback authorization remain required. No production
+  container restart, SQLite write, public Telegram
+  message change, Shelly control or PR merge.
+
 ## 2026-11-08 QA: verify full SQLite history before EM-50 rollout
 
 - Recovered Shelly EM-50 is online; incident #18 closed.
