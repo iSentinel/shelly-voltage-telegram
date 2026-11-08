@@ -52,13 +52,13 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
   const w=window.TelegramWidget;
   const $=id=>document.getElementById(id);
   const words={
-    uk:["Електромережа · Shelly","НА ЗВ'ЯЗКУ","НЕМАЄ ЗВ'ЯЗКУ","ЗАСТАРІЛО","НЕМАЄ ДАНИХ","Напруга","Частота","Останній запит","Вимір Shelly","Стан живлення невідомий","Прогноз відключень","Група ","Світло за планом","Відключення","Можливо","Графік недоступний","Неофіційний прогноз · outage-data-ua","Графік застарів","Прогноз не підтверджує наявність електрики. Факт — лише свіжі дані Shelly.","с","В","Гц"],
-    ru:["Электросеть · Shelly","НА СВЯЗИ","НЕТ СВЯЗИ","УСТАРЕЛО","НЕТ ДАННЫХ","Напряжение","Частота","Последний опрос","Измерено Shelly","Неизвестно, есть ли электричество","Прогноз отключений","Группа ","По плану свет есть","Отключение","Возможно","График не загружен","Неофициальный прогноз · outage-data-ua","График устарел","План не подтверждает наличие электричества. Факт — только свежие данные Shelly.","с","В","Гц"],
-    en:["Power monitor · Shelly","CONNECTED","DISCONNECTED","STALE","NO DATA","Voltage","Frequency","Last sample","Shelly measurement","Actual mains status unknown","Outage forecast","Group ","Scheduled power","Outage","Possible","Schedule unavailable","Unofficial forecast · outage-data-ua","Schedule expired","A forecast is not proof of power. Only fresh Shelly readings are measured.","s","V","Hz"]
+    uk:["Електромережа · Shelly","НА ЗВ'ЯЗКУ","НЕМАЄ ЗВ'ЯЗКУ","ЗАСТАРІЛО","НЕМАЄ ДАНИХ","Напруга","Частота","Останній запит","Вимір Shelly","Стан живлення невідомий","Прогноз відключень","Група ","Світло за планом","Відключення","Можливо","Графік недоступний","Неофіційний прогноз · outage-data-ua","Графік застарів","Прогноз не підтверджує наявність електрики. Факт — лише свіжі дані Shelly.","с","В","Гц","YASNO · графік ДТЕК Київ"],
+    ru:["Электросеть · Shelly","НА СВЯЗИ","НЕТ СВЯЗИ","УСТАРЕЛО","НЕТ ДАННЫХ","Напряжение","Частота","Последний опрос","Измерено Shelly","Неизвестно, есть ли электричество","Прогноз отключений","Группа ","По плану свет есть","Отключение","Возможно","График не загружен","Неофициальный прогноз · outage-data-ua","График устарел","План не подтверждает наличие электричества. Факт — только свежие данные Shelly.","с","В","Гц","YASNO · график ДТЭК Киев"],
+    en:["Power monitor · Shelly","CONNECTED","DISCONNECTED","STALE","NO DATA","Voltage","Frequency","Last sample","Shelly measurement","Actual mains status unknown","Outage forecast","Group ","Scheduled power","Outage","Possible","Schedule unavailable","Unofficial forecast · outage-data-ua","Schedule expired","A forecast is not proof of power. Only fresh Shelly readings are measured.","s","V","Hz","YASNO · DTEK Kyiv forecast"]
   };
   let drawn=null;
   function validBars(data,now){
-    if(!data||data.schema!==1||data.src!=="community"||typeof data.b!=="string"||
+    if(!data||data.schema!==1||(data.src!=="community"&&data.src!=="yasno")||typeof data.b!=="string"||
        !/^[OX?]{48}$/.test(data.b))return "";
     if(typeof data.u!=="number"||!Number.isFinite(data.u)||
        typeof data.e!=="number"||!Number.isFinite(data.e))return "";
@@ -125,7 +125,8 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
       /^\d{1,2}\.\d$/.test(data.g);
     $("group").hidden=!hasGroup;
     $("group").textContent=hasGroup?T[11]+data.g:"—";
-    $("source").textContent=bars?T[16]:data&&data.b?T[17]:T[15];
+    $("source").textContent=bars?
+      (data.src==="yasno"?T[22]:T[16]):data&&data.b?T[17]:T[15];
   }
   if(w&&typeof w.onEvent==="function"){
     w.onEvent("publicDataChanged",render);

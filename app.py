@@ -51,6 +51,8 @@ from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
 from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
+from yasno_schedule import parse_schedule as parse_yasno_schedule
+from yasno_schedule import read_cached as read_yasno_cache
 
 
 def read_version() -> str:
@@ -1816,8 +1818,52 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
+def cached_yasno_preview_args() -> dict | None:
+    """Read a configured local YASNO cache; never make a network request."""
+
+    path = os.getenv("YASNO_CACHE_FILE")
+    group = os.getenv("YASNO_GROUP")
+    if not path or not group:
+        return None
+    try:
+        data, fetched_at = read_yasno_cache(path)
+        result = parse_yasno_schedule(
+            data, group, datetime.now(ZoneInfo("UTC")), fetched_at
+        )
+        return {
+            "group": result.group,
+            "bars": result.bars,
+            "day": result.day,
+            "forecast_updated": result.retrieved_at,
+            "forecast_source": "yasno",
+        }
+    except (ValueError, OSError, KeyError, TypeError):
+        return None
+
+
+def cached_community_preview_args() -> dict:
+    """Use an independently labelled community cache only if valid."""
+
+    path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
+    region = os.getenv("COMMUNITY_OUTAGE_REGION")
+    group = os.getenv("COMMUNITY_OUTAGE_GROUP")
+    if not path or not region or not group:
+        return {}
+    try:
+        cache = read_snapshot(path)
+        bars, day, updated = slots_from_community(cache, region, group)
+        return {
+            "group": group,
+            "bars": bars,
+            "day": day,
+            "forecast_updated": updated,
+        }
+    except (ValueError, OSError, KeyError, TypeError):
+        return {}
+
+
 def private_widget_preview_text(monitor: Monitor) -> str:
-    """Build a private, stale-safe widget caption without Telegram I/O."""
+    """Compose one private caption from fresh Shelly and safe forecasts."""
 
     with monitor.config_lock:
         reading = monitor.state.snapshot()
@@ -1828,25 +1874,11 @@ def private_widget_preview_text(monitor: Monitor) -> str:
                 phase: monitor.phase_states[phase].snapshot()
                 for phase in ("L2", "L3")
             }
-    args = {}
-    path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
-    region = os.getenv("COMMUNITY_OUTAGE_REGION")
-    group = os.getenv("COMMUNITY_OUTAGE_GROUP")
-    if path and region and group:
-        try:
-            cache = read_snapshot(path)
-            bars, day, updated = slots_from_community(cache, region, group)
-            args = {
-                "group": group,
-                "bars": bars,
-                "day": day,
-                "forecast_updated": updated,
-            }
-        except (ValueError, OSError, KeyError, TypeError):
-            # A missing/untrusted forecast must not hide fresh Shelly data.
-            pass
+    forecast = cached_yasno_preview_args() or cached_community_preview_args()
     return widget_fallback_text(
-        widget_public_data(reading, language=language, phases=phases, **args)
+        widget_public_data(
+            reading, language=language, phases=phases, **forecast
+        )
     )
 
 

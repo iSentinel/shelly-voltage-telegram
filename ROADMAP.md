@@ -1,3 +1,33 @@
+## 2026-11-08 QA: YASNO source in private Telegram widget preview
+
+- Direct YASNO provider source Draft PR #210 independently passed
+  Python 3.11/3.12/3.13 GitHub push + PR CI. Public YASNO
+  region 25 / DSO 902 maps to Kyiv / DTEK Kyiv networks.
+- In a new dependent QA worktree, added a local-only cache
+  preference for /widget_preview. Opt-in YASNO_CACHE_FILE and
+  YASNO_GROUP select a strict parser of the pinned YASNO response.
+  No network calls occur in a Telegram request handler.
+- If YASNO cache is missing, invalid, unpublished or too old,
+  the separate community cache may be used (labelled as such);
+  otherwise only physical Shelly measurements are shown.
+  Local file mtime alone cannot prove provider authenticity.
+- Widget schema accepts distinct src=yasno and src=community,
+  labels each correctly in RU/UK/EN, and hides expired
+  schedules as before. Voltage/phase state is always sourced
+  from Shelly, never forecast. HTML zlib9 3606/4096 bytes.
+- Full combined QA: 1045/1045 Python tests PASS,
+  Ruff and quality gate PASS. Read-only preview using actual
+  Shelly health and YASNO Kyiv group 10.1 JSON displayed
+  221.6 V / 49.9 Hz with forecast 04:00–11:30,
+  14:30–22:00, separately labelled.
+- No Telegram message was sent. The production 0.5.13-hw
+  service was not deployed or restarted. SQLite untouched,
+  /ready continued HTTP 200.
+- NEXT: official QuickJS DOM and source labels, GitHub CI,
+  then the real client/private recipient acceptance, cache
+  provenance and scheduled read-only refresh architecture,
+  Pro3EM/3CT63 hardware and explicit release approval.
+
 ## 2026-11-08 QA: Telegram widget public_data lifecycle checks
 
 - New dependent isolated QA branch from responsive PR #208 tests
