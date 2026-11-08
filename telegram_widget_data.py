@@ -26,7 +26,7 @@ def numeric(value: object, low: float, high: float) -> float | None:
     number = float(value)
     if not math.isfinite(number) or not low <= number <= high:
         return None
-    return round(number, 2)
+    return number
 
 
 def health_state(health: object, now: float) -> dict:
@@ -43,10 +43,10 @@ def health_state(health: object, now: float) -> dict:
     voltage = numeric(health.get("voltage"), 0, 400)
     if voltage is None:
         return {"s": "unknown"}
-    result = {"s": "online", "v": voltage, "t": round(ts)}
+    result = {"s": "online", "v": round(voltage, 2), "t": int(ts)}
     frequency = numeric(health.get("frequency"), 40, 70)
     if frequency is not None:
-        result["f"] = frequency
+        result["f"] = round(frequency, 2)
     return result
 
 
@@ -74,7 +74,7 @@ def forecast_state(
     return {
         "b": bars,
         "d": day,
-        "u": round(fresh),
+        "u": int(fresh),
         "e": round(expires),
         "src": "community",
     }

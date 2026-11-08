@@ -39,6 +39,24 @@ class FallbackCaptionTests(unittest.TestCase):
                 self.assertIn("225.3", text)
                 self.assertIn("50.0", text)
 
+    def test_english_caption_uses_latin_units(self):
+        """English labels must not inherit Cyrillic unit abbreviations."""
+
+        data = widget_public_data(
+            {
+                "connectivity": "online",
+                "voltage": 223.3,
+                "frequency": 50.0,
+                "last_success": NOW - 1,
+            },
+            language="en",
+            now=NOW,
+        )
+        text = widget_fallback_text(data, now=NOW)
+        self.assertIn("223.3 V", text)
+        self.assertIn("50.0 Hz", text)
+        self.assertNotIn("Гц", text)
+
     def test_offline_does_not_display_historic_voltage(self):
         """Prior measurements do not imply the power state while offline."""
 
