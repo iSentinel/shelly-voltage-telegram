@@ -82,3 +82,13 @@ control calls are permitted.
 
 This covers the SDK's update bridge, not recipient-visible
 delivery on installed Telegram clients.
+
+
+## Repeated public data updates
+
+`tests/widget-update-stress.ts` applies 34 QuickJS data changes,
+alternating fresh three-phase data, offline status and an expired
+forecast. The final state must recover the complete 48-cell graph.
+The runtime must never stop, exceed Telegram's 2,000 DOM-node
+limit, or make network requests. This complements the five-stage
+lifecycle test without needing real Telegram messages.

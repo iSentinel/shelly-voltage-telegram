@@ -79,6 +79,11 @@ jobs:
         run: |
           cp "${GITHUB_WORKSPACE}/tests/widget-lifecycle-scenarios.ts" packages/core/scripts/shelly-widget-lifecycle.ts
           SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-lifecycle.ts
+      - name: Stress repeated widget data updates in QuickJS
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-update-stress.ts" packages/core/scripts/shelly-widget-stress.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-stress.ts
       - name: Install headless browser for official renderer layout
         working-directory: ${{ runner.temp }}/telegram-widget-sandbox
         run: corepack pnpm exec playwright install --with-deps chromium

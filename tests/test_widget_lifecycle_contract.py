@@ -37,6 +37,27 @@ class WidgetLifecycleContractTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, script)
 
+    def test_stress_checks_dom_limits_and_final_state(self):
+        """Exercise many real QuickJS updates without accumulating nodes."""
+
+        script = (ROOT / "tests" / "widget-update-stress.ts").read_text(
+            encoding="utf-8"
+        )
+        action = WORKFLOW.read_text(encoding="utf-8")
+        for marker in (
+            "widget-update-stress.ts",
+            "shelly-widget-stress.ts",
+        ):
+            self.assertIn(marker, action)
+        for marker in (
+            "result.nodes < 2000",
+            "result.stopped",
+            "result.requests.length, 0",
+            "34 updates",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, script)
+
     def test_no_network_or_telegram_send(self):
         """Keep the lifecycle acceptance isolated from live Bot API."""
 
