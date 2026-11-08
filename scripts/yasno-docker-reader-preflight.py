@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -65,16 +65,31 @@ def restricted_env(config: dict) -> dict[str, str]:
 
 
 def reader_mount(document: dict) -> dict:
-    """Require precisely one protected reader bind from the intended host."""
+    """Require one protected bind without parent/child shadow mounts."""
 
-    mounts = [
-        mount
-        for mount in document.get("Mounts", [])
-        if mount.get("Destination") == EXPECTED_TARGET
-    ]
-    if len(mounts) != 1:
+    mounts = document.get("Mounts")
+    if not isinstance(mounts, list):
+        raise ValueError("Docker mounts are missing or malformed")
+    root = PurePosixPath(EXPECTED_TARGET)
+    approved = []
+    for mount in mounts:
+        if not isinstance(mount, dict):
+            raise ValueError("Docker mount entry invalid")
+        destination = mount.get("Destination")
+        if not isinstance(destination, str) or not destination.startswith("/"):
+            raise ValueError("Docker mount destination invalid")
+        target = PurePosixPath(destination)
+        if ".." in target.parts:
+            raise ValueError("Docker mount traversal is not permitted")
+        if destination == EXPECTED_TARGET:
+            approved.append(mount)
+        elif (
+            target == root or root in target.parents or target in root.parents
+        ):
+            raise ValueError("overlapping YASNO reader mount")
+    if len(approved) != 1:
         raise ValueError("YASNO reader mount missing or duplicated")
-    mount = mounts[0]
+    mount = approved[0]
     if (
         mount.get("Type") != "bind"
         or mount.get("Source") != EXPECTED_SOURCE

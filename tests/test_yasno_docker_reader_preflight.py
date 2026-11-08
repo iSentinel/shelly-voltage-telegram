@@ -121,6 +121,64 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
             ):
                 QA.verify_reader(document, "staging")
 
+    def test_reader_mount_rejects_overlapping_destinations(self):
+        """No other Docker mount may shadow or replace the trusted cache."""
+
+        for destination in (
+            "/run/yasno/yasno.json",
+            "/run/yasno/extra",
+            "/run",
+            "/run/yasno/subdir",
+            "/run/yasno/",
+            "/",
+        ):
+            document = inspection()
+            document["Mounts"].append(
+                {
+                    "Destination": destination,
+                    "Source": "/tmp/untrusted-qa",
+                    "Type": "bind",
+                    "RW": True,
+                }
+            )
+            with (
+                self.subTest(destination=destination),
+                self.assertRaisesRegex(ValueError, "overlap"),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_traversal_or_malformed_destinations_fail_closed(self):
+        """Do not trust noncanonical or invalid Docker mount metadata."""
+
+        for destination in (
+            "/run/yasno/../yasno/yasno.json",
+            "run/yasno/yasno.json",
+            None,
+        ):
+            document = inspection()
+            document["Mounts"].append(
+                {"Destination": destination, "Source": "/tmp", "RW": True}
+            )
+            with (
+                self.subTest(destination=destination),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_unrelated_readonly_mount_remains_supported(self):
+        """A separate private mount cannot override the trusted YASNO bind."""
+
+        document = inspection()
+        document["Mounts"].append(
+            {
+                "Destination": "/data/certs",
+                "Source": "/var/lib/qa-certs",
+                "Type": "bind",
+                "RW": False,
+            }
+        )
+        self.assertIn("phase=staging", QA.verify_reader(document, "staging"))
+
     def test_docker_user_and_filesystem_must_remain_hardened(self):
         """Reject privilege elevation and writable container filesystem."""
 
