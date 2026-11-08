@@ -107,6 +107,8 @@ class AccountGuardTests(unittest.TestCase):
                 "bootstrap",
             )
         self.assertIn("phase=bootstrap", result)
+        self.assertIn("cache_files_optional=true", result)
+        self.assertNotIn("cache_modes_ok=true", result)
         self.assertEqual(directories.call_count, 2)
         files.assert_not_called()
 

@@ -10,6 +10,8 @@ There are now two explicit, read-only stages:
    its 0700 directory, and the root:10001 reader directory mode 0750.
    Cache files may be absent until the first successful refresh, but
    any file already present MUST meet strict ownership and modes.
+   Successful bootstrap reports cache_files_optional=true, NOT
+   cache_modes_ok=true; it does not authorize a live release.
 2. live: require everything from bootstrap PLUS a protected producer
    cache (0600) and root:10001 recipient cache (0640). Missing caches
    always FAIL. Default phase remains live for backward safety.

@@ -68,10 +68,12 @@ def verify(
     ):
         if phase == "live" or path.exists() or path.is_symlink():
             file(path, owner, group, mode)
-    return (
-        "producer_nologin=true reader_nonroot=true "
-        f"cache_modes_ok=true phase={phase}"
+    marker = (
+        "cache_modes_ok=true"
+        if phase == "live"
+        else "cache_files_optional=true"
     )
+    return f"producer_nologin=true reader_nonroot=true {marker} phase={phase}"
 
 
 def main() -> int:
