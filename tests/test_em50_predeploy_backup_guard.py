@@ -197,6 +197,32 @@ class PredeployBackupGuardTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ordinary file"):
             GATE.newest_backup(self.backups)
 
+    def test_old_archive_symlink_is_rejected_before_sort(self):
+        """Reject even a linked OLD candidate hidden behind a newer file."""
+
+        old_source = self.root / "ancient.sqlite3.gz"
+        old_source.write_bytes(b"synthetic")
+        old = self.now - 86400
+        os.utime(old_source, (old, old))
+        old_link = self.backups / "voltage-1999.sqlite3.gz"
+        old_link.symlink_to(old_source)
+        with self.assertRaisesRegex(ValueError, "ordinary file"):
+            GATE.newest_backup(self.backups)
+
+    def test_decompressed_copy_is_never_world_readable(self):
+        """Even inside a private directory, copied SQLite is mode 0600."""
+
+        def inspect_mode(path: Path) -> dict:
+            return {
+                "file_mode": path.stat().st_mode & 0o777,
+                "directory_mode": path.parent.stat().st_mode & 0o777,
+            }
+
+        with patch.object(GATE, "sqlite_state", side_effect=inspect_mode):
+            result = GATE.unpack_state(self.archive)
+        self.assertEqual(result["file_mode"], 0o600)
+        self.assertEqual(result["directory_mode"], 0o700)
+
     def test_missing_live_sqlite_fails_without_creating_it(self):
         """Never create a synthetic production DB implicitly."""
 

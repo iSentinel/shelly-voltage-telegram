@@ -57,3 +57,16 @@ the previous daily backup.
 
 The command does not send Telegram messages, alter Shelly,
 restart Docker or grant 0.5.14-hw release authorization.
+
+
+## Deterministic symlink rejection and temporary file confidentiality
+
+The predeployment backup scanner validates every matching backup
+archive's lstat type and link count BEFORE sorting by modification
+time. An older linked candidate is rejected just as an apparently
+newer one would be; the outcome cannot depend on runner file ordering.
+
+SQLite data decompressed for inspection is created mode 0600 inside
+an automatically deleted 0700 QA directory. No raw status message IDs
+or SQLite backup content are logged. Two regression tests protect
+against these platform-dependent edge cases.

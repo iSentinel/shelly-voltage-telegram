@@ -1,3 +1,28 @@
+## 2026-11-08 QA: deterministic backup symlink gate plus early recovery
+
+- Combined with PR #228 natural recovery, PR #229
+  latest-15-minute real samples and PR #230 strict
+  predeploy backup parity. First 15 minutes after incident
+  #18 closure: 89 real L1 samples, max gap 11.02s,
+  valid/near-current voltage. Telemetry-only status,
+  NEVER proof of Telegram public-channel message rotation.
+- Identified GitHub CI ordering failure in PR #230's
+  symlink archive test. Corrected predeploy backup scanner
+  to lstat EVERY matching archive BEFORE sorting by mtime,
+  rejecting any symlink regardless of age or enumeration.
+- Hardened decompressed QA SQLite to mode0600 inside
+  disposable mode0700 directory. Added reproducible
+  regression for older linked archive and file mode.
+- Combined 1228/1228 Python tests PASS, Ruff/quality
+  PASS, reproducible source archive/privacy PASS.
+- Real production backup guard intentionally FAILS as
+  daily copy is old and diverges from recent measurements
+  and Telegram status. A separate one-time private QA
+  snapshot earlier passed backup parity and was destroyed.
+- Installed 0.5.13-hw continues online and ready=200,
+  no container restart, device control, Telegram send/edit,
+  production SQLite write or stable release deployment.
+
 ## 2026-11-08 ~12:25 Kyiv — fail-closed predeploy backup parity
 
 - Latest 03:28 Kyiv daily gzip passed SHA256 and SQLite
