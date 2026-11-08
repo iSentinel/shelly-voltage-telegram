@@ -73,6 +73,12 @@ validate_inputs() {
             exit 3
         }
     done
+    # cp follows source links, so validate the template before staging.
+    if [[ ! -f "$PROJECT/.env.example" || -L "$PROJECT/.env.example" ]] ||
+        [[ "$(stat -c %h -- "$PROJECT/.env.example")" != 1 ]]; then
+        echo "ERROR: public release template must be an independent regular file." >&2
+        exit 3
+    fi
 }
 
 release_name() {
