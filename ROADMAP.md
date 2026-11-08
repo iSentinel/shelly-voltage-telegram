@@ -1,3 +1,29 @@
+## 2026-11-08 ~12:25 Kyiv — fail-closed predeploy backup parity
+
+- Latest 03:28 Kyiv daily gzip passed SHA256 and SQLite
+  quick_check but is 8.9h old: 25889 archived measurements
+  vs over 27223 current live records after incident #18.
+  Outage closure and status-message ID metadata differ.
+- New scripts/em50-predeploy-backup-guard.py reads the
+  current SQLite in mode=ro and validates the latest backup
+  SHA256, bounded private decompression/SQLite integrity,
+  age<=30min, exact measurement count + last sample,
+  latest outage state and status-message metadata parity.
+  It prints no actual Telegram message ID and creates
+  no new backup or production files.
+- Real Gateway guard correctly FAILS on backup_stale,
+  measurements_not_equal, outage_state_not_equal and
+  status_message_metadata_not_equal. The backup is
+  intact but unsuitable as a predeploy snapshot.
+- 13 focused tests; 1210/1210 full Python tests PASS
+  with -W default and zero ResourceWarning; Ruff/quality
+  and source-release privacy/reproducibility PASS.
+- Candidate 0.5.14-hw remains unpublished. Even a PASS
+  is a time-limited prerequisite, never signed release
+  authorization or guarantee of complete DB parity.
+  No Telegram sends, SQLite writes, Docker restart or
+  Shelly controls performed.
+
 ## 2026-11-08 12:13 Kyiv — 15-minute stable Shelly recovery QA
 
 - Connectivity incident #18 closed 11:55:01 Kyiv.
