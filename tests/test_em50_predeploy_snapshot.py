@@ -46,6 +46,52 @@ class SnapshotWindowTests(unittest.TestCase):
 
         return list(self.output.glob("voltage-*.sqlite3.gz"))
 
+    def test_raw_snapshot_is_private_before_sqlite_opens_it(self):
+        """The first SQLite handle must see an existing mode-0600 file."""
+
+        destination = self.output / "raw.sqlite3"
+        real_connect = QA.sqlite3.connect
+        observed = []
+        original_umask = os.umask(0o022)
+
+        def watch(path, *args, **kwargs):
+            """Inspect the raw file mode before opening destination SQLite."""
+
+            if "mode=rw" in str(path):
+                observed.append(stat.S_IMODE(destination.stat().st_mode))
+            return real_connect(path, *args, **kwargs)
+
+        try:
+            with patch.object(QA.sqlite3, "connect", side_effect=watch):
+                QA.online_copy(self.database, destination)
+        finally:
+            os.umask(original_umask)
+        self.assertEqual(observed, [0o600])
+
+    def test_raw_snapshot_does_not_overwrite_existing_file(self):
+        """Never reuse or replace a pre-existing destination."""
+
+        destination = self.output / "existing.sqlite3"
+        destination.write_bytes(b"sentinel")
+        with self.assertRaises(FileExistsError):
+            QA.online_copy(self.database, destination)
+        self.assertEqual(destination.read_bytes(), b"sentinel")
+
+    def test_failed_raw_snapshot_removes_private_partial_file(self):
+        """A SQLite connection error must not strand a raw copy."""
+
+        destination = self.output / "failed.sqlite3"
+        with (
+            patch.object(
+                QA.sqlite3,
+                "connect",
+                side_effect=sqlite3.DatabaseError("injected"),
+            ),
+            self.assertRaises(sqlite3.DatabaseError),
+        ):
+            QA.online_copy(self.database, destination)
+        self.assertFalse(destination.exists())
+
     def test_complete_snapshot_passes_full_parity_and_sha256(self):
         """Publish one private, versioned, nonoverwriting online backup."""
 
