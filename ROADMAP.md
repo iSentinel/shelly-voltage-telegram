@@ -1,3 +1,30 @@
+## 2026-11-08 QA: require stopped writer and unchanged SQLite before release
+
+- New source-only scripts/em50-writer-quiescence-preflight.py
+  explicitly distinguishes healthy live monitoring from a
+  safe database replacement window. --dry-run has no Docker
+  calls or SQLite writes. --check reads Docker .State, and
+  requires the named measurement producer to be stopped both
+  before and after an observation window of 1-60 seconds;
+  during this interval the full SQLite measurement/outage
+  digests and Telegram status metadata must remain unchanged.
+- Real production 0.5.13-hw continues running and
+  automatically FAILS this prerequisite. Bot is NOT stopped.
+  A pass cannot prove other writers are absent, and never
+  authorizes a release.
+- 11 new mock-Docker and synthetic SQLite tests cover active
+  producer, restart, new/older measurement, outage edits,
+  Telegram status rotation, missing metadata, zero timeout,
+  safe no-op dry-run and no sensitive error output.
+  Full 1254/1254 Python tests PASS, Ruff/quality and
+  reproducible private-safe source archive PASS.
+- Draft PR #234 protected snapshot creator has independent
+  GitHub CI push+PR SUCCESS. Actual production capture
+  remains disallowed before explicit user approval and
+  a coordinated live writer-quiescence/deployment plan.
+- Installed Shelly 0.5.13-hw, Telegram, SQLite, hardware
+  and permanent systemd services remain untouched.
+
 ## 2026-11-08 QA: protected EM-50 predeploy snapshot window
 
 - Real Shelly 0.5.13-hw recovered and is healthy; actual
