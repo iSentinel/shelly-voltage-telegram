@@ -79,6 +79,13 @@ from pathlib import PurePosixPath
 try:
     count = 0
     size = 0
+    required = {
+        "VERSION", "app.py", "Dockerfile", "compose.yaml",
+        "requirements.txt", "scripts/backup.sh",
+        "systemd/shelly-voltage-compose.service",
+        "systemd/shelly-voltage-backup.service",
+    }
+    present = set()
     with tarfile.open(sys.argv[1], "r:gz") as archive:
         for entry in archive:
             count += 1
@@ -94,6 +101,10 @@ try:
                 or size > 512 * 1024 * 1024
             ):
                 raise ValueError("unsafe source archive member")
+            if entry.isfile() and entry.size > 0:
+                present.add(str(PurePosixPath(entry.name)))
+    if not required.issubset(present):
+        raise ValueError("source archive missing required application files")
 except (OSError, ValueError, tarfile.TarError) as error:
     print(f"ERROR: invalid source archive: {error}", file=sys.stderr)
     raise SystemExit(3) from error
