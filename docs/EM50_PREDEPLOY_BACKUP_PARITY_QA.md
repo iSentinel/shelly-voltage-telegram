@@ -70,3 +70,11 @@ SQLite data decompressed for inspection is created mode 0600 inside
 an automatically deleted 0700 QA directory. No raw status message IDs
 or SQLite backup content are logged. Two regression tests protect
 against these platform-dependent edge cases.
+
+## Complete historical measurement and outage parity
+
+The guard now checks the SHA-256 digest of *every* ordered row in
+the measurements and outages tables, not just counts and the latest
+records. This detects changes to old data despite an unchanged last
+event. Digests are used only in memory and never logged.
+See docs/EM50_FULL_HISTORY_BACKUP_PARITY_QA.md.

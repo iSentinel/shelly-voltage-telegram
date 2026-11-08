@@ -56,10 +56,24 @@ def verify_checksum(path: Path) -> None:
         raise ValueError("backup SHA256 mismatch")
 
 
+def digest_rows(db: sqlite3.Connection, query: str) -> bytes:
+    """Hash complete ordered SQLite rows without exposing their contents."""
+
+    digest = hashlib.sha256()
+    for row in db.execute(query):
+        serialized = json.dumps(
+            row, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        digest.update(len(serialized).to_bytes(8, "big"))
+        digest.update(serialized)
+    return digest.digest()
+
+
 def sqlite_state(db_path: Path) -> dict:
     """Read selected critical state without exposing Telegram IDs."""
 
     with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as db:
+        db.execute("BEGIN")
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("SQLite integrity failed")
         rows = db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0]
@@ -74,7 +88,18 @@ def sqlite_state(db_path: Path) -> dict:
         status = db.execute(
             "SELECT value FROM meta WHERE key='telegram_status_message_id'"
         ).fetchone()
+        measurements_digest = digest_rows(
+            db,
+            "SELECT id,ts,voltage,frequency,phase "
+            "FROM measurements ORDER BY id",
+        )
+        outages_digest = digest_rows(
+            db,
+            "SELECT id,started_at,ended_at,phase FROM outages ORDER BY id",
+        )
     return {
+        "measurements_digest": measurements_digest,
+        "outages_digest": outages_digest,
         "rows": rows,
         "last": last,
         "outage": outage,
@@ -98,6 +123,31 @@ def unpack_state(archive: Path) -> dict:
         return sqlite_state(target)
 
 
+def parity_reasons(
+    live: dict, saved: dict, age: float, max_age: float
+) -> tuple[list[str], bool, bool]:
+    """Compare complete histories and critical status in private memory."""
+
+    measurements_equal = (
+        live["measurements_digest"] == saved["measurements_digest"]
+    )
+    outages_equal = live["outages_digest"] == saved["outages_digest"]
+    issues = []
+    if not 0 <= age <= max_age:
+        issues.append("backup_stale")
+    if (
+        live["rows"] != saved["rows"]
+        or live["last"] != saved["last"]
+        or not measurements_equal
+    ):
+        issues.append("measurements_not_equal")
+    if saved["outage"] != live["outage"] or not outages_equal:
+        issues.append("outage_state_not_equal")
+    if not saved["status"] or saved["status"] != live["status"]:
+        issues.append("status_message_metadata_not_equal")
+    return issues, measurements_equal, outages_equal
+
+
 def inspect(args: argparse.Namespace, now: float) -> dict:
     """Check age and recovery-relevant parity without altering production."""
 
@@ -112,15 +162,9 @@ def inspect(args: argparse.Namespace, now: float) -> dict:
     live = sqlite_state(live_path)
     saved = unpack_state(archive)
     lag = live["rows"] - saved["rows"]
-    issues = []
-    if not 0 <= age <= args.max_age_minutes:
-        issues.append("backup_stale")
-    if lag != 0 or saved["last"] != live["last"]:
-        issues.append("measurements_not_equal")
-    if saved["outage"] != live["outage"]:
-        issues.append("outage_state_not_equal")
-    if not saved["status"] or saved["status"] != live["status"]:
-        issues.append("status_message_metadata_not_equal")
+    issues, measurements_equal, outages_equal = parity_reasons(
+        live, saved, age, args.max_age_minutes
+    )
     return {
         "status": "FAIL" if issues else "PASS",
         "reason_codes": issues,
@@ -129,7 +173,9 @@ def inspect(args: argparse.Namespace, now: float) -> dict:
         "live_measurements": live["rows"],
         "record_gap": lag,
         "latest_measurement_matches": saved["last"] == live["last"],
+        "all_measurements_match": measurements_equal,
         "outage_state_matches": saved["outage"] == live["outage"],
+        "all_outages_match": outages_equal,
         "status_metadata_matches": bool(
             saved["status"] and saved["status"] == live["status"]
         ),

@@ -1,3 +1,33 @@
+## 2026-11-08 QA: verify full SQLite history before EM-50 rollout
+
+- Recovered Shelly EM-50 is online; incident #18 closed.
+  First and latest 15-minute real telemetry recovery windows
+  verified PASS, but no public Telegram channel edit/rotation
+  claimed without independent evidence.
+- Found a predeploy rollback blind spot: matching measurement
+  counts and latest rows could miss alterations to older
+  measurements or earlier outage events.
+- Candidate predeploy backup guard now hashes ALL ordered
+  measurement/outage rows in memory under a SQLite read
+  transaction. Only boolean equality is reported; raw
+  rows, hashes, message IDs and other private data are
+  not exposed in log/JSON outputs.
+- Added two targeted tests: changed earlier measurement
+  and changed older outage, both with identical final
+  rows, are now correctly rejected. Total local
+  1230/1230 tests PASS with default warnings; Ruff/quality
+  PASS; reproducible private-safe release archive PASS.
+- Live nightly backup remains intentionally NOT suitable
+  for rollback or promotion: archived 25889 measurements
+  versus 27718 live at verification, historical outages
+  and Telegram status metadata differ; gate FAILS safely.
+- 0.5.14-hw remains unpublished; a fresh explicitly approved
+  predeploy SQLite snapshot, dedicated secure YASNO account
+  and Docker reader bind, scoped PR review and separately
+  authorized signed release+rollback remain outstanding.
+- No new Telegram message, Shelly control, SQLite production
+  write, Docker restart, systemd install or PR merge.
+
 ## 2026-11-08 QA: deterministic backup symlink gate plus early recovery
 
 - Combined with PR #228 natural recovery, PR #229
