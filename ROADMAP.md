@@ -1,3 +1,34 @@
+## 2026-11-08 QA: direct public YASNO Kyiv/DTEK schedule source
+
+- Discovered and verified a direct public JSON source at app.yasno.ua
+  for Kyiv region_id 25 and DTEK Kyiv operator dso_id 902.
+  Public regions endpoint named Київ and ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ.
+  This is a direct YASNO publication, not an authenticated claim
+  that the protected dtek-kem.com.ua page was opened.
+- Live public read-only GET returned HTTP 200 application/json,
+  26792 bytes, 60 groups. GPV10.1 today 2026-11-08 has
+  ScheduleApplies and planned windows 04:00–11:30 and
+  14:30–22:00. Tomorrow is WaitingForSchedule: UNPUBLISHED,
+  never misreported as no outage.
+- New isolated yasno_schedule.py adapter only contacts a pinned
+  HTTPS endpoint on explicit --fetch, rejects redirects and
+  oversized responses. Cached-file inspection is bounded and
+  its mtime alone is not proof of trusted provider origin.
+- Strict parsing of Kyiv local day, timezone, publication
+  freshness (36h), capture freshness (2h), 48 complete half-hour
+  slots, unknown slot/status, gaps, overlaps and DST. Fail-closed
+  on ambiguous or stale data. Forecast never changes Shelly
+  actual power events or writes a Telegram message.
+- Dedicated tests 15/15 PASS; complete independent baseline
+  QA suite 1015/1015 PASS; Ruff and quality gate PASS.
+  Manual --fetch and --file both decoded today's GPV10.1.
+- No production deployment, Telegram sends, Shelly commands
+  or SQLite writes. Production 0.5.13-hw remained ready 200.
+- NEXT: independent GitHub CI on source-adapter Draft PR,
+  then an opt-in YASNO-backed Telegram preview with separate
+  source attribution, careful cache metadata, and real-client
+  acceptance; release approval remains blocked.
+
 ## 2026-11-08 Combined QA acceptance (not a release)
 
 - Three independent staged changes are combined *only* in a new
