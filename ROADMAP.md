@@ -1,3 +1,27 @@
+## 2026-11-08 ~12:00 Kyiv — natural Shelly recovery #18
+
+- Live 0.5.13-hw resumed actual EM-50 readings and /ready=200.
+  L1 incident #18 started 06:47:05 and ended 11:55:01 Kyiv:
+  duration 18475.3s. There are no currently open incidents.
+- Read-only SQLite verified ZERO synthetic zero-voltage
+  measurements and ZERO samples during the lengthy outage,
+  excluding the last 60s of physical reconnection hysteresis.
+  Fresh legitimate readings appeared after incident closure.
+- New scripts/em50-natural-recovery-audit.py audits latest
+  closed incident, stale/invalid health, local /ready, SQLite
+  continuity, zero and premature samples and saved status ID.
+  It labels telegram_channel_edit_visible=NOT_VERIFIED and
+  release_authorized=false; no prior Telegram channel-ID
+  baseline exists for #18 and no private/client receipt is
+  inferred from current SQLite metadata.
+- 14 new source tests; full 1186/1186 Python tests PASS
+  with -W default, Ruff/quality PASS, reproducible release
+  and private secret exclusion PASS. Source-only Draft PR.
+- No live Telegram sends/edits, SQLite writes, Docker restart,
+  permanent systemd activation or release promotion.
+  Explicit reviewed rollout and actual dedicated user/mount
+  remain pending; 0.5.14-hw is still unpublished.
+
 ## 2026-11-08 QA: private Telegram receipt reconciled in release gate
 
 - The operator has already confirmed seeing the exact
