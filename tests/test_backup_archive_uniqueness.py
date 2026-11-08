@@ -179,6 +179,28 @@ class BackupUniquenessTests(unittest.TestCase):
             self.assertNotEqual(done.returncode, 0)
             self.assertEqual(list(destination.iterdir()), [])
 
+    def test_unknown_options_never_start_backup(self) -> None:
+        """A mistaken dry-run flag must not write or rotate backups."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            db = root / "source.sqlite3"
+            make_db(db, "test")
+            for args in (("--dry-run",), ("--unknown",), ("--help", "oops")):
+                with self.subTest(args=args):
+                    dest = root / "backups"
+                    env = os.environ | {
+                        "DATABASE_PATH": str(db),
+                        "BACKUP_DIR": str(dest),
+                    }
+                    done = subprocess.run(
+                        ["bash", str(SCRIPT), *args],
+                        capture_output=True,
+                        env=env,
+                    )
+                    self.assertNotEqual(done.returncode, 0)
+                    self.assertFalse(dest.exists())
+
     def test_bad_retention_rejected_before_creating_archive(self) -> None:
         """Invalid rotation settings must never destroy backup history."""
 
