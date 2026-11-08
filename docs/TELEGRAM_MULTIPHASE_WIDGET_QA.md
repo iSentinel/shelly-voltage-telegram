@@ -67,3 +67,18 @@ are independent of the unofficial forecast.
 QuickJS DOM scenarios test a valid 48-slot community plan and an
 expired plan. Responsive layout coverage includes both valid plan
 and no-plan conditions at 200–600 CSS pixels.
+
+
+## Live widget state transitions (QuickJS)
+
+`tests/widget-lifecycle-scenarios.ts` boots one widget instance
+and updates its `publicData` without replacing the HTML or
+sending a new Telegram message. It checks initial three-phase
+data, a disconnected Russian status with removed schedule,
+Ukrainian recovery with a stale L2, schedule expiry, and a
+switch back to a single-phase English view. Each state is
+checked against actual QuickJS DOM probes. No network or
+control calls are permitted.
+
+This covers the SDK's update bridge, not recipient-visible
+delivery on installed Telegram clients.

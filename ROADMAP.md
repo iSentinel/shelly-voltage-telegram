@@ -1,3 +1,25 @@
+## 2026-11-08 QA: Telegram widget public_data lifecycle checks
+
+- New dependent isolated QA branch from responsive PR #208 tests
+  a *single widget instance* under real upstream Telegram QuickJS:
+  fresh three-phase EN state -> disconnected RU state with no
+  forecast -> recovered UK state with L2 stale -> expired
+  community forecast -> single-phase EN state. DOM probes assert
+  L1/L2/L3, status language, schedule and group visibility.
+- The test injects supported public_data bridge updates; it
+  must not require sending another Telegram message. Explicitly
+  rejects unexpected network requests or stopped widget runtimes.
+- Added tests/test_widget_lifecycle_contract.py with three checks
+  for pinned QuickJS CI, expected state transitions and no
+  requests. Full local Python tests 1022/1022 PASS, Ruff and
+  quality gate PASS. Actual QuickJS update results are pending
+  the new GitHub CI; do not claim client-visible acceptance.
+- Production 0.5.13-hw remains unchanged; this branch is QA only.
+- NEXT: run GitHub Actions QuickJS lifecycle acceptance, fix
+  any missing public-data notification or rendering defects;
+  then resume direct official DTEK provenance, physical Pro
+  3EM / 3CT63 acceptance and actual Telegram clients.
+
 ## 2026-11-08 QA: 3-phase Telegram widget and preview
 
 - New dependent QA branch from PR #206 adds independently stale-safe
