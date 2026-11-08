@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -54,6 +55,23 @@ def backup_fixture(directory: Path) -> Path:
         f"{digest}  {path}\n", encoding="utf-8"
     )
     return path
+
+
+def acceptance_arguments(path: str) -> argparse.Namespace:
+    """Reuse synthetic release targets for private evidence-only QA."""
+
+    return argparse.Namespace(
+        root=str(ROOT),
+        health_url="http://127.0.0.1:8080/health",
+        ready_url="http://127.0.0.1:8080/ready",
+        db="fake",
+        backup_dir="fake",
+        cache="fake",
+        group="10.1",
+        recipient_gid=10001,
+        max_age_hours=26,
+        acceptance_evidence=path,
+    )
 
 
 class Em50ReleasePreflightTests(unittest.TestCase):
@@ -200,6 +218,130 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         self.assertTrue(report["automated_pass"])
         self.assertFalse(report["release_authorized"])
         self.assertEqual(len(report["manual_pending"]), 3)
+
+    def test_protected_realistic_receipt_completes_only_private_gate(self):
+        """Human evidence changes manual status, never release permission."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "accepted.json"
+            receipt = {
+                "bot_api_send": "PASS",
+                "bot_api_edit": "PASS",
+                "user_visible_edited_message": "PASS",
+                "delivery_type": "silent private administrator chat",
+                "public_channel_modified": False,
+                "pinned_message_modified": False,
+                "released": False,
+                "confirmed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            path.write_text(json.dumps(receipt), encoding="utf-8")
+            path.chmod(0o600)
+            self.assertEqual(
+                GATE.acceptance_status(str(path), time.time()), "PASS"
+            )
+            arguments = acceptance_arguments(str(path))
+            with (
+                patch.object(GATE, "health_check", return_value="PASS"),
+                patch.object(GATE, "sqlite_check", return_value="PASS"),
+                patch.object(GATE, "backup_check", return_value="PASS"),
+                patch.object(GATE, "reader_cache_check", return_value="PASS"),
+            ):
+                report = GATE.inspect(arguments)
+            self.assertTrue(report["automated_pass"])
+            self.assertEqual(report["manual_evidence_status"], "PASS")
+            self.assertEqual(report["manual_completed"], [GATE.PENDING[0]])
+            self.assertEqual(len(report["manual_pending"]), 2)
+            self.assertFalse(report["release_authorized"])
+
+    def test_missing_evidence_is_not_implicitly_approved(self):
+        """Do not infer a human acceptance from test or GitHub success."""
+
+        self.assertEqual(
+            GATE.acceptance_status(None, time.time()), "NOT_PROVIDED"
+        )
+        self.assertEqual(
+            GATE.acceptance_status("/nonexistent/evidence", time.time()),
+            "INVALID",
+        )
+
+    def test_world_readable_and_symlink_receipt_is_rejected(self):
+        """Acceptance evidence must be a protected, direct regular file."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "proof.json"
+            path.write_text("{}", encoding="utf-8")
+            path.chmod(0o644)
+            self.assertEqual(
+                GATE.acceptance_status(str(path), time.time()), "INVALID"
+            )
+            alias = Path(tmp) / "linked.json"
+            alias.symlink_to(path)
+            path.chmod(0o600)
+            self.assertEqual(
+                GATE.acceptance_status(str(alias), time.time()), "INVALID"
+            )
+
+    def test_invalid_report_fields_are_not_human_evidence(self):
+        """A forged or incomplete JSON cannot close private acceptance."""
+
+        current = datetime.now(timezone.utc).isoformat()
+        base = {
+            "bot_api_send": "PASS",
+            "bot_api_edit": "PASS",
+            "user_visible_edited_message": "PASS",
+            "delivery_type": "silent private administrator chat",
+            "public_channel_modified": False,
+            "pinned_message_modified": False,
+            "released": False,
+            "confirmed_at": current,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "proof.json"
+            for change in (
+                {"bot_api_edit": "FAIL"},
+                {"user_visible_edited_message": "PENDING"},
+                {"public_channel_modified": True},
+                {"pinned_message_modified": True},
+                {"released": True},
+                {"public_channel_modified": 0},
+                {"delivery_type": "channel"},
+            ):
+                payload = {**base, **change}
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                path.chmod(0o600)
+                with self.subTest(change=change):
+                    self.assertEqual(
+                        GATE.acceptance_status(str(path), time.time()),
+                        "INVALID",
+                    )
+
+    def test_evidence_rejects_future_expired_and_naive_times(self):
+        """Human approval receipts need bounded, timezone-aware dates."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "proof.json"
+            for timestamp in (
+                (datetime.now(timezone.utc) - timedelta(days=31)).isoformat(),
+                (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+                datetime.now().isoformat(),
+            ):
+                receipt = {
+                    "bot_api_send": "PASS",
+                    "bot_api_edit": "PASS",
+                    "user_visible_edited_message": "PASS",
+                    "delivery_type": "silent private administrator chat",
+                    "public_channel_modified": False,
+                    "pinned_message_modified": False,
+                    "released": False,
+                    "confirmed_at": timestamp,
+                }
+                path.write_text(json.dumps(receipt), encoding="utf-8")
+                path.chmod(0o600)
+                with self.subTest(timestamp=timestamp):
+                    self.assertEqual(
+                        GATE.acceptance_status(str(path), time.time()),
+                        "INVALID",
+                    )
 
     def test_cli_exit_codes_distinguish_failure_from_manual_block(self):
         """Return 1 on automated failures and 2 for pending human gates."""

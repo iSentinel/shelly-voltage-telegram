@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sqlite3
+import stat
 import sys
 import time
 import urllib.request
@@ -142,6 +144,52 @@ def version_check(root: Path) -> str:
     return f"candidate={candidate}; stable_marker_unchanged=true"
 
 
+def private_acceptance(path: Path, now: float) -> None:
+    """Verify an explicitly supplied, protected client receipt."""
+
+    if any(item.is_symlink() for item in (path, *path.parents)):
+        raise ValueError("acceptance evidence contains symlinks")
+    info = path.lstat()
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_uid != os.geteuid()
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or info.st_nlink != 1
+        or not 64 <= info.st_size <= 8192
+    ):
+        raise ValueError("acceptance evidence owner or mode invalid")
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    expected = {
+        "bot_api_send": "PASS",
+        "bot_api_edit": "PASS",
+        "user_visible_edited_message": "PASS",
+        "delivery_type": "silent private administrator chat",
+        "public_channel_modified": False,
+        "pinned_message_modified": False,
+        "released": False,
+    }
+    if not isinstance(receipt, dict) or any(
+        receipt.get(key) != value or type(receipt.get(key)) is not type(value)
+        for key, value in expected.items()
+    ):
+        raise ValueError("acceptance receipt is incomplete")
+    when = datetime.fromisoformat(receipt["confirmed_at"])
+    if when.tzinfo is None or not 0 <= now - when.timestamp() <= 30 * 86400:
+        raise ValueError("acceptance time is invalid or expired")
+
+
+def acceptance_status(path: str | None, now: float) -> str:
+    """Report human acceptance without authorizing a deployment."""
+
+    if not path:
+        return "NOT_PROVIDED"
+    try:
+        private_acceptance(Path(path), now)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return "INVALID"
+    return "PASS"
+
+
 def check(action) -> dict[str, str]:
     """Run one isolated check with a clear non-secret status."""
 
@@ -183,12 +231,18 @@ def inspect(args: argparse.Namespace) -> dict:
             ),
         ),
     }
+    evidence = acceptance_status(
+        getattr(args, "acceptance_evidence", None), now
+    )
+    completed = [PENDING[0]] if evidence == "PASS" else []
     return {
+        "manual_evidence_status": evidence,
+        "manual_completed": completed,
         "automated_pass": all(
             result["status"] == "PASS" for result in checks.values()
         ),
         "checks": checks,
-        "manual_pending": list(PENDING),
+        "manual_pending": [item for item in PENDING if item not in completed],
         "release_authorized": False,
     }
 
@@ -210,6 +264,11 @@ def main() -> int:
     parser.add_argument("--group", default="10.1")
     parser.add_argument("--recipient-gid", type=int, default=10001)
     parser.add_argument("--max-age-hours", type=float, default=26)
+    parser.add_argument(
+        "--acceptance-evidence",
+        default=None,
+        help="Explicit protected local private Telegram client receipt",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     result = inspect(args)
@@ -219,7 +278,8 @@ def main() -> int:
         for name, item in result["checks"].items():
             print(f"{item['status']} {name}: {item['detail']}")
         print(
-            "BLOCKED release: manual recipient, systemd and approval pending"
+            "BLOCKED release: outstanding manual gates="
+            + ",".join(result["manual_pending"])
         )
     return 2 if result["automated_pass"] else 1
 
