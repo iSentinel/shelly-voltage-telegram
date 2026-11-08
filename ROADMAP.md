@@ -1,3 +1,24 @@
+## 2026-11-08 ~12:35 Kyiv — predeploy backup parity integrated
+
+- Integrated strict backup age/measurement/outage/status
+  metadata parity as a mandatory automated check in
+  scripts/em50-release-preflight.py. Routine daily backup
+  SHA256 check remains separate; a valid but outdated
+  daily copy MUST NOT certify safe release preparedness.
+- Actual Gateway preflight: live 0.5.13-hw online, healthy,
+  production SQLite integrity PASS; source marker candidate
+  0.5.14-hw unpublished. Six automatic checks include
+  predeploy_backup_parity FAIL (backup_stale, measurements,
+  outage and status metadata mismatch) and recipient_cache
+  FAIL (old QA YASNO data expired). release_authorized=false.
+- Two new focused integration tests; full 1212/1212
+  Python tests PASS with -W default, Ruff/quality and
+  reproducible secret-free source archive PASS.
+- No backup creation, Telegram send/edit, SQLite
+  production write, Docker restart, systemd activation or
+  public release. Actual preupgrade snapshot and YASNO
+  reader identity/mount require operator-approved rollout.
+
 ## 2026-11-08 ~12:25 Kyiv — fail-closed predeploy backup parity
 
 - Latest 03:28 Kyiv daily gzip passed SHA256 and SQLite
