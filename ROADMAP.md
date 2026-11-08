@@ -1,3 +1,26 @@
+## 2026-11-08 QA: read-only EM-50 release preflight gate
+
+- New scripts/em50-release-preflight.py checks candidate marker,
+  localhost /health and /ready, live SQLite quick_check and
+  saved Telegram status ID existence, newest backup SHA256
+  and age, and protected YASNO reader group/freshness.
+- Script prohibits off-host HTTP and redirects, hides private
+  Telegram message identifiers, and makes no changes to
+  production SQLite, Shelly, Telegram or Docker.
+- 0.5.14-hw remains UNPUBLISHED. Exit code 1 signifies a
+  failed automated check. Exit 2 means automated checks
+  PASS but real Telegram recipient acceptance, actual LXC
+  systemd activation review and explicit signed release/
+  rollback authorization are still PENDING. The program
+  NEVER returns approved-release status automatically.
+- Gateway live run: 5/5 automated checks PASS and
+  release_authorized=false; expected exit 2.
+  Local full QA 1120/1120 Python tests PASS,
+  Ruff/quality and source-release reproducibility/private
+  .env exclusion PASS.
+- Next: CI, reviewed private Telegram recipient acceptance,
+  operator-approved rollout. Production 0.5.13-hw unchanged.
+
 ## 2026-11-08 QA: numeric Linux UID YASNO handoff acceptance
 
 - On Gateway LXC110 tested protected YASNO producer cache with
