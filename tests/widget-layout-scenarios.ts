@@ -9,11 +9,19 @@ assert.ok(file, 'SHELLY_WIDGET_HTML is required');
 const html = readFileSync(file, 'utf8');
 const stamp = Math.floor(Date.now() / 1000) - 3;
 
-function publicState(multiphase: boolean): string {
+function publicState(multiphase: boolean, forecast: boolean): string {
   const state: Record<string, unknown> = {
     schema: 1, l: 'uk', s: 'online', v: 223.8, f: 50, t: stamp,
     g: '10.1',
   };
+  if (forecast) {
+    const now = Math.floor(Date.now() / 1000);
+    state.src = 'community';
+    state.b = 'OX?O'.repeat(12);
+    state.d = '2026-11-08';
+    state.u = now - 10;
+    state.e = now + 3600;
+  }
   if (multiphase) {
     state.p = {
       L2: { s: 'online', t: stamp, v: 222.3, f: 50 },
@@ -28,15 +36,16 @@ interface LayoutCase {
   font: number;
   theme: 'light' | 'dark';
   phases: boolean;
+  forecast: boolean;
 }
 
 const cases: LayoutCase[] = [
-  { width: 200, font: 16, theme: 'light', phases: false },
-  { width: 200, font: 22, theme: 'dark', phases: true },
-  { width: 320, font: 16, theme: 'light', phases: true },
-  { width: 320, font: 24, theme: 'dark', phases: true },
-  { width: 430, font: 16, theme: 'dark', phases: false },
-  { width: 600, font: 24, theme: 'light', phases: true },
+  { width: 200, font: 16, theme: 'light', phases: false, forecast: false },
+  { width: 200, font: 22, theme: 'dark', phases: true, forecast: true },
+  { width: 320, font: 16, theme: 'light', phases: true, forecast: true },
+  { width: 320, font: 24, theme: 'dark', phases: true, forecast: true },
+  { width: 430, font: 16, theme: 'dark', phases: false, forecast: false },
+  { width: 600, font: 24, theme: 'light', phases: true, forecast: true },
 ];
 
 for (const scenario of cases) {
@@ -45,7 +54,7 @@ for (const scenario of cases) {
     layout: true,
     theme: scenario.theme,
     text: { fontSize: scenario.font },
-    data: { publicData: publicState(scenario.phases) },
+    data: { publicData: publicState(scenario.phases, scenario.forecast) },
   });
   const label = JSON.stringify(scenario);
   assert.equal(result.stopped, undefined, label + ': runtime stopped');

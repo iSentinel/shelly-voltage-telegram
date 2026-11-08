@@ -90,6 +90,24 @@ class WidgetMarkupTests(unittest.TestCase):
         self.assertIn("data.schema!==1", html)
         self.assertIn("if(bars===drawn)return", html)
 
+    def test_no_false_schedule_when_community_data_is_missing(self):
+        """Hide the grid, time labels, and group unless bars are valid."""
+
+        html = HTML.read_text(encoding="utf-8")
+        for marker in (
+            'id="timeline" class="timeline" hidden',
+            'id="axis" class="axis" hidden',
+            'id="legend" class="legend" hidden',
+            'id="group" class="hint" hidden',
+            ".timeline[hidden],.axis[hidden],.legend[hidden]{display:none}",
+            '$("timeline").hidden=!scheduleVisible',
+            '$("axis").hidden=!scheduleVisible',
+            '$("legend").hidden=!scheduleVisible',
+            '$("group").hidden=!hasGroup',
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, html)
+
     def test_all_three_bot_languages_have_ui_strings(self):
         """Translate the card by the chosen bot language, not by assumption."""
 
