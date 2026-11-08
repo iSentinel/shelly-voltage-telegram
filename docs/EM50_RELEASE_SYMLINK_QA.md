@@ -30,3 +30,18 @@ This is not a deployment or release authorization. Do not put
 live private credentials in source worktrees or source archives.
 The installed 0.5.13-hw and all production SQLite/Docker/Telegram
 state remain unchanged.
+
+
+## Guard the release archive filename
+
+The release filename is derived from the candidate VERSION value.
+The earlier builder accepted a slash-containing version during
+--dry-run and would then construct an unsafe output pathname.
+The release builder now requires the same stable major.minor.patch-hw
+shape used by the update installer, rejecting slashes, path traversal,
+spaces and non-release markers before any archive is written.
+
+The synthetic negative fixture confirms a malformed VERSION is
+rejected in dry-run without creating an output directory. The
+normal candidate 0.5.14-hw still produces the same deterministic
+archive and checksum as before.
