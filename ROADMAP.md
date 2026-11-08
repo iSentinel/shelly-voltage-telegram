@@ -1,3 +1,22 @@
+## 2026-11-08 QA hardware model identity verification
+
+- Gateway confirms LXC110 production 0.5.13-hw online, /ready 200,
+  SQLite quick_check=ok and ~8.4 GiB free on 12 GiB rootfs.
+- A read-only preflight defect allowed a Pro EM-50 GetDeviceInfo
+  identity to pass a selected Pro 3EM adapter, provided numerical
+  three-phase fixtures looked valid. This is a false hardware PASS.
+- The preflight now enforces exact manufacturer identifiers:
+  SPEM-002CEBEU50 (Pro EM-50), SPEM-003CEBEU (Pro 3EM),
+  SPEM-003CEBEU63 (Pro 3EM-3CT63). Mismatch fails before any sample.
+  Other models explicitly return model_identity_verified=false.
+  Never label a mocked sample as physical hardware acceptance.
+- Mocked phase/identity tests and --dry-run perform zero hardware,
+  Telegram, SQLite or production writes. Documentation records official
+  manufacturer sources and single-phase 3CT63 limitation.
+- NEXT: run independent GitHub CI, physical Pro3EM / 3CT63 tests,
+  official DTEK trust proof, recipient-visible Telegram/widget
+  acceptance and explicit release authorization.
+
 ## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
 
 - **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`

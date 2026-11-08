@@ -13,6 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app  # noqa: E402
 
+# Official Shelly.GetDeviceInfo model identifiers for these hardware families.
+VERIFIED_MODELS = {
+    "pro_em50": frozenset({"SPEM-002CEBEU50"}),
+    "pro3em": frozenset({"SPEM-003CEBEU", "SPEM-003CEBEU63"}),
+}
+
 
 def parser() -> argparse.ArgumentParser:
     """Describe a bounded, non-interactive, read-only hardware check."""
@@ -106,10 +112,27 @@ def validate_device_identity(info: object) -> dict:
     }
 
 
+def verify_model_identity(info: object, selected: str) -> bool:
+    """Reject mismatched known models without leaking device-supplied text."""
+
+    if not isinstance(info, dict):
+        raise RuntimeError("device identity missing")
+    allowed = VERIFIED_MODELS.get(selected)
+    if allowed is None:
+        # Other hardware has not had its model IDs independently attested.
+        return False
+    reported = info.get("model")
+    if not isinstance(reported, str) or reported not in allowed:
+        raise RuntimeError("selected meter model differs from device")
+    return True
+
+
 def run_probe(client: app.ShellyClient, args: argparse.Namespace) -> dict:
     """Collect a bounded number of real read-only samples."""
 
-    identity = validate_device_identity(client.device_health())
+    health = client.device_health()
+    identity = validate_device_identity(health)
+    model_verified = verify_model_identity(health, args.model)
     readings = []
     for index in range(args.samples):
         if index:
@@ -120,6 +143,7 @@ def run_probe(client: app.ShellyClient, args: argparse.Namespace) -> dict:
         "read_only": True,
         "model_adapter": args.model,
         "identity": identity,
+        "model_identity_verified": model_verified,
         "samples": readings,
         "physical_family_independently_verified": False,
         "production_writes": 0,
