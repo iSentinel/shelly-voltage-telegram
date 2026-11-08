@@ -10,8 +10,10 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_ROOT = Path("/opt/shelly-voltage")
@@ -145,6 +147,68 @@ def real_recovery_status(args: argparse.Namespace) -> str:
         return "blocked"
 
 
+def exact_normal_window(
+    path: Path,
+    incident: int,
+    start: float,
+    end: float,
+    low: float,
+    high: float,
+    expected_count: int,
+) -> bool:
+    """Check unrounded normal bounds in a read-only SQLite transaction."""
+
+    if not path.is_file() or path.is_symlink():
+        return False
+    uri = "file:" + quote(str(path.resolve())) + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=5)) as db:
+        db.execute("BEGIN")
+        event = db.execute(
+            "SELECT id,phase FROM outages ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if event is None or event[0] != incident:
+            return False
+        values = db.execute(
+            "SELECT COUNT(*),MIN(voltage),MAX(voltage) "
+            "FROM measurements WHERE phase=? AND ts>=? AND ts<=?",
+            (event[1], start, end),
+        ).fetchone()
+    count, minimum, maximum = values
+    return (
+        count >= 60
+        and count == expected_count
+        and minimum is not None
+        and maximum is not None
+        and math.isfinite(minimum)
+        and math.isfinite(maximum)
+        and low < minimum <= maximum < high
+    )
+
+
+def stability_request(args: argparse.Namespace) -> SimpleNamespace:
+    """Reuse one bounded same-phase physical telemetry audit request."""
+
+    return SimpleNamespace(
+        db=str(args.db),
+        health_url="http://127.0.0.1:8080/health",
+        ready_url="http://127.0.0.1:8080/ready",
+        max_gap_seconds=30,
+        min_samples=60,
+    )
+
+
+def summary_in_bounds(result: dict, bounds: tuple[float, float]) -> bool:
+    """Reject clearly abnormal rounded summaries before exact comparison."""
+
+    minimum = float(result["voltage_min"])
+    maximum = float(result["voltage_max"])
+    return (
+        result.get("status") == "PASS"
+        and all(math.isfinite(value) for value in (minimum, maximum))
+        and bounds[0] < minimum <= maximum < bounds[1]
+    )
+
+
 def normal_voltage_status(args: argparse.Namespace) -> str:
     """Require the recent fifteen-minute band to be entirely normal."""
 
@@ -152,28 +216,23 @@ def normal_voltage_status(args: argparse.Namespace) -> str:
         "ui_only_normal_window", "em50-recovery-stability.py"
     )
     acceptance = load_script("ui_only_normal_bounds", "recovery-acceptance.py")
-    request = SimpleNamespace(
-        db=str(args.db),
-        health_url="http://127.0.0.1:8080/health",
-        ready_url="http://127.0.0.1:8080/ready",
-        max_gap_seconds=30,
-        min_samples=60,
-    )
     try:
-        result = stability.inspect(request, time.time())
+        now = time.time()
+        result = stability.inspect(stability_request(args), now)
         bounds = acceptance.configured_normal_bounds(args.db)
         if bounds is None or result.get("outage_id") != args.incident_id:
             return "FAIL"
-        low = float(result["voltage_min"])
-        high = float(result["voltage_max"])
-        if not all(math.isfinite(v) for v in (low, high)):
+        if not summary_in_bounds(result, bounds):
             return "FAIL"
-        return (
-            "PASS"
-            if result.get("status") == "PASS"
-            and bounds[0] < low <= high < bounds[1]
-            else "FAIL"
+        precise = exact_normal_window(
+            args.db,
+            args.incident_id,
+            now - 900,
+            now,
+            *bounds,
+            int(result["sample_count"]),
         )
+        return "PASS" if precise else "FAIL"
     except (
         OSError,
         ValueError,
