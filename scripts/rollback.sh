@@ -62,13 +62,28 @@ select_snapshot() {
     [[ -n "$SNAPSHOT" ]] || { echo "ERROR: no upgrade snapshot found." >&2; exit 3; }
 }
 
+verify_archive_manifest() {
+    local selected="$1" manifest="$1.sha256" computed recorded
+    [[ -f "$manifest" && ! -L "$manifest" ]] || {
+        echo "ERROR: archive manifest missing or linked." >&2
+        exit 3
+    }
+    # Do not accept sha256sum -c success for a different pathname.
+    computed="$(sha256sum -- "$selected")"
+    recorded="$(cat -- "$manifest")"
+    if [[ "$recorded" != "$computed" ]]; then
+        echo "ERROR: archive manifest not bound to selected file." >&2
+        exit 3
+    fi
+}
+
 validate_snapshot() {
     [[ -f "$SNAPSHOT/source.tar.gz" ]] || { echo "ERROR: source archive missing." >&2; exit 3; }
     local backup
     backup="$(find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' | head -n1)"
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
-    sha256sum -c "$SNAPSHOT/source.tar.gz.sha256"
-    sha256sum -c "${backup}.sha256"
+    verify_archive_manifest "$SNAPSHOT/source.tar.gz"
+    verify_archive_manifest "$backup"
     python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
         --archive "$backup"
     python3 - "$SNAPSHOT/source.tar.gz" <<'PY_CHECK'

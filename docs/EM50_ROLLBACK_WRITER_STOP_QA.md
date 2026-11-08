@@ -121,3 +121,24 @@ replacement. A synthetic, SHA256-consistent TAR with a second
 empty app.py entry must be rejected before Docker or SQLite
 actions. Historical snapshot names were checked and have no
 duplicate entries.
+
+
+## Bind SHA-256 manifests to exactly the restored archive
+
+The previous rollback code ran sha256sum -c on an archive
+manifest. That command can return success when the manifest
+names and hashes an unrelated file, leaving the actual selected
+source or SQLite archive unchecked. The source TAR may still
+be well-formed and the SQLite backup may still be readable,
+but neither would be cryptographically bound to its manifest.
+
+The rollback pre-stop verification now computes sha256sum on
+the exact selected archive pathname and requires its manifest
+to contain the corresponding single matching line. Symlinked
+manifests are rejected. Synthetic negative fixtures substitute
+a manifest of a decoy source TAR or SQLite gzip and require a
+block before any target source or SQLite changes.
+
+All five historical on-host upgrade snapshots were found
+to have exact manifests for their selected source TAR and
+SQLite archive. This check does not authorize their restoration.
