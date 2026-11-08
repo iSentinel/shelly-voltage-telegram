@@ -16,6 +16,9 @@ Live Gateway acceptance, November 8 2026, LXC 110.
 The optional scripts/yasno-systemd-account-preflight.py is strictly
 read-only. It validates that a resolvable shelly-yasno account exists,
 uses a noninteractive shell and is neither root nor bot UID10001.
+It also rejects producer primary or supplemental membership in the
+Telegram reader group (default GID 10001). NSS group-lookup failure
+blocks release instead of assuming safe isolation.
 It requires producer owner:group mode 0700, producer file mode 0600,
 recipient root:10001 mode 0750 and recipient file root:10001 mode 0640.
 Symlinks, hardlinks, missing files and mismatched permissions fail.
