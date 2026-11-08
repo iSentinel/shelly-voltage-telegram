@@ -10,6 +10,16 @@ DRY_RUN=false
 NO_START=false
 CONFIRM_DB_REPLACEMENT=false
 WRITER_REQUIRED=false
+RESTORE_TMP=""
+
+cleanup_restore_tmp() {
+    # Never leave partially extracted private Telegram/SQLite state behind.
+    if [[ -n "$RESTORE_TMP" ]]; then
+        rm -f -- "$RESTORE_TMP"
+    fi
+}
+
+trap cleanup_restore_tmp EXIT
 
 usage() {
     cat <<'EOF'
@@ -156,12 +166,13 @@ restore_source() {
 }
 
 restore_database() {
-    local backup tmp
+    local backup
     backup="$(find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' | head -n1)"
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore DB $backup -> $DB"; return; }
-    tmp="${DB}.restore.$$"
-    gzip -dc "$backup" > "$tmp"
-    python3 - "$tmp" <<'PY'
+    # mktemp uses an unpredictable, exclusive mode-0600 file on this filesystem.
+    RESTORE_TMP="$(mktemp -- "${DB}.restore.XXXXXXXX")"
+    gzip -dc "$backup" > "$RESTORE_TMP"
+    python3 - "$RESTORE_TMP" <<'PY'
 import sqlite3
 import sys
 from contextlib import closing
@@ -171,11 +182,12 @@ with closing(sqlite3.connect(sys.argv[1])) as db:
 if result != "ok":
     raise SystemExit(f"restored DB quick_check failed: {result}")
 PY
-    chown 10001:10001 "$tmp"
-    chmod 0640 "$tmp"
+    chown 10001:10001 "$RESTORE_TMP"
+    chmod 0640 "$RESTORE_TMP"
     assert_writer_stopped
     rm -f "${DB}-wal" "${DB}-shm"
-    mv -f "$tmp" "$DB"
+    mv -f "$RESTORE_TMP" "$DB"
+    RESTORE_TMP=""
 }
 
 start_service() {
