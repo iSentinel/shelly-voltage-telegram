@@ -151,3 +151,18 @@ if grep -E '/(secrets|validation|dist-publish|[.]work-state)/' \
     exit 1
 fi
 echo "RELEASE_NESTED_PRIVATE_PATHS=EXCLUDED"
+
+
+# A linked template is dereferenced by cp, so staging-only link checks miss it.
+rm -f "$FIXTURE/.env.example"
+ln -s "README.md" "$FIXTURE/.env.example"
+if "$FIXTURE/scripts/release.sh" \
+    --output-dir "$TMP/linked-template-dist" \
+    --source-date-epoch "$EPOCH" > "$TMP/linked-template.log" 2>&1; then
+    echo "ERROR: release accepted a linked env example template" >&2
+    exit 1
+fi
+grep -q "ERROR: public release template must be an independent regular file" \
+    "$TMP/linked-template.log"
+test ! -e "$TMP/linked-template-dist/$NAME.tar.gz"
+echo "RELEASE_LINKED_ENV_TEMPLATE=REJECTED"
