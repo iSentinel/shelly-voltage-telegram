@@ -51,6 +51,11 @@ with sqlite3.connect(sys.argv[1]) as db:
     """)
 PY
 
+mkdir -p "$OLD_SRC/scripts"
+cp "$PROJECT/scripts/backup.sh" "$OLD_SRC/scripts/backup.sh"
+for file in app.py compose.yaml Dockerfile requirements.txt; do
+    printf 'synthetic rollback source\n' > "$OLD_SRC/$file"
+done
 printf '0.4.1-hw\n' > "$OLD_SRC/VERSION"
 printf 'old\n' > "$OLD_SRC/OLD_ONLY"
 printf 'snapshot-overwrite\n' > "$OLD_SRC/.env"
@@ -87,6 +92,56 @@ PY
 
 gzip -c "$TMP/old.sqlite3" > "$SNAP/voltage-old.sqlite3.gz"
 sha256sum "$SNAP/voltage-old.sqlite3.gz" > "$SNAP/voltage-old.sqlite3.gz.sha256"
+
+# Reject checksum-consistent but INCOMPLETE archives before any stop.
+incomplete="$TMP/incomplete-source"
+mkdir -p "$incomplete"
+cp "$SNAP/voltage-old.sqlite3.gz" "$incomplete/"
+sha256sum "$incomplete/voltage-old.sqlite3.gz" \
+    > "$incomplete/voltage-old.sqlite3.gz.sha256"
+mkdir -p "$TMP/incomplete-src"
+printf '0.4.1-hw\n' > "$TMP/incomplete-src/VERSION"
+tar -C "$TMP/incomplete-src" -czf "$incomplete/source.tar.gz" .
+sha256sum "$incomplete/source.tar.gz" > "$incomplete/source.tar.gz.sha256"
+source_before="$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)"
+db_before="$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+    "$PROJECT/scripts/rollback.sh" --snapshot "$incomplete" \
+        --dry-run --no-start > "$TMP/incomplete-source.log" 2>&1; then
+    echo "ERROR: incomplete source archive accepted" >&2
+    exit 1
+fi
+grep -q "source archive missing required application files" "$TMP/incomplete-source.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+echo "ROLLBACK_INCOMPLETE_SOURCE_ARCHIVE=REJECTED"
+
+# Every mandatory runtime path must be individually present in the TAR.
+for required_path in VERSION app.py Dockerfile compose.yaml \
+    requirements.txt scripts/backup.sh; do
+    label="${required_path//\//_}"
+    missing="$TMP/missing-source-$label"
+    src="$TMP/missing-source-data-$label"
+    mkdir -p "$missing"
+    cp -a "$OLD_SRC" "$src"
+    rm -f "$src/$required_path"
+    cp "$SNAP/voltage-old.sqlite3.gz" "$missing/"
+    sha256sum "$missing/voltage-old.sqlite3.gz" \
+        > "$missing/voltage-old.sqlite3.gz.sha256"
+    tar -C "$src" -czf "$missing/source.tar.gz" .
+    sha256sum "$missing/source.tar.gz" > "$missing/source.tar.gz.sha256"
+    if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$missing" \
+            --dry-run --no-start > "$TMP/missing-$label.log" 2>&1; then
+        echo "ERROR: rollback accepted missing $required_path" >&2
+        exit 1
+    fi
+    grep -q "source archive missing required application files" \
+        "$TMP/missing-$label.log"
+done
+echo "ROLLBACK_MISSING_EACH_REQUIRED_SOURCE_FILE=REJECTED"
 
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
