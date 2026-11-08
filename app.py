@@ -46,7 +46,10 @@ from notification_features import (
     update_episode,
     update_history,
 )
+from outage_data_ua import read_snapshot
 from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
+from telegram_widget_data import slots_from_community, widget_public_data
+from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
 
 
@@ -1811,6 +1814,34 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
             duration=duration_text(duration, monitor.language),
         )
     ]
+
+
+def private_widget_preview_text(monitor: Monitor) -> str:
+    """Build a private, stale-safe widget caption without Telegram I/O."""
+
+    with monitor.config_lock:
+        reading = monitor.state.snapshot()
+        language = monitor.language
+    args = {}
+    path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
+    region = os.getenv("COMMUNITY_OUTAGE_REGION")
+    group = os.getenv("COMMUNITY_OUTAGE_GROUP")
+    if path and region and group:
+        try:
+            cache = read_snapshot(path)
+            bars, day, updated = slots_from_community(cache, region, group)
+            args = {
+                "group": group,
+                "bars": bars,
+                "day": day,
+                "forecast_updated": updated,
+            }
+        except (ValueError, OSError, KeyError, TypeError):
+            # A missing/untrusted forecast must not hide fresh Shelly data.
+            pass
+    return widget_fallback_text(
+        widget_public_data(reading, language=language, **args)
+    )
 
 
 def compact_preview_text(monitor: Monitor) -> str:
@@ -5216,6 +5247,8 @@ class Monitor:
             )
         elif command == "/preview":
             self.send_compact_preview(sender_id)
+        elif command == "/widget_preview":
+            self.send_private_widget_preview(sender_id)
         elif command == "/view":
             self.change_private_preview_layout(sender_id, parts)
         elif command == "/week":
@@ -5336,6 +5369,17 @@ class Monitor:
                 "Private status preview failed: {}", exc.__class__.__name__
             )
 
+    def send_private_widget_preview(self, sender_id: str) -> None:
+        """Deliver widget fallback privately and silently on admin request."""
+
+        try:
+            text = private_widget_preview_text(self)
+            self.telegram.send(text, notify=False, chat_id=sender_id)
+        except Exception as exc:
+            logger.warning(
+                "Private widget preview failed: {}", type(exc).__name__
+            )
+
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
 
@@ -5353,8 +5397,8 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
-        if command == "/schedule":
-            return  # Private admin only, never a public-channel reply.
+        if command in {"/schedule", "/widget_preview"}:
+            return  # Private admin only; never publish to the channel.
         if command == "/week" and len(parts) != 1:
             return
         if command in {"/chart", "/export"}:

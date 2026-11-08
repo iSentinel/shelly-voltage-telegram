@@ -43,6 +43,25 @@ class WidgetStateTests(unittest.TestCase):
         self.assertEqual(result, {"schema": 1, "l": "uk", "s": "offline"})
         self.assertNotIn("v", result)
 
+    def test_fractional_sample_time_never_rounds_into_future(self):
+        """A new poll at :xx.9 seconds must remain visible right away."""
+
+        now = NOW + 0.91
+        data = json.loads(
+            WIDGET.widget_public_data(
+                {
+                    "connectivity": "online",
+                    "voltage": 224.1,
+                    "frequency": 50.0,
+                    "last_success": now - 0.03,
+                },
+                now=now,
+            )
+        )
+        self.assertEqual(data["s"], "online")
+        self.assertLessEqual(data["t"], now)
+        self.assertEqual(data["v"], 224.1)
+
     def test_old_sample_hides_voltage(self):
         """A seemingly connected meter with old telemetry is stale."""
 

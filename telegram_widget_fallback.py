@@ -26,6 +26,8 @@ WORDS = {
         "Можливо",
         "Неофіційне джерело",
         "Це прогноз, не вимірювання",
+        "В",
+        "Гц",
     ),
     "ru": (
         "Напряжение",
@@ -40,6 +42,8 @@ WORDS = {
         "Возможно",
         "Неофициальный источник",
         "Это прогноз, не измерение",
+        "В",
+        "Гц",
     ),
     "en": (
         "Voltage",
@@ -54,6 +58,8 @@ WORDS = {
         "Possible",
         "Unofficial source",
         "Forecast, not measurement",
+        "V",
+        "Hz",
     ),
 }
 
@@ -82,10 +88,10 @@ def measured_lines(
             and 0 <= now - ts <= 60
             and bounded(voltage, 0, 400)
         ):
-            lines = [f"⚡ {words[0]}: {voltage:.1f} В"]
+            lines = [f"⚡ {words[0]}: {voltage:.1f} {words[12]}"]
             frequency = data.get("f")
             if bounded(frequency, 40, 70):
-                lines.append(f"{words[5]}: {frequency:.1f} Гц")
+                lines.append(f"{words[5]}: {frequency:.1f} {words[13]}")
             return lines
         return [f"⚠️ {words[3]}. {words[4]}."]
     if raw_state == "offline":

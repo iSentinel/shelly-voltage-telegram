@@ -1,3 +1,24 @@
+## 2026-11-08 QA: admin-only widget fallback preview and precise timestamps
+
+- Dependent on combined QA source branch PR #205. Added an optional
+  private-only /widget_preview command for an authenticated administrator;
+  never responds in public channel or to an unauthorized private sender.
+- /widget_preview renders only stale-safe plaintext from the widget
+  public-data format; no experimental Telegram sendWidget calls.
+  Actual command delivery occurs only if a real authorized administrator
+  requests it after a future deployment. No sends in QA.
+- Community forecast is opt-in via three environment settings
+  COMMUNITY_OUTAGE_CACHE_FILE, COMMUNITY_OUTAGE_REGION and
+  COMMUNITY_OUTAGE_GROUP, with a validated bounded local JSON file.
+  Bad/missing/stale data are omitted, not interpreted as power events.
+- Fixed fractional-second timestamp rounding (never convert a recent
+  poll into a future sample). Added EN unit labels V/Hz.
+- Full isolated QA suite: 1009/1009 PASS; Ruff/quality PASS;
+  widget zlib9 remains 3205/4096 bytes. Production unchanged.
+- NEXT: CI and private Telegram recipient acceptance after explicit
+  client/Bot API support; official DTEK trust, real Pro3EM hardware
+  acceptance and authorized release remain pending.
+
 ## 2026-11-08 Combined QA acceptance (not a release)
 
 - Three independent staged changes are combined *only* in a new
