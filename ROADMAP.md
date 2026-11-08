@@ -1,3 +1,24 @@
+## 2026-11-08 12:13 Kyiv — 15-minute stable Shelly recovery QA
+
+- Connectivity incident #18 closed 11:55:01 Kyiv.
+  Gateway 12:13:17 confirmed online/healthy, 109 physical
+  measurements after incident closure, largest gap ~11s.
+- New source-only scripts/em50-recovery-stability.py requires
+  a full trailing 900-second period AFTER incident closure,
+  at least 60 real phase measurements, no gap larger than
+  30s (including time-window edges), valid voltage/frequency,
+  fresh /health and /ready. Uses protected SQLite mode=ro
+  and refuses to infer Telegram channel client visibility.
+- Actual Gateway latest 900s: 89 readings, gap max 11.02s,
+  voltage 203.4–212.1V, PASS.
+- 11 new focused tests, full local 1197/1197 Python tests
+  PASS with -W default and no ResourceWarnings, Ruff/quality
+  and secret-free source archive reproducibility PASS.
+- No Telegram send/edit, Shelly controls, SQLite writes,
+  Docker restarts, systemd activation or GitHub release.
+  Explicit signed promotion/rollback/account/mount gates
+  remain pending; candidate 0.5.14-hw unpublished.
+
 ## 2026-11-08 ~12:00 Kyiv — natural Shelly recovery #18
 
 - Live 0.5.13-hw resumed actual EM-50 readings and /ready=200.
