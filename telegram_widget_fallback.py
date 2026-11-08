@@ -99,6 +99,31 @@ def measured_lines(
     return [f"⚠️ {words[4]}."]
 
 
+def secondary_phase_lines(
+    data: dict, now: float, words: tuple[str, ...]
+) -> list[str]:
+    """Report L2 and L3 independently, hiding stale phase voltages."""
+
+    phases = data.get("p")
+    if not isinstance(phases, dict) or set(phases) != {"L2", "L3"}:
+        return []
+    result = []
+    for phase in ("L2", "L3"):
+        snap = phases[phase]
+        if not isinstance(snap, dict):
+            return []
+        stamp, voltage = snap.get("t"), snap.get("v")
+        fresh = (
+            snap.get("s") == "online"
+            and bounded(stamp, 1, now)
+            and 0 <= now - stamp <= 60
+            and bounded(voltage, 0, 400)
+        )
+        label = f"{voltage:.1f} {words[12]}" if fresh else "—"
+        result.append(f"🔌 {phase}: {label}")
+    return result
+
+
 def valid_forecast(data: dict, now: float) -> bool:
     """Prevent old schedules from appearing as current captions."""
 
@@ -158,6 +183,7 @@ def widget_fallback_text(
     clock = time.time() if now is None else now
     lines = ["⚡ Shelly"]
     lines.extend(measured_lines(data, clock, WORDS[lang]))
+    lines.extend(secondary_phase_lines(data, clock, WORDS[lang]))
     lines.extend(forecast_lines(data, clock, WORDS[lang]))
     caption = "\n".join(lines)
     if len(caption) > 1024:

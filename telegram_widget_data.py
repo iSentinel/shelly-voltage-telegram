@@ -88,6 +88,7 @@ def widget_public_data(
     forecast_updated: float | None = None,
     now: float | None = None,
     language: str = "uk",
+    phases: dict[str, dict] | None = None,
 ) -> str:
     """Encode an opaque per-widget state fitting Bot API widget limits."""
 
@@ -99,6 +100,14 @@ def widget_public_data(
         "l": language,
         **health_state(health, clock),
     }
+    if phases is not None:
+        if not isinstance(phases, dict) or set(phases) != {"L2", "L3"}:
+            raise ValueError("three-phase widget needs L2 and L3")
+        if not all(isinstance(phases[name], dict) for name in phases):
+            raise ValueError("invalid secondary phase snapshot")
+        state["p"] = {
+            name: health_state(phases[name], clock) for name in ("L2", "L3")
+        }
     if group:
         if not re.fullmatch(r"\d{1,2}\.\d", group):
             raise ValueError("unsupported outage group")

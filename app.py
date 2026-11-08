@@ -1822,6 +1822,12 @@ def private_widget_preview_text(monitor: Monitor) -> str:
     with monitor.config_lock:
         reading = monitor.state.snapshot()
         language = monitor.language
+        phases = None
+        if monitor.meter_type == "pro3em":
+            phases = {
+                phase: monitor.phase_states[phase].snapshot()
+                for phase in ("L2", "L3")
+            }
     args = {}
     path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
     region = os.getenv("COMMUNITY_OUTAGE_REGION")
@@ -1840,7 +1846,7 @@ def private_widget_preview_text(monitor: Monitor) -> str:
             # A missing/untrusted forecast must not hide fresh Shelly data.
             pass
     return widget_fallback_text(
-        widget_public_data(reading, language=language, **args)
+        widget_public_data(reading, language=language, phases=phases, **args)
     )
 
 
