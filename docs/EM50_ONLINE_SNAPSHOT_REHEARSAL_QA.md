@@ -15,7 +15,8 @@ rehearses the exact full-history backup guard without stopping the bot.
 The dry-run does not read SQLite or create any files. The run opens
 the source with a SQLite mode=ro URI and uses the official online
 backup API into a unique 0700 temporary directory. The snapshot
-database and gzip/sha256 manifest use mode 0600. The original source
+database and gzip/sha256 manifest use mode 0600 from creation,
+with streaming archive hashing instead of whole-file memory allocation. The original source
 never receives a write. The script invokes the same complete
 row-hash parity guard as prerelease, then removes the temporary
 directory on every exit.
