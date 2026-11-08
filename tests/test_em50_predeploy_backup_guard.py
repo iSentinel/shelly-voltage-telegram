@@ -213,6 +213,24 @@ class PredeployBackupGuardTests(unittest.TestCase):
         self.assertIn("sqlite_state_not_equal", result["reason_codes"])
         self.assertNotIn("ui_language", json.dumps(result))
 
+    def test_sqlite_user_version_header_blocks_mismatched_backup(self):
+        """SQLite header migration marker is part of full backup parity."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("PRAGMA user_version=7")
+        report = GATE.inspect(self.args, self.now)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertIn("sqlite_state_not_equal", report["reason_codes"])
+
+    def test_sqlite_application_id_header_blocks_mismatched_backup(self):
+        """An application marker mismatch is not equivalent SQLite."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("PRAGMA application_id=123456")
+        report = GATE.inspect(self.args, self.now)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertIn("sqlite_state_not_equal", report["reason_codes"])
+
     def test_auxiliary_aggregate_changes_block_complete_backup(self):
         """Preserve all historical aggregate rows across an upgrade."""
 

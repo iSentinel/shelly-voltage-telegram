@@ -60,3 +60,22 @@ read-only release preflight reported five automated PASS checks
 but FAIL for predeploy_backup_parity. This is expected with the
 older nightly backup. The test did not create or overwrite any
 backup, restart a container or change the Telegram channel.
+
+
+## Persisted SQLite header parity
+
+The full logical SQL dump previously omitted SQLite header fields
+PRAGMA user_version and PRAGMA application_id. A copy could have
+identical measurements, outages, Telegram status, settings and schema
+SQL yet a different persisted migration/application identity, and
+be incorrectly called equivalent.
+
+The whole-state SHA-256 fingerprint now includes both integer header
+pragmas, with names and length-prefixes but no disclosed table rows or
+Telegram identifiers. Both the release backup parity guard and
+predeploy online-snapshot capture share this fingerprint.
+
+Four synthetic RED/GREEN regression tests cover mismatched saved
+headers and live header drift during SQLite online backup and gzip
+compression. On drift, the private snapshot fails closed and no archive
+is published. No production schema or database is modified.
