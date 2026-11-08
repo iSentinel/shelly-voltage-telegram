@@ -1,3 +1,22 @@
+## 2026-11-08 QA: Docker and release module completeness
+
+- Identified that the old Dockerfile omitted new app dependencies
+  despite successful source-only Python tests.
+- Dockerfile now copies all root Python modules and preserves
+  the unprivileged 10001:10001 runtime user. The GitHub CI
+  imports app, yasno_cache and telegram_channel_yasno inside
+  the actual built container with Docker --network none.
+- Reproducible release.sh required-file manifest and privacy
+  fixture now include the full imported local runtime set.
+- AST-based tests protect against future module omissions.
+  Local full 1088/1088 tests PASS, Ruff/quality PASS,
+  release reproducibility + private .env exclusion PASS,
+  release.sh dry-run PASS.
+- No image published, installed or deployed; production
+  0.5.13-hw remains healthy. Next: GitHub Docker smoke,
+  versioned EM-50 candidate, real-client Telegram acceptance,
+  protected cache mount and controlled rollout approval.
+
 ## 2026-11-08 QA: EM-50 standard Bot API YASNO status card
 
 - Dedicated QA worktree implements optional (default OFF)
