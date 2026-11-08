@@ -209,12 +209,35 @@ echo "ROLLBACK_writer_restarted=BLOCKED"
 rm -rf "$RESCUE"
 rm "$TARGET/compose.yaml"
 
+# Check restored SQLite is private BEFORE gzip writes its first byte.
+cat > "$TMP/mock-bin/gzip" <<'MOCK_PRIVATE_GZIP'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $1 == -dc ]]; then
+    permissions="$(stat -Lc '%a' "/proc/$$/fd/1")"
+    printf '%s\n' "$permissions" > "$RESTORE_MODE_REPORT"
+    if [[ "$permissions" != 600 ]]; then
+        echo "ERROR: restored SQLite temp not private before gzip" >&2
+        exit 89
+    fi
+fi
+exec /usr/bin/gzip "$@"
+MOCK_PRIVATE_GZIP
+chmod 0755 "$TMP/mock-bin/gzip"
+# Simulate a usual service account shell, not an inherited restrictive umask.
+umask 022
+
+RESTORE_MODE_REPORT="$TMP/restore-mode" PATH="$TMP/mock-bin:$PATH" \
 SVT_ROOT="$TARGET" \
 DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
 SNAPSHOT_ROOT="$SNAP_ROOT" \
 RESCUE_ROOT="$RESCUE" \
     "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start \
         --confirm-db-replacement
+
+test "$(cat "$TMP/restore-mode")" = 600
+test -z "$(find "$DB_DIR" -maxdepth 1 -name '*.restore.*' -print -quit)"
+echo "ROLLBACK_SQLITE_PRIVATE_RESTORE_TEMP=PASS"
 
 test "$(cat "$TARGET/VERSION")" = "0.4.1-hw"
 test -f "$TARGET/OLD_ONLY"
@@ -248,6 +271,41 @@ with sqlite3.connect(sys.argv[1]) as db:
 PY
 
 echo "ROLLBACK_FIXTURE PASS"
+
+# A mid-decompression failure must remove mode-0600 partial SQLite data.
+before_failed_restore="$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"
+cat > "$TMP/mock-bin/gzip" <<'MOCK_FAILED_GZIP'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $1 == -dc ]]; then
+    permissions="$(stat -Lc '%a' "/proc/$$/fd/1")"
+    if [[ "$permissions" != 600 ]]; then
+        echo "ERROR: partial SQLite temp opened too broadly" >&2
+        exit 91
+    fi
+    printf 'synthetic-partial-private-database-bytes'
+    echo "ERROR: injected gzip failure before database restore" >&2
+    exit 92
+fi
+exec /usr/bin/gzip "$@"
+MOCK_FAILED_GZIP
+chmod 0755 "$TMP/mock-bin/gzip"
+if PATH="$TMP/mock-bin:$PATH" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+    bash -c '
+        set -euo pipefail
+        source <(sed '\''$d'\'' "$1")
+        SNAPSHOT="$2"
+        restore_database
+    ' _ "$PROJECT/scripts/rollback.sh" "$SNAP" \
+        > "$TMP/partial-restore.log" 2>&1; then
+    echo "ERROR: partial gzip failure was accepted" >&2
+    exit 1
+fi
+grep -q "injected gzip failure" "$TMP/partial-restore.log"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" \
+    = "$before_failed_restore"
+test -z "$(find "$DB_DIR" -maxdepth 1 -name '*.restore.*' -print -quit)"
+echo "ROLLBACK_PARTIAL_SQLITE_TEMP_CLEANUP=PASS"
 
 # A SHA256-valid gzip must be verified as SQLite before any service stop.
 INVALID_DB="$TMP/invalid-sqlite-snapshot"
