@@ -1,3 +1,31 @@
+## 2026-11-08 QA: guarded YASNO cache refresh and systemd examples
+
+- Gateway 03:18 Kyiv: live Shelly Pro EM-50 0.5.13-hw remains
+  online at 212.9 V / 50.0 Hz, 1313 successful polls, /ready
+  HTTP 200. SQLite quick_check=ok, 25832 measurements.
+- Protected YASNO cache PR #212 passed push and PR GitHub CI.
+- QA-only scripts/yasno-refresh.py supports explicit --status,
+  --dry-run and --once. The first two never access the network
+  or write a lock. --once holds an owner-only nonblocking
+  exclusive lock and makes at most one HTTPS fetch when due,
+  with >=900s default interval (allowed 300..7200s).
+  Failed fetches preserve the prior sealed cache.
+- Actual protected QA cache STATUS PASS, DRY_RUN PASS,
+  guarded --once SKIPPED when fetch age was 603 seconds.
+  The already-running production service was not touched.
+- Added NOT-INSTALLED .example systemd service and timer
+  files with dedicated service account, protected state
+  directory, 15-minute schedule, jitter, and reviewed
+  installation/rollback documentation. No timer enabled.
+- New tests: 13, full 1072/1072 Python tests PASS,
+  Ruff 0.14.2 + maintainability gate PASS.
+- Outstanding: controlled source cache sharing with the
+  production bot, standard Bot API channel fallback,
+  recipient-visible acceptance, approved rollback/release.
+  Physical Pro 3EM/3CT63 testing does not block EM-50-only.
+- No Telegram sends, Shelly controls, SQLite production
+  writes, Docker restart, or production deployment.
+
 ## 2026-11-08 QA: secure parent-directory guard for YASNO cache
 
 - Follow-up hardening of Draft PR #212: the trusted local cache
