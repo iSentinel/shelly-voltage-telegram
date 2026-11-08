@@ -70,11 +70,19 @@ def digest_rows(db: sqlite3.Connection, query: str) -> bytes:
 
 
 def whole_sqlite_digest(db: sqlite3.Connection) -> bytes:
-    """Fingerprint all user tables and schema without exposing their rows."""
+    """Hash table state and persistent SQLite header metadata privately."""
 
     digest = hashlib.sha256()
     for statement in db.iterdump():
         raw = statement.encode("utf-8")
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    # iterdump omits these persisted header fields used for migrations.
+    for pragma in ("user_version", "application_id"):
+        row = db.execute(f"PRAGMA {pragma}").fetchone()
+        if row is None or not isinstance(row[0], int):
+            raise ValueError("SQLite header pragma is unavailable")
+        raw = f"{pragma}={row[0]}".encode("ascii")
         digest.update(len(raw).to_bytes(8, "big"))
         digest.update(raw)
     return digest.digest()
