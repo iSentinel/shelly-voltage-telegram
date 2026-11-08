@@ -78,7 +78,10 @@ validate_inputs() {
 release_name() {
     local version
     version="$(tr -d '\r\n' < "$PROJECT/VERSION")"
-    [[ -n "$version" ]] || { echo "ERROR: VERSION is empty" >&2; exit 3; }
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-hw$ ]] || {
+        echo "ERROR: VERSION must be a release version (major.minor.patch-hw)." >&2
+        exit 3
+    }
     printf 'shelly-voltage-telegram-%s' "$version"
 }
 
