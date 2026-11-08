@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import math
 import sqlite3
 import subprocess
 import sys
@@ -14,6 +15,13 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_ROOT = Path("/opt/shelly-voltage")
+REQUIRED_CHECKS = (
+    "source_candidate",
+    "live_health",
+    "sqlite_readonly",
+    "latest_backup_sha256",
+    "predeploy_backup_parity",
+)
 
 
 def load_script(name: str, filename: str):
@@ -130,32 +138,75 @@ def real_recovery_status(args: argparse.Namespace) -> str:
         return "blocked"
 
 
-def diagnostic_result(original: dict, compose: str, recovered: str) -> dict:
+def normal_voltage_status(args: argparse.Namespace) -> str:
+    """Require the recent fifteen-minute band to be entirely normal."""
+
+    stability = load_script(
+        "ui_only_normal_window", "em50-recovery-stability.py"
+    )
+    acceptance = load_script("ui_only_normal_bounds", "recovery-acceptance.py")
+    request = SimpleNamespace(
+        db=str(args.db),
+        health_url="http://127.0.0.1:8080/health",
+        ready_url="http://127.0.0.1:8080/ready",
+        max_gap_seconds=30,
+        min_samples=60,
+    )
+    try:
+        result = stability.inspect(request, time.time())
+        bounds = acceptance.configured_normal_bounds(args.db)
+        if bounds is None or result.get("outage_id") != args.incident_id:
+            return "FAIL"
+        low = float(result["voltage_min"])
+        high = float(result["voltage_max"])
+        if not all(math.isfinite(v) for v in (low, high)):
+            return "FAIL"
+        return (
+            "PASS"
+            if result.get("status") == "PASS"
+            and bounds[0] < low <= high < bounds[1]
+            else "FAIL"
+        )
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        KeyError,
+        sqlite3.Error,
+        OverflowError,
+    ):
+        return "FAIL"
+
+
+def diagnostic_result(
+    original: dict, compose: str, recovered: str, normal: str
+) -> dict:
     """Keep all release manual gates despite optional YASNO diagnostics."""
 
-    needed = (
-        "source_candidate",
-        "live_health",
-        "sqlite_readonly",
-        "latest_backup_sha256",
-        "predeploy_backup_parity",
-    )
     required = all(
-        original["checks"][name]["status"] == "PASS" for name in needed
+        original["checks"][name]["status"] == "PASS"
+        for name in REQUIRED_CHECKS
     )
-    eligible = required and compose == "PASS" and recovered == "pass"
+    eligible = (
+        required
+        and compose == "PASS"
+        and recovered == "pass"
+        and normal == "PASS"
+    )
     return {
         "scope": "design_only_diagnostic_not_a_release_gate",
         "status": "MANUAL_REVIEW_ONLY" if eligible else "BLOCKED",
         "automated_non_yasno_pass": eligible,
         "compose_yasno_disabled": compose,
         "natural_recovery_15min": recovered,
+        "normal_voltage_15min": normal,
         "full_release_checks": {
             name: value["status"] for name, value in original["checks"].items()
         },
         "private_telegram_receipt": original["manual_evidence_status"],
         "manual_pending": list(original["manual_pending"])
         + [
+            "normal_voltage_baseline_and_threshold_review",
             "real_client_visual_design_PNG_signoff",
             "independent_source_review",
             "explicit_signed_UI_only_release_and_rollback_authorization",
@@ -170,7 +221,10 @@ def inspect(args: argparse.Namespace) -> dict:
     release = load_script("ui_only_release_gate", "em50-release-preflight.py")
     original = release.inspect(release_arguments(args))
     return diagnostic_result(
-        original, compose_status(args), real_recovery_status(args)
+        original,
+        compose_status(args),
+        real_recovery_status(args),
+        normal_voltage_status(args),
     )
 
 
