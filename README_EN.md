@@ -55,7 +55,7 @@ The service is designed as a **monitor only**. It does not switch relays, change
 
 ## Project status
 
-- **Current software candidate: `0.5.13-hw`**
+- **Current software candidate: `0.5.14-hw`**
 - **Current release: `0.5.12-hw`**
 - **Production field-test runtime: `0.5.13-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.

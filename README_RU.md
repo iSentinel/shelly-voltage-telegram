@@ -55,7 +55,7 @@ See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 
 ## Статус проекта
 
-- Текущий software candidate: **`0.5.12-hw`**.
+- Текущий software candidate: **`0.5.14-hw`**.
 - Текущий публичный релиз: **`0.5.12-hw`**.
 - Тестовая production-установка использует **`0.5.13-hw`** с физическим Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
 - Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.
