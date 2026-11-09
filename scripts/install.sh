@@ -135,7 +135,7 @@ require_safe_fresh_database_state() {
     # New install roots must not reuse an existing shared SQLite history.
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] && return 0
     local db="/var/lib/shelly-voltage/voltage.sqlite3" candidate
-    for candidate in "$db" "$db-wal" "$db-shm"; do
+    for candidate in "$db" "$db-wal" "$db-shm" "$db-journal"; do
         if [[ -e "$candidate" || -L "$candidate" ]]; then
             echo "ERROR: existing Shelly SQLite state requires reviewed migration." >&2
             exit 5
