@@ -131,6 +131,18 @@ require_valid_install_marker() {
     fi
 }
 
+require_safe_fresh_database_state() {
+    # New install roots must not reuse an existing shared SQLite history.
+    [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] && return 0
+    local db="/var/lib/shelly-voltage/voltage.sqlite3" candidate
+    for candidate in "$db" "$db-wal" "$db-shm" "$db-journal"; do
+        if [[ -e "$candidate" || -L "$candidate" ]]; then
+            echo "ERROR: existing Shelly SQLite state requires reviewed migration." >&2
+            exit 5
+        fi
+    done
+}
+
 require_quiesced_upgrade() {
     local installed=false running
     if [[ -d "$TARGET" && -f "$TARGET/VERSION" ]]; then
@@ -378,6 +390,7 @@ main() {
     require_safe_install_target
     require_safe_install_files
     require_valid_install_marker
+    require_safe_fresh_database_state
     require_quiesced_upgrade
     snapshot_upgrade
     install_docker
