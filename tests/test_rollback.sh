@@ -377,6 +377,31 @@ for kind in linked_target linked_parent root_target relative_target \
 done
 echo "ROLLBACK_UNSAFE_SOURCE_TARGETS=REJECTED"
 
+# A missing/non-directory SQLite parent must block before Docker stop.
+printf 'not a directory\n' > "$TMP/not-a-db-directory"
+for kind in missing_parent wrong_parent_type relative_db traversal_db; do
+    case "$kind" in
+        missing_parent) bad_db="$TMP/missing-db-parent/voltage.sqlite3" ;;
+        wrong_parent_type) bad_db="$TMP/not-a-db-directory/voltage.sqlite3" ;;
+        relative_db) bad_db="relative.sqlite3" ;;
+        traversal_db) bad_db="$DB_DIR/../data/voltage.sqlite3" ;;
+    esac
+    if SVT_ROOT="$TARGET" DATABASE_PATH="$bad_db" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --dry-run \
+            --no-start >"$TMP/unsafe-db-parent-$kind.log" 2>&1; then
+        echo "ERROR: rollback accepted invalid SQLite parent $kind" >&2
+        exit 1
+    fi
+    grep -q "ERROR: rollback unsafe backup path: SQLite directory" \
+        "$TMP/unsafe-db-parent-$kind.log"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" \
+        = "$source_before"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" \
+        = "$db_before"
+done
+echo "ROLLBACK_SQLITE_DIRECTORY_PREFLIGHT=BLOCKED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
