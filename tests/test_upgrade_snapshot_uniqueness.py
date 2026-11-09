@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import os
 import sqlite3
 import stat
@@ -227,6 +228,38 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             self.assertTrue((incomplete / "source.tar.gz").is_file())
             archive_count = len(list(upgrades.glob("*/voltage-*.sqlite3.gz")))
             self.assertEqual(archive_count, 5)
+
+    def test_corrupt_snapshot_preserves_valid_backups(self) -> None:
+        """A corrupt-looking recovery folder must not displace good copies."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            upgrades.mkdir(mode=0o700)
+            corrupt = upgrades / "20261109-073000-0.5.13-hw-ABCDEF12"
+            corrupt.mkdir()
+            set_history(db, 0)
+            source_tar = corrupt / "source.tar.gz"
+            source_tar.write_bytes(b"not a gzip TAR")
+            sqlite_tar = corrupt / "voltage-pretend.sqlite3.gz"
+            sqlite_tar.write_bytes(gzip.compress(db.read_bytes()))
+            for archive in (source_tar, sqlite_tar):
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                Path(str(archive) + ".sha256").write_text(
+                    f"{digest}  {archive}\n"
+                )
+            (corrupt / "manifest.env").write_text("from_version=0.5.13-hw\n")
+            os.utime(corrupt, (2145916800, 2145916800))
+            for value in range(1, 7):
+                set_history(db, value)
+                invoke_snapshot(installer, installed, clock)
+            valid = [
+                path
+                for path in upgrades.glob("*/source.tar.gz")
+                if path.parent != corrupt
+            ]
+            self.assertTrue((corrupt / "source.tar.gz").exists())
+            self.assertEqual(len(valid), 5)
 
     def test_rotation_handles_spaces_without_overwriting(self) -> None:
         """Prune to five snapshot pairs even when path contains spaces."""

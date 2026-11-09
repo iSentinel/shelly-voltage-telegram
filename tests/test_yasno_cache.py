@@ -6,7 +6,7 @@ import json
 import stat
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -132,11 +132,12 @@ class YasnoCacheTests(unittest.TestCase):
             invalid["10.1"]["today"]["status"] = "WaitingForSchedule"
             with (
                 patch(
-                    "yasno_cache.fetch_live",
-                    return_value=(invalid, datetime.now(timezone.utc)),
+                    "yasno_cache.fetch_live", return_value=(invalid, FETCHED)
                 ),
+                patch("yasno_cache.datetime") as clock,
                 self.assertRaisesRegex(ValueError, "not published"),
             ):
+                clock.now.return_value = NOW
                 C.fetch_to_cache(str(path), "10.1")
             self.assertEqual(path.read_bytes(), before)
 
