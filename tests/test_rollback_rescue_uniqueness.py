@@ -27,6 +27,22 @@ def put_measurement(path: Path, value: int) -> None:
         db.execute("INSERT INTO measurements VALUES (?)", (value,))
 
 
+def sourceable_rollback(root: Path) -> Path:
+    """Put function-only rollback code beside the real archive validator."""
+
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    source = ROLLBACK.read_text()
+    assert source.rstrip().endswith('main "$@"')
+    functions = scripts / "rollback-functions.sh"
+    functions.write_text(source.rsplit('main "$@"', 1)[0])
+    validator = scripts / "validate-sqlite-archive.py"
+    validator.write_bytes(
+        (ROLLBACK.parent / "validate-sqlite-archive.py").read_bytes()
+    )
+    return functions
+
+
 def rescue_once(path: Path, database: Path, root: Path, bin_dir: Path) -> None:
     """Run only the isolated rescue function, never Docker or main."""
 
@@ -36,9 +52,10 @@ def rescue_once(path: Path, database: Path, root: Path, bin_dir: Path) -> None:
         "RESCUE_ROOT": str(path),
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
     }
-    command = "source <(sed '$d' \"$1\"); rescue_current_db"
+    source = sourceable_rollback(root)
+    command = 'source "$1"; rescue_current_db'
     subprocess.run(
-        ["bash", "-c", command, "_", str(ROLLBACK)],
+        ["bash", "-c", command, "_", str(source)],
         env=env,
         check=True,
         capture_output=True,
@@ -67,6 +84,31 @@ def archived_values(path: Path) -> set[int]:
 
 class RescueBackupUniquenessTests(unittest.TestCase):
     """A rescue must never silently replace its predecessor."""
+
+    def test_corrupt_rescue_blocks_before_database_rewind(self) -> None:
+        """A backup helper exit zero is not proof of restorable SQLite."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / "source"
+            scripts = source / "scripts"
+            scripts.mkdir(parents=True)
+            fake = scripts / "backup.sh"
+            fake.write_text(
+                "#!/bin/sh\n"
+                "set -eu\n"
+                'mkdir -p "$BACKUP_DIR"\n'
+                'gzip -c </dev/null > "$BACKUP_DIR/voltage-fake.sqlite3.gz"\n'
+                'sha256sum "$BACKUP_DIR/voltage-fake.sqlite3.gz" '
+                '> "$BACKUP_DIR/voltage-fake.sqlite3.gz.sha256"\n'
+            )
+            fake.chmod(0o700)
+            db = root / "live.sqlite3"
+            put_measurement(db, 222)
+            rescue_root = root / "rescues"
+            rescue_root.mkdir(mode=0o700)
+            with self.assertRaises(subprocess.CalledProcessError):
+                rescue_once(rescue_root, db, source, Path("/usr/bin"))
 
     def test_two_rescues_same_second_keep_both_histories(self) -> None:
         """Distinct historic records survive consecutive rescue attempts."""
