@@ -40,18 +40,32 @@ def sourceable_rollback(root: Path) -> Path:
     validator.write_bytes(
         (ROLLBACK.parent / "validate-sqlite-archive.py").read_bytes()
     )
+    guard = scripts / "em50-predeploy-backup-guard.py"
+    guard.write_bytes(
+        (ROLLBACK.parent / "em50-predeploy-backup-guard.py").read_bytes()
+    )
     return functions
 
 
-def rescue_once(path: Path, database: Path, root: Path, bin_dir: Path) -> None:
+def rescue_once(
+    path: Path,
+    database: Path,
+    root: Path,
+    bin_dir: Path,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     """Run only the isolated rescue function, never Docker or main."""
 
-    env = os.environ | {
-        "SVT_ROOT": str(root),
-        "DATABASE_PATH": str(database),
-        "RESCUE_ROOT": str(path),
-        "PATH": f"{bin_dir}:{os.environ['PATH']}",
-    }
+    env = (
+        os.environ
+        | {
+            "SVT_ROOT": str(root),
+            "DATABASE_PATH": str(database),
+            "RESCUE_ROOT": str(path),
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        }
+        | (extra_env or {})
+    )
     source = sourceable_rollback(root)
     command = 'source "$1"; rescue_current_db'
     subprocess.run(
@@ -84,6 +98,38 @@ def archived_values(path: Path) -> set[int]:
 
 class RescueBackupUniquenessTests(unittest.TestCase):
     """A rescue must never silently replace its predecessor."""
+
+    def test_valid_but_stale_rescue_blocks_before_rewind(self) -> None:
+        """Equal row counts alone cannot preserve current SQLite history."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            scripts = root / "source/scripts"
+            scripts.mkdir(parents=True)
+            fake = scripts / "backup.sh"
+            fake.write_text(
+                "#!/bin/sh\nset -eu\n"
+                'mkdir -p "$BACKUP_DIR"\n'
+                'gzip -c "$STALE_DB" '
+                '> "$BACKUP_DIR/voltage-stale.sqlite3.gz"\n'
+                'sha256sum "$BACKUP_DIR/voltage-stale.sqlite3.gz" '
+                '> "$BACKUP_DIR/voltage-stale.sqlite3.gz.sha256"\n'
+            )
+            fake.chmod(0o700)
+            stale = root / "stale.sqlite3"
+            live = root / "live.sqlite3"
+            put_measurement(stale, 111)
+            put_measurement(live, 222)
+            rescue = root / "rescues"
+            rescue.mkdir(mode=0o700)
+            with self.assertRaises(subprocess.CalledProcessError):
+                rescue_once(
+                    rescue,
+                    live,
+                    root / "source",
+                    Path("/usr/bin"),
+                    {"STALE_DB": str(stale)},
+                )
 
     def test_corrupt_rescue_blocks_before_database_rewind(self) -> None:
         """A backup helper exit zero is not proof of restorable SQLite."""

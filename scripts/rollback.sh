@@ -242,7 +242,7 @@ rescue_current_db() {
     archive="$(unique_snapshot_backup "$rescue")"
     verify_archive_manifest "$archive"
     python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
-        --archive "$archive" >/dev/null
+        --archive "$archive" --compare-db "$DB" >/dev/null
     echo "Rescue backup: $rescue"
 }
 
