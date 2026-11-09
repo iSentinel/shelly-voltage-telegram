@@ -16,7 +16,7 @@ lack TARGET/VERSION, making this an unsafe implicit migration path.
 
 Before inspecting the writer, creating a snapshot or touching Docker,
 require_safe_fresh_database_state checks for the existing database,
-SQLite -wal and -shm sidecars, and dangling symlinks. An unversioned
+SQLite -wal, -shm and -journal sidecars, and dangling symlinks. An unversioned
 target with any of those paths present is rejected with exit status 5.
 
 A versioned target still uses the existing quiesced upgrade and
@@ -27,7 +27,7 @@ reports the migration blocker rather than claiming success.
 ## Independent QA
 
 - RED: seven assertions failed with the missing guard.
-- GREEN: 4/4 new tests PASS covering database, -wal, -shm,
+- GREEN: 4/4 new tests PASS covering database, -wal, -shm, -journal,
   symlink, truly empty state, versioned upgrade and stage ordering.
 - LXC 110 installer fixture: FRESH_INSTALL_WITH_EXISTING_DB=BLOCKED;
   versioned in-place dry-run and two configuration fixtures PASS.
