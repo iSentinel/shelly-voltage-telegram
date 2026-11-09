@@ -376,8 +376,8 @@ main() {
     require_safe_install_files
     require_valid_install_marker
     require_quiesced_upgrade
-    install_docker
     snapshot_upgrade
+    install_docker
     copy_source
     prepare_state
     configure_project
