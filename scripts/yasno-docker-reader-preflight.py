@@ -85,8 +85,15 @@ def reader_mount(document: dict) -> dict:
 
 
 def secure_container(document: dict) -> dict[str, str]:
-    """Keep production UID and read-only Docker isolation intact."""
+    """Require a running nonprivileged reader with read-only Docker."""
 
+    state = document.get("State")
+    if not isinstance(state, dict):
+        raise ValueError("YASNO reader Docker state missing")
+    if state.get("Running") is not True or any(
+        state.get(key) is not False for key in ("Paused", "Restarting", "Dead")
+    ):
+        raise ValueError("YASNO reader is not running normally")
     config = document["Config"]
     host = document["HostConfig"]
     dropped = host.get("CapDrop") or []
