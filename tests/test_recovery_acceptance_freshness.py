@@ -109,6 +109,26 @@ class RecoveryAcceptanceFreshnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertIn("captured outage is still open", result["errors"])
 
+    def test_other_phase_cannot_reuse_preoutage_l1_sample(self):
+        """An L1 timestamp near closure is not fresh since baseline."""
+
+        with closing(RECOVERY.sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "update outages set started_at=? where id=15",
+                (timestamp("2026-11-07T00:39:55+02:00"),),
+            )
+        self.insert_sample("L1", "2026-11-07T00:39:53+02:00")
+        baseline = RECOVERY.baseline_payload(args(self.path))
+        self.assertEqual(baseline["status"], "pass")
+        self.checkpoint.write_text(RECOVERY.json.dumps(baseline))
+        self.close_and_rotate()
+        self.insert_sample("L2", "2026-11-07T00:40:03+02:00")
+        result = self.verify()
+        self.assertEqual(result["status"], "fail")
+        self.assertTrue(
+            any("since baseline" in error for error in result["errors"])
+        )
+
     def test_other_phase_must_not_prove_l1_recovery(self):
         """New L2 data cannot satisfy the L1 event under verification."""
 
