@@ -240,7 +240,8 @@ prune_upgrade_snapshots() {
 
 snapshot_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
-    [[ "$SOURCE" != "$TARGET" ]] || return 0
+    # Even an in-place reinstall may rebuild the image and replace state.
+    # Always preserve source and exact SQLite history before deployment.
     local stamp old_version root snapshot sqlite_archive
     local sqlite_db=/var/lib/shelly-voltage/voltage.sqlite3
     stamp="$(date +%Y%m%d-%H%M%S)"
