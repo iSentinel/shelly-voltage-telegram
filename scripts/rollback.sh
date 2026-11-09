@@ -173,7 +173,8 @@ rescue_current_db() {
         echo "DRY-RUN: backup current DB -> $rescue"
         return
     fi
-    mkdir -p "$rescue"
+    # The backup writer refuses existing directories not already mode 0700.
+    mkdir -m 0700 -p -- "$rescue"
     DATABASE_PATH="$DB" BACKUP_DIR="$rescue" BACKUP_KEEP=1 \
         "$TARGET/scripts/backup.sh" >/dev/null
     echo "Rescue backup: $rescue"
