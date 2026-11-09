@@ -50,3 +50,22 @@ SQLite operation. For read-only operator validation, use
 python3 scripts/em50-predeploy-snapshot.py --dry-run instead.
 A synthetic RED/GREEN test requires zero output changes for
 mistaken invocations.
+
+
+## Destination safety and no implicit chmod
+
+The former helper unconditionally changed the configured destination
+directory's permissions to 0700. A typo in BACKUP_DIR could therefore
+change the permissions on a shared pre-existing directory, and an
+intermediate path symlink could redirect archive output.
+
+The helper now checks the full path component chain for symlinks before
+mkdir. Newly created destinations inherit an owner-only umask; an
+existing destination must already belong to the invoking account and
+have exact mode 0700. A mismatch fails before opening any backup stage.
+No chmod is performed on an unrelated pre-existing directory.
+
+Two synthetic RED tests demonstrate the prior permission mutation
+and intermediate symlink redirection. GREEN requires rejection and
+no created archives. The normal nightly default and rollback-rescue
+backup paths remain compatible with owner-only destinations.
