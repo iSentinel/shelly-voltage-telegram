@@ -24,6 +24,12 @@ def inspection(enabled: str = "0") -> dict:
     """Return a synthetic hardened container with no real credentials."""
 
     return {
+        "State": {
+            "Running": True,
+            "Paused": False,
+            "Restarting": False,
+            "Dead": False,
+        },
         "Config": {
             "User": "10001:10001",
             "Env": [
@@ -118,6 +124,35 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
                 self.assertRaises(ValueError),
             ):
                 QA.verify_reader(document, "staging")
+
+    def test_staging_rejects_nonrunning_container(self):
+        """A configured mount cannot certify a stopped reader."""
+
+        for state in ("stopped", "missing", "paused", "restarting", "dead"):
+            document = inspection()
+            if state == "stopped":
+                document["State"]["Running"] = False
+            elif state == "missing":
+                document.pop("State")
+            else:
+                document["State"][state.capitalize()] = True
+            with (
+                self.subTest(state=state),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_active_rejects_nonrunning_before_cache_access(self):
+        """A stopped reader is not ready, regardless of cached YASNO."""
+
+        document = inspection("1")
+        document["State"]["Running"] = False
+        with (
+            patch.object(QA, "read_verified_cache") as read,
+            self.assertRaises(ValueError),
+        ):
+            QA.verify_reader(document, "active")
+        read.assert_not_called()
 
     def test_docker_user_and_filesystem_must_remain_hardened(self):
         """Reject privilege elevation and writable container filesystem."""
