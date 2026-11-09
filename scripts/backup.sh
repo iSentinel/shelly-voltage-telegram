@@ -36,11 +36,11 @@ trap cleanup_backup EXIT
     echo "ERROR: regular SQLite database not found." >&2
     exit 3
 }
-assert_unlinked_destination() {
-    local part="$DEST" parent
+assert_unlinked_path() {
+    local part="$1" parent
     while [[ "$part" != / && "$part" != . ]]; do
         if [[ -L "$part" ]]; then
-            echo "ERROR: backup destination contains a symlink." >&2
+            echo "ERROR: backup path contains a symlink." >&2
             exit 3
         fi
         parent="$(dirname -- "$part")"
@@ -49,7 +49,12 @@ assert_unlinked_destination() {
     done
 }
 
-assert_unlinked_destination
+assert_unlinked_path "$DB"
+assert_unlinked_path "$DEST"
+if [[ "$(stat -c %h -- "$DB")" != 1 ]]; then
+    echo "ERROR: SQLite source must not have hard links." >&2
+    exit 3
+fi
 umask 077
 mkdir -p -- "$DEST"
 if [[ ! -d "$DEST" || ! -O "$DEST" ]] ||

@@ -200,6 +200,47 @@ class BackupUniquenessTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o755)
             self.assertEqual(list(dest.iterdir()), [])
 
+    def test_rejects_linked_parent_database(self) -> None:
+        """Reject a SQLite file reached through a linked parent folder."""
+
+        with tempfile.TemporaryDirectory() as location:
+            root = Path(location)
+            actual = root / "actual"
+            actual.mkdir()
+            source = actual / "source.sqlite3"
+            make_db(source, "test")
+            (root / "link").symlink_to(actual, target_is_directory=True)
+            dest = root / "backups"
+            env = os.environ | {
+                "DATABASE_PATH": str(root / "link" / source.name),
+                "BACKUP_DIR": str(dest),
+            }
+            done = subprocess.run(
+                ["bash", str(SCRIPT)], env=env, capture_output=True
+            )
+            self.assertNotEqual(done.returncode, 0)
+            self.assertFalse(dest.exists())
+
+    def test_rejects_hardlinked_database(self) -> None:
+        """Reject a source database inode with multiple public names."""
+
+        with tempfile.TemporaryDirectory() as location:
+            root = Path(location)
+            actual = root / "original.sqlite3"
+            make_db(actual, "test")
+            source = root / "alternate.sqlite3"
+            source.hardlink_to(actual)
+            dest = root / "backups"
+            env = os.environ | {
+                "DATABASE_PATH": str(source),
+                "BACKUP_DIR": str(dest),
+            }
+            done = subprocess.run(
+                ["bash", str(SCRIPT)], env=env, capture_output=True
+            )
+            self.assertNotEqual(done.returncode, 0)
+            self.assertFalse(dest.exists())
+
     def test_rejects_linked_parent_destination(self) -> None:
         """Never write backup data through a symlinked parent directory."""
 
