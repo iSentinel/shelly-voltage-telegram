@@ -77,7 +77,9 @@ class InstallVersionMarkerTests(unittest.TestCase):
         installer = (source / "scripts/install.sh").read_text()
         main = installer.split("main() {", 1)[1].split("\n}", 1)[0]
         self.assertIn(
-            "require_valid_install_marker\n    require_quiesced_upgrade",
+            "require_valid_install_marker"
+            "\n    require_safe_fresh_database_state"
+            "\n    require_quiesced_upgrade",
             main,
         )
 
