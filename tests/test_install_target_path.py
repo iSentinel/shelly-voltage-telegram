@@ -84,9 +84,71 @@ class InstallerTargetPathTests(unittest.TestCase):
         script = (ROOT / "scripts/install.sh").read_text()
         main = script.split("main() {", 1)[1].split("\n}", 1)[0]
         self.assertIn(
-            "require_safe_install_target\n    require_quiesced_upgrade",
+            "require_safe_install_target\n    require_safe_install_files",
             main,
         )
+
+    def test_reject_protected_environment_links(self) -> None:
+        """Symlink or hard link to an external .env must fail preflight."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "installed"
+            target.mkdir()
+            other = root / "external-env"
+            other.write_text("safe")
+            linked = target / ".env"
+            linked.symlink_to(other)
+            self.assertNotEqual(dry_run(str(target)).returncode, 0)
+            linked.unlink()
+            os.link(other, linked)
+            self.assertNotEqual(dry_run(str(target)).returncode, 0)
+            self.assertEqual(other.read_text(), "safe")
+
+    def test_reject_linked_secrets_directory(self) -> None:
+        """Do not chmod or chown an unrelated secrets directory."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "installed"
+            target.mkdir()
+            outside = root / "elsewhere"
+            outside.mkdir()
+            (target / "secrets").symlink_to(outside, target_is_directory=True)
+            result = dry_run(str(target))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"unsafe installation secrets", result.stderr)
+
+    def test_reject_linked_secret_files(self) -> None:
+        """Do not touch, chown or chmod external secret file inodes."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "installed"
+            secrets = target / "secrets"
+            secrets.mkdir(parents=True)
+            outside = root / "external-secret"
+            outside.write_text("preserved")
+            token = secrets / "telegram_token"
+            token.symlink_to(outside)
+            self.assertNotEqual(dry_run(str(target)).returncode, 0)
+            token.unlink()
+            os.link(outside, token)
+            self.assertNotEqual(dry_run(str(target)).returncode, 0)
+            self.assertEqual(outside.read_text(), "preserved")
+
+    def test_regular_protected_files_are_accepted(self) -> None:
+        """Existing standard private files do not block dry run."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "installed"
+            secrets = target / "secrets"
+            secrets.mkdir(parents=True)
+            (target / ".env").write_text("present")
+            for name in ("telegram_token", "shelly_password"):
+                (secrets / name).write_text("present")
+            result = dry_run(str(target))
+            self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

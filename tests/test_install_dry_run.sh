@@ -16,7 +16,14 @@ grep -q "DRY-RUN PASS: no changes applied." "$TMP/fresh.log"
 [[ ! -e "$fresh" ]]
 echo "FRESH_INSTALL_DRY_RUN=PASS"
 
-SVT_ROOT="$PROJECT" "$PROJECT/scripts/install.sh"     --dry-run --non-interactive > "$TMP/in-place.log" 2>&1
+# GitHub checkout belongs to runner, not root: use an isolated
+# root-owned in-place tree instead of weakening the safety guard.
+in_place="$TMP/in-place-root"
+mkdir -p "$in_place/scripts"
+cp "$PROJECT/scripts/install.sh" "$in_place/scripts/install.sh"
+cp "$PROJECT/VERSION" "$in_place/VERSION"
+SVT_ROOT="$in_place" "$in_place/scripts/install.sh" \
+    --dry-run --non-interactive > "$TMP/in-place.log" 2>&1
 grep -q "DRY-RUN PASS: no changes applied." "$TMP/in-place.log"
 echo "IN_PLACE_INSTALL_DRY_RUN=PASS"
 
