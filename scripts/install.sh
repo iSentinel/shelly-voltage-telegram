@@ -132,14 +132,24 @@ require_valid_install_marker() {
 }
 
 require_quiesced_upgrade() {
-    [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
+    local installed=false running
+    if [[ -d "$TARGET" && -f "$TARGET/VERSION" ]]; then
+        installed=true
+    fi
     if [[ "$DRY_RUN" == true ]]; then
-        echo "DRY-RUN: require stopped Shelly Docker writer before upgrade."
+        if [[ "$installed" == true ]]; then
+            echo "DRY-RUN: require stopped Shelly Docker writer before upgrade."
+        fi
         return 0
     fi
-    local running
+    if ! command -v docker >/dev/null 2>&1; then
+        [[ "$installed" == false ]] && return 0
+        echo "ERROR: cannot verify stopped Shelly writer." >&2
+        exit 5
+    fi
     if ! running="$(docker inspect --format '{{.State.Running}}' \
         shelly-voltage-bot 2>/dev/null)"; then
+        [[ "$installed" == false ]] && return 0
         echo "ERROR: cannot verify stopped Shelly writer." >&2
         exit 5
     fi

@@ -95,6 +95,34 @@ class InstallWriterGateTests(unittest.TestCase):
                 invoke_gate(Path(directory), "unknown", False, False), 0
             )
 
+    def test_fresh_target_rejects_existing_live_writer(self) -> None:
+        """An alternate installation root cannot replace a running bot."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                invoke_gate(Path(directory), "running", False, False), 5
+            )
+
+    def test_fresh_target_allows_stopped_or_absent_writer(self) -> None:
+        """A fresh install remains possible with no live Docker writer."""
+
+        for state in ("stopped", "unknown"):
+            with (
+                self.subTest(state=state),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                self.assertEqual(
+                    invoke_gate(Path(directory), state, False, False), 0
+                )
+
+    def test_dry_run_fresh_does_not_require_docker(self) -> None:
+        """Plan mode never inspects Docker, even when the bot is running."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                invoke_gate(Path(directory), "running", False, True), 0
+            )
+
     def test_dry_run_existing_install_has_no_docker_dependency(self) -> None:
         """Print a plan without querying or changing Docker."""
 
