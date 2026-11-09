@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import io
 import os
 import sqlite3
 import stat
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from contextlib import closing
@@ -98,6 +100,18 @@ def create_fixture(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     installed = root / "installed"
     installed.mkdir()
     (installed / "VERSION").write_text("0.5.13-hw\n")
+    for filename in (
+        "app.py",
+        "Dockerfile",
+        "compose.yaml",
+        "requirements.txt",
+        "scripts/backup.sh",
+        "systemd/shelly-voltage-compose.service",
+        "systemd/shelly-voltage-backup.service",
+    ):
+        item = installed / filename
+        item.parent.mkdir(parents=True, exist_ok=True)
+        item.write_text("synthetic rollback fixture\n")
     clock = root / "bin"
     clock.mkdir()
     fake_date = clock / "date"
@@ -260,6 +274,42 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             ]
             self.assertTrue((corrupt / "source.tar.gz").exists())
             self.assertEqual(len(valid), 5)
+
+    def test_valid_gzip_incomplete_source_cannot_displace_backup(self):
+        """A VERSION-only archive is not a restorable backup."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            upgrades.mkdir(mode=0o700)
+            unsafe = upgrades / "20261109-073000-0.5.13-hw-BADDCAFE"
+            unsafe.mkdir()
+            set_history(db, 0)
+            source = unsafe / "source.tar.gz"
+            with tarfile.open(source, "w:gz") as archive:
+                contents = b"0.5.13-hw\n"
+                entry = tarfile.TarInfo("VERSION")
+                entry.size = len(contents)
+                archive.addfile(entry, io.BytesIO(contents))
+            backup = unsafe / "voltage-pretend.sqlite3.gz"
+            backup.write_bytes(gzip.compress(db.read_bytes()))
+            for archive in (source, backup):
+                digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                Path(str(archive) + ".sha256").write_text(
+                    f"{digest}  {archive}\n"
+                )
+            (unsafe / "manifest.env").write_text("from_version=0.5.13-hw\n")
+            os.utime(unsafe, (2145916800, 2145916800))
+            for value in range(1, 7):
+                set_history(db, value)
+                invoke_snapshot(installer, installed, clock)
+            healthy = [
+                item
+                for item in upgrades.glob("*/source.tar.gz")
+                if item.parent != unsafe
+            ]
+            self.assertTrue(source.exists())
+            self.assertEqual(len(healthy), 5)
 
     def test_rotation_handles_spaces_without_overwriting(self) -> None:
         """Prune to five snapshot pairs even when path contains spaces."""
