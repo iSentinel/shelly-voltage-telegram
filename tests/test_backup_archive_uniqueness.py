@@ -179,6 +179,48 @@ class BackupUniquenessTests(unittest.TestCase):
             self.assertNotEqual(done.returncode, 0)
             self.assertEqual(list(destination.iterdir()), [])
 
+    def test_existing_public_destination_never_chmodded(self) -> None:
+        """Refuse an unsafe destination without changing its permissions."""
+
+        with tempfile.TemporaryDirectory() as location:
+            root = Path(location)
+            db = root / "source.sqlite3"
+            make_db(db, "private")
+            dest = root / "shared-directory"
+            dest.mkdir(mode=0o755)
+            dest.chmod(0o755)
+            env = os.environ | {
+                "DATABASE_PATH": str(db),
+                "BACKUP_DIR": str(dest),
+            }
+            done = subprocess.run(
+                ["bash", str(SCRIPT)], env=env, capture_output=True
+            )
+            self.assertNotEqual(done.returncode, 0)
+            self.assertEqual(stat.S_IMODE(dest.stat().st_mode), 0o755)
+            self.assertEqual(list(dest.iterdir()), [])
+
+    def test_rejects_linked_parent_destination(self) -> None:
+        """Never write backup data through a symlinked parent directory."""
+
+        with tempfile.TemporaryDirectory() as location:
+            root = Path(location)
+            db = root / "source.sqlite3"
+            make_db(db, "private")
+            actual = root / "private-parent"
+            actual.mkdir(mode=0o700)
+            (root / "shortcut").symlink_to(actual, target_is_directory=True)
+            dest = root / "shortcut" / "backups"
+            env = os.environ | {
+                "DATABASE_PATH": str(db),
+                "BACKUP_DIR": str(dest),
+            }
+            done = subprocess.run(
+                ["bash", str(SCRIPT)], env=env, capture_output=True
+            )
+            self.assertNotEqual(done.returncode, 0)
+            self.assertFalse((actual / "backups").exists())
+
     def test_unknown_options_never_start_backup(self) -> None:
         """A mistaken dry-run flag must not write or rotate backups."""
 
