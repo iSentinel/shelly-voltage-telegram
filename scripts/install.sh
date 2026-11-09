@@ -106,6 +106,31 @@ require_safe_install_files() {
     done
 }
 
+require_valid_install_marker() {
+    [[ -d "$TARGET" ]] || return 0
+    local version="$TARGET/VERSION" unexpected
+    if [[ -L "$version" ]]; then
+        echo "ERROR: unsafe installed VERSION marker." >&2
+        exit 5
+    fi
+    if [[ -e "$version" ]]; then
+        if [[ ! -f "$version" ]] ||
+           [[ "$(stat -c %h -- "$version")" -ne 1 ]]; then
+            echo "ERROR: unsafe installed VERSION marker." >&2
+            exit 5
+        fi
+        return 0
+    fi
+    # Only a preconfigured fresh install may lack VERSION.
+    unexpected="$(find "$TARGET" -mindepth 1 -maxdepth 1 \
+        ! -name .env ! -name .env.example ! -name secrets \
+        -printf 'found' -quit)"
+    if [[ -n "$unexpected" ]]; then
+        echo "ERROR: existing project files missing VERSION." >&2
+        exit 5
+    fi
+}
+
 require_quiesced_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     if [[ "$DRY_RUN" == true ]]; then
@@ -324,6 +349,7 @@ main() {
     require_root
     require_safe_install_target
     require_safe_install_files
+    require_valid_install_marker
     require_quiesced_upgrade
     install_docker
     snapshot_upgrade
