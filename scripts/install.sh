@@ -143,13 +143,16 @@ prune_upgrade_snapshots() {
         [[ "$name" =~ ^[0-9]{8}-[0-9]{6}-[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[A-Za-z0-9]{8}$ ]] || continue
         [[ -f "$path/source.tar.gz" && -f "$path/source.tar.gz.sha256" && -f "$path/manifest.env" ]] || continue
         mapfile -d '' -t sqlite_archives < <(
-            find "$path" -maxdepth 1 -type f                 -name 'voltage-*.sqlite3.gz' -print0
+            find "$path" -maxdepth 1 -type f \
+                -name 'voltage-*.sqlite3.gz' -print0
         )
         [[ ${#sqlite_archives[@]} -eq 1 ]] || continue
         snapshot_artifact_verified "$path/source.tar.gz" || continue
         snapshot_artifact_verified "${sqlite_archives[0]}" || continue
-        tar -tzf "$path/source.tar.gz" >/dev/null 2>&1 || continue
-        python3 "$SOURCE/scripts/validate-sqlite-archive.py"             --archive "${sqlite_archives[0]}" >/dev/null 2>&1 || continue
+        python3 "$SOURCE/scripts/validate-source-archive.py" \
+            "$path/source.tar.gz" >/dev/null 2>&1 || continue
+        python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
+            --archive "${sqlite_archives[0]}" >/dev/null 2>&1 || continue
         snapshots+=("$path")
     done
     for index in "${!snapshots[@]}"; do
