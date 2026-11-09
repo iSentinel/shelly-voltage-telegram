@@ -157,6 +157,29 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                     stat.S_IMODE(archive.parent.stat().st_mode), 0o700
                 )
 
+    def test_inplace_reinstall_preserves_recovery_snapshot(self) -> None:
+        """Source equal to target must not skip recovery protection."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            scripts = installed / "scripts"
+            scripts.mkdir()
+            for filename in (
+                "source-tar.sh",
+                "backup.sh",
+                "validate-sqlite-archive.py",
+                "em50-predeploy-backup-guard.py",
+            ):
+                helper = scripts / filename
+                helper.write_bytes((ROOT / "scripts" / filename).read_bytes())
+                if filename == "backup.sh":
+                    helper.chmod(0o700)
+            set_history(db, 111)
+            invoke_snapshot(installer, installed, clock, source=installed)
+            self.assertEqual(len(list(upgrades.glob("*/source.tar.gz"))), 1)
+            self.assertEqual(recovered_values(upgrades), [111])
+
     def test_valid_but_stale_sqlite_snapshot_is_rejected(self) -> None:
         """Do not accept a valid but stale SQLite backup."""
 
