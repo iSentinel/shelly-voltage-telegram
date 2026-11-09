@@ -220,14 +220,20 @@ preflight_backup_paths() {
 
 rescue_current_db() {
     [[ -f "$DB" ]] || return 0
-    local rescue
-    rescue="$RESCUE_ROOT/rollback-rescue-$(date +%Y%m%d-%H%M%S)"
+    local rescue label
+    label="rollback-rescue-$(date +%Y%m%d-%H%M%S)"
     if [[ "$DRY_RUN" == true ]]; then
-        echo "DRY-RUN: backup current DB -> $rescue"
+        echo "DRY-RUN: backup current DB -> $RESCUE_ROOT/$label-XXXXXXXX"
         return
     fi
-    # The backup writer refuses existing directories not already mode 0700.
-    mkdir -m 0700 -p -- "$rescue"
+    # Each approved rollback owns a separate 0700 rescue directory.
+    mkdir -m 0700 -p -- "$RESCUE_ROOT"
+    if [[ ! -O "$RESCUE_ROOT" ]] ||
+        [[ "$(stat -c %a -- "$RESCUE_ROOT")" != 700 ]]; then
+        echo "ERROR: rollback rescue root must be owner-owned 0700." >&2
+        exit 3
+    fi
+    rescue="$(mktemp -d -- "$RESCUE_ROOT/$label-XXXXXXXX")"
     DATABASE_PATH="$DB" BACKUP_DIR="$rescue" BACKUP_KEEP=1 \
         "$TARGET/scripts/backup.sh" >/dev/null
     echo "Rescue backup: $rescue"
