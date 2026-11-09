@@ -186,6 +186,38 @@ require_db_replacement_approval() {
     echo "WARNING: explicitly approved replacing existing SQLite history."
 }
 
+assert_backup_path_unlinked() {
+    local part="$1" parent
+    while [[ "$part" != / && "$part" != . ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: rollback unsafe backup path: symlink." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$parent" != "$part" ]] || break
+        part="$parent"
+    done
+}
+
+preflight_backup_paths() {
+    assert_backup_path_unlinked "$DB"
+    assert_backup_path_unlinked "$RESCUE_ROOT"
+    if [[ -e "$DB" && ! -f "$DB" ]]; then
+        echo "ERROR: rollback unsafe backup path: SQLite type." >&2
+        exit 3
+    fi
+    if [[ -f "$DB" && "$(stat -c %h -- "$DB")" != 1 ]]; then
+        echo "ERROR: rollback unsafe backup path: SQLite links." >&2
+        exit 3
+    fi
+    if [[ -e "$RESCUE_ROOT" ]] &&
+        { [[ ! -d "$RESCUE_ROOT" || ! -O "$RESCUE_ROOT" ]] ||
+          [[ "$(stat -c %a -- "$RESCUE_ROOT")" != 700 ]]; }; then
+        echo "ERROR: rollback unsafe backup path: destination." >&2
+        exit 3
+    fi
+}
+
 rescue_current_db() {
     [[ -f "$DB" ]] || return 0
     local rescue
@@ -292,6 +324,7 @@ main() {
     validate_snapshot
     echo "Rollback snapshot: $SNAPSHOT"
     require_db_replacement_approval
+    preflight_backup_paths
     stop_service
     rescue_current_db
     assert_writer_stopped
