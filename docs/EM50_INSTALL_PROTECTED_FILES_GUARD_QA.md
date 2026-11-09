@@ -38,3 +38,11 @@ Telegram or access to Shelly device settings. Remaining predeploy
 gates include independent source review, exact quiesced SQLite history
 parity, YASNO protected recipient configuration, Telegram client
 visual acceptance, and signed rollout/rollback approvals.
+
+## GitHub CI fixture correction
+
+GitHub Actions runs the fixture under sudo, but checkout is runner-owned.
+The root-owned target preflight correctly blocks dry-run against checkout.
+The in-place fixture now stages only VERSION and installer into a separate
+root-owned disposable directory, preserving real in-place semantics and
+the strict production safety check. No production behavior was relaxed.
