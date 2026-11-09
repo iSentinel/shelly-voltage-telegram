@@ -27,8 +27,8 @@ def synthetic_installer(
         "/var/backups/shelly-voltage/upgrades", str(upgrade_root)
     )
     script = script.replace(
-        "DATABASE_PATH=/var/lib/shelly-voltage/voltage.sqlite3",
-        f'DATABASE_PATH="{database}"',
+        "sqlite_db=/var/lib/shelly-voltage/voltage.sqlite3",
+        f'sqlite_db="{database}"',
     )
     target = path / "isolated-installer-functions.sh"
     target.write_text(script)
@@ -44,16 +44,26 @@ def set_history(path: Path, value: int) -> None:
         db.execute("INSERT INTO measurements VALUES (?)", (value,))
 
 
-def invoke_snapshot(installer: Path, target: Path, clock: Path) -> None:
+def invoke_snapshot(
+    installer: Path,
+    target: Path,
+    clock: Path,
+    source: Path = ROOT,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     """Run only the sandboxed snapshot helper, never install or deploy."""
 
     cmd = (
         'source "$1"; SOURCE="$2"; TARGET="$3"; '
         "DRY_RUN=false; snapshot_upgrade"
     )
-    env = os.environ | {"PATH": f"{clock}:{os.environ['PATH']}"}
+    env = (
+        os.environ
+        | {"PATH": f"{clock}:{os.environ['PATH']}"}
+        | (extra_env or {})
+    )
     subprocess.run(
-        ["bash", "-c", cmd, "_", str(installer), str(ROOT), str(target)],
+        ["bash", "-c", cmd, "_", str(installer), str(source), str(target)],
         env=env,
         check=True,
         capture_output=True,
@@ -101,6 +111,30 @@ def create_fixture(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     )
 
 
+def stale_backup_source(root: Path) -> Path:
+    """Create fake-success backup producer with valid but stale content."""
+
+    release = root / "test-release"
+    scripts = release / "scripts"
+    scripts.mkdir(parents=True)
+    for file in (
+        "source-tar.sh",
+        "validate-sqlite-archive.py",
+        "em50-predeploy-backup-guard.py",
+    ):
+        (scripts / file).write_bytes((ROOT / "scripts" / file).read_bytes())
+    fake = scripts / "backup.sh"
+    fake.write_text(
+        "#!/bin/bash\nset -euo pipefail\n"
+        'archive="$BACKUP_DIR/voltage-stale.sqlite3.gz"\n'
+        'gzip -c "$STALE_DB" > "$archive"\n'
+        'sha256sum "$archive" > "$archive.sha256"\n'
+    )
+    fake.chmod(0o700)
+    (release / "VERSION").write_text("0.5.14-hw\n")
+    return release
+
+
 class UpgradeSnapshotUniquenessTests(unittest.TestCase):
     """A fresh upgrade attempt cannot overwrite its predecessor."""
 
@@ -122,6 +156,44 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                 self.assertEqual(
                     stat.S_IMODE(archive.parent.stat().st_mode), 0o700
                 )
+
+    def test_valid_but_stale_sqlite_snapshot_is_rejected(self) -> None:
+        """Do not accept a valid but stale SQLite backup."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            old = root / "stale.sqlite3"
+            set_history(old, 111)
+            set_history(db, 222)
+            source = stale_backup_source(root)
+            with self.assertRaises(subprocess.CalledProcessError) as result:
+                invoke_snapshot(
+                    installer, installed, clock, source, {"STALE_DB": str(old)}
+                )
+            self.assertIn(b"invalid SQLite archive", result.exception.stderr)
+            archives = list(upgrades.glob("*/voltage-*.sqlite3.gz"))
+            self.assertEqual(len(archives), 1)
+            validator = source / "scripts/validate-sqlite-archive.py"
+            basic = subprocess.run(
+                ["python3", str(validator), "--archive", str(archives[0])],
+                capture_output=True,
+                check=True,
+            )
+            self.assertIn(b"SQLITE ARCHIVE PASS", basic.stdout)
+            strict = subprocess.run(
+                [
+                    "python3",
+                    str(validator),
+                    "--archive",
+                    str(archives[0]),
+                    "--compare-db",
+                    str(db),
+                ],
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(strict.returncode, 2)
 
     def test_invalid_version_cannot_create_snapshot(self) -> None:
         """Do not use an untrusted previous VERSION as a directory name."""
