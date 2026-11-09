@@ -306,6 +306,48 @@ for kind in source_archive sqlite_archive source_manifest sqlite_manifest; do
 done
 echo "ROLLBACK_HARDLINKED_SNAPSHOT_ARTIFACTS=REJECTED"
 
+# Do not stop the writer if rescue or live SQLite paths are redirected.
+mkdir -p "$TMP/rollback-mock-bin" "$TMP/real-rescue-root"
+ln -s "$TMP/real-rescue-root" "$TMP/linked-rescue-root"
+ln -s "$DB_DIR" "$TMP/linked-live-db-parent"
+cat > "$TMP/rollback-mock-bin/docker" <<'MOCK_PRECHECK_DOCKER'
+#!/usr/bin/env bash
+if [[ $1 == compose && $4 == stop ]]; then
+    touch "$MOCK_STOP_MARKER"
+    exit 0
+fi
+if [[ $1 == inspect ]]; then
+    printf 'false\n'
+    exit 0
+fi
+exit 97
+MOCK_PRECHECK_DOCKER
+chmod 0755 "$TMP/rollback-mock-bin/docker"
+touch "$TARGET/compose.yaml"
+for kind in linked_rescue linked_live_db; do
+    rm -f "$TMP/precheck-stopped"
+    db_for_case="$DB_DIR/voltage.sqlite3"
+    rescue_for_case="$TMP/rescue"
+    if [[ $kind == linked_rescue ]]; then
+        rescue_for_case="$TMP/linked-rescue-root"
+    else
+        db_for_case="$TMP/linked-live-db-parent/voltage.sqlite3"
+    fi
+    if env PATH="$TMP/rollback-mock-bin:$PATH"         MOCK_STOP_MARKER="$TMP/precheck-stopped"         SVT_ROOT="$TARGET" DATABASE_PATH="$db_for_case"         SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$rescue_for_case"         "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start             --confirm-db-replacement >"$TMP/precheck-$kind.log" 2>&1; then
+        echo "ERROR: rollback accepted unsafe $kind" >&2
+        exit 1
+    fi
+    if [[ -e "$TMP/precheck-stopped" ]]; then
+        echo "ERROR: rollback stopped writer before $kind path validation" >&2
+        exit 1
+    fi
+    grep -q "ERROR: rollback unsafe backup path"         "$TMP/precheck-$kind.log"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"         = "$db_before"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)"         = "$source_before"
+done
+rm -f "$TARGET/compose.yaml"
+echo "ROLLBACK_PRECHECK_RESCUE_AND_LIVE_DB=BLOCKED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
