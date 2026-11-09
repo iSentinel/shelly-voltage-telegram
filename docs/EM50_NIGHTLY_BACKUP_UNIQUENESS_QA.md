@@ -69,3 +69,17 @@ Two synthetic RED tests demonstrate the prior permission mutation
 and intermediate symlink redirection. GREEN requires rejection and
 no created archives. The normal nightly default and rollback-rescue
 backup paths remain compatible with owner-only destinations.
+
+
+## Source SQLite path containment
+
+The previous backup helper checked only whether DATABASE_PATH itself
+was a symlink, not whether any of its parent directories was linked.
+It also accepted a hardlinked SQLite source. A disposable RED fixture
+showed both alias forms being backed up successfully.
+
+The source and destination now share the same full-component symlink
+check. A source database with a hard-link count other than one is
+rejected before creating a backup destination. Both changes align
+the nightly/rescue helper with the strict source-path policy of the
+protected predeploy snapshot tool. Neither test uses live SQLite.
