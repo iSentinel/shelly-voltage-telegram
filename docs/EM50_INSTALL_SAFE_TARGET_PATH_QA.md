@@ -24,7 +24,7 @@ the separately established Docker writer guard permits the upgrade.
 
 ## Regression
 
-Run only direct installer --dry-run against disposable targets.
+Source installer functions and invoke the full main --dry-run with only the root privilege check stubbed, using disposable targets. This works on unprivileged CI runners.
 Reject linked final directories, linked parents, filesystem root,
 relative and traversal paths, existing regular-file destinations
 and trailing separators. Confirm normal existing and fresh target
