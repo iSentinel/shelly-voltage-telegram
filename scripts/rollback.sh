@@ -82,6 +82,12 @@ verify_archive_manifest() {
         echo "ERROR: archive manifest missing or linked." >&2
         exit 3
     }
+    # Trusted rollback archives and SHA256 sidecars must be independent.
+    if [[ "$(stat -c %h -- "$selected")" != 1 ]] ||
+        [[ "$(stat -c %h -- "$manifest")" != 1 ]]; then
+        echo "ERROR: rollback snapshot artifact has multiple links." >&2
+        exit 3
+    fi
     # Do not accept sha256sum -c success for a different pathname.
     computed="$(sha256sum -- "$selected")"
     recorded="$(cat -- "$manifest")"

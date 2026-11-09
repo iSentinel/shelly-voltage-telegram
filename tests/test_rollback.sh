@@ -280,6 +280,32 @@ test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
 test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
 echo "ROLLBACK_LINKED_SNAPSHOT_PARENT=REJECTED"
 
+# Hard-linked archives/sidecars are not independent trusted artifacts.
+for kind in source_archive sqlite_archive source_manifest sqlite_manifest; do
+    directory="$TMP/hardlinked-$kind"
+    mkdir -p "$directory"
+    cp "$SNAP/source.tar.gz" "$directory/source.tar.gz"
+    cp "$SNAP/voltage-old.sqlite3.gz"         "$directory/voltage-old.sqlite3.gz"
+    sha256sum "$directory/source.tar.gz"         > "$directory/source.tar.gz.sha256"
+    sha256sum "$directory/voltage-old.sqlite3.gz"         > "$directory/voltage-old.sqlite3.gz.sha256"
+    case "$kind" in
+        source_archive) filename=source.tar.gz ;;
+        sqlite_archive) filename=voltage-old.sqlite3.gz ;;
+        source_manifest) filename=source.tar.gz.sha256 ;;
+        sqlite_manifest) filename=voltage-old.sqlite3.gz.sha256 ;;
+    esac
+    mv "$directory/$filename" "$TMP/external-$kind"
+    ln "$TMP/external-$kind" "$directory/$filename"
+    if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3"         SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE"         "$PROJECT/scripts/rollback.sh" --snapshot "$directory"             --dry-run --no-start > "$TMP/hardlinked-$kind.log" 2>&1; then
+        echo "ERROR: rollback accepted hardlinked $kind" >&2
+        exit 1
+    fi
+    grep -q "ERROR: rollback snapshot artifact has multiple links"         "$TMP/hardlinked-$kind.log"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)"         = "$source_before"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"         = "$db_before"
+done
+echo "ROLLBACK_HARDLINKED_SNAPSHOT_ARTIFACTS=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
