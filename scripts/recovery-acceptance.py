@@ -322,6 +322,12 @@ def recovery_errors(
         errors.append("stable Telegram status message was not rotated")
     if state["measurement_count"] <= old_state["measurement_count"]:
         errors.append("no new valid measurements were stored after baseline")
+    baseline_stamp = old_state.get("last_valid_phase_sample_ts")
+    phase_stamp = state.get("last_valid_phase_sample_ts")
+    if baseline_stamp is not None and (
+        phase_stamp is None or phase_stamp <= baseline_stamp
+    ):
+        errors.append("no new same-phase measurement since baseline")
     observed = time.time() if observed_at is None else observed_at
     errors.extend(recovery_sample_errors(state, observed))
     if health.get("connectivity") != "online":
