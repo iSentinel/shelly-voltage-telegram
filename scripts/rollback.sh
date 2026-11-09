@@ -55,8 +55,22 @@ require_root() {
     [[ ${EUID} -eq 0 ]] || { echo "ERROR: run as root." >&2; exit 2; }
 }
 
+assert_unlinked_snapshot_path() {
+    local part="$1" parent
+    while [[ "$part" != / && "$part" != . ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: rollback snapshot path contains a symlink." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+}
+
 select_snapshot() {
     [[ -n "$SNAPSHOT" ]] && return
+    assert_unlinked_snapshot_path "$SNAPSHOT_ROOT"
     SNAPSHOT="$(find "$SNAPSHOT_ROOT" -mindepth 1 -maxdepth 1 -type d \
         -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-)"
     [[ -n "$SNAPSHOT" ]] || { echo "ERROR: no upgrade snapshot found." >&2; exit 3; }
@@ -90,6 +104,7 @@ unique_snapshot_backup() {
 }
 
 validate_snapshot() {
+    assert_unlinked_snapshot_path "$SNAPSHOT"
     [[ -d "$SNAPSHOT" && ! -L "$SNAPSHOT" ]] || {
         echo "ERROR: snapshot directory is missing or linked." >&2
         exit 3
