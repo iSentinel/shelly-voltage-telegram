@@ -1,0 +1,85 @@
+# Nightly and rollback-rescue SQLite backup uniqueness
+
+## Reproduced defect
+
+The old backup helper named both the intermediate SQLite copy and
+final compressed archive using a timestamp with second precision.
+Two snapshots initiated within that second wrote the same filenames.
+A synthetic pair with distinct SQLite history produced only one
+backup (RED), destroying the earlier copy.
+
+## Fail-closed approach
+
+- Each run uses a private 0700 temporary staging directory created by
+  mktemp inside the owner's 0700 backup destination.
+- Each final archive has a random suffix in addition to the timestamp;
+  existing consumers select with voltage-*.sqlite3.gz and remain
+  compatible.
+- The SQLite copy and gzip checksum are completed in the private stage.
+  Hard links publish the finished gzip and exact-path SHA256 sidecar
+  exclusively; existing archive paths cannot be overwritten.
+- A failed checksum publication removes only the archive this process
+  successfully linked. The private staging directory is removed on
+  exit. No partial archive remains accepted as a verified backup.
+- Owner-only file permissions (0600), strict retention count
+  validation and existing unique backup rotation remain in effect.
+
+## Synthetic tests
+
+The same-second sequential and simultaneous-process tests both verify\nunique private archives. The sequential fixture restores each SQLite\narchive and checks SHA256,
+permissions, independent data and no leftover staging directory.
+Other negative tests cover failed sidecar publication, invalid
+retention settings, and BACKUP_KEEP=1 rollback-rescue semantics.
+
+This is candidate code in a Draft PR, not deployed to the nightly
+production service. The current live-history predeploy backup remains
+unmatched, and this improvement does not authorize a deployment.
+
+
+## Strict backup command-line behavior
+
+The nightly and rollback-rescue backup.sh intentionally accepts
+no positional or operation arguments; only a single -h or
+--help exits successfully without doing work. Previously,
+backup.sh --dry-run silently performed a real snapshot and
+retention cleanup, creating unexpected backup files.
+
+Unsupported arguments, including --dry-run, --unknown or a
+second token after --help, now fail before any file or
+SQLite operation. For read-only operator validation, use
+python3 scripts/em50-predeploy-snapshot.py --dry-run instead.
+A synthetic RED/GREEN test requires zero output changes for
+mistaken invocations.
+
+
+## Destination safety and no implicit chmod
+
+The former helper unconditionally changed the configured destination
+directory's permissions to 0700. A typo in BACKUP_DIR could therefore
+change the permissions on a shared pre-existing directory, and an
+intermediate path symlink could redirect archive output.
+
+The helper now checks the full path component chain for symlinks before
+mkdir. Newly created destinations inherit an owner-only umask; an
+existing destination must already belong to the invoking account and
+have exact mode 0700. A mismatch fails before opening any backup stage.
+No chmod is performed on an unrelated pre-existing directory.
+
+Two synthetic RED tests demonstrate the prior permission mutation
+and intermediate symlink redirection. GREEN requires rejection and
+no created archives. The normal nightly default and rollback-rescue
+backup paths remain compatible with owner-only destinations.
+
+
+## Source SQLite path containment
+
+The previous backup helper checked only whether DATABASE_PATH itself
+was a symlink, not whether any of its parent directories was linked.
+It also accepted a hardlinked SQLite source. A disposable RED fixture
+showed both alias forms being backed up successfully.
+
+The source and destination now share the same full-component symlink
+check. A source database with a hard-link count other than one is
+rejected before creating a backup destination. Both changes align
+the nightly/rescue helper with the strict source-path policy of the
+protected predeploy snapshot tool. Neither test uses live SQLite.

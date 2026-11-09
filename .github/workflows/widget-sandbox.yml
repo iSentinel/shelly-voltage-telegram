@@ -1,0 +1,94 @@
+name: Telegram Widget Sandbox Smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/widget-sandbox.yml"
+      - "widgets/**"
+      - "telegram_widget_data.py"
+      - "telegram_widget_fallback.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  widget-quickjs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Check Telegram payload size
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zlib import compress
+          html = Path("widgets/voltage_status.html").read_bytes()
+          packed = compress(html, 9)
+          print(f"Raw {len(html)}/32768, zlib {len(packed)}/4096")
+          assert len(html) <= 32768
+          assert len(packed) <= 4096
+          PY
+      - name: Checkout pinned upstream widget-sandbox
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/telegram-widget-sandbox"
+          cd "${RUNNER_TEMP}/telegram-widget-sandbox"
+          git init -q
+          git remote add origin https://github.com/TelegramMessenger/widget-sandbox.git
+          git fetch --depth 1 origin 3acba1b62093c83815d38603d26f48c4f26a94c2
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "3acba1b62093c83815d38603d26f48c4f26a94c2"
+          git submodule update --init --depth 1
+      - name: Install sandbox dependencies
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+      - name: Execute official QuickJS sandbox
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          set -euo pipefail
+          corepack pnpm tsx packages/core/scripts/sandbox-node.ts \
+            "${GITHUB_WORKSPACE}/widgets/voltage_status.html" \
+            --ops-file "${RUNNER_TEMP}/widget-render-ops.json" \
+            > "${RUNNER_TEMP}/widget-sandbox.log"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "widget-render-ops.json"
+          operations = json.loads(path.read_text(encoding="utf-8"))
+          print(f"Validated renderer messages: {len(operations)}")
+          if not isinstance(operations, list) or len(operations) < 2:
+              raise SystemExit("FAIL: no validated widget renderer output")
+          print("PASS: official QuickJS widget sandbox executed")
+          PY
+      - name: Exercise L1-L2-L3 rendering in official QuickJS
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-sandbox-scenarios.ts" packages/core/scripts/shelly-widget-acceptance.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-acceptance.ts
+      - name: Verify live widget state transitions in QuickJS
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-lifecycle-scenarios.ts" packages/core/scripts/shelly-widget-lifecycle.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-lifecycle.ts
+      - name: Stress repeated widget data updates in QuickJS
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-update-stress.ts" packages/core/scripts/shelly-widget-stress.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-stress.ts
+      - name: Install headless browser for official renderer layout
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Check narrow and wide Telegram bubble layouts
+        working-directory: ${{ runner.temp }}/telegram-widget-sandbox
+        run: |
+          cp "${GITHUB_WORKSPACE}/tests/widget-layout-scenarios.ts" packages/core/scripts/shelly-widget-layout.ts
+          SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-layout.ts

@@ -1,0 +1,10 @@
+# EXAMPLE ONLY - do not use on production without approval and review.
+# Merge with compose.yaml after creating the protected reader directory.
+services:
+  shelly-voltage:
+    environment:
+      TELEGRAM_YASNO_STATUS_ENABLED: "0"
+      YASNO_TRUSTED_CACHE_FILE: "/run/yasno/yasno.json"
+      YASNO_GROUP: "10.1"
+    volumes:
+      - /var/lib/shelly-yasno-reader:/run/yasno:ro

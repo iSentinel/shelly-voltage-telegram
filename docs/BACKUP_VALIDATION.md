@@ -77,6 +77,77 @@ opened from a sidecar line.
 The script prints stable result labels rather than archive names or
 private filesystem contents.
 
+## Offline restoration rehearsal (candidate source only)
+
+A checksum and `PRAGMA quick_check` do not establish that the monitor
+can restore the most recent reading and outage state. The staged source
+candidate additionally includes `scripts/restore-drill.py`. This command
+is **not available in the deployed 0.5.13-hw container** until a future
+explicitly approved release; run it from an isolated source checkout
+with the pinned Python runtime requirements installed.
+
+Run the dry/help mode to check supported arguments without touching
+the database or services:
+
+```bash
+python scripts/restore-drill.py --help
+```
+
+Rehearse the three newest saved copies from an authorized host with
+read-only access to its backup directory:
+
+```bash
+python scripts/restore-drill.py \
+  --backup-dir /var/backups/shelly-voltage \
+  --count 3 --max-size-mib 64 --jsonl
+```
+
+The command validates each archive's SHA-256 sidecar, enforces a maximum
+decompressed size, and creates a separate disposable SQLite copy.
+Before each extraction it also checks free space **on the temporary
+filesystem**, requiring the configured maximum decompressed size plus
+32 MiB safety headroom. If this capacity is unavailable, the drill
+returns FAIL before unpacking anything. A capacity check cannot prevent
+other processes from consuming disk space concurrently, so the
+maximum size should remain conservative; for the current small
+database, `--max-size-mib 64` is appropriate.
+When a v1/v2 backup predates the three-phase `phase` column, the
+restore drill first verifies the original restored SQLite and then
+runs the application's supported schema migration **inside that
+disposable copy only**. It verifies the row count and most recent
+L1 timestamp/voltage after migration; the source gzip and live
+database remain unchanged. Old archives with verified checksums
+are not falsely rejected just because their schema predates v3.
+
+The restore drill explicitly discards all inherited environment
+variables when creating its test monitor. A user's live Shelly
+address, password-file path, Telegram token, chat ID, and phase hosts
+can never affect this test configuration; `SHELLY_HOST` is replaced
+with the reserved documentation address. A backup with a
+future/unsupported schema is classified as FAIL without a crash
+or attempting a downgrade, while the source archive remains intact.
+
+The disconnected monitor uses the reserved test address `192.0.2.1`,
+empty Telegram credentials and no administrators. It restores the
+last valid L1 timestamp and voltage and requires `/ready` semantics
+to remain **503** before any fresh live poll. There are no Shelly
+requests or Telegram messages, and it never writes the production DB.
+
+The last standard-output line in `--jsonl` mode is one object containing
+`status`, `requested`, `passed`, `network_calls`, `read_only_source`
+and `temporary_copies_removed`. A fully successful run returns
+exit code **0**; missing files, checksum mismatch, corrupt SQLite,
+decompression limits and other failed verification return **2**.
+The command's own log messages go to standard error.
+
+This is a **source-level recovery smoke test**, not a service deployment,
+actual restoration of the production database, physical Shelly acceptance
+or proof of Telegram message delivery. It cannot replace the separately
+approved `scripts/rollback.sh --dry-run`, the live outage baseline
+`scripts/recovery-acceptance.py`, or the 15-minute stable restoration
+check. Do not mistake an offline connectivity incident for a proven
+mains outage.
+
 ## What validation proves
 
 Checksum checks establish that an archive still matches its recorded

@@ -1,0 +1,13 @@
+# EXAMPLE ONLY: NOT installed, enabled or deployed.
+[Unit]
+Description=Refresh YASNO forecast at most every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=90s
+AccuracySec=1min
+Persistent=true
+Unit=shelly-yasno-refresh.service
+
+[Install]
+WantedBy=timers.target

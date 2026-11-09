@@ -1,3 +1,19 @@
+## Explicit approval before replacing live SQLite on rollback
+
+Rollback to an older application snapshot can also restore an older
+SQLite database, losing measurements and outage history added since
+the snapshot. Inspect --dry-run output before taking action:
+
+    sudo bash scripts/rollback.sh --dry-run --no-start       --snapshot /var/backups/shelly-voltage/upgrades/<snapshot>
+
+If the current SQLite file exists, REAL rollback now fails closed
+unless the operator explicitly adds --confirm-db-replacement.
+This confirmation authorizes potential data loss; it does not
+preserve current measurements. The rescue backup is still created
+before service stop. Never run this option without reviewing the
+snapshot and agreeing to its history/DB schema consequences.
+See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
+
 # Secure GitHub update checks and manual container upgrades
 
 This feature checks GitHub Releases every **24 hours**. Automatic installation

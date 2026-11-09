@@ -50,6 +50,141 @@ require_root() {
     fi
 }
 
+require_safe_install_target() {
+    local part parent
+    case "$TARGET" in
+        /*) ;;
+        *) echo "ERROR: unsafe application target." >&2; exit 3 ;;
+    esac
+    case "$TARGET" in
+        /|*/|*//*|*/./*|*/.|*/../*|*/..)
+            echo "ERROR: unsafe application target." >&2
+            exit 3 ;;
+    esac
+    part="$TARGET"
+    while [[ "$part" != / ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: unsafe application target." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+    if [[ -e "$TARGET" && ! -d "$TARGET" ]] ||
+       [[ -d "$TARGET" && ! -O "$TARGET" ]]; then
+        echo "ERROR: unsafe application target." >&2
+        exit 3
+    fi
+}
+
+require_private_regular_file() {
+    local path="$1"
+    if [[ -L "$path" ]] ||
+       [[ -e "$path" && ! -f "$path" ]]; then
+        echo "ERROR: unsafe protected installation file." >&2
+        exit 3
+    fi
+    if [[ -f "$path" && "$(stat -c %h -- "$path")" -ne 1 ]]; then
+        echo "ERROR: shared protected installation file." >&2
+        exit 3
+    fi
+}
+
+require_safe_install_files() {
+    [[ -d "$TARGET" ]] || return 0
+    if [[ -L "$TARGET/secrets" ]] ||
+       [[ -e "$TARGET/secrets" && ! -d "$TARGET/secrets" ]]; then
+        echo "ERROR: unsafe installation secrets directory." >&2
+        exit 3
+    fi
+    local file
+    require_private_regular_file "$TARGET/.env"
+    for file in telegram_token telegram_chat_id shelly_password \
+                shelly_l2_password shelly_l3_password; do
+        require_private_regular_file "$TARGET/secrets/$file"
+    done
+}
+
+require_valid_install_marker() {
+    [[ -d "$TARGET" ]] || return 0
+    local version="$TARGET/VERSION" unexpected
+    if [[ -L "$version" ]]; then
+        echo "ERROR: unsafe installed VERSION marker." >&2
+        exit 5
+    fi
+    if [[ -e "$version" ]]; then
+        if [[ ! -f "$version" ]] ||
+           [[ "$(stat -c %h -- "$version")" -ne 1 ]]; then
+            echo "ERROR: unsafe installed VERSION marker." >&2
+            exit 5
+        fi
+        return 0
+    fi
+    # Only a preconfigured fresh install may lack VERSION.
+    unexpected="$(find "$TARGET" -mindepth 1 -maxdepth 1 \
+        ! -name .env ! -name .env.example ! -name secrets \
+        -printf 'found' -quit)"
+    if [[ -n "$unexpected" ]]; then
+        echo "ERROR: existing project files missing VERSION." >&2
+        exit 5
+    fi
+}
+
+require_safe_fresh_database_state() {
+    # New install roots must not reuse an existing shared SQLite history.
+    [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] && return 0
+    local db="/var/lib/shelly-voltage/voltage.sqlite3" candidate
+    for candidate in "$db" "$db-wal" "$db-shm" "$db-journal"; do
+        if [[ -e "$candidate" || -L "$candidate" ]]; then
+            echo "ERROR: existing Shelly SQLite state requires reviewed migration." >&2
+            exit 5
+        fi
+    done
+}
+
+require_quiesced_upgrade() {
+    local installed=false running
+    if [[ -d "$TARGET" && -f "$TARGET/VERSION" ]]; then
+        installed=true
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        if [[ "$installed" == true ]]; then
+            echo "DRY-RUN: require stopped Shelly Docker writer before upgrade."
+        fi
+        return 0
+    fi
+    if ! command -v docker >/dev/null 2>&1; then
+        [[ "$installed" == false ]] && return 0
+        echo "ERROR: cannot verify stopped Shelly writer." >&2
+        exit 5
+    fi
+    if ! running="$(docker inspect --format '{{.State.Running}}' \
+        shelly-voltage-bot 2>/dev/null)"; then
+        if [[ "$installed" == true ]]; then
+            echo "ERROR: cannot verify stopped Shelly writer." >&2
+            exit 5
+        fi
+        # A failed inspect is ambiguous: distinguish no named container
+        # from an unreachable Docker daemon before a first install.
+        local names
+        if ! names="$(docker container ls --all --format '{{.Names}}' \
+            2>/dev/null)"; then
+            echo "ERROR: cannot confirm Shelly writer is absent." >&2
+            exit 5
+        fi
+        if printf '%s\n' "$names" | grep -Fxq shelly-voltage-bot; then
+            echo "ERROR: existing Shelly writer state is unknown." >&2
+            exit 5
+        fi
+        return 0
+    fi
+    if [[ "$running" != false ]]; then
+        echo "ERROR: Shelly writer is running; quiescence required." >&2
+        exit 5
+    fi
+}
+
 install_docker() {
     if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
         return
@@ -72,36 +207,118 @@ install_docker() {
     systemctl enable --now docker
 }
 
+prepare_upgrade_root() {
+    local root="$1" part parent
+    [[ "$root" == /* && "$root" != / ]] || {
+        echo "ERROR: unsafe upgrade snapshot root." >&2
+        exit 3
+    }
+    part="$root"
+    while [[ "$part" != / ]]; do
+        [[ ! -L "$part" ]] || {
+            echo "ERROR: linked upgrade snapshot root." >&2
+            exit 3
+        }
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+    umask 077
+    mkdir -m 0700 -p -- "$root"
+    [[ -d "$root" && -O "$root" ]] || {
+        echo "ERROR: upgrade snapshot root is not owner-owned." >&2
+        exit 3
+    }
+    chmod 0700 -- "$root"
+}
+
+snapshot_artifact_verified() {
+    local file="$1" manifest="$1.sha256" digest
+    [[ -f "$file" && -f "$manifest" &&
+       ! -L "$file" && ! -L "$manifest" ]] || return 1
+    [[ "$(stat -c %h -- "$file")" == 1 &&
+       "$(stat -c %h -- "$manifest")" == 1 ]] || return 1
+    digest="$(sha256sum -- "$file")" || return 1
+    [[ "$(cat -- "$manifest")" == "$digest" ]] || return 1
+    gzip -t -- "$file" >/dev/null 2>&1
+}
+
+prune_upgrade_snapshots() {
+    local root="$1" index path name record
+    local -a ordered=() snapshots=() sqlite_archives=()
+    mapfile -d '' -t ordered < <(
+        find "$root" -mindepth 1 -maxdepth 1 -type d \
+            -printf '%T@ %p\0' | sort -zrn
+    )
+    for record in "${ordered[@]}"; do
+        path="${record#* }"
+        [[ "$path" == "$root/"* ]] || {
+            echo "ERROR: unsafe upgrade snapshot rotation path." >&2
+            exit 3
+        }
+        name="${path##*/}"
+        [[ "$name" =~ ^[0-9]{8}-[0-9]{6}-[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[A-Za-z0-9]{8}$ ]] || continue
+        [[ -f "$path/source.tar.gz" && -f "$path/source.tar.gz.sha256" && -f "$path/manifest.env" ]] || continue
+        mapfile -d '' -t sqlite_archives < <(
+            find "$path" -maxdepth 1 -type f \
+                -name 'voltage-*.sqlite3.gz' -print0
+        )
+        [[ ${#sqlite_archives[@]} -eq 1 ]] || continue
+        snapshot_artifact_verified "$path/source.tar.gz" || continue
+        snapshot_artifact_verified "${sqlite_archives[0]}" || continue
+        python3 "$SOURCE/scripts/validate-source-archive.py" \
+            "$path/source.tar.gz" >/dev/null 2>&1 || continue
+        python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
+            --archive "${sqlite_archives[0]}" >/dev/null 2>&1 || continue
+        snapshots+=("$path")
+    done
+    for index in "${!snapshots[@]}"; do
+        (( index >= 5 )) || continue
+        rm -rf -- "${snapshots[index]}"
+    done
+}
+
 snapshot_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
-    [[ "$SOURCE" != "$TARGET" ]] || return 0
-    local stamp old_version snapshot
+    # Even an in-place reinstall may rebuild the image and replace state.
+    # Always preserve source and exact SQLite history before deployment.
+    local stamp old_version root snapshot sqlite_archive
+    local sqlite_db=/var/lib/shelly-voltage/voltage.sqlite3
     stamp="$(date +%Y%m%d-%H%M%S)"
     old_version="$(tr -d '\n' < "$TARGET/VERSION")"
-    snapshot="/var/backups/shelly-voltage/upgrades/${stamp}-${old_version}"
+    [[ "$old_version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
+        echo "ERROR: invalid installed version for snapshot." >&2
+        exit 3
+    }
+    root="${UPGRADE_SNAPSHOT_ROOT:-/var/backups/shelly-voltage/upgrades}"
     if [[ "$DRY_RUN" == true ]]; then
-        echo "DRY-RUN: snapshot current source and SQLite -> $snapshot"
+        echo "DRY-RUN: snapshot current source and SQLite -> $root"
         return
     fi
-    mkdir -m 0700 -p "$snapshot"
+    prepare_upgrade_root "$root"
+    snapshot="$(mktemp -d -- "$root/${stamp}-${old_version}-XXXXXXXX")"
     bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
-    DATABASE_PATH=/var/lib/shelly-voltage/voltage.sqlite3 \
-        BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
+    # Do not change Docker packages without a restorable source image.
+    python3 "$SOURCE/scripts/validate-source-archive.py" \
+        "$snapshot/source.tar.gz"
+    DATABASE_PATH="$sqlite_db" BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
         "$SOURCE/scripts/backup.sh" > "$snapshot/backup.log"
     printf 'from_version=%s\nto_version=%s\n' \
         "$old_version" "$(tr -d '\n' < "$SOURCE/VERSION")" \
         > "$snapshot/manifest.env"
     sha256sum "$snapshot/source.tar.gz" > "$snapshot/source.tar.gz.sha256"
-    local sqlite_archive
     sqlite_archive="$(find "$snapshot" -maxdepth 1 -type f \
         -name "voltage-*.sqlite3.gz" -print -quit)"
-    [[ -n "$sqlite_archive" ]] || { echo "ERROR: backup missing" >&2; exit 2; }
+    [[ -n "$sqlite_archive" ]] || {
+        echo "ERROR: upgrade SQLite backup missing." >&2
+        exit 3
+    }
+    # A valid SQLite archive may still contain older measurements.
+    # Compare every table and persistent header before source replacement.
     python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
-        --archive "$sqlite_archive"
-    find /var/backups/shelly-voltage/upgrades -mindepth 1 -maxdepth 1 \
-        -type d -printf '%T@ %p\n' | sort -nr | awk 'NR > 5 {print $2}' | \
-        xargs -r rm -rf
+        --archive "$sqlite_archive" --compare-db "$sqlite_db"
+    prune_upgrade_snapshots "$root"
     echo "Upgrade snapshot: $snapshot"
 }
 
@@ -198,8 +415,13 @@ summary() {
 main() {
     parse_args "$@"
     require_root
-    install_docker
+    require_safe_install_target
+    require_safe_install_files
+    require_valid_install_marker
+    require_safe_fresh_database_state
+    require_quiesced_upgrade
     snapshot_upgrade
+    install_docker
     copy_source
     prepare_state
     configure_project

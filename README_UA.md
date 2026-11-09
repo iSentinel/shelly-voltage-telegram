@@ -22,6 +22,11 @@
 </p>
 <p align="center"><em>Повідомлення бота про напругу в Telegram. Залишено лише саме повідомлення.</em></p>
 
+<p align="center">
+  <img src="docs/assets/telegram-chart-24h-field-20261107.webp" alt="Графік напруги Shelly Pro EM-50 в Telegram за 24 години" width="430">
+</p>
+<p align="center"><em>Реальний скриншот 24-годинного графіка з порогом 207 В. Історичні вимірювання, не поточна напруга.</em> <a href="docs/TELEGRAM_FIELD_SCREENSHOTS.md">QA context</a></p>
+
 ---
 
 ## Telegram menu / Меню Telegram
@@ -50,7 +55,7 @@ See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 
 ## Статус проєкту
 
-- Поточний software candidate: **`0.5.12-hw`**.
+- Поточний software candidate: **`0.5.14-hw`**.
 - Поточний публічний реліз: **`0.5.12-hw`**.
 - Тестова production-інсталяція використовує **`0.5.13-hw`** із фізичним Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
 - Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
@@ -246,6 +251,10 @@ docker exec shelly-voltage-bot python /app/app.py doctor
 
 # Online backup SQLite
 ./scripts/backup.sh
+
+# Перевірка відновлення копій ізольовано (лише staging-вихідні коди)
+python scripts/restore-drill.py --help
+python scripts/restore-drill.py --backup-dir /var/backups/shelly-voltage --count 3 --jsonl
 
 # Знеособлений support bundle
 ./scripts/support-bundle.sh

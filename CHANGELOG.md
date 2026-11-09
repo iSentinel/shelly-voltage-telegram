@@ -1,3 +1,28 @@
+## 0.5.14-hw - finalization rehearsal (NOT PUBLISHED)
+
+- Source-only candidate; no published release or production rollout.
+- Finalization PREVIEW aligns VERSION and RELEASE_VERSION to 0.5.14-hw.
+  This unmerged branch and its local tag rehearsal do not publish
+  the software or authorize deployment; independent acceptance and
+  signed release approval are still required.
+- Guard installer source paths, version marker, protected credentials,
+  existing SQLite and running writer before deployment changes.
+- Take a complete validated source+SQLite snapshot before Docker setup;
+  require strict whole-history parity and safe rollback.
+- Retain five genuinely restorable source+SQLite archive pairs and
+  preserve invalid archives separately rather than counting them.
+- Preserve stale-safe HTTP voltage semantics while offline and
+  require fresh same-phase samples before accepting restoration.
+- Fail closed on optional YASNO reader runtime and privilege checks.
+- Standard Telegram Bot API status can optionally include a verified,
+  source-labelled YASNO Kyiv forecast alongside existing Shelly data.
+- Adds protected cache, guarded one-shot refresh, and inactive systemd
+  examples. No electrical control, no channel-side HTML widget send.
+- Docker now packages all runtime modules and CI smoke-tests the
+  resulting image without network access.
+- EM-50-only acceptance: private Telegram recipient, cache mount,
+  signed image / rollback review and explicit approval still pending.
+
 ## 0.5.13-hw - apartment phase management candidate
 
 - Add administrator-only `/updates` release information and Telegram menu button.

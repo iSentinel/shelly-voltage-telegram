@@ -1,3 +1,719 @@
+## 2026-11-08 QA: protected EM-50 predeploy snapshot window
+
+- Real Shelly 0.5.13-hw recovered and is healthy; actual
+  15-minute incident #18 recovery has 89 valid samples,
+  max 11-second interval and zero synthetic zero-voltage.
+- Stacked PR #233 full-history integrated release parity
+  has push+PR GitHub CI SUCCESS, but live 6-check preflight
+  returns 5/6 PASS; nightly backup differs in measurement
+  and outage histories and Telegram status metadata.
+  This correctly blocks release (exit 1, authorized=false).
+- New scripts/em50-predeploy-snapshot.py provides no-write
+  --dry-run and a separate explicitly confirmed --capture.
+  Source SQLite is opened mode=ro, online backup snapshot
+  taken into a temporary owner-only directory, complete
+  history/status parity checked before and after compression.
+  New archive and checksum use 0600 from creation, unique
+  versioned filenames, no overwrite or backup pruning.
+  Writer activity during capture makes it fail closed.
+- Only synthetic SQLite fixture captures were performed:
+  10 targeted tests PASS, full 1243/1243 Python tests PASS,
+  Ruff/quality and reproducible secret-free archive PASS.
+  Actual production LXC dry-run PASS; no production backup
+  capture or systemd/Docker writes.
+- A new snapshot can immediately become out of date while
+  physical polling continues: real rollout still requires
+  explicit writer-quiescence review and immediately-before-
+  install strict parity, dedicated YASNO account/mount,
+  stacked PR scope review and signed release/rollback approval.
+
+## 2026-11-08 QA: mandatory full-history parity in EM-50 release preflight
+
+- Draft PR #232 full-history backup parity has independent
+  push and PR CI SUCCESS. The guard hashes all ordered
+  measurements/outages under one read-only transaction.
+- This stage integrates the guard into the MAIN source
+  scripts/em50-release-preflight.py as a mandatory check;
+  it cannot report automated_pass=true with old/mismatched
+  snapshot history, even if Shelly is online and /ready 200.
+- One new synthetic integration test proves an earlier
+  modified measurement blocks the overall release check;
+  1233/1233 Python tests PASS with -W default, Ruff/quality
+  and secret-free reproducible release archive PASS.
+- Real online Shelly read-only candidate results:
+  5 automated checks PASS, predeploy_backup_parity FAIL
+  with stale nightly backup, different measurements,
+  outage state and Telegram metadata. Private admin
+  recipient-visible send/edit was previously confirmed.
+  2 manual gates remain, release_authorized=false.
+- Dedicated shelly-yasno account and Docker reader mount,
+  fresh approved backup and explicit signed deployment/
+  rollback authorization remain required. No production
+  container restart, SQLite write, public Telegram
+  message change, Shelly control or PR merge.
+
+## 2026-11-08 QA: verify full SQLite history before EM-50 rollout
+
+- Recovered Shelly EM-50 is online; incident #18 closed.
+  First and latest 15-minute real telemetry recovery windows
+  verified PASS, but no public Telegram channel edit/rotation
+  claimed without independent evidence.
+- Found a predeploy rollback blind spot: matching measurement
+  counts and latest rows could miss alterations to older
+  measurements or earlier outage events.
+- Candidate predeploy backup guard now hashes ALL ordered
+  measurement/outage rows in memory under a SQLite read
+  transaction. Only boolean equality is reported; raw
+  rows, hashes, message IDs and other private data are
+  not exposed in log/JSON outputs.
+- Added two targeted tests: changed earlier measurement
+  and changed older outage, both with identical final
+  rows, are now correctly rejected. Total local
+  1230/1230 tests PASS with default warnings; Ruff/quality
+  PASS; reproducible private-safe release archive PASS.
+- Live nightly backup remains intentionally NOT suitable
+  for rollback or promotion: archived 25889 measurements
+  versus 27718 live at verification, historical outages
+  and Telegram status metadata differ; gate FAILS safely.
+- 0.5.14-hw remains unpublished; a fresh explicitly approved
+  predeploy SQLite snapshot, dedicated secure YASNO account
+  and Docker reader bind, scoped PR review and separately
+  authorized signed release+rollback remain outstanding.
+- No new Telegram message, Shelly control, SQLite production
+  write, Docker restart, systemd install or PR merge.
+
+## 2026-11-08 QA: deterministic backup symlink gate plus early recovery
+
+- Combined with PR #228 natural recovery, PR #229
+  latest-15-minute real samples and PR #230 strict
+  predeploy backup parity. First 15 minutes after incident
+  #18 closure: 89 real L1 samples, max gap 11.02s,
+  valid/near-current voltage. Telemetry-only status,
+  NEVER proof of Telegram public-channel message rotation.
+- Identified GitHub CI ordering failure in PR #230's
+  symlink archive test. Corrected predeploy backup scanner
+  to lstat EVERY matching archive BEFORE sorting by mtime,
+  rejecting any symlink regardless of age or enumeration.
+- Hardened decompressed QA SQLite to mode0600 inside
+  disposable mode0700 directory. Added reproducible
+  regression for older linked archive and file mode.
+- Combined 1228/1228 Python tests PASS, Ruff/quality
+  PASS, reproducible source archive/privacy PASS.
+- Real production backup guard intentionally FAILS as
+  daily copy is old and diverges from recent measurements
+  and Telegram status. A separate one-time private QA
+  snapshot earlier passed backup parity and was destroyed.
+- Installed 0.5.13-hw continues online and ready=200,
+  no container restart, device control, Telegram send/edit,
+  production SQLite write or stable release deployment.
+
+## 2026-11-08 ~12:25 Kyiv — fail-closed predeploy backup parity
+
+- Latest 03:28 Kyiv daily gzip passed SHA256 and SQLite
+  quick_check but is 8.9h old: 25889 archived measurements
+  vs over 27223 current live records after incident #18.
+  Outage closure and status-message ID metadata differ.
+- New scripts/em50-predeploy-backup-guard.py reads the
+  current SQLite in mode=ro and validates the latest backup
+  SHA256, bounded private decompression/SQLite integrity,
+  age<=30min, exact measurement count + last sample,
+  latest outage state and status-message metadata parity.
+  It prints no actual Telegram message ID and creates
+  no new backup or production files.
+- Real Gateway guard correctly FAILS on backup_stale,
+  measurements_not_equal, outage_state_not_equal and
+  status_message_metadata_not_equal. The backup is
+  intact but unsuitable as a predeploy snapshot.
+- 13 focused tests; 1210/1210 full Python tests PASS
+  with -W default and zero ResourceWarning; Ruff/quality
+  and source-release privacy/reproducibility PASS.
+- Candidate 0.5.14-hw remains unpublished. Even a PASS
+  is a time-limited prerequisite, never signed release
+  authorization or guarantee of complete DB parity.
+  No Telegram sends, SQLite writes, Docker restart or
+  Shelly controls performed.
+
+## 2026-11-08 12:13 Kyiv — 15-minute stable Shelly recovery QA
+
+- Connectivity incident #18 closed 11:55:01 Kyiv.
+  Gateway 12:13:17 confirmed online/healthy, 109 physical
+  measurements after incident closure, largest gap ~11s.
+- New source-only scripts/em50-recovery-stability.py requires
+  a full trailing 900-second period AFTER incident closure,
+  at least 60 real phase measurements, no gap larger than
+  30s (including time-window edges), valid voltage/frequency,
+  fresh /health and /ready. Uses protected SQLite mode=ro
+  and refuses to infer Telegram channel client visibility.
+- Actual Gateway latest 900s: 89 readings, gap max 11.02s,
+  voltage 203.4–212.1V, PASS.
+- 11 new focused tests, full local 1197/1197 Python tests
+  PASS with -W default and no ResourceWarnings, Ruff/quality
+  and secret-free source archive reproducibility PASS.
+- No Telegram send/edit, Shelly controls, SQLite writes,
+  Docker restarts, systemd activation or GitHub release.
+  Explicit signed promotion/rollback/account/mount gates
+  remain pending; candidate 0.5.14-hw unpublished.
+
+## 2026-11-08 ~12:00 Kyiv — natural Shelly recovery #18
+
+- Live 0.5.13-hw resumed actual EM-50 readings and /ready=200.
+  L1 incident #18 started 06:47:05 and ended 11:55:01 Kyiv:
+  duration 18475.3s. There are no currently open incidents.
+- Read-only SQLite verified ZERO synthetic zero-voltage
+  measurements and ZERO samples during the lengthy outage,
+  excluding the last 60s of physical reconnection hysteresis.
+  Fresh legitimate readings appeared after incident closure.
+- New scripts/em50-natural-recovery-audit.py audits latest
+  closed incident, stale/invalid health, local /ready, SQLite
+  continuity, zero and premature samples and saved status ID.
+  It labels telegram_channel_edit_visible=NOT_VERIFIED and
+  release_authorized=false; no prior Telegram channel-ID
+  baseline exists for #18 and no private/client receipt is
+  inferred from current SQLite metadata.
+- 14 new source tests; full 1186/1186 Python tests PASS
+  with -W default, Ruff/quality PASS, reproducible release
+  and private secret exclusion PASS. Source-only Draft PR.
+- No live Telegram sends/edits, SQLite writes, Docker restart,
+  permanent systemd activation or release promotion.
+  Explicit reviewed rollout and actual dedicated user/mount
+  remain pending; 0.5.14-hw is still unpublished.
+
+## 2026-11-08 QA: private Telegram receipt reconciled in release gate
+
+- The operator has already confirmed seeing the exact
+  private admin QA message AFTER its edit. Protected
+  root-owned 0600 local JSON evidence exists only on
+  the server, with no Telegram user or chat IDs in PR.
+- Candidate scripts/em50-release-preflight.py now accepts
+  OPTIONAL --acceptance-evidence. It requires a direct
+  owner-matched 0600 nonlinked file, completed send/edit
+  and recipient-visible PASS, private-chat delivery,
+  no public/pinned changes and timezone-aware timestamp
+  at most 30 days old. Invalid/unprovided evidence
+  keeps the manual recipient gate PENDING.
+- Valid Gateway evidence marked only the private send/edit
+  requirement manual_completed; the systemd commissioning
+  and explicit signed release/rollback gates remain PENDING.
+  release_authorized remains ALWAYS false.
+- During the real Shelly power cut the live_health automatic
+  test fails and the preflight still exits 1. Production
+  0.5.13-hw, SQLite, Docker, Telegram, Shelly and systemd
+  configuration are unchanged by this source-only QA.
+- Full 1172/1172 Python tests PASS, Ruff/quality and source
+  archive reproducibility/privacy PASS, Draft only.
+
+## 2026-11-08 QA: fail-closed Docker YASNO reader mount
+
+- Shelly runtime 0.5.13-hw remains offline during a real
+  power cut: LXC110 and healthy Docker are running, /ready
+  HTTP 503 and historic voltage is NOT current. Live SQLite
+  has one open L1 incident and zero fabricated samples
+  after its start. No device commands or Telegram writes.
+- New scripts/yasno-docker-reader-preflight.py checks
+  actual Docker inspect metadata without exposing env secrets.
+  --dry-run makes no Docker call. --check --phase staging
+  requires UID10001:10001, read-only rootfs, no privileged
+  mode, cap_drop ALL, exact read-only bind from protected
+  reader directory to /run/yasno, trusted filename,
+  group 10.1 and TELEGRAM_YASNO_STATUS_ENABLED=0.
+- --phase active additionally requires feature=1 and a
+  verified protected cache with pinned source, freshness
+  and valid full-day forecast; default phase is active.
+  No install, restart or secret access is performed.
+- Current live staging correctly FAILS because the
+  protected YASNO reader bind is not installed. This
+  remains a reviewed release-blocking requirement.
+- New 11 isolated tests including writable/duplicate/missing
+  mount, root/privileged Docker, wrong flags and cache,
+  safe no-op dry-run and non-secret failure outputs.
+  Full local 1167/1167 Python tests PASS with -W default,
+  Ruff/quality and reproducible private-safe source
+  archive PASS. Draft only pending independent GitHub CI.
+- Prior private admin Telegram send/edit was visible
+  in client and accepted PASS. Still require dedicated
+  nonlogin account, mount/activation and approval for
+  scoped versioned release/rollback.
+
+## 2026-11-08 QA follow-up: outage recovery cannot be inferred from YASNO
+
+- Expanded PR #225 offline channel/YASNO acceptance from
+  8 to 10 targeted tests. Source-only synthetic recovery
+  requires three actual fresh Shelly successful samples
+  before the online state returns; refreshed YASNO forecast
+  alone never establishes restored mains or connectivity.
+- A fully published no-outage YASNO day still leaves a
+  disconnected Shelly visibly OFFLINE and never displays
+  hours-old stored voltage as current.
+- Full combined 1156/1156 Python tests PASS with warnings
+  enabled, Ruff/quality and release source privacy/
+  reproducibility checks PASS. No network/Telegram sends,
+  live DB writes, new timers or deployment.
+- During the real outage, last measured sample stayed
+  historical, one L1 incident remained open, and three
+  latest SQLite backups restored in disposable QA sandboxes
+  with 3/3 PASS and zero network calls.
+- Actual future reconnection requires live hardware evidence;
+  production remains 0.5.13-hw and 0.5.14-hw unpublished.
+
+## 2026-11-08 QA: outage-safe standard Telegram/YASNO card
+
+- A real long EM-50 outage left Proxmox/LXC online while
+  Shelly was unreachable for over two hours. The running
+  bot 0.5.13-hw reported offline /ready 503 and retained
+  the last sample, which must not be represented as current.
+- New test_em50_offline_yasno_acceptance.py validates the
+  real 0.5.14-hw channel status compositor with isolated
+  SQLite, mocked Telegram, and synthetic trusted GPV10.1
+  YASNO schedule. Covers no stale voltage/frequency, forecast
+  explicitly separate from measurement, RU/UK/EN, expired/
+  corrupted/missing cache, disabled feature, Kyiv midnight
+  rollover, and zero side effects.
+- Tests 1154/1154 PASS, Ruff/quality PASS, source release
+  reproducibility/private .env exclusion PASS.
+- Public QA docs omit private LAN/device identifiers.
+- Human private Telegram delivery/edit acceptance previously
+  confirmed PASS. This branch remains Draft with production
+  0.5.13-hw and candidate 0.5.14-hw unpublished. No
+  new Telegram messages, bot restart, systemd or DB writes.
+- Remaining release gates: reviewed secure service account
+  and reader mount; broad PR integration scope; explicitly
+  authorized signing, deployment and safe rollback.
+
+## 2026-11-08 QA: reject silent SQLite rewind during rollback
+
+- Gateway dry-run against preserved Nov 6 0.5.13-hw
+  upgrade snapshot confirms 21413 archived measurements
+  while current running database holds over 26000.
+  Existing rollback restored the old database by default
+  and could overwrite newly collected power history.
+- New candidate rollback.sh requires explicit
+  --confirm-db-replacement if a live SQLite file exists.
+  Without it, REAL restore is BLOCKED BEFORE rescue
+  backup, Docker stop, source or SQLite replacement.
+  Dry-run stays read-only and prints clear warning.
+- Confirmed rollback accepts the history-loss risk;
+  it does not claim automatic old/new schema compatibility.
+- Artificial recovery fixture tested denied real restore
+  with zero state mutations, explicit confirmed test restore
+  PASS and unsafe archive checks PASS. Live rollback never run.
+- Full local 1146/1146 Python tests PASS, Ruff/quality and
+  reproducible secret-free source archive PASS. Candidate
+  0.5.14-hw still unpublished; current 0.5.13-hw healthy.
+- Human gates: private Telegram recipient-visible send/edit,
+  shelly-yasno account & service/volume review, signed
+  release and explicit rollback authorization.
+
+## 2026-11-08 QA: two-phase systemd first-install readiness
+
+- Real Gateway temp /run/systemd/system QA: successful producer
+  OnSuccess launched the protected exporter, failed producer
+  did NOT launch its exporter. Nonroot UID10001 read-only
+  Docker consumed the resulting synthetic YASNO cache.
+  All temporary unit files were removed after test.
+- Fixed a clean-install deadlock: systemd-account-preflight
+  previously required both cache files to exist BEFORE first
+  scheduled refresh. Explicit --phase bootstrap checks
+  account and secure directories, allowing absent files
+  but rejecting any unsafe existing file; --phase live
+  requires both cache files 0600/0640, default remains live.
+- Real isolated Gateway commissioning: bootstrap PASS with
+  empty protected dirs; live FAIL before first refresh;
+  synthetic source+handoff PASS; live PASS afterward.
+- Current production still lacks shelly-yasno account and
+  no unit was installed/enabled. Production 0.5.13-hw
+  unchanged. Private Telegram client acceptance remains.
+- Full local 1146/1146 Python tests PASS with warning checks,
+  Ruff/quality and source-release privacy/reproducibility PASS.
+  Draft only, no release or message sends.
+
+## 2026-11-08 QA: systemd account preflight blocks uninstalled user
+
+- Actual Gateway transient unit using raw User=10002 failed at
+  systemd step USER (217/USER) before Python ran, because the
+  account did not exist in passwd/NSS. Earlier setpriv UID10002
+  acceptance did not cover systemd's identity resolution.
+- Separate transient producer using existing nobody account
+  (65534), bounded root exporter and UID10001 read-only Docker
+  consumer succeeded on isolated QA synthetic YASNO data.
+- New scripts/yasno-systemd-account-preflight.py checks that
+  a real non-login shelly-yasno account exists and required
+  producer (0700/0600) and root:10001 reader (0750/0640)
+  ownership/permissions are correct. Dry-run is no-write.
+- The current LXC expectedly FAILS the account check, since
+  the permanent identity has NOT been provisioned.
+- Local 1141/1141 tests PASS with -W default, no ResourceWarnings,
+  Ruff/quality and source-release reproducibility/privacy PASS.
+- No permanent systemd jobs, users, Telegram sends, Shelly
+  control, SQLite writes or 0.5.14-hw rollout performed.
+  The account and real recipient visibility remain release
+  blockers requiring explicit approval.
+
+## 2026-11-08 QA: private Telegram send/edit acceptance guarded
+
+- New QA-only scripts/telegram-private-acceptance.py provides
+  --dry-run with zero network/writes, --check with getMe and
+  getChat only, and opt-in --execute requiring explicit
+  confirmation for ONE silent synthetic message followed by
+  editing only its returned ID.
+- Requires positive matching recipient/admin numeric IDs,
+  membership in configured TELEGRAM_ADMIN_USER_IDS, and
+  Telegram getChat type=private with exact ID. Group,
+  channel and unapproved recipients fail closed.
+  Protected token file 0600, bounded nonredirecting API,
+  no delete/pin methods. Never output sensitive identifiers.
+- Gateway live --check through running Docker verified exact
+  private admin destination (getMe/getChat), writes=0.
+  No Telegram messages were sent or edited.
+- 12 new tests, full 1132/1132 local Python tests PASS with
+  -W default, no ResourceWarning, Ruff/quality PASS,
+  source archive reproducibility and private env exclusion PASS.
+- Future real private client send/edit and human-visible
+  acceptance remain PENDING and require explicit approval.
+  No production rollout or 0.5.14-hw release authorized.
+
+## 2026-11-08 QA: read-only EM-50 release preflight gate
+
+- New scripts/em50-release-preflight.py checks candidate marker,
+  localhost /health and /ready, live SQLite quick_check and
+  saved Telegram status ID existence, newest backup SHA256
+  and age, and protected YASNO reader group/freshness.
+- Script prohibits off-host HTTP and redirects, hides private
+  Telegram message identifiers, and makes no changes to
+  production SQLite, Shelly, Telegram or Docker.
+- 0.5.14-hw remains UNPUBLISHED. Exit code 1 signifies a
+  failed automated check. Exit 2 means automated checks
+  PASS but real Telegram recipient acceptance, actual LXC
+  systemd activation review and explicit signed release/
+  rollback authorization are still PENDING. The program
+  NEVER returns approved-release status automatically.
+- Gateway live run: 5/5 automated checks PASS and
+  release_authorized=false; expected exit 2.
+  Local full QA 1120/1120 Python tests PASS,
+  Ruff/quality and source-release reproducibility/private
+  .env exclusion PASS.
+- Next: CI, reviewed private Telegram recipient acceptance,
+  operator-approved rollout. Production 0.5.13-hw unchanged.
+
+## 2026-11-08 QA: numeric Linux UID YASNO handoff acceptance
+
+- On Gateway LXC110 tested protected YASNO producer cache with
+  numeric UID10002 (0700/0600), bounded exporter CAP_CHOWN+
+  CAP_DAC_OVERRIDE, and UID10001 read-only container. PASS.
+- New test_yasno_role_isolation.py reproduces the same real
+  Linux identity boundary in an isolated temporary path using
+  synthetic current-day source data; no Telegram sends, no
+  provider HTTP, no production files touched. It skips
+  privileged path on unprivileged CI workers.
+- Full 1111/1111 tests PASS, Ruff/quality gate PASS, source
+  archive reproducibility/private .env exclusion PASS.
+- No production systemd units, bind mounts or release promotion.
+  Native Telegram recipient/client visibility and explicit
+  production rollout approval remain mandatory.
+
+## 2026-11-08 QA: inactive systemd YASNO refresh-to-reader handoff
+
+- Added a separate UNINSTALLED handoff.service.example,
+  triggered only on successful refresh.service via OnSuccess.
+  Source producer user is shelly-yasno; recipient exporter
+  is root with only CAP_CHOWN + CAP_DAC_OVERRIDE to read
+  private source and change recipient group 10001.
+- Handed-off cache is read-only to nonroot bot 10001, source
+  stays private; no Bot API or Shelly controls from exporter.
+- All files remain .example and have NOT been installed,
+  started, enabled or promoted to production.
+- Full local 1110/1110 tests PASS, Ruff/quality PASS,
+  static systemd-analyze verify PASS and reproducible source
+  archive/private .env exclusion PASS.
+- PR #217 verified handoff CI SUCCESS; this stage needs
+  independent CI and review, real LXC systemd sandbox
+  acceptance and private Telegram recipient test.
+- Production still 0.5.13-hw with no Docker restart or
+  channel message change. Candidate 0.5.14-hw unpublished.
+
+## 2026-11-08 QA: verified YASNO handoff to read-only EM-50 bot
+
+- On isolated 0.5.14-hw source candidate, added a manual,
+  opt-in yasno_handoff.py: no provider HTTP, Telegram send,
+  Shelly RPC, SQLite write, production volume change or restart.
+- The producer original remains 0700/0600. The exporter
+  validates pinned provider metadata, SHA256 integrity, Kyiv
+  day, valid ScheduleApplies 48-slot plan and age. It preserves
+  source capture time and refuses older data over newer output.
+- Recipient directory owner:bot-group mode 0750 and file
+  owner:bot-group mode 0640; symlink/hardlink/unsafe paths and
+  parallel writers are rejected. Atomic fsync and replace,
+  idempotent identical-copy SKIP.
+- Real QA read-only check in isolated container (UID 10001,
+  --network none, --read-only, read-only mount): READ PASS
+  and write rights denied. No production Docker changes.
+- New default-OFF Compose override example, CI merged-config
+  syntax check and 14 targeted safety tests. Complete local
+  1106/1106 Python tests PASS, Ruff/quality and private-env/
+  reproducible source release PASS.
+- Next: independent CI, operator-approved private Telegram
+  recipient-visible testing, rollout mount/service review,
+  stable release approval and rollback. Draft only.
+
+## 2026-11-08 QA: unpublished candidate 0.5.14-hw for EM-50
+
+- VERSION=0.5.14-hw in source-only QA candidate; no stable
+  GitHub release or production deployment. RELEASE_VERSION
+  stays 0.5.12-hw and historical LIVE_VERSION stays
+  0.5.6-hw. Actual production /health currently 0.5.13-hw.
+- This source includes opt-in standard Bot API text/YASNO
+  status, protected cache and refresh, full image module
+  packaging and networkless Docker import smoke.
+- README in EN/RU/UA, CHANGELOG and release status reflect
+  the UNPUBLISHED candidate without changing published
+  release history or physical hardware checkpoint.
+- Full local 1092/1092 Python tests PASS, Ruff/quality PASS,
+  reproducible archive and private .env exclusion PASS.
+  QA-only 602KB source tarball validated via SHA256SUMS.
+  Manual QA image policy PASS; stable tag policy BLOCKED.
+- GitHub PR #214 and #215 CI SUCCESS. Next: independent
+  GitHub CI for candidate, recipient-visible Telegram,
+  protected cache mount/UID, rollback and approval.
+- No Telegram sends, Shelly writes, SQLite modifications,
+  production restarts, or new systemd jobs.
+
+## 2026-11-08 QA: Docker and release module completeness
+
+- Identified that the old Dockerfile omitted new app dependencies
+  despite successful source-only Python tests.
+- Dockerfile now copies all root Python modules and preserves
+  the unprivileged 10001:10001 runtime user. The GitHub CI
+  imports app, yasno_cache and telegram_channel_yasno inside
+  the actual built container with Docker --network none.
+- Reproducible release.sh required-file manifest and privacy
+  fixture now include the full imported local runtime set.
+- AST-based tests protect against future module omissions.
+  Local full 1088/1088 tests PASS, Ruff/quality PASS,
+  release reproducibility + private .env exclusion PASS,
+  release.sh dry-run PASS.
+- No image published, installed or deployed; production
+  0.5.13-hw remains healthy. Next: GitHub Docker smoke,
+  versioned EM-50 candidate, real-client Telegram acceptance,
+  protected cache mount and controlled rollout approval.
+
+## 2026-11-08 QA: EM-50 standard Bot API YASNO status card
+
+- Dedicated QA worktree implements optional (default OFF)
+  TELEGRAM_YASNO_STATUS_ENABLED=1 text enhancement.
+  It preserves the existing pinned message ID, sendMessage/
+  editMessageText, buttons, event stats and recovery logic.
+- Only YASNO_TRUSTED_CACHE_FILE with verified private
+  provenance metadata can add a short RU/UK/EN forecast.
+  The formatter does not call the provider or Telegram API.
+  Possible/definite schedules remain separate from measured
+  Shelly power; invalid/stale cache shows an unavailable line.
+- Current Telegram text remains byte-for-byte unchanged
+  without the explicit feature flag. A conservative UTF-16
+  length guard refuses additions over 4096 code units.
+- 12 dedicated tests and 1084/1084 full Python tests PASS,
+  Ruff + quality gate PASS. No live Telegram send or rollout.
+- EM-50-only production release remains gated by recipient
+  client acceptance, protected cache read-only mount/UID,
+  versioned image/rollback review and explicit approval.
+  Pro3EM/3CT63 physical testing is a separate follow-up.
+
+## 2026-11-08 QA: guarded YASNO cache refresh and systemd examples
+
+- Gateway 03:18 Kyiv: live Shelly Pro EM-50 0.5.13-hw remains
+  online at 212.9 V / 50.0 Hz, 1313 successful polls, /ready
+  HTTP 200. SQLite quick_check=ok, 25832 measurements.
+- Protected YASNO cache PR #212 passed push and PR GitHub CI.
+- QA-only scripts/yasno-refresh.py supports explicit --status,
+  --dry-run and --once. The first two never access the network
+  or write a lock. --once holds an owner-only nonblocking
+  exclusive lock and makes at most one HTTPS fetch when due,
+  with >=900s default interval (allowed 300..7200s).
+  Failed fetches preserve the prior sealed cache.
+- Actual protected QA cache STATUS PASS, DRY_RUN PASS,
+  guarded --once SKIPPED when fetch age was 603 seconds.
+  The already-running production service was not touched.
+- Added NOT-INSTALLED .example systemd service and timer
+  files with dedicated service account, protected state
+  directory, 15-minute schedule, jitter, and reviewed
+  installation/rollback documentation. No timer enabled.
+- New tests: 13, full 1072/1072 Python tests PASS,
+  Ruff 0.14.2 + maintainability gate PASS.
+- Outstanding: controlled source cache sharing with the
+  production bot, standard Bot API channel fallback,
+  recipient-visible acceptance, approved rollback/release.
+  Physical Pro 3EM/3CT63 testing does not block EM-50-only.
+- No Telegram sends, Shelly controls, SQLite production
+  writes, Docker restart, or production deployment.
+
+## 2026-11-08 QA: secure parent-directory guard for YASNO cache
+
+- Follow-up hardening of Draft PR #212: the trusted local cache
+  reader/writer now requires a protected parent directory,
+  rejects group/world-writable parents and symlinked parent
+  path segments, in addition to the 0600 file itself.
+- Added explicit negative tests for world-writable parent and
+  symlinked directory. Full integrated QA 1059/1059 PASS;
+  Ruff and maintainability gate PASS.
+- Direct public HTTPS fetch to protected QA location
+  /tmp/shelly-yasno-qa-private/yasno.json succeeded;
+  parent mode 0700, file 0600, 27079 bytes, group 10.1
+  day 2026-11-08 has all 48 slots and definite windows
+  04:00–11:30 / 14:30–22:00.
+- A previous test-only file in shared /tmp was validated as
+  this QA fixture and removed *after* a valid protected
+  replacement existed. No application or backup files deleted.
+- Still no scheduled refresh service nor promotion; production
+  0.5.13-hw /ready 200, Telegram and Shelly untouched.
+- NEXT: GitHub CI for the hardened cache stage, then a
+  restricted/observed refresh policy and actual client QA.
+
+## 2026-11-08 QA: provenance-labelled atomic YASNO cache
+
+- Built yasno_cache.py for explicit direct public HTTPS retrieval
+  from pinned YASNO Kyiv region 25 / DTEK DSO 902 endpoint.
+  It validates source data and schedule before writing a private
+  cache envelope with pinned URL, region/operator IDs, retrieved_at,
+  payload and SHA-256 corruption checksum. It is not a digital
+  signature and cannot defend against a compromised writer.
+- Cache writes are restricted to an existing directory, no symlink,
+  mode 0600, atomic rename + fsync file/directory. Invalid
+  or unpublished fetched schedule never replaces the prior cache.
+  Strict reads enforce file type/permissions, schema, provider IDs
+  and checksum. Schedule still needs fresh actual capture <=2h,
+  publication <=36h and today's Europe/Kyiv slots.
+- Private QA /widget_preview now prefers explicitly configured
+  YASNO_TRUSTED_CACHE_FILE over legacy YASNO_CACHE_FILE and
+  refuses any silent downgrade to raw YASNO on failure.
+  Separate community fallback remains labelled independently.
+  No network request is made by the Telegram command handler.
+- New local tests: 12 more; full integrated QA 1057/1057 PASS,
+  Ruff and maintainability quality gate PASS. Real read-only
+  YASNO API to /tmp/shelly-yasno-trusted-20261108.json succeeded;
+  27079-byte cache 0600, group10.1 48 slots, windows
+  04:00–11:30 and 14:30–22:00. Read-only preview from
+  Shelly health: 219.7 V / 50.0 Hz and separately labelled
+  YASNO graph. /ready remained HTTP 200.
+- Production 0.5.13-hw not redeployed, no Telegram sends,
+  no Shelly configuration changes, no production SQLite writes.
+  No automatic trusted cache refresh or cron configured.
+- NEXT: GitHub CI review of this cache stage; restricted
+  scheduled cache refresh, monitoring/staleness diagnostics,
+  real Telegram client acceptance, physical Pro3EM/3CT63,
+  DTEK attribution review and explicit release approval.
+
+## 2026-11-08 QA: YASNO source in private Telegram widget preview
+
+- Direct YASNO provider source Draft PR #210 independently passed
+  Python 3.11/3.12/3.13 GitHub push + PR CI. Public YASNO
+  region 25 / DSO 902 maps to Kyiv / DTEK Kyiv networks.
+- In a new dependent QA worktree, added a local-only cache
+  preference for /widget_preview. Opt-in YASNO_CACHE_FILE and
+  YASNO_GROUP select a strict parser of the pinned YASNO response.
+  No network calls occur in a Telegram request handler.
+- If YASNO cache is missing, invalid, unpublished or too old,
+  the separate community cache may be used (labelled as such);
+  otherwise only physical Shelly measurements are shown.
+  Local file mtime alone cannot prove provider authenticity.
+- Widget schema accepts distinct src=yasno and src=community,
+  labels each correctly in RU/UK/EN, and hides expired
+  schedules as before. Voltage/phase state is always sourced
+  from Shelly, never forecast. HTML zlib9 3606/4096 bytes.
+- Full combined QA: 1045/1045 Python tests PASS,
+  Ruff and quality gate PASS. Read-only preview using actual
+  Shelly health and YASNO Kyiv group 10.1 JSON displayed
+  221.6 V / 49.9 Hz with forecast 04:00–11:30,
+  14:30–22:00, separately labelled.
+- No Telegram message was sent. The production 0.5.13-hw
+  service was not deployed or restarted. SQLite untouched,
+  /ready continued HTTP 200.
+- NEXT: official QuickJS DOM and source labels, GitHub CI,
+  then the real client/private recipient acceptance, cache
+  provenance and scheduled read-only refresh architecture,
+  Pro3EM/3CT63 hardware and explicit release approval.
+
+## 2026-11-08 QA: Telegram widget public_data lifecycle checks
+
+- New dependent isolated QA branch from responsive PR #208 tests
+  a *single widget instance* under real upstream Telegram QuickJS:
+  fresh three-phase EN state -> disconnected RU state with no
+  forecast -> recovered UK state with L2 stale -> expired
+  community forecast -> single-phase EN state. DOM probes assert
+  L1/L2/L3, status language, schedule and group visibility.
+- The test injects supported public_data bridge updates; it
+  must not require sending another Telegram message. Explicitly
+  rejects unexpected network requests or stopped widget runtimes.
+- Added tests/test_widget_lifecycle_contract.py with three checks
+  for pinned QuickJS CI, expected state transitions and no
+  requests. Full local Python tests 1022/1022 PASS, Ruff and
+  quality gate PASS. Actual QuickJS update results are pending
+  the new GitHub CI; do not claim client-visible acceptance.
+- Production 0.5.13-hw remains unchanged; this branch is QA only.
+- NEXT: run GitHub Actions QuickJS lifecycle acceptance, fix
+  any missing public-data notification or rendering defects;
+  then resume direct official DTEK provenance, physical Pro
+  3EM / 3CT63 acceptance and actual Telegram clients.
+
+## 2026-11-08 QA: 3-phase Telegram widget and preview
+
+- New dependent QA branch from PR #206 adds independently stale-safe
+  Pro 3EM L2 and L3 measurements to Telegram widget public_data,
+  fallback caption and admin-only /widget_preview.
+- Pro 3EM always specifies both secondary phases in the payload.
+  Each phase's online/offline/stale state uses a separate timestamp:
+  a stale or missing L2/L3 value is "—", not 0 V or L1 voltage.
+  L1 failure never masks fresh L2/L3 values.
+- Non-three-phase devices such as live Pro EM-50 still render only
+  L1, keeping their existing UI and messages unchanged.
+- No secret/request metadata is serialized. The entire widget HTML
+  is 9256 bytes raw / 3430 of 4096 bytes zlib9. Source remains
+  unofficial for community forecast, separate from real measurements.
+- Local full QA: 1018/1018 PASS, Ruff 0.14.2 and quality gate PASS.
+  No physical Pro3EM/3CT63 hardware or Telegram recipient acceptance;
+  production 0.5.13-hw has not been redeployed.
+- NEXT: independent GitHub Actions CI and QuickJS smoke on this
+  integrated QA branch; later physical multi-meter acceptance,
+  supported Telegram client checks, direct official DTEK provenance
+  and explicit release approval.
+
+## 2026-11-08 QA: admin-only widget fallback preview and precise timestamps
+
+- Dependent on combined QA source branch PR #205. Added an optional
+  private-only /widget_preview command for an authenticated administrator;
+  never responds in public channel or to an unauthorized private sender.
+- /widget_preview renders only stale-safe plaintext from the widget
+  public-data format; no experimental Telegram sendWidget calls.
+  Actual command delivery occurs only if a real authorized administrator
+  requests it after a future deployment. No sends in QA.
+- Community forecast is opt-in via three environment settings
+  COMMUNITY_OUTAGE_CACHE_FILE, COMMUNITY_OUTAGE_REGION and
+  COMMUNITY_OUTAGE_GROUP, with a validated bounded local JSON file.
+  Bad/missing/stale data are omitted, not interpreted as power events.
+- Fixed fractional-second timestamp rounding (never convert a recent
+  poll into a future sample). Added EN unit labels V/Hz.
+- Full isolated QA suite: 1009/1009 PASS; Ruff/quality PASS;
+  widget zlib9 remains 3205/4096 bytes. Production unchanged.
+- NEXT: CI and private Telegram recipient acceptance after explicit
+  client/Bot API support; official DTEK trust, real Pro3EM hardware
+  acceptance and authorized release remain pending.
+
+## 2026-11-08 Combined QA acceptance (not a release)
+
+- Three independent staged changes are combined *only* in a new
+  disposable QA worktree: widget/community schedule PR #202;
+  DTEK numeric-day compatibility PR #203; exact Shelly identity
+  read-only preflight PR #204. Source baseline b7016e8.
+- Python comprehensive combined regression: 1000/1000 PASS,
+  Ruff 0.14.2 PASS, project maintainability quality gate PASS.
+  HTML widget 8439 bytes raw and 3205/4096 bytes zlib-9.
+- This is source-level coexistence testing, not a completed merge
+  of individual GitHub PRs, nor physical/recipient acceptance.
+- Actual Shelly EM-50 identity was confirmed read-only against
+  selected pro_em50; hardware 3EM and 3CT63 are NOT physically
+  connected/tested. Official DTEK returns a challenge page.
+- No Telegram API writes, no service restarts, no production
+  SQLite writes. Continue independent cross-version GitHub CI,
+  real-client widget checks, hardware acceptance, DTEK provenance,
+  and approved promotion before release.
+
 ## 2026-11-06 15:48 Europe/Kyiv — HTTP monitoring freshness and browser hardening
 
 - **REAL GATEWAY FIELD STATE:** installed `0.5.13-hw`

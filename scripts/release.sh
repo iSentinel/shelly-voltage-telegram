@@ -64,6 +64,7 @@ validate_inputs() {
     local required=(
         VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py
         telegram_i18n.py notification_features.py Dockerfile
+        dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_widget_data.py telegram_widget_fallback.py
         compose.yaml requirements.txt README.md
     )
     for file in "${required[@]}"; do
@@ -72,12 +73,29 @@ validate_inputs() {
             exit 3
         }
     done
+    # cp follows source links, so validate the template before staging.
+    if [[ ! -f "$PROJECT/.env.example" || -L "$PROJECT/.env.example" ]] ||
+        [[ "$(stat -c %h -- "$PROJECT/.env.example")" != 1 ]]; then
+        echo "ERROR: public release template must be an independent regular file." >&2
+        exit 3
+    fi
+}
+
+assert_no_hardlinked_sources() {
+    # Tar preserves regular-file data from hard-linked private inodes.
+    if [[ -n "$(find "$PROJECT" -type f -links +1 -print -quit)" ]]; then
+        echo "ERROR: public release cannot contain hard-linked source files." >&2
+        exit 4
+    fi
 }
 
 release_name() {
     local version
     version="$(tr -d '\r\n' < "$PROJECT/VERSION")"
-    [[ -n "$version" ]] || { echo "ERROR: VERSION is empty" >&2; exit 3; }
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-hw$ ]] || {
+        echo "ERROR: VERSION must be a release version (major.minor.patch-hw)." >&2
+        exit 3
+    }
     printf 'shelly-voltage-telegram-%s' "$version"
 }
 
@@ -88,17 +106,36 @@ copy_public_tree() {
         --exclude='./.env*' \
         --exclude='*/.env*' \
         --exclude='./secrets' \
+        --exclude='*/secrets' \
         --exclude='./dist' \
+        --exclude='*/dist' \
+        --exclude='./dist-audit' \
+        --exclude='*/dist-audit' \
         --exclude='./dist-publish' \
+        --exclude='*/dist-publish' \
         --exclude='./validation' \
+        --exclude='*/validation' \
         --exclude='./ROADMAP.md.pre-*' \
+        --exclude='./ROADMAP.md' \
+        --exclude='*/ROADMAP.md' \
+        --exclude='./.work-state' \
+        --exclude='*/.work-state' \
+        --exclude='.*.lock' \
+        --exclude='*.pem' \
+        --exclude='*.key' \
+        --exclude='*.token' \
+        --exclude='*.secret' \
         --exclude='./.git' \
+        --exclude='*/.git' \
         --exclude='./.github-main-sha' \
         --exclude='./__pycache__' \
         --exclude='*/__pycache__' \
         --exclude='./.ruff_cache' \
+        --exclude='*/.ruff_cache' \
         --exclude='./.pytest_cache' \
+        --exclude='*/.pytest_cache' \
         --exclude='./.mypy_cache' \
+        --exclude='*/.mypy_cache' \
         --exclude='*.pyc' \
         --exclude='*.pyo' \
         --exclude='*.sqlite' \
@@ -122,6 +159,21 @@ write_file_manifest() {
 assert_public_tree() {
     local destination="$1"
     local forbidden
+    # Manifests hash regular files only; never ship unresolved symlinks.
+    if [[ -n "$(find "$destination" -type l -print -quit)" ]]; then
+        echo "ERROR: public release cannot contain symbolic links." >&2
+        exit 4
+    fi
+    # Check the staged tree as well as tar excludes, including nested paths.
+    if [[ -n "$(find "$destination" -type d \( \
+        -name secrets -o -name validation -o -name dist -o \
+        -name dist-audit -o -name dist-publish -o -name .work-state -o \
+        -name .git -o -name __pycache__ -o \
+        -name .ruff_cache -o -name .pytest_cache -o \
+        -name .mypy_cache \) -print -quit)" ]]; then
+        echo "ERROR: private/generated directory entered release tree." >&2
+        exit 4
+    fi
     forbidden="$(
         cd "$destination"
         find . -type f \( \
@@ -129,7 +181,10 @@ assert_public_tree() {
             -path './dist-publish/*' -o -path './validation/*' -o \
             -path './.ruff_cache/*' -o -path './.pytest_cache/*' -o \
             -path './.mypy_cache/*' -o -name '.github-main-sha' -o \
-            -name 'ROADMAP.md.pre-*' -o \
+            -name 'ROADMAP.md' -o -name 'ROADMAP.md.pre-*' -o \
+            -name '.work-state' -o -name '.*.lock' -o \
+            -name '*.pem' -o -name '*.key' -o \
+            -name '*.token' -o -name '*.secret' -o \
             -name '*.pyc' -o -name '*.pyo' -o \
             -name '*.sqlite' -o -name '*.sqlite3' -o \
             -name '*.sqlite3-*' -o -name '*.log' \
@@ -187,6 +242,7 @@ build_archive() {
 main() {
     parse_args "$@"
     validate_inputs
+    assert_no_hardlinked_sources
     local name archive stage
     name="$(release_name)"
     archive="$OUTPUT_DIR/$name.tar.gz"

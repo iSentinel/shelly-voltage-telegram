@@ -22,6 +22,11 @@
 </p>
 <p align="center"><em>Telegram voltage status message, cropped to the message boundaries.</em></p>
 
+<p align="center">
+  <img src="docs/assets/telegram-chart-24h-field-20261107.webp" alt="Real Shelly Pro EM-50 24-hour Telegram voltage graph" width="430">
+</p>
+<p align="center"><em>Field screenshot: 24-hour Telegram voltage chart with a 207 V warning line. Historical measurements; not a live voltage display.</em> <a href="docs/TELEGRAM_FIELD_SCREENSHOTS.md">QA context</a></p>
+
 ---
 
 ## Telegram menu / Меню Telegram
@@ -48,8 +53,8 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.13-hw**
-- Current release: **0.5.12-hw**
+- Current software candidate: **0.5.14-hw**
+- Current release: **0.5.14-hw**
 - Production field-test runtime: **0.5.13-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
@@ -160,6 +165,7 @@ Troubleshooting: [Shelly online in the app, but offline in Telegram](docs/SHELLY
 - 🇺🇦 [Українська документація](README_UA.md)
 - 🔐 [Telegram administrator guide](docs/TELEGRAM_ADMIN_GUIDE.md)
 - 💾 [Read-only backup validation](docs/BACKUP_VALIDATION.md)
+- 🧪 [Offline backup restoration rehearsal (staged source)](docs/BACKUP_VALIDATION.md#offline-restoration-rehearsal-candidate-source-only)
 - 🧭 [Roadmap](ROADMAP.md)
 - 🧪 [Hardware validation](HARDWARE_VALIDATION.md)
 - 📝 [Changelog](CHANGELOG.md)

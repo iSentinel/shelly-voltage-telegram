@@ -21,6 +21,9 @@ HOST_DB = Path("/var/lib/shelly-voltage/voltage.sqlite3")
 DEFAULT_HEALTH = "http://127.0.0.1:8080/health"
 DEFAULT_READY = "http://127.0.0.1:8080/ready"
 STABLE_RECOVERY_SECONDS = 15 * 60
+MAX_RECOVERY_SAMPLE_AGE_SECONDS = 45
+MAX_STABLE_SAMPLE_GAP_SECONDS = 90
+MAX_STABLE_LAST_SAMPLE_AGE_SECONDS = 45
 
 
 def default_db_path() -> Path:
@@ -68,10 +71,29 @@ def stored_event_kind(raw: object) -> str | None:
     return str(kind) if kind else None
 
 
+def valid_phase_sample_ts(
+    db: sqlite3.Connection, outage: tuple | None
+) -> float | None:
+    """Find recent valid voltage for the same phase as a tracked gap."""
+
+    if outage is None:
+        return None
+    row = db.execute(
+        "SELECT ts,voltage,frequency FROM measurements WHERE phase=? "
+        "ORDER BY ts DESC LIMIT 1",
+        (outage[3],),
+    ).fetchone()
+    if row is None or not valid_stable_measurement(row):
+        return None
+    stamp = float(row[0])
+    return stamp if math.isfinite(stamp) else None
+
+
 def current_db_state(path: Path) -> dict[str, object]:
     """Read recovery-relevant database state without modifying it."""
 
     with closing(open_db(path)) as db:
+        db.execute("BEGIN")
         outage = db.execute(
             "SELECT id,started_at,ended_at,phase FROM outages "
             "ORDER BY id DESC LIMIT 1"
@@ -85,6 +107,7 @@ def current_db_state(path: Path) -> dict[str, object]:
             "measurement_count": scalar(
                 db, "SELECT COUNT(*) FROM measurements"
             ),
+            "last_valid_phase_sample_ts": valid_phase_sample_ts(db, outage),
             "status_message_id": meta_value(db, "telegram_status_message_id"),
             "recovery_stable_since": meta_value(
                 db, "voltage_recovery_stable_since"
@@ -257,12 +280,33 @@ def safe_verification_state(
     return safe
 
 
+def recovery_sample_errors(state: dict, now: float) -> list[str]:
+    """Require a fresh valid same-phase sample around actual recovery."""
+
+    event = state.get("outage")
+    if not event or event.get("ended_at") is None:
+        return []
+    phase = str(event.get("phase"))
+    stamp = state.get("last_valid_phase_sample_ts")
+    if stamp is None or not math.isfinite(stamp):
+        return [f"no fresh valid {phase} measurement since recovery"]
+    ended = float(event["ended_at"])
+    if not math.isfinite(ended) or ended > now:
+        return ["invalid recovery timestamp"]
+    if stamp > now or now - stamp > MAX_RECOVERY_SAMPLE_AGE_SECONDS:
+        return ["no fresh same-phase voltage after recovery"]
+    if stamp < ended - 15:
+        return ["no measurement near the connection recovery"]
+    return []
+
+
 def recovery_errors(
     baseline: dict[str, object],
     state: dict[str, object],
     health: dict[str, object],
+    observed_at: float | None = None,
 ) -> list[str]:
-    """Compare current state with one outage baseline."""
+    """Compare recovery with fresh same-phase measurement evidence."""
 
     errors = []
     old_state = baseline["state"]
@@ -278,6 +322,14 @@ def recovery_errors(
         errors.append("stable Telegram status message was not rotated")
     if state["measurement_count"] <= old_state["measurement_count"]:
         errors.append("no new valid measurements were stored after baseline")
+    baseline_stamp = old_state.get("last_valid_phase_sample_ts")
+    phase_stamp = state.get("last_valid_phase_sample_ts")
+    if baseline_stamp is not None and (
+        phase_stamp is None or phase_stamp <= baseline_stamp
+    ):
+        errors.append("no new same-phase measurement since baseline")
+    observed = time.time() if observed_at is None else observed_at
+    errors.extend(recovery_sample_errors(state, observed))
     if health.get("connectivity") != "online":
         errors.append("Shelly connectivity is not online")
     return errors
@@ -290,7 +342,7 @@ def verify_payload(args: argparse.Namespace) -> dict[str, object]:
     state = current_db_state(args.db)
     health_code, health = fetch_json(args.health_url, args.timeout)
     ready_code, ready = fetch_json(args.ready_url, args.timeout)
-    errors = recovery_errors(baseline, state, health)
+    errors = recovery_errors(baseline, state, health, time.time())
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200 or ready.get("ready") is not True:
@@ -353,6 +405,37 @@ def stable_baseline_errors(
     return errors
 
 
+def configured_normal_bounds(path: Path) -> tuple[float, float] | None:
+    """Read actual saved normal-voltage limits without guessing defaults."""
+
+    try:
+        with closing(open_db(path)) as db:
+            values = (
+                meta_value(db, "telegram_setting_warning_low"),
+                meta_value(db, "telegram_setting_warning_high"),
+            )
+        low, high = (float(value) for value in values)
+    except (OSError, TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(value) for value in (low, high)):
+        return None
+    return (low, high) if 0 < low < high < 500 else None
+
+
+def stable_normal_bounds_errors(
+    baseline: dict[str, object], path: Path
+) -> list[str]:
+    """Reject changed or missing voltage limits since stable capture."""
+
+    captured = baseline["state"].get("normal_voltage_bounds")
+    now = configured_normal_bounds(path)
+    if not isinstance(captured, list) or len(captured) != 2 or now is None:
+        return ["normal voltage thresholds unavailable"]
+    if captured != list(now):
+        return ["normal voltage thresholds changed during recovery"]
+    return []
+
+
 def stable_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
     """Capture read-only state while the 15-minute recovery timer is active."""
 
@@ -360,6 +443,11 @@ def stable_baseline_payload(args: argparse.Namespace) -> dict[str, object]:
     health_code, health = fetch_json(args.health_url, args.timeout)
     ready_code, ready = fetch_json(args.ready_url, args.timeout)
     errors = stable_baseline_errors(state, health, ready)
+    bounds = configured_normal_bounds(args.db)
+    if bounds is None:
+        errors.append("normal voltage thresholds unavailable")
+    else:
+        state["normal_voltage_bounds"] = list(bounds)
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:
@@ -497,6 +585,84 @@ def stable_transition_continuity_errors(
     return []
 
 
+def valid_stable_measurement(row: tuple) -> bool:
+    """Reject anomalous readings instead of hiding them in SQL filters."""
+
+    try:
+        voltage, frequency = float(row[1]), float(row[2])
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (
+        math.isfinite(voltage)
+        and math.isfinite(frequency)
+        and 0 < voltage < 500
+        and 40 <= frequency <= 70
+    )
+
+
+def stable_phase_sample_errors(
+    db_path: Path,
+    phase: str,
+    started: float,
+    now: float,
+    bounds: tuple[float, float],
+) -> list[str]:
+    """Require plausible, regular readings throughout stable recovery."""
+
+    previous = started
+    found = False
+    with closing(open_db(db_path)) as db:
+        rows = db.execute(
+            "SELECT ts,voltage,frequency FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<=? ORDER BY ts",
+            (phase, started, now),
+        )
+        for row in rows:
+            if not valid_stable_measurement(row):
+                return ["invalid stable phase voltage or frequency sample"]
+            if not bounds[0] < float(row[1]) < bounds[1]:
+                return ["stable phase voltage left configured normal range"]
+            stamp = float(row[0])
+            if not math.isfinite(stamp):
+                return ["stable phase sample timestamp is invalid"]
+            if stamp - previous > MAX_STABLE_SAMPLE_GAP_SECONDS:
+                return ["stable phase sample gap exceeds allowed interval"]
+            previous = stamp
+            found = True
+    if not found:
+        return ["no valid stable phase samples were observed"]
+    if now - previous > MAX_STABLE_LAST_SAMPLE_AGE_SECONDS:
+        return ["latest stable phase sample is stale"]
+    return []
+
+
+def stable_sample_continuity_errors(
+    db_path: Path, baseline: dict[str, object], now: float
+) -> list[str]:
+    """Validate sample coverage for the baseline outage phase."""
+
+    old = baseline["state"]
+    started = stable_since_value(old)
+    if started is None or now < started:
+        return ["stable phase sample interval is invalid"]
+    if now - started > 3600:
+        return ["stable phase sample evidence is outside one hour"]
+    outage = old.get("outage")
+    if not isinstance(outage, dict) or not outage.get("phase"):
+        return ["stable baseline has no outage phase"]
+    raw = old.get("normal_voltage_bounds")
+    if not isinstance(raw, list) or len(raw) != 2:
+        return ["stable phase normal-voltage limits are unavailable"]
+    bounds = tuple(raw)
+    if not all(type(v) in (int, float) and math.isfinite(v) for v in bounds):
+        return ["stable phase normal-voltage limits are invalid"]
+    if not 0 < bounds[0] < bounds[1] < 500:
+        return ["stable phase normal-voltage limits are invalid"]
+    return stable_phase_sample_errors(
+        db_path, str(outage["phase"]), started, now, bounds
+    )
+
+
 def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     """Verify the 15-minute silent recovery-status replacement."""
 
@@ -507,6 +673,8 @@ def stable_verify_payload(args: argparse.Namespace) -> dict[str, object]:
     now = time.time()
     errors = stable_verify_errors(baseline, state, health, ready, now)
     errors.extend(stable_transition_continuity_errors(args.db, baseline, now))
+    errors.extend(stable_sample_continuity_errors(args.db, baseline, now))
+    errors.extend(stable_normal_bounds_errors(baseline, args.db))
     if health_code != 200:
         errors.append(f"health endpoint returned HTTP {health_code}")
     if ready_code != 200:

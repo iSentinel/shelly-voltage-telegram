@@ -34,6 +34,14 @@ def make_fixture(root: Path) -> None:
         "nested/local.sqlite3": "hidden",
         "nested/debug.log": "hidden",
         "ROADMAP.md.pre-0.5.3": "hidden",
+        "ROADMAP.md": "private incident and credentials context",
+        ".roadmap-update.lock": "private",
+        ".telegram-private-acceptance.lock": "private",
+        ".work-state/deploy-state.json": "private",
+        "nested/identity.pem": "private",
+        "nested/admin.key": "private",
+        "nested/local.token": "private",
+        "nested/local.secret": "private",
     }
     for name, content in files.items():
         path = root / name
@@ -89,6 +97,14 @@ class SourceTarTests(unittest.TestCase):
                     "./nested/local.sqlite3",
                     "./nested/debug.log",
                     "./ROADMAP.md.pre-0.5.3",
+                    "./ROADMAP.md",
+                    "./.roadmap-update.lock",
+                    "./.telegram-private-acceptance.lock",
+                    "./.work-state/deploy-state.json",
+                    "./nested/identity.pem",
+                    "./nested/admin.key",
+                    "./nested/local.token",
+                    "./nested/local.secret",
                 ):
                     self.assertNotIn(value, names)
                 self.assertIn("./scripts/run.py", names)
@@ -126,6 +142,27 @@ class SourceTarTests(unittest.TestCase):
                 template = archive.extractfile("./.env.example")
                 self.assertIsNotNone(template)
                 self.assertEqual(template.read(), b"TELEGRAM_TOKEN=")
+
+    def test_rejects_hardlinked_private_source(self):
+        """Never archive a public-looking hard link into private contents."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            make_fixture(root)
+            (root / "nested/public-looking.txt").hardlink_to(
+                root / "secrets/telegram_token"
+            )
+            result = subprocess.run(
+                ["bash", str(SCRIPT), str(root)],
+                check=False,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, b"")
+            self.assertIn(
+                b"ERROR: source archive cannot contain hard-linked files",
+                result.stderr,
+            )
 
 
 if __name__ == "__main__":

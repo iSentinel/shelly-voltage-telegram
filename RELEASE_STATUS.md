@@ -1,3 +1,49 @@
+## 2026-11-09 — 0.5.14-hw integrated release candidate, NOT PUBLISHED
+
+- Candidate combines the cumulative installer/recovery safety chain
+  through PR #291 and the snapshot/recovery chain through PR #295.
+- Finalization rehearsal only: VERSION=RELEASE_VERSION=0.5.14-hw
+  in this UNMERGED preview. Public release remains 0.5.12-hw,
+  and the candidate/tag is not published or deployed. The exact
+  source-tag and human acceptance safety gates remain mandatory.
+- No GitHub public tag, published release or production deployment;
+  full-history SQLite+source snapshot, independent human review,
+  protected YASNO, real Telegram visual check, explicit rollout and
+  rollback acceptance remain blocking. Shelly is offline.
+- Candidate archive, CI and SHA256 are tracked in isolated QA.
+
+## 2026-11-08 — staged systemd handoff examples for EM-50
+
+- Optional OnSuccess refresh-to-reader handoff remains
+  disabled and packaged as .example files only.
+- Root exporter has limited CAP_CHOWN + CAP_DAC_OVERRIDE;
+  bot stays nonroot 10001; no user-visible Telegram sends.
+- Local QA: 1110/1110 PASS; systemd static parse PASS.
+  Real service activation and Telegram recipient acceptance
+  require separate operator approval.
+
+## 2026-11-08 — safe YASNO handoff QA
+
+- Unpublished 0.5.14-hw candidate now has a verified exporter
+  for protected producer cache to a bot-group read-only volume.
+  Actual isolated Gateway UID10001 read/no-write PASS.
+- Tests: 1106/1106 PASS and Compose validation PASS.
+  Independent GitHub CI remains to be checked.
+- Production 0.5.13-hw still runs unchanged. Release awaits
+  private Telegram recipient verification and authorized rollout.
+
+## 2026-11-08 — unpublished 0.5.14-hw EM-50 YASNO candidate
+
+- Separate source-only QA candidate, not installed/published.
+  Public release remains 0.5.12-hw; installed runtime 0.5.13-hw.
+- QA: 1092/1092 tests PASS; Ruff/quality PASS;
+  reproducible 602KB source archive with SHA256 verified.
+- New default-OFF standard Telegram status/YASNO forecast,
+  safe refresh cache, image module smoke and rollback docs.
+- Pending: approved private recipient Telegram acceptance,
+  secure mounted cache, release image + rollback review,
+  explicit authorized production promotion. No actual deploy.
+
 ## 2026-11-06 — no-cache monitoring HTTP candidate
 
 - Read-only HTTP monitoring endpoints now send explicit
