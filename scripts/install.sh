@@ -78,6 +78,34 @@ require_safe_install_target() {
     fi
 }
 
+require_private_regular_file() {
+    local path="$1"
+    if [[ -L "$path" ]] ||
+       [[ -e "$path" && ! -f "$path" ]]; then
+        echo "ERROR: unsafe protected installation file." >&2
+        exit 3
+    fi
+    if [[ -f "$path" && "$(stat -c %h -- "$path")" -ne 1 ]]; then
+        echo "ERROR: shared protected installation file." >&2
+        exit 3
+    fi
+}
+
+require_safe_install_files() {
+    [[ -d "$TARGET" ]] || return 0
+    if [[ -L "$TARGET/secrets" ]] ||
+       [[ -e "$TARGET/secrets" && ! -d "$TARGET/secrets" ]]; then
+        echo "ERROR: unsafe installation secrets directory." >&2
+        exit 3
+    fi
+    local file
+    require_private_regular_file "$TARGET/.env"
+    for file in telegram_token telegram_chat_id shelly_password \
+                shelly_l2_password shelly_l3_password; do
+        require_private_regular_file "$TARGET/secrets/$file"
+    done
+}
+
 require_quiesced_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     if [[ "$DRY_RUN" == true ]]; then
@@ -295,6 +323,7 @@ main() {
     parse_args "$@"
     require_root
     require_safe_install_target
+    require_safe_install_files
     require_quiesced_upgrade
     install_docker
     snapshot_upgrade
