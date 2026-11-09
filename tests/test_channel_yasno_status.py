@@ -126,6 +126,73 @@ class TelegramChannelYasnoTests(unittest.TestCase):
         self.assertIn("Прогноз, а не измерение", result)
         fetch.assert_not_called()
 
+    def test_planned_outage_does_not_turn_online_shelly_offline(self):
+        """Forecast X must not override valid physical L1 voltage."""
+        base = (
+            "⚡️ Напруга мережі · L\n"
+            "🟢 Зв’язок із Shelly є\n"
+            "🟢 L: 220.8 В\n"
+            "〰️ Частота: 50.00 Гц"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            cache = sealed_file(directory)
+            monitor = make_monitor("uk")
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "TELEGRAM_YASNO_STATUS_ENABLED": "1",
+                        "YASNO_TRUSTED_CACHE_FILE": str(cache),
+                        "YASNO_GROUP": "10.1",
+                    },
+                ),
+                patch.object(APP, "multiphase_status_text", return_value=base),
+                patch("yasno_cache.fetch_live") as fetch,
+            ):
+                actual = APP.channel_status_text(monitor)
+        self.assertTrue(actual.startswith(base + "\n\n"))
+        self.assertIn("Планові відключення", actual)
+        self.assertIn("Прогноз, а не показання", actual)
+        self.assertNotIn("🔴", actual[: len(base)])
+        fetch.assert_not_called()
+
+    def test_no_planned_outage_cannot_recover_offline_shelly(self):
+        """An all-clear schedule is never physical power restoration."""
+        now = datetime.now(KYIV)
+        payload = response(now)
+        payload["10.1"]["today"]["slots"] = [
+            {"start": 0, "end": 1440, "type": "NotPlanned"}
+        ]
+        base = (
+            "🔴 Зв’язок із Shelly відсутній\n"
+            "🕐 Останнє історичне значення: 220.8 В"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / "schedule.json"
+            atomic_write(
+                str(cache),
+                build_cache(payload, now - timedelta(seconds=30)),
+            )
+            monitor = make_monitor("uk")
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "TELEGRAM_YASNO_STATUS_ENABLED": "1",
+                        "YASNO_TRUSTED_CACHE_FILE": str(cache),
+                        "YASNO_GROUP": "10.1",
+                    },
+                ),
+                patch.object(APP, "multiphase_status_text", return_value=base),
+                patch("yasno_cache.fetch_live") as fetch,
+            ):
+                actual = APP.channel_status_text(monitor)
+        self.assertTrue(actual.startswith(base + "\n\n"))
+        self.assertIn("Не заплановано відключень", actual)
+        self.assertIn("Прогноз, а не показання", actual)
+        self.assertNotIn("🟢", actual)
+        fetch.assert_not_called()
+
     def test_cache_stale_does_not_claim_scheduled_outage(self):
         """Expired forecast is replaced by an unavailable message."""
 

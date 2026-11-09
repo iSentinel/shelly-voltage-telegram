@@ -50,3 +50,17 @@ Regression result: 14/14 Compose tests PASS, 1359/1359 Python tests
 PASS, release and installer fixtures PASS, Ruff/quality PASS,
 docker compose config -q PASS. Published release remains 0.5.14-hw;
 candidate 0.5.15-hw is not authorized for publication.
+
+## Forecast and measured-power contradiction (2026-11-09)
+
+During the live group 10.1 YASNO scheduled blackout at 21:30
+Kyiv, the installed 0.5.14-hw continued to receive positive Shelly
+L1 measurements and reported online/healthy. The forecast label X
+does not establish an actual blackout. Two additional regression
+tests assert both contradiction directions through the actual
+Telegram channel status builder: X cannot mark an online device
+offline, and an all-clear schedule cannot bring an offline device
+online or turn its last historical value into live voltage.
+Both use verified local cache fixtures, with live network fetching
+mocked out. Current QA: 1361/1361 Python and release/installer
+fixture PASS, no production mutation.
