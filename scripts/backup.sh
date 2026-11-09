@@ -36,14 +36,27 @@ trap cleanup_backup EXIT
     echo "ERROR: regular SQLite database not found." >&2
     exit 3
 }
-[[ ! -L "$DEST" ]] || {
-    echo "ERROR: backup destination must not be a link." >&2
-    exit 3
+assert_unlinked_destination() {
+    local part="$DEST" parent
+    while [[ "$part" != / && "$part" != . ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: backup destination contains a symlink." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$parent" != "$part" ]] || break
+        part="$parent"
+    done
 }
 
+assert_unlinked_destination
 umask 077
 mkdir -p -- "$DEST"
-chmod 0700 -- "$DEST"
+if [[ ! -d "$DEST" || ! -O "$DEST" ]] ||
+    [[ "$(stat -c %a -- "$DEST")" != 700 ]]; then
+    echo "ERROR: backup directory must be owner-owned mode 0700." >&2
+    exit 3
+fi
 STAGE="$(mktemp -d -- "$DEST/.voltage-${STAMP}.XXXXXXXX")"
 SUFFIX="${STAGE##*.}"
 TMP="$STAGE/snapshot.sqlite3"

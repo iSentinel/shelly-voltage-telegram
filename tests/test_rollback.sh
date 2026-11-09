@@ -479,6 +479,12 @@ test "$(cat "$TMP/restore-mode")" = 600
 test -z "$(find "$DB_DIR" -maxdepth 1 -name '*.restore.*' -print -quit)"
 echo "ROLLBACK_SQLITE_PRIVATE_RESTORE_TEMP=PASS"
 
+# Rescue backup is always inside a protected owner-only directory.
+rescue_dir="$(find "$RESCUE" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+test -n "$rescue_dir"
+test "$(stat -c %a -- "$rescue_dir")" = 700
+echo "ROLLBACK_RESCUE_DESTINATION_PRIVATE=PASS"
+
 test "$(cat "$TARGET/VERSION")" = "0.4.1-hw"
 test -f "$TARGET/OLD_ONLY"
 test ! -e "$TARGET/NEW_ONLY"
