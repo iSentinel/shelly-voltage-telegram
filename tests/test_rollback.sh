@@ -264,6 +264,22 @@ test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
 test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
 echo "ROLLBACK_LINKED_SOURCE_ARCHIVE=REJECTED"
 
+# A symlink in a snapshot parent is not a trusted private snapshot root.
+mkdir -p "$TMP/linked-parent-real"
+cp -a "$SNAP" "$TMP/linked-parent-real/snapshot"
+ln -s "$TMP/linked-parent-real" "$TMP/linked-parent"
+alias_snap="$TMP/linked-parent/snapshot"
+sha256sum "$alias_snap/source.tar.gz" > "$alias_snap/source.tar.gz.sha256"
+sha256sum "$alias_snap/voltage-old.sqlite3.gz"     > "$alias_snap/voltage-old.sqlite3.gz.sha256"
+if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3"     SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE"     "$PROJECT/scripts/rollback.sh" --snapshot "$alias_snap"         --dry-run --no-start > "$TMP/linked-parent.log" 2>&1; then
+    echo "ERROR: rollback accepted symlinked snapshot parent" >&2
+    exit 1
+fi
+grep -q "ERROR: rollback snapshot path contains a symlink"     "$TMP/linked-parent.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
+echo "ROLLBACK_LINKED_SNAPSHOT_PARENT=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
