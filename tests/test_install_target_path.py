@@ -18,7 +18,13 @@ def dry_run(target: str) -> subprocess.CompletedProcess[bytes]:
     assert script.rstrip().endswith('main "$@"')
     with tempfile.TemporaryDirectory() as name:
         functions = Path(name) / "install-functions.sh"
-        functions.write_text(script.rsplit('main "$@"', 1)[0])
+        isolated = script.rsplit('main "$@"', 1)[0]
+        # Replace only the production DB locator in inert dry-run fixtures.
+        isolated = isolated.replace(
+            "/var/lib/shelly-voltage/voltage.sqlite3",
+            str(Path(name) / "unused-test-database.sqlite3"),
+        )
+        functions.write_text(isolated)
         command = (
             'source "$1"; require_root() { :; }; '
             "main --dry-run --non-interactive"
