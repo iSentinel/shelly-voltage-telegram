@@ -98,9 +98,10 @@ verify_archive_manifest() {
 }
 
 unique_snapshot_backup() {
+    local directory="${1:-$SNAPSHOT}"
     local -a candidates=()
     mapfile -d '' -t candidates < <(
-        find "$SNAPSHOT" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' -print0
+        find "$directory" -maxdepth 1 -type f -name 'voltage-*.sqlite3.gz' -print0
     )
     if [[ ${#candidates[@]} -ne 1 ]]; then
         echo "ERROR: snapshot must contain exactly one SQLite backup." >&2
@@ -236,6 +237,12 @@ rescue_current_db() {
     rescue="$(mktemp -d -- "$RESCUE_ROOT/$label-XXXXXXXX")"
     DATABASE_PATH="$DB" BACKUP_DIR="$rescue" BACKUP_KEEP=1 \
         "$TARGET/scripts/backup.sh" >/dev/null
+    # A successful writer exit does not prove its gzip can restore.
+    local archive
+    archive="$(unique_snapshot_backup "$rescue")"
+    verify_archive_manifest "$archive"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
+        --archive "$archive" >/dev/null
     echo "Rescue backup: $rescue"
 }
 
