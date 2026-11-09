@@ -18,9 +18,19 @@ def fake_docker_directory(root: Path) -> Path:
     folder.mkdir(exist_ok=True)
     executable = folder / "docker"
     executable.write_text(
-        '#!/bin/sh\ncase "$DOCKER_SIM_STATE" in\n'
-        "running) echo true;;\nstopped) echo false;;\n"
-        "unknown) exit 17;;\nesac\n"
+        '#!/bin/sh\nif [ "$1" = inspect ]; then\n'
+        '  case "$DOCKER_SIM_STATE" in\n'
+        "    running) echo true;;\n"
+        "    stopped) echo false;;\n"
+        "    *) exit 17;;\n"
+        "  esac\n"
+        'elif [ "$1" = container ] && [ "$2" = ls ]; then\n'
+        '  case "$DOCKER_SIM_STATE" in\n'
+        "    absent) echo other-container;;\n"
+        "    listed) echo shelly-voltage-bot;;\n"
+        "    *) exit 17;;\n"
+        "  esac\n"
+        "else\n  exit 17\nfi\n"
     )
     executable.chmod(0o700)
     return folder
@@ -70,7 +80,11 @@ class InstallWriterGateTests(unittest.TestCase):
 
         source = (ROOT / "scripts/install.sh").read_text()
         main = source.split("main() {", 1)[1].split("\n}", 1)[0]
-        self.assertIn("require_quiesced_upgrade\n    install_docker", main)
+        self.assertIn(
+            "require_quiesced_upgrade\n    snapshot_upgrade"
+            "\n    install_docker",
+            main,
+        )
 
     def test_existing_running_or_unknown_writer_rejected(self) -> None:
         """Fail closed when the container runs or cannot be inspected."""
@@ -92,7 +106,47 @@ class InstallWriterGateTests(unittest.TestCase):
             )
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(
-                invoke_gate(Path(directory), "unknown", False, False), 0
+                invoke_gate(Path(directory), "absent", False, False), 0
+            )
+
+    def test_fresh_target_rejects_existing_live_writer(self) -> None:
+        """An alternate installation root cannot replace a running bot."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                invoke_gate(Path(directory), "running", False, False), 5
+            )
+
+    def test_fresh_target_allows_stopped_or_absent_writer(self) -> None:
+        """A fresh install remains possible with no live Docker writer."""
+
+        for state in ("stopped", "absent"):
+            with (
+                self.subTest(state=state),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                self.assertEqual(
+                    invoke_gate(Path(directory), state, False, False), 0
+                )
+
+    def test_fresh_target_rejects_unknown_docker_inspection(self) -> None:
+        """Never assume failed inspect means no existing writer."""
+
+        for state in ("unknown", "listed"):
+            with (
+                self.subTest(state=state),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                self.assertEqual(
+                    invoke_gate(Path(directory), state, False, False), 5
+                )
+
+    def test_dry_run_fresh_does_not_require_docker(self) -> None:
+        """Plan mode never inspects Docker, even when the bot is running."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                invoke_gate(Path(directory), "running", False, True), 0
             )
 
     def test_dry_run_existing_install_has_no_docker_dependency(self) -> None:
