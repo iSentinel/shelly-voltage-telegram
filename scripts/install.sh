@@ -50,6 +50,34 @@ require_root() {
     fi
 }
 
+require_safe_install_target() {
+    local part parent
+    case "$TARGET" in
+        /*) ;;
+        *) echo "ERROR: unsafe application target." >&2; exit 3 ;;
+    esac
+    case "$TARGET" in
+        /|*/|*//*|*/./*|*/.|*/../*|*/..)
+            echo "ERROR: unsafe application target." >&2
+            exit 3 ;;
+    esac
+    part="$TARGET"
+    while [[ "$part" != / ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: unsafe application target." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+    if [[ -e "$TARGET" && ! -d "$TARGET" ]] ||
+       [[ -d "$TARGET" && ! -O "$TARGET" ]]; then
+        echo "ERROR: unsafe application target." >&2
+        exit 3
+    fi
+}
+
 require_quiesced_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     if [[ "$DRY_RUN" == true ]]; then
@@ -266,6 +294,7 @@ summary() {
 main() {
     parse_args "$@"
     require_root
+    require_safe_install_target
     require_quiesced_upgrade
     install_docker
     snapshot_upgrade
