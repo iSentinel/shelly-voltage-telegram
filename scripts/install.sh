@@ -149,9 +149,23 @@ require_quiesced_upgrade() {
     fi
     if ! running="$(docker inspect --format '{{.State.Running}}' \
         shelly-voltage-bot 2>/dev/null)"; then
-        [[ "$installed" == false ]] && return 0
-        echo "ERROR: cannot verify stopped Shelly writer." >&2
-        exit 5
+        if [[ "$installed" == true ]]; then
+            echo "ERROR: cannot verify stopped Shelly writer." >&2
+            exit 5
+        fi
+        # A failed inspect is ambiguous: distinguish no named container
+        # from an unreachable Docker daemon before a first install.
+        local names
+        if ! names="$(docker container ls --all --format '{{.Names}}' \
+            2>/dev/null)"; then
+            echo "ERROR: cannot confirm Shelly writer is absent." >&2
+            exit 5
+        fi
+        if printf '%s\n' "$names" | grep -Fxq shelly-voltage-bot; then
+            echo "ERROR: existing Shelly writer state is unknown." >&2
+            exit 5
+        fi
+        return 0
     fi
     if [[ "$running" != false ]]; then
         echo "ERROR: Shelly writer is running; quiescence required." >&2

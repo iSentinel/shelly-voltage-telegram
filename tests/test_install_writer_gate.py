@@ -18,9 +18,19 @@ def fake_docker_directory(root: Path) -> Path:
     folder.mkdir(exist_ok=True)
     executable = folder / "docker"
     executable.write_text(
-        '#!/bin/sh\ncase "$DOCKER_SIM_STATE" in\n'
-        "running) echo true;;\nstopped) echo false;;\n"
-        "unknown) exit 17;;\nesac\n"
+        '#!/bin/sh\nif [ "$1" = inspect ]; then\n'
+        '  case "$DOCKER_SIM_STATE" in\n'
+        "    running) echo true;;\n"
+        "    stopped) echo false;;\n"
+        "    *) exit 17;;\n"
+        "  esac\n"
+        'elif [ "$1" = container ] && [ "$2" = ls ]; then\n'
+        '  case "$DOCKER_SIM_STATE" in\n'
+        "    absent) echo other-container;;\n"
+        "    listed) echo shelly-voltage-bot;;\n"
+        "    *) exit 17;;\n"
+        "  esac\n"
+        "else\n  exit 17\nfi\n"
     )
     executable.chmod(0o700)
     return folder
@@ -92,7 +102,7 @@ class InstallWriterGateTests(unittest.TestCase):
             )
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(
-                invoke_gate(Path(directory), "unknown", False, False), 0
+                invoke_gate(Path(directory), "absent", False, False), 0
             )
 
     def test_fresh_target_rejects_existing_live_writer(self) -> None:
@@ -106,13 +116,25 @@ class InstallWriterGateTests(unittest.TestCase):
     def test_fresh_target_allows_stopped_or_absent_writer(self) -> None:
         """A fresh install remains possible with no live Docker writer."""
 
-        for state in ("stopped", "unknown"):
+        for state in ("stopped", "absent"):
             with (
                 self.subTest(state=state),
                 tempfile.TemporaryDirectory() as directory,
             ):
                 self.assertEqual(
                     invoke_gate(Path(directory), state, False, False), 0
+                )
+
+    def test_fresh_target_rejects_unknown_docker_inspection(self) -> None:
+        """Never assume failed inspect means no existing writer."""
+
+        for state in ("unknown", "listed"):
+            with (
+                self.subTest(state=state),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                self.assertEqual(
+                    invoke_gate(Path(directory), state, False, False), 5
                 )
 
     def test_dry_run_fresh_does_not_require_docker(self) -> None:
