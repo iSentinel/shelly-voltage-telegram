@@ -1,9 +1,10 @@
-## 0.5.14-hw - release candidate (publication and rollout pending)
+## 0.5.14-hw - finalization rehearsal (NOT PUBLISHED)
 
 - Source-only candidate; no published release or production rollout.
-- VERSION=0.5.14-hw, while RELEASE_VERSION remains 0.5.12-hw
-  until independent review and publication are approved. The
-  intentional mismatch keeps the stable-tag release gate closed.
+- Finalization PREVIEW aligns VERSION and RELEASE_VERSION to 0.5.14-hw.
+  This unmerged branch and its local tag rehearsal do not publish
+  the software or authorize deployment; independent acceptance and
+  signed release approval are still required.
 - Guard installer source paths, version marker, protected credentials,
   existing SQLite and running writer before deployment changes.
 - Take a complete validated source+SQLite snapshot before Docker setup;
