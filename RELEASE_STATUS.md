@@ -1,3 +1,15 @@
+## 2026-11-10 — 0.5.15-hw Owner Approval finalization
+
+- Owner explicitly authorized PR #299 merge, release publication,
+  signed Docker image, and ONE controlled LXC110 update including
+  YASNO Telegram activation with a stopped-writer SQLite backup.
+- Source VERSION and RELEASE_VERSION both equal 0.5.15-hw.
+- This source is only publishable after exact-head GitHub CI PASS,
+  immutable tag and signed image verification; no release artifact
+  or production installation is claimed by this file.
+- Rollback preserves secure owner-controlled YASNO overlay and
+  fails closed before stopping the database writer.
+
 ## 2026-11-09 — 0.5.14-hw integrated release candidate, NOT PUBLISHED
 
 - Candidate combines the cumulative installer/recovery safety chain

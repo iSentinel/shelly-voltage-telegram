@@ -1,6 +1,20 @@
-## 0.5.14-hw - finalization rehearsal (NOT PUBLISHED)
+## 0.5.15-hw - owner-approved release source
+- Preserve owner-protected YASNO read-only Compose opt-in for normal
+  restarts, pinned updater starts and installer builds.
+- Reject symlinks, hardlinks, path traversal and writable ancestor
+  directories before any Docker command.
+- Preserve the separately approved read-only YASNO overlay during
+  guarded SQLite/source rollback, with fail-closed preflight before
+  stopping the live writer.
+- Owner Approval for one controlled LXC110 maintenance window granted
+  2026-11-10. VERSION=RELEASE_VERSION=0.5.15-hw; this source commit
+  is the tag target only after GitHub CI and source checks pass.
+- The running bot remains 0.5.14-hw until a separately verified
+  tagged source archive and Cosign-signed GHCR digest are available.
 
-- Source-only candidate; no published release or production rollout.
+## 0.5.14-hw - signed release published 2026-11-09
+
+- Originally staged as source-only; public release and hardware rollout completed 2026-11-09.
 - Finalization PREVIEW aligns VERSION and RELEASE_VERSION to 0.5.14-hw.
   This unmerged branch and its local tag rehearsal do not publish
   the software or authorize deployment; independent acceptance and

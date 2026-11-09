@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sqlite3
 import stat
 import sys
@@ -141,8 +142,14 @@ def version_check(root: Path) -> str:
 
     candidate = (root / "VERSION").read_text(encoding="utf-8").strip()
     release = (root / "RELEASE_VERSION").read_text(encoding="utf-8").strip()
-    if candidate != "0.5.14-hw":
-        raise ValueError("expected 0.5.14-hw candidate")
+    markers = []
+    for value in (candidate, release):
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)-hw", value)
+        if match is None:
+            raise ValueError("invalid candidate or stable version marker")
+        markers.append(tuple(int(part) for part in match.groups()))
+    if markers[0] < markers[1]:
+        raise ValueError("candidate is older than published release")
     if candidate == release:
         return f"candidate={candidate}; stable_marker_matches=true"
     return f"candidate={candidate}; stable_marker_unchanged=true"

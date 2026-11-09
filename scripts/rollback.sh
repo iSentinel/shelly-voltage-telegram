@@ -324,7 +324,10 @@ start_service() {
     cp "$TARGET/systemd/"*.service /etc/systemd/system/
     cp "$TARGET/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
     systemctl daemon-reload
-    docker compose -f "$TARGET/compose.yaml" up -d --build
+    # Use the validated plan saved before restoring the old source.
+    # This preserves a separately approved, read-only YASNO overlay.
+    compose_cmd config -q
+    compose_cmd up -d --build
     for _ in $(seq 1 20); do
         curl -fsS http://127.0.0.1:8080/health >/dev/null && return
         sleep 2
@@ -342,6 +345,12 @@ main() {
     echo "Rollback snapshot: $SNAPSHOT"
     require_db_replacement_approval
     preflight_backup_paths
+    if [[ "$NO_START" == false ]]; then
+        # Load secure layer checks BEFORE restore_source replaces scripts.
+        # Keep the functions in memory for starting the restored version.
+        source "$(dirname -- "${BASH_SOURCE[0]}")/start-compose.sh"
+        compose_prepare true
+    fi
     stop_service
     rescue_current_db
     assert_writer_stopped
