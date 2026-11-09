@@ -64,3 +64,24 @@ online or turn its last historical value into live voltage.
 Both use verified local cache fixtures, with live network fetching
 mocked out. Current QA: 1361/1361 Python and release/installer
 fixture PASS, no production mutation.
+
+## Guarded rollback after YASNO opt-in (2026-11-09)
+
+The initial 0.5.15 candidate preserved the approved overlay for
+systemd starts, pinned updater starts and source installs, but its
+rollback.sh still used a base-only docker compose up command.
+This could silently drop an enabled YASNO reader after restoring
+the previous source release. The candidate now loads the same
+protected Compose-plan functions before stopping the SQLite
+writer. Functions survive replacement of the source directory,
+so rollback can validate and start the restored base image with
+the separately approved, read-only YASNO overlay intact.
+
+Unsafe overlay ownership, symlink ancestry, traversal or mode
+fails before the actual writer is stopped. With no opt-in file,
+the original base-only rollback remains unchanged; --no-start
+does not validate or activate a Compose overlay. No additional
+production stop, message edit, or database replacement occurred
+during this isolated QA. The dedicated regression exercises
+restored-source replacement, default-off, unsafe-file fail-closed
+and the early-preflight call order with fake Docker/systemctl.

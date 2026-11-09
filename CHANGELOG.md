@@ -3,6 +3,9 @@
   restarts, pinned updater starts and installer builds.
 - Reject symlinks, hardlinks, path traversal and writable ancestor
   directories before any Docker command.
+- Preserve the separately approved read-only YASNO overlay during
+  guarded SQLite/source rollback, with fail-closed preflight before
+  stopping the live writer.
 - Released production remains 0.5.14-hw; release marker stays
   0.5.14-hw until new Owner Approval and signed tag publication.
 

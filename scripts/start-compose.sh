@@ -58,31 +58,44 @@ compose_cmd() {
     fi
 }
 
-build=false
-if [[ $# -gt 0 ]]; then
-    case "$1" in
-        --build) build=true ;;
-        -h|--help) usage; exit 0 ;;
-        *) usage >&2; exit 2 ;;
-    esac
-fi
-[[ $# -le 1 ]] || { usage >&2; exit 2; }
+compose_prepare() {
+    # Compute the same secure layers for start, install and rollback.
+    local build="$1"
+    pinned=false
+    has_yasno=false
+    if [[ "$build" == false && -f "$OVERRIDE" ]]; then
+        pinned=true
+    fi
+    if [[ -e "$YASNO_OVERLAY" || -L "$YASNO_OVERLAY" ]]; then
+        validate_yasno_overlay "$YASNO_OVERLAY"
+        has_yasno=true
+    fi
+}
 
-pinned=false
-has_yasno=false
-if [[ "$build" == false && -f "$OVERRIDE" ]]; then
-    pinned=true
-fi
-if [[ -e "$YASNO_OVERLAY" || -L "$YASNO_OVERLAY" ]]; then
-    validate_yasno_overlay "$YASNO_OVERLAY"
-    has_yasno=true
-fi
+start_compose_main() {
+    local build=false
+    if [[ $# -gt 0 ]]; then
+        case "$1" in
+            --build) build=true ;;
+            -h|--help) usage; return 0 ;;
+            *) usage >&2; return 2 ;;
+        esac
+    fi
+    [[ $# -le 1 ]] || { usage >&2; return 2; }
 
-compose_cmd config -q
-if [[ "$build" == true ]]; then
-    compose_cmd up -d --build
-elif [[ "$pinned" == true ]]; then
-    compose_cmd up -d --no-build
-else
-    compose_cmd up -d
+    compose_prepare "$build"
+    compose_cmd config -q
+    if [[ "$build" == true ]]; then
+        compose_cmd up -d --build
+    elif [[ "$pinned" == true ]]; then
+        compose_cmd up -d --no-build
+    else
+        compose_cmd up -d
+    fi
+}
+
+# When rollback sources this file, retain the checked Compose plan
+# in shell memory while old release sources are being restored.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    start_compose_main "$@"
 fi
