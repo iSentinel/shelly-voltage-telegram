@@ -16,7 +16,9 @@ if [[ -e /var/lib/shelly-voltage/voltage.sqlite3 ||
       -e /var/lib/shelly-voltage/voltage.sqlite3-wal ||
       -L /var/lib/shelly-voltage/voltage.sqlite3-wal ||
       -e /var/lib/shelly-voltage/voltage.sqlite3-shm ||
-      -L /var/lib/shelly-voltage/voltage.sqlite3-shm ]]; then
+      -L /var/lib/shelly-voltage/voltage.sqlite3-shm ||
+      -e /var/lib/shelly-voltage/voltage.sqlite3-journal ||
+      -L /var/lib/shelly-voltage/voltage.sqlite3-journal ]]; then
     # On a live host, a fresh root must not silently reuse SQLite history.
     if SVT_ROOT="$fresh" "$PROJECT/scripts/install.sh"         --dry-run --non-interactive > "$TMP/fresh.log" 2>&1; then
         echo "ERROR: shared SQLite history accepted by fresh installer." >&2
