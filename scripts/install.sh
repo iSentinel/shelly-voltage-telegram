@@ -72,18 +72,66 @@ install_docker() {
     systemctl enable --now docker
 }
 
+prepare_upgrade_root() {
+    local root="$1" part parent
+    [[ "$root" == /* && "$root" != / ]] || {
+        echo "ERROR: unsafe upgrade snapshot root." >&2
+        exit 3
+    }
+    part="$root"
+    while [[ "$part" != / ]]; do
+        [[ ! -L "$part" ]] || {
+            echo "ERROR: linked upgrade snapshot root." >&2
+            exit 3
+        }
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+    umask 077
+    mkdir -m 0700 -p -- "$root"
+    [[ -d "$root" && -O "$root" ]] || {
+        echo "ERROR: upgrade snapshot root is not owner-owned." >&2
+        exit 3
+    }
+    chmod 0700 -- "$root"
+}
+
+prune_upgrade_snapshots() {
+    local root="$1" index path
+    local -a ordered=()
+    mapfile -d '' -t ordered < <(
+        find "$root" -mindepth 1 -maxdepth 1 -type d \
+            -printf '%T@ %p\0' | sort -zrn
+    )
+    for index in "${!ordered[@]}"; do
+        (( index >= 5 )) || continue
+        path="${ordered[index]#* }"
+        [[ "$path" == "$root/"* ]] || {
+            echo "ERROR: unsafe upgrade snapshot rotation path." >&2
+            exit 3
+        }
+        rm -rf -- "$path"
+    done
+}
+
 snapshot_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     [[ "$SOURCE" != "$TARGET" ]] || return 0
-    local stamp old_version snapshot
+    local stamp old_version root snapshot sqlite_archive
     stamp="$(date +%Y%m%d-%H%M%S)"
     old_version="$(tr -d '\n' < "$TARGET/VERSION")"
-    snapshot="/var/backups/shelly-voltage/upgrades/${stamp}-${old_version}"
+    [[ "$old_version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
+        echo "ERROR: invalid installed version for snapshot." >&2
+        exit 3
+    }
+    root="${UPGRADE_SNAPSHOT_ROOT:-/var/backups/shelly-voltage/upgrades}"
     if [[ "$DRY_RUN" == true ]]; then
-        echo "DRY-RUN: snapshot current source and SQLite -> $snapshot"
+        echo "DRY-RUN: snapshot current source and SQLite -> $root"
         return
     fi
-    mkdir -m 0700 -p "$snapshot"
+    prepare_upgrade_root "$root"
+    snapshot="$(mktemp -d -- "$root/${stamp}-${old_version}-XXXXXXXX")"
     bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
     DATABASE_PATH=/var/lib/shelly-voltage/voltage.sqlite3 \
@@ -93,15 +141,15 @@ snapshot_upgrade() {
         "$old_version" "$(tr -d '\n' < "$SOURCE/VERSION")" \
         > "$snapshot/manifest.env"
     sha256sum "$snapshot/source.tar.gz" > "$snapshot/source.tar.gz.sha256"
-    local sqlite_archive
     sqlite_archive="$(find "$snapshot" -maxdepth 1 -type f \
         -name "voltage-*.sqlite3.gz" -print -quit)"
-    [[ -n "$sqlite_archive" ]] || { echo "ERROR: backup missing" >&2; exit 2; }
+    [[ -n "$sqlite_archive" ]] || {
+        echo "ERROR: upgrade SQLite backup missing." >&2
+        exit 3
+    }
     python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
         --archive "$sqlite_archive"
-    find /var/backups/shelly-voltage/upgrades -mindepth 1 -maxdepth 1 \
-        -type d -printf '%T@ %p\n' | sort -nr | awk 'NR > 5 {print $2}' | \
-        xargs -r rm -rf
+    prune_upgrade_snapshots "$root"
     echo "Upgrade snapshot: $snapshot"
 }
 
