@@ -12,20 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def dry_run(target: str) -> subprocess.CompletedProcess[bytes]:
-    """Run the installer in nonwriting mode against a disposable path."""
+    """Run complete installer dry-run with isolated privilege stub."""
 
-    return subprocess.run(
-        [
-            "bash",
-            str(ROOT / "scripts/install.sh"),
-            "--dry-run",
-            "--non-interactive",
-        ],
-        env=os.environ | {"SVT_ROOT": target},
-        capture_output=True,
-        check=False,
-        timeout=12,
-    )
+    script = (ROOT / "scripts/install.sh").read_text()
+    assert script.rstrip().endswith('main "$@"')
+    with tempfile.TemporaryDirectory() as name:
+        functions = Path(name) / "install-functions.sh"
+        functions.write_text(script.rsplit('main "$@"', 1)[0])
+        command = (
+            'source "$1"; require_root() { :; }; '
+            "main --dry-run --non-interactive"
+        )
+        return subprocess.run(
+            ["bash", "-c", command, "_", str(functions)],
+            env=os.environ | {"SVT_ROOT": target},
+            capture_output=True,
+            check=False,
+            timeout=12,
+        )
 
 
 class InstallerTargetPathTests(unittest.TestCase):
