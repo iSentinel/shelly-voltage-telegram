@@ -65,16 +65,29 @@ def restricted_env(config: dict) -> dict[str, str]:
 
 
 def reader_mount(document: dict) -> dict:
-    """Require precisely one protected reader bind from the intended host."""
+    """Require one readonly reader bind with no overlapping mounts."""
 
-    mounts = [
-        mount
-        for mount in document.get("Mounts", [])
-        if mount.get("Destination") == EXPECTED_TARGET
-    ]
-    if len(mounts) != 1:
+    mounts = document.get("Mounts")
+    if not isinstance(mounts, list):
+        raise ValueError("YASNO Docker mount list unavailable")
+    matched = []
+    for mount in mounts:
+        if not isinstance(mount, dict):
+            raise ValueError("malformed Docker mount")
+        destination = mount.get("Destination")
+        if not isinstance(destination, str) or not destination.startswith("/"):
+            raise ValueError("invalid Docker mount destination")
+        if any(part in {"", ".", ".."} for part in destination.split("/")[1:]):
+            raise ValueError("noncanonical Docker mount destination")
+        if destination == EXPECTED_TARGET:
+            matched.append(mount)
+        elif destination.startswith(
+            EXPECTED_TARGET + "/"
+        ) or EXPECTED_TARGET.startswith(destination.rstrip("/") + "/"):
+            raise ValueError("overlapping YASNO reader mount")
+    if len(matched) != 1:
         raise ValueError("YASNO reader mount missing or duplicated")
-    mount = mounts[0]
+    mount = matched[0]
     if (
         mount.get("Type") != "bind"
         or mount.get("Source") != EXPECTED_SOURCE
