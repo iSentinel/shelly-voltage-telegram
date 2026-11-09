@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGES = (
     "parse_args require_root require_safe_install_target "
     "require_safe_install_files require_valid_install_marker "
-    "require_quiesced_upgrade snapshot_upgrade install_docker "
+    "require_safe_fresh_database_state require_quiesced_upgrade "
+    "snapshot_upgrade install_docker "
     "copy_source prepare_state configure_project install_units deploy summary"
 )
 
