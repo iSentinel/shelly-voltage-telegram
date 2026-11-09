@@ -11,12 +11,36 @@ trap 'rm -rf "$TMP"' EXIT
 }
 
 fresh="$TMP/fresh-root"
-SVT_ROOT="$fresh" "$PROJECT/scripts/install.sh"     --dry-run --non-interactive > "$TMP/fresh.log" 2>&1
-grep -q "DRY-RUN PASS: no changes applied." "$TMP/fresh.log"
+if [[ -e /var/lib/shelly-voltage/voltage.sqlite3 ||
+      -L /var/lib/shelly-voltage/voltage.sqlite3 ||
+      -e /var/lib/shelly-voltage/voltage.sqlite3-wal ||
+      -L /var/lib/shelly-voltage/voltage.sqlite3-wal ||
+      -e /var/lib/shelly-voltage/voltage.sqlite3-shm ||
+      -L /var/lib/shelly-voltage/voltage.sqlite3-shm ||
+      -e /var/lib/shelly-voltage/voltage.sqlite3-journal ||
+      -L /var/lib/shelly-voltage/voltage.sqlite3-journal ]]; then
+    # On a live host, a fresh root must not silently reuse SQLite history.
+    if SVT_ROOT="$fresh" "$PROJECT/scripts/install.sh"         --dry-run --non-interactive > "$TMP/fresh.log" 2>&1; then
+        echo "ERROR: shared SQLite history accepted by fresh installer." >&2
+        exit 1
+    fi
+    grep -q "existing Shelly SQLite state" "$TMP/fresh.log"
+    echo "FRESH_INSTALL_WITH_EXISTING_DB=BLOCKED"
+else
+    SVT_ROOT="$fresh" "$PROJECT/scripts/install.sh"         --dry-run --non-interactive > "$TMP/fresh.log" 2>&1
+    grep -q "DRY-RUN PASS: no changes applied." "$TMP/fresh.log"
+    echo "FRESH_INSTALL_DRY_RUN=PASS"
+fi
 [[ ! -e "$fresh" ]]
-echo "FRESH_INSTALL_DRY_RUN=PASS"
 
-SVT_ROOT="$PROJECT" "$PROJECT/scripts/install.sh"     --dry-run --non-interactive > "$TMP/in-place.log" 2>&1
+# GitHub checkout belongs to runner, not root: use an isolated
+# root-owned in-place tree instead of weakening the safety guard.
+in_place="$TMP/in-place-root"
+mkdir -p "$in_place/scripts"
+cp "$PROJECT/scripts/install.sh" "$in_place/scripts/install.sh"
+cp "$PROJECT/VERSION" "$in_place/VERSION"
+SVT_ROOT="$in_place" "$in_place/scripts/install.sh" \
+    --dry-run --non-interactive > "$TMP/in-place.log" 2>&1
 grep -q "DRY-RUN PASS: no changes applied." "$TMP/in-place.log"
 echo "IN_PLACE_INSTALL_DRY_RUN=PASS"
 

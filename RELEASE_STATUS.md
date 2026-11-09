@@ -1,3 +1,16 @@
+## 2026-11-09 — 0.5.14-hw integrated release candidate, NOT PUBLISHED
+
+- Candidate combines the cumulative installer/recovery safety chain
+  through PR #291 and the snapshot/recovery chain through PR #295.
+- VERSION=0.5.14-hw; RELEASE_VERSION=0.5.12-hw deliberately
+  remains the most recently published release. Never bypass the
+  unpublished-candidate unit or tag-policy safety tests.
+- No GitHub public tag, published release or production deployment;
+  full-history SQLite+source snapshot, independent human review,
+  protected YASNO, real Telegram visual check, explicit rollout and
+  rollback acceptance remain blocking. Shelly is offline.
+- Candidate archive, CI and SHA256 are tracked in isolated QA.
+
 ## 2026-11-08 — staged systemd handoff examples for EM-50
 
 - Optional OnSuccess refresh-to-reader handoff remains

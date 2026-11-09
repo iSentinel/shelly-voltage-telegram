@@ -65,16 +65,29 @@ def restricted_env(config: dict) -> dict[str, str]:
 
 
 def reader_mount(document: dict) -> dict:
-    """Require precisely one protected reader bind from the intended host."""
+    """Require one readonly reader bind with no overlapping mounts."""
 
-    mounts = [
-        mount
-        for mount in document.get("Mounts", [])
-        if mount.get("Destination") == EXPECTED_TARGET
-    ]
-    if len(mounts) != 1:
+    mounts = document.get("Mounts")
+    if not isinstance(mounts, list):
+        raise ValueError("YASNO Docker mount list unavailable")
+    matched = []
+    for mount in mounts:
+        if not isinstance(mount, dict):
+            raise ValueError("malformed Docker mount")
+        destination = mount.get("Destination")
+        if not isinstance(destination, str) or not destination.startswith("/"):
+            raise ValueError("invalid Docker mount destination")
+        if any(part in {"", ".", ".."} for part in destination.split("/")[1:]):
+            raise ValueError("noncanonical Docker mount destination")
+        if destination == EXPECTED_TARGET:
+            matched.append(mount)
+        elif destination.startswith(
+            EXPECTED_TARGET + "/"
+        ) or EXPECTED_TARGET.startswith(destination.rstrip("/") + "/"):
+            raise ValueError("overlapping YASNO reader mount")
+    if len(matched) != 1:
         raise ValueError("YASNO reader mount missing or duplicated")
-    mount = mounts[0]
+    mount = matched[0]
     if (
         mount.get("Type") != "bind"
         or mount.get("Source") != EXPECTED_SOURCE
@@ -85,11 +98,26 @@ def reader_mount(document: dict) -> dict:
 
 
 def secure_container(document: dict) -> dict[str, str]:
-    """Keep production UID and read-only Docker isolation intact."""
+    """Require a running nonprivileged reader with read-only Docker."""
 
+    state = document.get("State")
+    if not isinstance(state, dict):
+        raise ValueError("YASNO reader Docker state missing")
+    if state.get("Running") is not True or any(
+        state.get(key) is not False for key in ("Paused", "Restarting", "Dead")
+    ):
+        raise ValueError("YASNO reader is not running normally")
+    health = state.get("Health")
+    if not isinstance(health, dict) or health.get("Status") != "healthy":
+        raise ValueError("YASNO reader healthcheck has not passed")
     config = document["Config"]
     host = document["HostConfig"]
     dropped = host.get("CapDrop") or []
+    security = host.get("SecurityOpt")
+    if not isinstance(security, list) or (
+        "no-new-privileges:true" not in security
+    ):
+        raise ValueError("YASNO reader privilege escalation is not blocked")
     if (
         config.get("User") != EXPECTED_UID
         or host.get("ReadonlyRootfs") is not True

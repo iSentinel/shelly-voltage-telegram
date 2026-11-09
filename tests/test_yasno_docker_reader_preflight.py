@@ -24,6 +24,13 @@ def inspection(enabled: str = "0") -> dict:
     """Return a synthetic hardened container with no real credentials."""
 
     return {
+        "State": {
+            "Running": True,
+            "Paused": False,
+            "Restarting": False,
+            "Dead": False,
+            "Health": {"Status": "healthy"},
+        },
         "Config": {
             "User": "10001:10001",
             "Env": [
@@ -37,6 +44,7 @@ def inspection(enabled: str = "0") -> dict:
             "ReadonlyRootfs": True,
             "Privileged": False,
             "CapDrop": ["ALL"],
+            "SecurityOpt": ["no-new-privileges:true"],
         },
         "Mounts": [
             {
@@ -119,6 +127,72 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
             ):
                 QA.verify_reader(document, "staging")
 
+    def test_staging_rejects_nonrunning_container(self):
+        """A configured mount cannot certify a stopped reader."""
+
+        for state in ("stopped", "missing", "paused", "restarting", "dead"):
+            document = inspection()
+            if state == "stopped":
+                document["State"]["Running"] = False
+            elif state == "missing":
+                document.pop("State")
+            else:
+                document["State"][state.capitalize()] = True
+            with (
+                self.subTest(state=state),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_active_rejects_nonrunning_before_cache_access(self):
+        """A stopped reader is not ready, regardless of cached YASNO."""
+
+        document = inspection("1")
+        document["State"]["Running"] = False
+        with (
+            patch.object(QA, "read_verified_cache") as read,
+            self.assertRaises(ValueError),
+        ):
+            QA.verify_reader(document, "active")
+        read.assert_not_called()
+
+    def test_overlapping_mounts_cannot_override_reader_cache(self):
+        """A second bind above or below /run/yasno defeats isolation."""
+
+        for destination in (
+            "/run",
+            "/run/yasno/yasno.json",
+            "/run/yasno/nested",
+        ):
+            document = inspection()
+            document["Mounts"].append(
+                {
+                    "Destination": destination,
+                    "Source": "/tmp/untrusted",
+                    "Type": "bind",
+                    "RW": True,
+                }
+            )
+            with (
+                self.subTest(destination=destination),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_unrelated_mount_does_not_block_reader(self):
+        """Other independent container mounts are not YASNO overlays."""
+
+        document = inspection()
+        document["Mounts"].append(
+            {
+                "Destination": "/run/yasno-other",
+                "Source": "/tmp/other",
+                "Type": "bind",
+                "RW": True,
+            }
+        )
+        self.assertIn("phase=staging", QA.verify_reader(document, "staging"))
+
     def test_docker_user_and_filesystem_must_remain_hardened(self):
         """Reject privilege elevation and writable container filesystem."""
 
@@ -136,6 +210,47 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "isolation"),
             ):
                 QA.verify_reader(document, "staging")
+
+    def test_unhealthy_reader_cannot_pass_staging(self):
+        """Ready YASNO must have its declared Docker healthcheck passing."""
+
+        for health in ("starting", "unhealthy", "none", "missing"):
+            document = inspection()
+            if health == "missing":
+                document["State"].pop("Health")
+            elif health == "none":
+                document["State"]["Health"] = {}
+            else:
+                document["State"]["Health"]["Status"] = health
+            with (
+                self.subTest(health=health),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_no_new_privileges_is_mandatory(self):
+        """A hardened reader cannot permit extra process privileges."""
+
+        for options in ([], None, ["no-new-privileges:false"]):
+            document = inspection()
+            document["HostConfig"]["SecurityOpt"] = options
+            with (
+                self.subTest(options=options),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_active_health_failure_never_reads_cache(self):
+        """Unhealthy active reader must fail before touching YASNO cache."""
+
+        document = inspection("1")
+        document["State"]["Health"]["Status"] = "unhealthy"
+        with (
+            patch.object(QA, "read_verified_cache") as reader,
+            self.assertRaises(ValueError),
+        ):
+            QA.verify_reader(document, "active")
+        reader.assert_not_called()
 
     def test_bad_environment_and_conflicting_cache_path_rejected(self):
         """No implicit feature flags or duplicate reader selection."""
