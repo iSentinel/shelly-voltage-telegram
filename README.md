@@ -36,7 +36,7 @@ Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 The private administrator **Updates** menu checks GitHub Releases without
 installing automatically; see [safe updates](docs/UPDATES.md).
-Public GitHub Release: `v0.5.14-hw`; installed EM-50 runtime: `0.5.14-hw`.
+Release source for `v0.5.15-hw` (tag publication requires signed GHCR verification); previously installed EM-50 runtime: `0.5.14-hw`.
 
 ## Overview
 
@@ -54,7 +54,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.15-hw**
-- Current release: **0.5.14-hw**
+- Current release: **0.5.15-hw**
 - Production field-test runtime: **0.5.14-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
@@ -151,7 +151,7 @@ validated production release before use.
 ## Container image
 
 ```bash
-docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.14-hw
+docker pull ghcr.io/isentinel/shelly-voltage-telegram:v0.5.15-hw
 ```
 
 Published for `linux/amd64` and `linux/arm64` with SBOM/provenance metadata.

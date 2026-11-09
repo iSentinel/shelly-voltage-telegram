@@ -27,18 +27,21 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
         """Final source marker remains separate from installed runtime."""
 
         self.assertEqual(version("VERSION"), "0.5.15-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.14-hw")
-        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.15-hw")
+        self.assertEqual(version("VERSION"), version("RELEASE_VERSION"))
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
     def test_finalized_tag_requires_exact_source_commit(self):
         """Tag creation must not permit a different checked-out SHA."""
 
-        with self.assertRaisesRegex(ValueError, "VERSION differs"):
+        # Final release is aligned; a mismatched marker must still fail.
+        with (
+            patch.object(policy, "version_file", return_value="0.5.14-hw"),
+            self.assertRaisesRegex(ValueError, "release tag differs"),
+        ):
             policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
 
-        # Mock ONLY finalized markers so this release identity regression
-        # stays meaningful while the real unpublished marker stays old.
+        # A tag pointing to any non-approved source SHA must fail.
         with (
             patch.object(policy, "version_file", return_value="0.5.15-hw"),
             patch.object(policy, "tag_commit", return_value="wrong"),

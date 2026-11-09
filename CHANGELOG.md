@@ -1,4 +1,4 @@
-## 0.5.15-hw - development candidate (unpublished)
+## 0.5.15-hw - owner-approved release source
 - Preserve owner-protected YASNO read-only Compose opt-in for normal
   restarts, pinned updater starts and installer builds.
 - Reject symlinks, hardlinks, path traversal and writable ancestor
@@ -6,8 +6,11 @@
 - Preserve the separately approved read-only YASNO overlay during
   guarded SQLite/source rollback, with fail-closed preflight before
   stopping the live writer.
-- Released production remains 0.5.14-hw; release marker stays
-  0.5.14-hw until new Owner Approval and signed tag publication.
+- Owner Approval for one controlled LXC110 maintenance window granted
+  2026-11-10. VERSION=RELEASE_VERSION=0.5.15-hw; this source commit
+  is the tag target only after GitHub CI and source checks pass.
+- The running bot remains 0.5.14-hw until a separately verified
+  tagged source archive and Cosign-signed GHCR digest are available.
 
 ## 0.5.14-hw - signed release published 2026-11-09
 

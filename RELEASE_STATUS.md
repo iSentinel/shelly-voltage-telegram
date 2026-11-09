@@ -1,4 +1,16 @@
-## 2026-11-09 — 0.5.15-hw YASNO Compose candidate\n\n- Published and installed production release: 0.5.14-hw.\n- VERSION=0.5.15-hw development; RELEASE_VERSION remains 0.5.14-hw.\n- Persistent protected YASNO opt-in is tested source-only and is OFF by default.\n- No 0.5.15-hw release tag, image, or production installation is approved.\n\n## 2026-11-09 — 0.5.14-hw integrated release candidate, NOT PUBLISHED
+## 2026-11-10 — 0.5.15-hw Owner Approval finalization
+
+- Owner explicitly authorized PR #299 merge, release publication,
+  signed Docker image, and ONE controlled LXC110 update including
+  YASNO Telegram activation with a stopped-writer SQLite backup.
+- Source VERSION and RELEASE_VERSION both equal 0.5.15-hw.
+- This source is only publishable after exact-head GitHub CI PASS,
+  immutable tag and signed image verification; no release artifact
+  or production installation is claimed by this file.
+- Rollback preserves secure owner-controlled YASNO overlay and
+  fails closed before stopping the database writer.
+
+## 2026-11-09 — 0.5.14-hw integrated release candidate, NOT PUBLISHED
 
 - Candidate combines the cumulative installer/recovery safety chain
   through PR #291 and the snapshot/recovery chain through PR #295.
