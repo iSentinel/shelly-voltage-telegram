@@ -154,6 +154,43 @@ class YasnoDockerReaderGateTests(unittest.TestCase):
             QA.verify_reader(document, "active")
         read.assert_not_called()
 
+    def test_overlapping_mounts_cannot_override_reader_cache(self):
+        """A second bind above or below /run/yasno defeats isolation."""
+
+        for destination in (
+            "/run",
+            "/run/yasno/yasno.json",
+            "/run/yasno/nested",
+        ):
+            document = inspection()
+            document["Mounts"].append(
+                {
+                    "Destination": destination,
+                    "Source": "/tmp/untrusted",
+                    "Type": "bind",
+                    "RW": True,
+                }
+            )
+            with (
+                self.subTest(destination=destination),
+                self.assertRaises(ValueError),
+            ):
+                QA.verify_reader(document, "staging")
+
+    def test_unrelated_mount_does_not_block_reader(self):
+        """Other independent container mounts are not YASNO overlays."""
+
+        document = inspection()
+        document["Mounts"].append(
+            {
+                "Destination": "/run/yasno-other",
+                "Source": "/tmp/other",
+                "Type": "bind",
+                "RW": True,
+            }
+        )
+        self.assertIn("phase=staging", QA.verify_reader(document, "staging"))
+
     def test_docker_user_and_filesystem_must_remain_hardened(self):
         """Reject privilege elevation and writable container filesystem."""
 
