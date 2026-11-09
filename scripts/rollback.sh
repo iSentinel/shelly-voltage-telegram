@@ -200,6 +200,33 @@ assert_backup_path_unlinked() {
     done
 }
 
+preflight_source_target() {
+    local part parent
+    case "$TARGET" in
+        /*) ;;
+        *) echo "ERROR: rollback unsafe application target." >&2; exit 3 ;;
+    esac
+    case "$TARGET" in
+        /|*/|*//*|*/./*|*/.|*/../*|*/..)
+            echo "ERROR: rollback unsafe application target." >&2
+            exit 3 ;;
+    esac
+    part="$TARGET"
+    while [[ "$part" != / ]]; do
+        if [[ -L "$part" ]]; then
+            echo "ERROR: rollback unsafe application target." >&2
+            exit 3
+        fi
+        parent="$(dirname -- "$part")"
+        [[ "$part" != "$parent" ]] || break
+        part="$parent"
+    done
+    if [[ ! -d "$TARGET" || ! -O "$TARGET" ]]; then
+        echo "ERROR: rollback unsafe application target." >&2
+        exit 3
+    fi
+}
+
 preflight_backup_paths() {
     assert_backup_path_unlinked "$DB"
     assert_backup_path_unlinked "$RESCUE_ROOT"
@@ -333,6 +360,7 @@ start_service() {
 main() {
     parse_args "$@"
     require_root
+    preflight_source_target
     select_snapshot
     validate_snapshot
     echo "Rollback snapshot: $SNAPSHOT"

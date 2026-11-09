@@ -348,6 +348,35 @@ done
 rm -f "$TARGET/compose.yaml"
 echo "ROLLBACK_PRECHECK_RESCUE_AND_LIVE_DB=BLOCKED"
 
+# The source destination and all its parents must be unlinkable.
+ln -s "$TARGET" "$TMP/linked-target"
+ln -s "$TMP" "$TMP/linked-target-parent"
+for kind in linked_target linked_parent root_target relative_target \
+    traversal_target missing_target; do
+    case "$kind" in
+        linked_target) rejected="$TMP/linked-target" ;;
+        linked_parent) rejected="$TMP/linked-target-parent/target" ;;
+        root_target) rejected="/" ;;
+        relative_target) rejected="." ;;
+        traversal_target) rejected="$TMP/target/../target" ;;
+        missing_target) rejected="$TMP/no-such-application" ;;
+    esac
+    if SVT_ROOT="$rejected" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+        SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
+        "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --dry-run \
+            --no-start >"$TMP/unsafe-target-$kind.log" 2>&1; then
+        echo "ERROR: rollback accepted unsafe source target $kind" >&2
+        exit 1
+    fi
+    grep -q "ERROR: rollback unsafe application target" \
+        "$TMP/unsafe-target-$kind.log"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" \
+        = "$db_before"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" \
+        = "$source_before"
+done
+echo "ROLLBACK_UNSAFE_SOURCE_TARGETS=REJECTED"
+
 # Reject corrupt but checksum-consistent archives before touching the target.
 for unsafe_type in traversal symlink; do
     unsafe="$TMP/unsafe-$unsafe_type"
