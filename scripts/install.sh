@@ -137,6 +137,7 @@ snapshot_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     [[ "$SOURCE" != "$TARGET" ]] || return 0
     local stamp old_version root snapshot sqlite_archive
+    local sqlite_db=/var/lib/shelly-voltage/voltage.sqlite3
     stamp="$(date +%Y%m%d-%H%M%S)"
     old_version="$(tr -d '\n' < "$TARGET/VERSION")"
     [[ "$old_version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || {
@@ -152,8 +153,7 @@ snapshot_upgrade() {
     snapshot="$(mktemp -d -- "$root/${stamp}-${old_version}-XXXXXXXX")"
     bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
-    DATABASE_PATH=/var/lib/shelly-voltage/voltage.sqlite3 \
-        BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
+    DATABASE_PATH="$sqlite_db" BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
         "$SOURCE/scripts/backup.sh" > "$snapshot/backup.log"
     printf 'from_version=%s\nto_version=%s\n' \
         "$old_version" "$(tr -d '\n' < "$SOURCE/VERSION")" \
@@ -165,8 +165,10 @@ snapshot_upgrade() {
         echo "ERROR: upgrade SQLite backup missing." >&2
         exit 3
     }
+    # A valid SQLite archive may still contain older measurements.
+    # Compare every table and persistent header before source replacement.
     python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
-        --archive "$sqlite_archive"
+        --archive "$sqlite_archive" --compare-db "$sqlite_db"
     prune_upgrade_snapshots "$root"
     echo "Upgrade snapshot: $snapshot"
 }
