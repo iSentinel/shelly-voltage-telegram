@@ -228,7 +228,24 @@ preflight_source_target() {
 }
 
 preflight_backup_paths() {
+    local sqlite_directory
+    case "$DB" in
+        /*) ;;
+        *) echo "ERROR: rollback unsafe backup path: SQLite directory." >&2
+           exit 3 ;;
+    esac
+    case "$DB" in
+        */|*//*|*/./*|*/.|*/../*|*/..)
+            echo "ERROR: rollback unsafe backup path: SQLite directory." >&2
+            exit 3 ;;
+    esac
     assert_backup_path_unlinked "$DB"
+    sqlite_directory="$(dirname -- "$DB")"
+    if [[ ! -d "$sqlite_directory" ||
+          ! -w "$sqlite_directory" || ! -x "$sqlite_directory" ]]; then
+        echo "ERROR: rollback unsafe backup path: SQLite directory." >&2
+        exit 3
+    fi
     assert_backup_path_unlinked "$RESCUE_ROOT"
     if [[ -e "$DB" && ! -f "$DB" ]]; then
         echo "ERROR: rollback unsafe backup path: SQLite type." >&2
