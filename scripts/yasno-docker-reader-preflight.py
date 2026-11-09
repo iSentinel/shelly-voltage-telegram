@@ -107,9 +107,17 @@ def secure_container(document: dict) -> dict[str, str]:
         state.get(key) is not False for key in ("Paused", "Restarting", "Dead")
     ):
         raise ValueError("YASNO reader is not running normally")
+    health = state.get("Health")
+    if not isinstance(health, dict) or health.get("Status") != "healthy":
+        raise ValueError("YASNO reader healthcheck has not passed")
     config = document["Config"]
     host = document["HostConfig"]
     dropped = host.get("CapDrop") or []
+    security = host.get("SecurityOpt")
+    if not isinstance(security, list) or (
+        "no-new-privileges:true" not in security
+    ):
+        raise ValueError("YASNO reader privilege escalation is not blocked")
     if (
         config.get("User") != EXPECTED_UID
         or host.get("ReadonlyRootfs") is not True
