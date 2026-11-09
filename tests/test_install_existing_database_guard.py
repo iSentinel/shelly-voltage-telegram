@@ -24,7 +24,7 @@ def invoke_guard(kind: str, installed: bool = False) -> tuple[int, str]:
             (target / "VERSION").write_text("0.5.13-hw\n")
         if kind == "db":
             db.write_bytes(b"existing sqlite content")
-        elif kind in ("wal", "shm"):
+        elif kind in ("wal", "shm", "journal"):
             (root / ("voltage.sqlite3-" + kind)).write_text("journal")
         elif kind == "linked":
             db.symlink_to(root / "external.sqlite3")
@@ -51,7 +51,7 @@ class ExistingDatabaseInstallGuardTests(unittest.TestCase):
     def test_existing_database_or_journals_block_new_root(self) -> None:
         """Never call a reused SQLite state a first installation."""
 
-        for kind in ("db", "wal", "shm", "linked"):
+        for kind in ("db", "wal", "shm", "journal", "linked"):
             with self.subTest(kind=kind):
                 code, message = invoke_guard(kind)
                 self.assertEqual(code, 5)
