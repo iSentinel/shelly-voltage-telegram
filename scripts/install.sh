@@ -259,6 +259,9 @@ snapshot_upgrade() {
     snapshot="$(mktemp -d -- "$root/${stamp}-${old_version}-XXXXXXXX")"
     bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
+    # Do not change Docker packages without a restorable source image.
+    python3 "$SOURCE/scripts/validate-source-archive.py" \
+        "$snapshot/source.tar.gz"
     DATABASE_PATH="$sqlite_db" BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
         "$SOURCE/scripts/backup.sh" > "$snapshot/backup.log"
     printf 'from_version=%s\nto_version=%s\n' \

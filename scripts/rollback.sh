@@ -127,49 +127,8 @@ validate_snapshot() {
     verify_archive_manifest "$backup"
     python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
         --archive "$backup"
-    python3 - "$SNAPSHOT/source.tar.gz" <<'PY_CHECK'
-import sys
-import tarfile
-from pathlib import PurePosixPath
-
-try:
-    count = 0
-    size = 0
-    required = {
-        "VERSION", "app.py", "Dockerfile", "compose.yaml",
-        "requirements.txt", "scripts/backup.sh",
-        "systemd/shelly-voltage-compose.service",
-        "systemd/shelly-voltage-backup.service",
-    }
-    present = set()
-    seen = set()
-    with tarfile.open(sys.argv[1], "r:gz") as archive:
-        for entry in archive:
-            count += 1
-            size += entry.size
-            member_path = PurePosixPath(entry.name)
-            parts = member_path.parts
-            safe_type = entry.isfile() or entry.isdir()
-            if (
-                entry.name.startswith("/")
-                or ".." in parts
-                or not safe_type
-                or entry.mode & 0o6000
-                or count > 20000
-                or size > 512 * 1024 * 1024
-            ):
-                raise ValueError("unsafe source archive member")
-            if str(member_path) in seen:
-                raise ValueError("duplicate source archive member")
-            seen.add(str(member_path))
-            if entry.isfile() and entry.size > 0:
-                present.add(str(member_path))
-    if not required.issubset(present):
-        raise ValueError("source archive missing required application files")
-except (OSError, ValueError, tarfile.TarError) as error:
-    print(f"ERROR: invalid source archive: {error}", file=sys.stderr)
-    raise SystemExit(3) from error
-PY_CHECK
+    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-source-archive.py" \
+        "$SNAPSHOT/source.tar.gz"
 }
 
 require_db_replacement_approval() {

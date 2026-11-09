@@ -97,6 +97,18 @@ def create_fixture(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     installed = root / "installed"
     installed.mkdir()
     (installed / "VERSION").write_text("0.5.13-hw\n")
+    for filename in (
+        "app.py",
+        "Dockerfile",
+        "compose.yaml",
+        "requirements.txt",
+        "scripts/backup.sh",
+        "systemd/shelly-voltage-compose.service",
+        "systemd/shelly-voltage-backup.service",
+    ):
+        fixture = installed / filename
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_text("isolated rollback fixture\n")
     clock = root / "bin"
     clock.mkdir()
     fake_date = clock / "date"
@@ -120,6 +132,7 @@ def stale_backup_source(root: Path) -> Path:
     for file in (
         "source-tar.sh",
         "validate-sqlite-archive.py",
+        "validate-source-archive.py",
         "em50-predeploy-backup-guard.py",
     ):
         (scripts / file).write_bytes((ROOT / "scripts" / file).read_bytes())
@@ -164,11 +177,12 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             root = Path(name)
             upgrades, db, installed, clock, installer = create_fixture(root)
             scripts = installed / "scripts"
-            scripts.mkdir()
+            scripts.mkdir(exist_ok=True)
             for filename in (
                 "source-tar.sh",
                 "backup.sh",
                 "validate-sqlite-archive.py",
+                "validate-source-archive.py",
                 "em50-predeploy-backup-guard.py",
             ):
                 helper = scripts / filename
@@ -179,6 +193,19 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             invoke_snapshot(installer, installed, clock, source=installed)
             self.assertEqual(len(list(upgrades.glob("*/source.tar.gz"))), 1)
             self.assertEqual(recovered_values(upgrades), [111])
+
+    def test_incomplete_source_snapshot_is_rejected(self) -> None:
+        """A snapshot that rollback cannot restore must block installation."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            set_history(db, 111)
+            (installed / "app.py").unlink()
+            with self.assertRaises(subprocess.CalledProcessError) as result:
+                invoke_snapshot(installer, installed, clock)
+            self.assertIn(b"invalid source archive", result.exception.stderr)
+            self.assertEqual(len(list(upgrades.glob("*/source.tar.gz"))), 1)
 
     def test_valid_but_stale_sqlite_snapshot_is_rejected(self) -> None:
         """Do not accept a valid but stale SQLite backup."""
