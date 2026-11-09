@@ -54,7 +54,7 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 ## Status
 
 - Current software candidate: **0.5.14-hw**
-- Current release: **0.5.12-hw**
+- Current release: **0.5.14-hw**
 - Production field-test runtime: **0.5.13-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.

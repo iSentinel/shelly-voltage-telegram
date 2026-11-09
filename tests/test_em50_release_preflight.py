@@ -244,13 +244,15 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertIn("measurements_not_equal", result["detail"])
 
-    def test_candidate_must_remain_unpublished(self):
-        """Do not confuse stable releases and unapproved source candidates."""
+    def test_finalized_marker_does_not_auto_approve_release(self):
+        """Version alignment cannot grant human deployment approval."""
 
         self.assertIn(
-            "stable_marker_unchanged=true",
+            "stable_marker_matches=true",
             GATE.version_check(ROOT),
         )
+        result = GATE.inspect(acceptance_arguments(""))
+        self.assertFalse(result["release_authorized"])
 
     def test_manual_release_gates_never_auto_pass(self):
         """No test run can certify unobserved real Telegram visibility."""

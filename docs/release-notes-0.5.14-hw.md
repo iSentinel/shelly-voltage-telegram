@@ -1,8 +1,10 @@
 # Shelly Voltage Telegram 0.5.14-hw — release candidate
 
-**Status: unpublished and not deployed.** RELEASE_VERSION must remain
-0.5.12-hw until final approved tag publication. Installed production remains
-0.5.13-hw. Do not claim that Shelly is online or mains is present.
+**Status: finalization staging, unpublished and not deployed.** This
+unmerged review branch aligns VERSION and RELEASE_VERSION to 0.5.14-hw,
+but the latest publicly released version remains 0.5.12-hw. Installed
+production remains 0.5.13-hw. Do not claim Shelly is online or mains
+electricity is present. No public tag or release has been created.
 
 ## Changes
 

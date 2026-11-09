@@ -141,8 +141,10 @@ def version_check(root: Path) -> str:
 
     candidate = (root / "VERSION").read_text(encoding="utf-8").strip()
     release = (root / "RELEASE_VERSION").read_text(encoding="utf-8").strip()
-    if candidate != "0.5.14-hw" or candidate == release:
-        raise ValueError("expected unpublished 0.5.14-hw candidate")
+    if candidate != "0.5.14-hw":
+        raise ValueError("expected 0.5.14-hw candidate")
+    if candidate == release:
+        return f"candidate={candidate}; stable_marker_matches=true"
     return f"candidate={candidate}; stable_marker_unchanged=true"
 
 

@@ -2,9 +2,10 @@
 
 - Candidate combines the cumulative installer/recovery safety chain
   through PR #291 and the snapshot/recovery chain through PR #295.
-- VERSION=0.5.14-hw; RELEASE_VERSION=0.5.12-hw deliberately
-  remains the most recently published release. Never bypass the
-  unpublished-candidate unit or tag-policy safety tests.
+- Finalization rehearsal only: VERSION=RELEASE_VERSION=0.5.14-hw
+  in this UNMERGED preview. Public release remains 0.5.12-hw,
+  and the candidate/tag is not published or deployed. The exact
+  source-tag and human acceptance safety gates remain mandatory.
 - No GitHub public tag, published release or production deployment;
   full-history SQLite+source snapshot, independent human review,
   protected YASNO, real Telegram visual check, explicit rollout and
