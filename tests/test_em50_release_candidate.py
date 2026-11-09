@@ -26,25 +26,33 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_finalized_marker_matches_without_changing_live(self):
         """Final source marker remains separate from installed runtime."""
 
-        self.assertEqual(version("VERSION"), "0.5.14-hw")
-        self.assertEqual(version("VERSION"), version("RELEASE_VERSION"))
+        self.assertEqual(version("VERSION"), "0.5.15-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.14-hw")
+        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
     def test_finalized_tag_requires_exact_source_commit(self):
         """Tag creation must not permit a different checked-out SHA."""
 
+        with self.assertRaisesRegex(ValueError, "VERSION differs"):
+            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+
+        # Mock ONLY finalized markers so this release identity regression
+        # stays meaningful while the real unpublished marker stays old.
         with (
+            patch.object(policy, "version_file", return_value="0.5.15-hw"),
             patch.object(policy, "tag_commit", return_value="wrong"),
             patch.object(policy, "current_commit", return_value="expected"),
             self.assertRaisesRegex(ValueError, "commit differs"),
         ):
-            policy.validate("push", "refs/tags/v0.5.14-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
 
         with (
+            patch.object(policy, "version_file", return_value="0.5.15-hw"),
             patch.object(policy, "tag_commit", return_value="expected"),
             patch.object(policy, "current_commit", return_value="expected"),
         ):
-            policy.validate("push", "refs/tags/v0.5.14-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""

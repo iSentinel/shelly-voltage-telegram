@@ -248,9 +248,16 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         """Version alignment cannot grant human deployment approval."""
 
         self.assertIn(
-            "stable_marker_matches=true",
+            "stable_marker_unchanged=true",
             GATE.version_check(ROOT),
         )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VERSION").write_text("0.5.15-hw\n")
+            (root / "RELEASE_VERSION").write_text("0.5.15-hw\n")
+            self.assertIn(
+                "stable_marker_matches=true", GATE.version_check(root)
+            )
         result = GATE.inspect(acceptance_arguments(""))
         self.assertFalse(result["release_authorized"])
 

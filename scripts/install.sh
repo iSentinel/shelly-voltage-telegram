@@ -378,8 +378,8 @@ deploy() {
         return
     fi
     cd "$TARGET"
-    docker compose config -q
-    docker compose up -d --build
+    # Reuse the protected overlay plan used for systemd restarts.
+    bash "$TARGET/scripts/start-compose.sh" --build
     systemctl start shelly-voltage-compose.service shelly-voltage-backup.timer
     for _ in $(seq 1 20); do
         if curl -fsS http://127.0.0.1:8080/health >/dev/null; then

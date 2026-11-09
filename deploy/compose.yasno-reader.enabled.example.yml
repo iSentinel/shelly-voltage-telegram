@@ -1,0 +1,11 @@
+# EXAMPLE ONLY: copy to /etc/shelly-voltage/yasno-reader.yaml with 0600,
+# root ownership and protected parent directory after owner approval.
+# Forecast data does not establish physical mains power state.
+services:
+  shelly-voltage:
+    environment:
+      TELEGRAM_YASNO_STATUS_ENABLED: "1"
+      YASNO_TRUSTED_CACHE_FILE: "/run/yasno/yasno.json"
+      YASNO_GROUP: "10.1"
+    volumes:
+      - /var/lib/shelly-yasno-reader:/run/yasno:ro

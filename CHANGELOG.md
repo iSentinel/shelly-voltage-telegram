@@ -1,6 +1,13 @@
-## 0.5.14-hw - finalization rehearsal (NOT PUBLISHED)
+## 0.5.15-hw - development candidate (unpublished)
+- Preserve owner-protected YASNO read-only Compose opt-in for normal
+  restarts, pinned updater starts and installer builds.
+- Reject unsafe symlink/hardlinked/insecure overlay configuration.
+- Released production remains 0.5.14-hw; release marker stays
+  0.5.14-hw until new Owner Approval and signed tag publication.
 
-- Source-only candidate; no published release or production rollout.
+## 0.5.14-hw - signed release published 2026-11-09
+
+- Originally staged as source-only; public release and hardware rollout completed 2026-11-09.
 - Finalization PREVIEW aligns VERSION and RELEASE_VERSION to 0.5.14-hw.
   This unmerged branch and its local tag rehearsal do not publish
   the software or authorize deployment; independent acceptance and
