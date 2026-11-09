@@ -207,6 +207,27 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                 invoke_snapshot(installer, installed, clock)
             self.assertFalse(upgrades.exists())
 
+    def test_rotation_preserves_unknown_recovery_directories(self) -> None:
+        """Never delete unrelated or incomplete snapshot directories."""
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            upgrades, db, installed, clock, installer = create_fixture(root)
+            upgrades.mkdir(mode=0o700)
+            unrelated = upgrades / "manual-recovery-do-not-delete"
+            unrelated.mkdir()
+            (unrelated / "marker.txt").write_text("keep")
+            incomplete = upgrades / "20261109-073000-0.5.13-hw-ABCDEFGH"
+            incomplete.mkdir()
+            (incomplete / "source.tar.gz").write_text("incomplete")
+            for value in range(1, 7):
+                set_history(db, value)
+                invoke_snapshot(installer, installed, clock)
+            self.assertTrue((unrelated / "marker.txt").is_file())
+            self.assertTrue((incomplete / "source.tar.gz").is_file())
+            archive_count = len(list(upgrades.glob("*/voltage-*.sqlite3.gz")))
+            self.assertEqual(archive_count, 5)
+
     def test_rotation_handles_spaces_without_overwriting(self) -> None:
         """Prune to five snapshot pairs even when path contains spaces."""
 

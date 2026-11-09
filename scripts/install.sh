@@ -116,20 +116,27 @@ prepare_upgrade_root() {
 }
 
 prune_upgrade_snapshots() {
-    local root="$1" index path
-    local -a ordered=()
+    local root="$1" index path name record
+    local -a ordered=() snapshots=()
     mapfile -d '' -t ordered < <(
         find "$root" -mindepth 1 -maxdepth 1 -type d \
             -printf '%T@ %p\0' | sort -zrn
     )
-    for index in "${!ordered[@]}"; do
-        (( index >= 5 )) || continue
-        path="${ordered[index]#* }"
+    for record in "${ordered[@]}"; do
+        path="${record#* }"
         [[ "$path" == "$root/"* ]] || {
             echo "ERROR: unsafe upgrade snapshot rotation path." >&2
             exit 3
         }
-        rm -rf -- "$path"
+        name="${path##*/}"
+        [[ "$name" =~ ^[0-9]{8}-[0-9]{6}-[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[A-Za-z0-9]{8}$ ]] || continue
+        [[ -f "$path/source.tar.gz" && -f "$path/source.tar.gz.sha256" && -f "$path/manifest.env" ]] || continue
+        compgen -G "$path/voltage-*.sqlite3.gz" >/dev/null || continue
+        snapshots+=("$path")
+    done
+    for index in "${!snapshots[@]}"; do
+        (( index >= 5 )) || continue
+        rm -rf -- "${snapshots[index]}"
     done
 }
 
