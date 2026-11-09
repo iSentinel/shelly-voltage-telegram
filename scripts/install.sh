@@ -50,6 +50,24 @@ require_root() {
     fi
 }
 
+require_quiesced_upgrade() {
+    [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: require stopped Shelly Docker writer before upgrade."
+        return 0
+    fi
+    local running
+    if ! running="$(docker inspect --format '{{.State.Running}}' \
+        shelly-voltage-bot 2>/dev/null)"; then
+        echo "ERROR: cannot verify stopped Shelly writer." >&2
+        exit 5
+    fi
+    if [[ "$running" != false ]]; then
+        echo "ERROR: Shelly writer is running; quiescence required." >&2
+        exit 5
+    fi
+}
+
 install_docker() {
     if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then
         return
@@ -246,6 +264,7 @@ summary() {
 main() {
     parse_args "$@"
     require_root
+    require_quiesced_upgrade
     install_docker
     snapshot_upgrade
     copy_source
