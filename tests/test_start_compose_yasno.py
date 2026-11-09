@@ -134,6 +134,54 @@ class StartComposeYasnoTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertEqual(calls, [])
 
+    def test_symlinked_grandparent_refused(self):
+        """Do not resolve an attacker-controlled ancestral directory."""
+        real = self.root / "real"
+        real.mkdir(mode=0o700)
+        nested = real / "safe"
+        nested.mkdir(mode=0o700)
+        file = nested / "yasno.yaml"
+        file.write_text("services: {}\\n")
+        file.chmod(0o600)
+        (self.root / "alias").symlink_to(real, target_is_directory=True)
+        self.overlay = self.root / "alias" / "safe" / "yasno.yaml"
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
+
+    def test_world_writable_grandparent_refused(self):
+        """Permissions of grandparents count, not only direct parent."""
+        parent = self.root / "unsafe"
+        parent.mkdir(mode=0o777)
+        parent.chmod(0o777)
+        safe = parent / "safe"
+        safe.mkdir(mode=0o700)
+        self.overlay = safe / "yasno.yaml"
+        self.enable()
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
+
+    def test_noncanonical_parent_traversal_refused(self):
+        """Never permit a path that traverses a parent component."""
+        safe = self.root / "safe"
+        safe.mkdir(mode=0o700)
+        self.enable()
+        self.overlay = safe / ".." / "yasno.yaml"
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
+
+    def test_nested_private_overlay_allowed(self):
+        """Protected directories remain supported for production layouts."""
+        safe = self.root / "parent" / "child"
+        safe.mkdir(parents=True, mode=0o700)
+        self.overlay = safe / "yasno.yaml"
+        self.enable()
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(all(str(self.overlay) in call for call in calls))
+
     def test_help_is_noninteractive(self):
         """Expose usage without any access to Docker."""
         result, calls = self.run_script("--help")

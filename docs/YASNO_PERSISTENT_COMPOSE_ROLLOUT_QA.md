@@ -35,3 +35,18 @@ Run offline acceptance:
 Never interpret forecast schedules as live power or generate a 0-V
 measurement during a physical outage. On error remove the opt-in file
 in an owner-approved maintenance window; preserve the protected cache.
+
+## Additional ancestor-path security regression (2026-11-09)
+
+Three RED fixtures originally showed that an intermediate symlink,
+a world-writable grandparent or a parent-traversal component could
+bypass checks limited to the overlay file and immediate parent. All
+three now PASS after validating every ancestor. The root-owned sticky
+/tmp is recognized only for isolated fixtures, not a production
+configuration location. Production requires a private /etc/shelly-voltage
+directory and a root-owned, mode 0600 overlay.
+
+Regression result: 14/14 Compose tests PASS, 1359/1359 Python tests
+PASS, release and installer fixtures PASS, Ruff/quality PASS,
+docker compose config -q PASS. Published release remains 0.5.14-hw;
+candidate 0.5.15-hw is not authorized for publication.

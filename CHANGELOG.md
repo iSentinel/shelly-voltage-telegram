@@ -1,7 +1,8 @@
 ## 0.5.15-hw - development candidate (unpublished)
 - Preserve owner-protected YASNO read-only Compose opt-in for normal
   restarts, pinned updater starts and installer builds.
-- Reject unsafe symlink/hardlinked/insecure overlay configuration.
+- Reject symlinks, hardlinks, path traversal and writable ancestor
+  directories before any Docker command.
 - Released production remains 0.5.14-hw; release marker stays
   0.5.14-hw until new Owner Approval and signed tag publication.
 

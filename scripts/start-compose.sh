@@ -11,21 +11,39 @@ usage() {
     echo "Optional YASNO overlay must be an owner-controlled private file."
 }
 
+fail_overlay() {
+    echo "ERROR: unsafe YASNO overlay path, ownership or permissions." >&2
+    exit 3
+}
+
 validate_yasno_overlay() {
-    local file="$1" parent
-    [[ "$file" == /* && "$file" != */.. && "$file" != */. ]] || {
-        echo "ERROR: YASNO overlay path is not absolute and safe." >&2
-        exit 3
-    }
-    parent="$(dirname -- "$file")"
-    if [[ -L "$file" || ! -f "$file" || -L "$parent" ]] ||
-       [[ "$(stat -c %h "$file")" -ne 1 ]] ||
-       [[ "$(stat -c %u "$file")" -ne "$EUID" ]] ||
-       (( (8#$(stat -c %a "$file") & 0022) != 0 )) ||
-       (( (8#$(stat -c %a "$parent") & 0022) != 0 )); then
-        echo "ERROR: unsafe YASNO overlay permissions or file type." >&2
-        exit 3
-    fi
+    local file="$1" part owner mode
+    [[ "$file" == /* ]] || fail_overlay
+    case "$file" in
+        *"//"*|*"/./"*|*"/../"*|*"/."|*"/..") fail_overlay ;;
+    esac
+    [[ -f "$file" && ! -L "$file" ]] || fail_overlay
+    [[ "$(stat -c %h -- "$file")" -eq 1 ]] || fail_overlay
+
+    part="$file"
+    while [[ "$part" != "/" ]]; do
+        [[ ! -L "$part" ]] || fail_overlay
+        owner="$(stat -c %u -- "$part")"
+        mode="$(stat -c %a -- "$part")"
+        if [[ "$part" == "$file" ]]; then
+            [[ "$owner" -eq "$EUID" ]] || fail_overlay
+        else
+            [[ "$owner" -eq "$EUID" || "$owner" -eq 0 ]] || fail_overlay
+        fi
+        if (( (8#$mode & 0022) != 0 )); then
+            # Root-owned /tmp is sticky; other writable parents fail.
+            if [[ "$part" != /tmp || "$owner" -ne 0 ]] ||
+               (( (8#$mode & 01000) == 0 )); then
+                fail_overlay
+            fi
+        fi
+        part="$(dirname -- "$part")"
+    done
 }
 
 compose_cmd() {
