@@ -460,7 +460,8 @@ of Shelly connectivity; neither one may supply physical live voltage.
 
 The source-only regression in tests/test_graphic_midnight_rollover.py tests
 23:59:59 -> 00:00:00 on November 10/11, Ukrainian DST rollback on October 25
-(the local calendar day lasts 25 hours), old-day source rejection, and the
+(the local calendar day lasts 25 hours), spring-forward on March 29
+(the local day lasts 23 hours), old-day source rejection, and the
 absence of historic 193.8 V from an offline widget on both sides of midnight.
 The text fallback and PNG must both discard yesterday's forecast at the
 same instant; unsupported Telegram clients must not show an older schedule.

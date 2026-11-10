@@ -111,6 +111,21 @@ class GraphicMidnightRolloverTests(unittest.TestCase):
             self.render(state, midnight, "dst.png")["forecast_visible"]
         )
 
+    def test_spring_forward_dst_day_has_23_hour_expiry(self):
+        """YASNO expires at local midnight on a 23-hour Kyiv day."""
+
+        start = kyiv_time(2026, 3, 29, 0)
+        before = kyiv_time(2026, 3, 29, 23, 59) + 59
+        midnight = kyiv_time(2026, 3, 30, 0)
+        self.assertEqual(midnight - start, 23 * 3600)
+        state = offline_state(before, "2026-03-29")
+        self.assertEqual(state["e"], int(midnight))
+        self.assertTrue(valid_forecast(state, before))
+        self.assertFalse(valid_forecast(state, midnight))
+        self.assertFalse(
+            self.render(state, midnight, "spring.png")["forecast_visible"]
+        )
+
     def test_fallback_text_and_png_agree_across_midnight(self):
         """Text clients and PNG cards must discard the old YASNO day."""
 
