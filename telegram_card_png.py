@@ -27,7 +27,7 @@ GREEN = b"\x35\xd0\x92"
 RED = b"\xff\x70\x7a"
 AMBER = b"\xff\xc3\x64"
 BLUE = b"\x66\xb1\xfa"
-OFFLINE_HINT = "ЙМОВІРНЕ ВІДКЛЮЧЕННЯ / НЕ ПІДТВЕРДЖЕНО"
+OFFLINE_HINT = "ЙМОВІРНЕ ЗНЕСТРУМЛЕННЯ / ЗБІЙ SHELLY ЧИ МЕРЕЖІ"
 STATUS_LABELS = {
     "online": "ОНЛАЙН",
     "offline": "ОФЛАЙН",

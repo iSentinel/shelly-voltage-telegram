@@ -383,3 +383,28 @@ offline historical-value secrecy, and absence of trusted YASNO data.
 The read-only real-device observation was recorded separately; no
 public Telegram post or production database value was modified as part
 of this regression.
+
+
+## Physical installation: Shelly ahead of ZUBR protection
+
+Shelly is installed after the utility meter and before the ZUBR
+protective cut-off module. Therefore, a downstream ZUBR trip does not
+directly remove power from Shelly.
+
+An unreachable Shelly could mean upstream mains loss, a fault of
+Shelly or its local supply/wiring, or Wi-Fi/network connectivity loss.
+Offline alone is **not proof of 0 V**, ZUBR activation, or a confirmed
+grid outage. Fresh Shelly telemetry is authoritative even if YASNO
+predicts planned electricity loss.
+
+The Ukrainian offline PNG uses the qualified text
+"ЙМОВІРНЕ ЗНЕСТРУМЛЕННЯ / ЗБІЙ SHELLY ЧИ МЕРЕЖІ".
+A separate prefix identifies YASNO as a forecast, not a measurement.
+The full text fits inside the 960x560 bitmap panel, and all required
+Ukrainian glyphs are available. Six source-only regression cases in
+tests/test_graphic_supply_topology.py enforce this, including stale
+connectivity, unavailable live readings, and low but valid voltage.
+
+Public deployment remains blocked until the existing Telegram media
+identity is verified by a guarded operation and a fresh matching
+source+SQLite snapshot passes the rollback readiness gate.
