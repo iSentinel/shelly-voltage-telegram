@@ -157,12 +157,17 @@ python3 scripts/graphic-rollout-readiness.py --help
 python3 scripts/graphic-rollout-readiness.py \
   --database /var/lib/shelly-voltage/voltage.sqlite3 \
   --snapshot /var/backups/shelly-voltage/upgrades/SELECTED-SNAPSHOT \
+  --installed-version-file /opt/shelly-voltage/VERSION \
   --max-snapshot-age-hours 2
 ```
 
 A status of `BLOCKED` (exit 2) is expected with the current production
 legacy text status, which lacks a verified media marker. An older upgrade
 snapshot is also not accepted as proof of a fresh predeployment copy.
+The rollback source archive must carry a VERSION matching the exact
+installed release; a historic 0.5.14-hw source backup cannot be treated
+as a ready rollback for an installed 0.5.15-hw. No version is inferred
+from archive directory names, modification times or caller input.
 Do not clear markers or fabricate timestamps to make the check pass.
 
 A `READY FOR OWNER REVIEW` result (exit 0) confirms only that the

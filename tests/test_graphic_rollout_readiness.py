@@ -48,6 +48,8 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         self.database = root / "live.sqlite3"
+        self.installed_version = root / "VERSION"
+        self.installed_version.write_text("0.5.15-hw\n")
         self.snapshot = root / "upgrade"
         self.snapshot.mkdir()
         with closing(sqlite3.connect(self.database)) as db:
@@ -62,13 +64,7 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
             )
             db.commit()
         self.source = self.snapshot / "source.tar.gz"
-        with tarfile.open(self.source, "w:gz") as archive:
-            for name in FILES:
-                content = b"source-fixture\n"
-                info = tarfile.TarInfo(name)
-                info.size = len(content)
-                archive.addfile(info, io.BytesIO(content))
-        seal_file(self.source)
+        self.write_source_archive()
         db_copy = root / "archive.sqlite3"
         with closing(sqlite3.connect(db_copy)) as db:
             db.execute("CREATE TABLE measurements(ts REAL, voltage REAL)")
@@ -78,6 +74,19 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         with gzip.open(self.archive, "wb") as handle:
             handle.write(db_copy.read_bytes())
         seal_file(self.archive)
+
+    def write_source_archive(
+        self, version: bytes = b"0.5.15-hw\n", dot_prefix: bool = False
+    ) -> None:
+        """Package synthetic code with an explicitly labelled release."""
+
+        with tarfile.open(self.source, "w:gz") as archive:
+            for name in FILES:
+                content = version if name == "VERSION" else b"source-fixture\n"
+                info = tarfile.TarInfo("./" + name if dot_prefix else name)
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+        seal_file(self.source)
 
     def run_gate(self, *extras: str) -> subprocess.CompletedProcess:
         """Run against synthetic metadata without real Telegram tokens."""
@@ -92,6 +101,8 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
                 str(self.database),
                 "--snapshot",
                 str(self.snapshot),
+                "--installed-version-file",
+                str(self.installed_version),
                 "--chat-env",
                 "TEST_GRAPHIC_CHAT_ID",
                 *extras,
@@ -137,6 +148,46 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
             db.commit()
         self.assertEqual(self.run_gate().returncode, 2)
 
+    def test_snapshot_must_match_the_installed_release(self):
+        """A valid backup of an older release cannot protect this upgrade."""
+
+        self.installed_version.write_text("0.5.14-hw\n")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("VERSION differs", result.stdout)
+
+    def test_source_archive_with_older_version_is_blocked(self):
+        """A fresh checksum is not proof of the correct release build."""
+
+        self.write_source_archive(version=b"0.5.14-hw\n")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("VERSION differs", result.stdout)
+
+    def test_source_archive_with_dot_version_path_is_supported(self):
+        """Real filtered source tarballs commonly store ./VERSION."""
+
+        self.write_source_archive(dot_prefix=True)
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_missing_installed_release_blocks_rollout(self):
+        """Unknown production versions cannot be inferred from the archive."""
+
+        self.installed_version.unlink()
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("VERSION file is invalid", result.stdout)
+
+    def test_linked_installed_version_blocks_rollout(self):
+        """Do not trust redirected release metadata in an approval gate."""
+
+        self.installed_version.unlink()
+        source = self.installed_version.with_name("other-version")
+        source.write_text("0.5.15-hw\n")
+        self.installed_version.symlink_to(source)
+        self.assertEqual(self.run_gate().returncode, 2)
+
     def test_stale_snapshot_is_not_accepted(self):
         """A past deployment snapshot cannot protect the next upgrade."""
 
@@ -167,6 +218,14 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         """One changed byte blocks a source rollback despite existing hash."""
 
         self.source.write_bytes(self.source.read_bytes() + b"tampered")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("checksum mismatch", result.stdout)
+
+    def test_oversized_checksum_sidecar_is_blocked(self):
+        """Huge metadata must be rejected before loading it into memory."""
+
+        Path(str(self.source) + ".sha256").write_bytes(b"x" * 100000)
         result = self.run_gate()
         self.assertEqual(result.returncode, 2)
         self.assertIn("checksum mismatch", result.stdout)
@@ -230,6 +289,7 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0)
         self.assertIn("--snapshot", result.stdout)
+        self.assertIn("--installed-version-file", result.stdout)
         self.assertIn("--max-snapshot-age-hours", result.stdout)
 
 

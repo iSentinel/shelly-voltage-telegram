@@ -11,6 +11,7 @@ import re
 import stat
 import subprocess
 import sys
+import tarfile
 import time
 from pathlib import Path
 
@@ -23,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", required=True, type=Path)
     parser.add_argument("--snapshot", required=True, type=Path)
+    parser.add_argument("--installed-version-file", required=True, type=Path)
     parser.add_argument("--chat-env", default="TELEGRAM_STATUS_CHAT_ID")
     parser.add_argument(
         "--max-snapshot-age-hours",
@@ -85,9 +87,10 @@ def verify_sha256(archive: Path) -> bool:
     """Require a checksum sidecar bound to the exact archived path."""
 
     try:
-        manifest = Path(str(archive) + ".sha256").read_text()
-        if len(manifest) > 512:
+        sidecar = Path(str(archive) + ".sha256")
+        if sidecar.stat().st_size > 512:
             return False
+        manifest = sidecar.read_text()
         digest = hashlib.sha256()
         with archive.open("rb") as stream:
             for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -149,12 +152,66 @@ def snapshot_issues(snapshot: Path, max_age: float) -> list[str]:
     return []
 
 
+def expected_version(path: Path) -> str | None:
+    """Read a bounded, unlinked installed release identifier."""
+
+    if not safe_regular_file(path) or path.stat().st_size > 128:
+        return None
+    try:
+        value = path.read_bytes().decode("ascii").strip()
+    except (OSError, UnicodeError):
+        return None
+    return (
+        value
+        if re.fullmatch(r"[0-9]+(?:\.[0-9]+){2}-[a-z0-9.-]+", value)
+        else None
+    )
+
+
+def snapshot_version(archive: Path) -> str | None:
+    """Read one source VERSION member only after archive validation."""
+
+    try:
+        with tarfile.open(archive, "r:gz") as source:
+            matches = [
+                item
+                for item in source.getmembers()
+                if item.name in {"VERSION", "./VERSION"}
+            ]
+            if len(matches) != 1 or matches[0].size > 128:
+                return None
+            handle = source.extractfile(matches[0])
+            if handle is None:
+                return None
+            with handle:
+                return handle.read(129).decode("ascii").strip()
+    except (OSError, UnicodeError, tarfile.TarError):
+        return None
+
+
+def version_issues(snapshot: Path, installed: Path) -> list[str]:
+    """Require the snapshot to restore exactly the installed release."""
+
+    expected = expected_version(installed)
+    if expected is None:
+        return ["installed release VERSION file is invalid or linked"]
+    actual = snapshot_version(snapshot / "source.tar.gz")
+    if actual != expected:
+        return ["rollback source VERSION differs from installed release"]
+    return []
+
+
 def main() -> int:
     """Print a private-identifier-free decision; never activate graphics."""
 
     args = parse_args()
     issues = read_media_gate(args.database, args.chat_env)
-    issues.extend(snapshot_issues(args.snapshot, args.max_snapshot_age_hours))
+    snapshots = snapshot_issues(args.snapshot, args.max_snapshot_age_hours)
+    issues.extend(snapshots)
+    if not snapshots:
+        issues.extend(
+            version_issues(args.snapshot, args.installed_version_file)
+        )
     if issues:
         print("GRAPHIC ROLLOUT: BLOCKED (read-only)")
         for issue in issues:
