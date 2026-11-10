@@ -290,6 +290,75 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, _ = self.media_monitor({})
         self.assertEqual(APP.Monitor.status_media_kind(monitor), "missing")
 
+    def test_photo_caption_edit_uses_existing_id_and_exact_channel(self):
+        """Caption-only status update never sends a new public message."""
+
+        self.bot.call = Mock(
+            return_value={"message_id": 811, "chat": {"id": -100123}}
+        )
+        self.bot.edit_photo_caption(811, "Відновлено", "-100123")
+        self.bot.call.assert_called_once_with(
+            "editMessageCaption",
+            {
+                "chat_id": "-100123",
+                "message_id": 811,
+                "caption": "Відновлено",
+            },
+        )
+
+    def test_identical_photo_caption_is_idempotent(self):
+        """Telegram's identical-caption response is a successful no-op."""
+
+        self.bot.call = Mock(
+            side_effect=RuntimeError(
+                "Telegram API error 400: message is not modified"
+            )
+        )
+        self.bot.edit_photo_caption(811, "Same status", "-100123")
+        self.bot.call.assert_called_once()
+
+    def test_caption_edit_refuses_ambiguous_api_response(self):
+        """Wrong chat, wrong ID and non-Message are all fail closed."""
+
+        for payload in (
+            {"message_id": 812, "chat": {"id": -100123}},
+            {"message_id": 811, "chat": {"id": -100456}},
+            {"message_id": 811},
+            True,
+        ):
+            with (
+                self.subTest(payload=payload),
+                self.assertRaises(RuntimeError),
+            ):
+                self.bot.call = Mock(return_value=payload)
+                self.bot.edit_photo_caption(811, "Caption", "-100123")
+
+    def test_caption_edit_rejects_invalid_destination_and_text(self):
+        """No implicit channel fallback, invalid ID or empty caption."""
+
+        self.bot.call = Mock()
+        values = (
+            (True, "Caption", "-100123"),
+            (0, "Caption", "-100123"),
+            (811, "Caption", ""),
+            (811, "Caption", "  "),
+            (811, "", "-100123"),
+            (811, "a" * 1025, "-100123"),
+        )
+        for message_id, caption, chat_id in values:
+            with (
+                self.subTest(message_id=message_id, chat_id=chat_id),
+                self.assertRaises(ValueError),
+            ):
+                self.bot.edit_photo_caption(message_id, caption, chat_id)
+        self.bot.call.assert_not_called()
+
+    def test_caption_edits_have_no_public_status_caller(self):
+        """New transport cannot activate photos without owner approval."""
+
+        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
+        self.assertNotIn("self.telegram.edit_photo_caption(", source)
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 

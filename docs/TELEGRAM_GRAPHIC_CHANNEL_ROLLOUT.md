@@ -44,6 +44,9 @@ authorize public message changes, publishing, or a production upgrade.
 
 - Test online, starting, stale, offline, recovering, low/high voltage,
   end-of-episode and stable-recovery status changes with mock Bot API.
+- For photo status, update caption with editMessageCaption only after
+  explicit destination, persisted ID, caption length and API response
+  match; no implicit text edit or replacement on ambiguous failures.
 - Simulate timeout, 400 not-modified, wrong chat, wrong message ID,
   unavailable photo, failed new publish and failed old delete.
 - Verify SQLite message ID continuity, count of active public messages,

@@ -1570,6 +1570,44 @@ class Telegram:
         if isinstance(chat, dict) and str(chat.get("id")) != chat_id:
             raise RuntimeError("Telegram returned unexpected edited chat")
 
+    def edit_photo_caption(
+        self, message_id: int, caption: str, chat_id: str
+    ) -> None:
+        """Update a known photo caption without sending a new message."""
+
+        if (
+            type(message_id) is not int
+            or message_id < 1
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
+            or not isinstance(caption, str)
+            or not caption.strip()
+            or len(caption) > 1024
+        ):
+            raise ValueError("explicit photo target and caption required")
+        try:
+            result = self.call(
+                "editMessageCaption",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "caption": caption,
+                },
+            )
+        except RuntimeError as exc:
+            if message_not_modified(exc):
+                return
+            raise
+        if not isinstance(result, dict):
+            raise RuntimeError("Telegram returned unexpected caption edit")
+        chat = result.get("chat")
+        if (
+            result.get("message_id") != message_id
+            or not isinstance(chat, dict)
+            or str(chat.get("id")) != chat_id
+        ):
+            raise RuntimeError("Telegram returned unexpected caption edit")
+
     def _edit_photo_payload(
         self, message_id: int, path: Path, caption: str, chat_id: str
     ) -> object:

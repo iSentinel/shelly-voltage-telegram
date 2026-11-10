@@ -1,3 +1,15 @@
+## 2026-11-10T03:43:43+02:00 Gateway: guarded caption-only transport for photo status
+
+- Added source-only Telegram editMessageCaption for a known photo ID.
+- Fail-closed explicit chat ID and message ID, nonempty 1024-character
+  caption limit, checked returned message and exact channel identity.
+- Identical-caption error is an idempotent success, without any new post.
+- Transport still has no public status-loop callers or enabled toggle.
+- 25/25 media tests PASS, pinned Ruff and maintainability gate PASS.
+- Full isolated Docker regression 1405 tests OK (1 skipped); source-only.
+- NEXT: coherent opt-in photo status lifecycle for online/offline/voltage
+  event/recovery paths with gated rollback and separate Owner Approval.
+
 ## 2026-11-10T03:39:00+02:00 Gateway: PR300 media-format identity bound to chat and message ID
 
 - Isolated source-only format binding; no production status callers changed.
