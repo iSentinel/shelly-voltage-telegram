@@ -26,8 +26,8 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_finalized_marker_matches_without_changing_live(self):
         """Final source marker remains separate from installed runtime."""
 
-        self.assertEqual(version("VERSION"), "0.5.15-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.15-hw")
+        self.assertEqual(version("VERSION"), "0.5.16-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.16-hw")
         self.assertEqual(version("VERSION"), version("RELEASE_VERSION"))
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
@@ -39,23 +39,23 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
             patch.object(policy, "version_file", return_value="0.5.14-hw"),
             self.assertRaisesRegex(ValueError, "release tag differs"),
         ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
 
         # A tag pointing to any non-approved source SHA must fail.
         with (
-            patch.object(policy, "version_file", return_value="0.5.15-hw"),
+            patch.object(policy, "version_file", return_value="0.5.16-hw"),
             patch.object(policy, "tag_commit", return_value="wrong"),
             patch.object(policy, "current_commit", return_value="expected"),
             self.assertRaisesRegex(ValueError, "commit differs"),
         ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
 
         with (
-            patch.object(policy, "version_file", return_value="0.5.15-hw"),
+            patch.object(policy, "version_file", return_value="0.5.16-hw"),
             patch.object(policy, "tag_commit", return_value="expected"),
             patch.object(policy, "current_commit", return_value="expected"),
         ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""

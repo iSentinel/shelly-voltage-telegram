@@ -578,3 +578,17 @@ targets fail closed without writing SQLite media metadata. This is
 not invoked by the automatic status loop. A controlled, paused-writer
 migration and deliberately changed confirmation text are required.
 Owner Approval is already granted for this one-time guarded cutover.
+
+
+## Owner-approved v0.5.16-hw graphic release candidate
+
+Production remains 0.5.15-hw until a separate guarded installation.
+This branch now identifies the next source/release candidate as 0.5.16-hw,
+which prevents an in-place code change being mistaken for a rebuild of
+an already installed 0.5.15-hw runtime. The historical LIVE_VERSION
+field remains unchanged. Promotion still requires completed exact-head
+CI, controlled legacy text identity verification, source and SQLite
+stopped-writer snapshot with complete table parity, and monitoring
+of the existing Telegram status after the in-place photo edit.
+Owner Approval was already granted for this specific migration, but
+version numbering and CI never waive the technical rollout gates.
