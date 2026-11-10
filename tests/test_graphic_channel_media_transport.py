@@ -624,6 +624,25 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor.telegram.edit.assert_not_called()
         self.assertNotIn("telegram_status_media_identity", state)
 
+    def test_legacy_confirmation_refuses_unresolved_publish(self):
+        """Owner approval cannot bypass an uncertain prior Telegram send."""
+
+        for pending in ("-100123:new", ""):
+            with self.subTest(pending=pending):
+                monitor, state = self.editor_monitor(
+                    {
+                        "telegram_status_message_id": "101",
+                        "telegram_graphic_publish_pending": pending,
+                    }
+                )
+                self.assertFalse(
+                    APP.Monitor.confirm_legacy_text_status(
+                        monitor, "Status", True
+                    )
+                )
+                monitor.telegram.edit.assert_not_called()
+                self.assertNotIn("telegram_status_media_identity", state)
+
     def test_legacy_text_confirmation_binds_verified_channel_and_id(self):
         """A successful text edit seeds only the verified legacy identity."""
 

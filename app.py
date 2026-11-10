@@ -2959,6 +2959,11 @@ class Monitor:
             or len(text) > 4096
         ):
             return False
+        if (
+            self.storage.get_meta("telegram_graphic_publish_pending")
+            is not None
+        ):
+            return False
         if self.storage.get_meta("telegram_status_media_identity") is not None:
             return False
         stored = self.storage.get_meta(self.status_message_key())
@@ -3037,7 +3042,7 @@ class Monitor:
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         pending_key = "telegram_graphic_publish_pending"
-        if self.storage.get_meta(pending_key):
+        if self.storage.get_meta(pending_key) is not None:
             return False
         if old_id and self.status_media_kind() not in {"photo", "text"}:
             return False
@@ -3074,7 +3079,10 @@ class Monitor:
     def _update_graphic_status_locked(self, text: str) -> bool:
         """Edit only a known post; never race an uncertain publish."""
 
-        if self.storage.get_meta("telegram_graphic_publish_pending"):
+        if (
+            self.storage.get_meta("telegram_graphic_publish_pending")
+            is not None
+        ):
             return False
         if not self.storage.get_meta(self.status_message_key()):
             return self._publish_graphic_status_locked(text, notify=False)
@@ -3088,7 +3096,7 @@ class Monitor:
         if not self.cfg.telegram_status_chat_id:
             return None
         pending = self.storage.get_meta("telegram_graphic_publish_pending")
-        if isinstance(pending, str) and pending:
+        if pending is not None:
             return False
         marker = self.storage.get_meta("telegram_status_media_identity")
         if not isinstance(marker, str) or not marker:

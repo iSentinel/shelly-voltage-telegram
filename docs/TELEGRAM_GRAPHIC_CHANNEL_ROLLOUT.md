@@ -85,6 +85,10 @@ settings. Environment flags do **not** constitute actual Owner Approval.
   Retries and text rollback block while this marker exists. Clear it only
   after independent owner reconciliation of Telegram channel history and
   SQLite; never clear it just because a timeout has elapsed.
+  The *presence* of the marker is authoritative even if its value is
+  empty or malformed: a corrupted marker cannot silently enable
+  another send, legacy text confirmation, photo edit, or text rollback.
+  The read-only preflight and JSONL audit apply the same strict rule.
 - A per-monitor reentrant status lock serializes ID checks and all media
   mutations against simultaneous status refresh and voltage callbacks.
   The Telegram API session lock separately serializes actual HTTP calls.

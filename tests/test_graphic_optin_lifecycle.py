@@ -163,6 +163,47 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor.telegram.send.assert_not_called()
         self.assertNotIn("telegram_graphic_publish_pending", state)
 
+    def test_empty_pending_marker_blocks_new_status_publication(self):
+        """Malformed existing marker must not create a duplicate message."""
+
+        monitor, state = self.make_monitor(
+            {"telegram_graphic_publish_pending": ""}
+        )
+        self.assertFalse(monitor.publish_graphic_status("Grid"))
+        monitor.telegram.send_status_photo.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        self.assertIn("telegram_graphic_publish_pending", state)
+
+    def test_empty_pending_marker_blocks_status_refresh(self):
+        """No graphics edit or new post while reconciliation is unresolved."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+                "telegram_graphic_publish_pending": "",
+            }
+        )
+        self.assertFalse(monitor.update_graphic_status("Grid"))
+        monitor.telegram.edit_photo.assert_not_called()
+        monitor.telegram.send_status_photo.assert_not_called()
+        self.assertIn("telegram_graphic_publish_pending", state)
+
+    def test_empty_pending_marker_blocks_legacy_rollback(self):
+        """Disabling graphics cannot bypass even a malformed marker."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+                "telegram_graphic_publish_pending": "",
+            }
+        )
+        self.assertFalse(monitor.legacy_media_guard("Offline"))
+        monitor.telegram.edit_photo_caption.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        self.assertIn("telegram_graphic_publish_pending", state)
+
     def test_timeout_persists_uncertain_marker_and_blocks_retry(self):
         """Unacknowledged Telegram send must not generate a second post."""
 

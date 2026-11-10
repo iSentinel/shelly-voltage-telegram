@@ -201,6 +201,22 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.installed_version.symlink_to(source)
         self.assertEqual(self.run_gate().returncode, 2)
 
+    def test_empty_pending_record_is_blocked_in_jsonl(self):
+        """Machine preflight must not approve damaged publication state."""
+
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "INSERT INTO meta VALUES (?, ?)",
+                ("telegram_graphic_publish_pending", ""),
+            )
+            db.commit()
+        result = self.run_gate("--jsonl")
+        self.assertEqual(result.returncode, 2)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "BLOCKED")
+        self.assertIn("reconciliation", " ".join(payload["reasons"]))
+        self.assertFalse(payload["deployment_allowed"])
+
     def test_stale_snapshot_is_not_accepted(self):
         """A past deployment snapshot cannot protect the next upgrade."""
 

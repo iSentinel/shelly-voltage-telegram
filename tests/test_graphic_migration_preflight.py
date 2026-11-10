@@ -118,6 +118,15 @@ class GraphicMigrationPreflightTests(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
         self.assertNotIn("secret", result.stdout + result.stderr)
 
+    def test_empty_pending_marker_is_not_safe_to_ignore(self):
+        """A damaged pending key still mandates owner reconciliation."""
+
+        self.write_meta("telegram_status_media_identity", "text:-100123:101")
+        self.write_meta("telegram_graphic_publish_pending", "")
+        result = self.run_check()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("requires reconciliation", result.stdout)
+
     def test_missing_database_is_never_created(self):
         """A nonexistent database path fails without side effects."""
 

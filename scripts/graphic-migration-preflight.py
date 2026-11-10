@@ -84,7 +84,7 @@ def readiness_issues(
         not in (f"text:{channel}:{current}", f"photo:{channel}:{current}")
     ):
         issues.append("channel media identity is not verified")
-    if metadata.get(PENDING_KEY):
+    if PENDING_KEY in metadata:
         issues.append(
             "unresolved Telegram publication requires reconciliation"
         )
