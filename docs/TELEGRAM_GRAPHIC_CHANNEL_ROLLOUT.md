@@ -23,6 +23,9 @@ authorize public message changes, publishing, or a production upgrade.
    Missing, old or cross-channel markers are unknown; never edit text on photo.
 3. Text-to-photo conversion uses editMessageMedia on the existing message
    when supported, and verifies the returned message ID and destination.
+   An unbound legacy text post must be independently verified via an
+   owner-approved, explicit editMessageText before recording its type.
+   Never auto-confirm a previously unknown or timed-out conversion.
 4. Media edits treat Telegram's "message is not modified" as success.
    Transient failures must not trigger a duplicate public post.
 5. A rejected or ambiguous API response cannot advance persisted message

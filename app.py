@@ -2946,6 +2946,42 @@ class Monitor:
             return False
         return True
 
+    def confirm_legacy_text_status(
+        self, text: str, owner_approved: bool
+    ) -> bool:
+        """Verify a legacy text post before any owner-approved conversion."""
+
+        if (
+            owner_approved is not True
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 4096
+        ):
+            return False
+        if self.storage.get_meta("telegram_status_media_identity") is not None:
+            return False
+        stored = self.storage.get_meta(self.status_message_key())
+        target = self.telegram.status_chat_id
+        if (
+            not isinstance(stored, str)
+            or len(stored) > 20
+            or not stored.isascii()
+            or not stored.isdecimal()
+            or int(stored) < 1
+            or not isinstance(target, str)
+            or not target.strip()
+        ):
+            return False
+        try:
+            self.telegram.edit(int(stored), text, chat_id=target)
+            self.record_status_media_kind(int(stored), "text", target)
+        except Exception as exc:
+            logger.warning(
+                "Legacy status verification: {}", type(exc).__name__
+            )
+            return False
+        return True
+
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
         """Edit the stable status or recreate a missing Telegram message."""
 

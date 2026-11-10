@@ -607,6 +607,92 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 self.assertNotIn("private endpoint", str(error.exception))
                 self.assertFalse(self.bot.api_lock.locked())
 
+    def test_legacy_text_confirmation_requires_explicit_owner_approval(self):
+        """Old status is untouched unless a boolean approval is present."""
+
+        monitor, state = self.editor_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        for approval in (False, None, "yes", 1):
+            with self.subTest(approval=approval):
+                self.assertFalse(
+                    APP.Monitor.confirm_legacy_text_status(
+                        monitor, "Status", approval
+                    )
+                )
+        monitor.telegram.edit.assert_not_called()
+        self.assertNotIn("telegram_status_media_identity", state)
+
+    def test_legacy_text_confirmation_binds_verified_channel_and_id(self):
+        """A successful text edit seeds only the verified legacy identity."""
+
+        monitor, state = self.editor_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        self.assertTrue(
+            APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
+        )
+        monitor.telegram.edit.assert_called_once_with(
+            101, "Status", chat_id="-100123"
+        )
+        self.assertEqual(
+            state["telegram_status_media_identity"], "text:-100123:101"
+        )
+        monitor.telegram.send.assert_not_called()
+
+    def test_legacy_text_confirmation_never_overwrites_unknown_marker(self):
+        """Timeout from prior conversion must require manual reconciliation."""
+
+        for marker in ("unknown:-100123:101", "photo:-100123:101"):
+            monitor, state = self.editor_monitor(
+                {
+                    "telegram_status_message_id": "101",
+                    "telegram_status_media_identity": marker,
+                }
+            )
+            self.assertFalse(
+                APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
+            )
+            self.assertEqual(state["telegram_status_media_identity"], marker)
+            monitor.telegram.edit.assert_not_called()
+
+    def test_legacy_text_failed_edit_never_claims_verified_identity(self):
+        """A Telegram transport error cannot promote unverifiable text."""
+
+        monitor, state = self.editor_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        monitor.telegram.edit.side_effect = RuntimeError("timeout")
+        self.assertFalse(
+            APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
+        )
+        self.assertNotIn("telegram_status_media_identity", state)
+
+    def test_legacy_text_confirmation_rejects_bad_ids_and_text(self):
+        """Invalid persisted data cannot trigger public status updates."""
+
+        for stored, text in (
+            ("0", "Hi"),
+            ("abc", "Hi"),
+            ("101", ""),
+            ("101", "x" * 4097),
+        ):
+            monitor, _ = self.editor_monitor(
+                {"telegram_status_message_id": stored}
+            )
+            with self.subTest(stored=stored):
+                self.assertFalse(
+                    APP.Monitor.confirm_legacy_text_status(monitor, text, True)
+                )
+                monitor.telegram.edit.assert_not_called()
+
+    def test_legacy_confirmation_has_no_live_status_caller(self):
+        """No legacy post is touched by default when a feature is installed."""
+
+        self.assertFalse(
+            "self.confirm_legacy_text_status(" in self.live_status_source()
+        )
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 

@@ -1,3 +1,18 @@
+## 2026-11-10T04:05:28+02:00 Gateway: legacy text media preflight (source only)
+
+- Added confirm_legacy_text_status to verify an existing unbound text post.
+- Mandatory owner_approved is True; non-boolean/false values reject.
+- Requires exact persisted channel ID, numeric message ID and a valid
+  text; calls editMessageText only to verify already owned text content.
+- Only success persists text:chat_id:message_id; API timeouts never
+  claim verified type and prior ambiguous markers are never overwritten.
+- No live status caller or public Bot API requests were performed.
+- Targeted media tests 45/45 PASS; Ruff/quality gate PASS.
+- Full isolated regression 1425 tests OK (1 skipped), exit code zero.
+- NEXT: integrate complete opt-in status lifecycle across periodic,
+  offline/recovery, voltage transitions and stable recovery, with
+  explicit Owner Approval, fallback, backup and rollback acceptance.
+
 ## 2026-11-10T04:00:49+02:00 Gateway: serialize Telegram multipart transport (source only)
 
 - Shared Telegram api_lock now protects send_file/sendPhoto uploads and
