@@ -480,6 +480,26 @@ def chart_header(
         )
 
 
+def chart_last_sample_note(
+    pixels: bytearray,
+    width: int,
+    height: int,
+    points: list[tuple[float, float]],
+    now: float,
+    timezone: str,
+) -> None:
+    """Show measurement time; never label an old chart value as live."""
+
+    if not points:
+        return
+    timestamp = points[-1][0]
+    observed = datetime.fromtimestamp(timestamp, ZoneInfo(timezone))
+    age = now - timestamp
+    status = "HISTORICAL" if age > 60 else "RECENT"
+    note = f"LAST AT {observed:%d.%m %H:%M} / {status}"
+    chart_text(pixels, width, height, note, 480, 82, b"\x33\x47\x56", 2)
+
+
 def chart_data(
     pixels: bytearray,
     width: int,
@@ -552,6 +572,7 @@ def chart_png(
     values = [value for _, value in points]
     limits = chart_scale(values) if values else (0.0, 250.0, 50.0)
     chart_header(pixels, width, height, phase, hours, values, warning_low)
+    chart_last_sample_note(pixels, width, height, points, now, timezone)
     chart_grid(pixels, width, height, limits, bounds)
     chart_times(pixels, width, height, bounds, since, now, timezone)
     chart_warning_line(pixels, width, height, bounds, limits, warning_low)

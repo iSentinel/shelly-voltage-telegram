@@ -511,3 +511,15 @@ age, and source checks. Totals count exactly 48 half-hour slots with
 unrounded whole/half hours; the forecast is never evidence of physical
 power. Offline Shelly still displays unknown live voltage, not zero or
 its last historical sample. This candidate is not installed in production.
+
+
+## Historical voltage chart remains independent
+
+The chart sent by the existing /chart command is a separate 1000x560
+historical voltage report, not a YASNO forecast. It already leaves
+long gaps unconnected instead of interpolating through missing Shelly
+samples. Design Polish now prints the exact Kyiv date and clock time
+of its last measurement in its header and labels samples older than
+60 seconds as HISTORICAL. A recent sample is called RECENT, not LIVE.
+The chart retains its original sample count and min/max statistics;
+no outage, database, or Telegram channel metadata is changed.

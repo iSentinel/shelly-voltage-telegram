@@ -10,11 +10,14 @@ import time
 import unittest
 import zlib
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
+from unittest import mock
+from zoneinfo import ZoneInfo
 
 from test_app import APP
 
-from advanced_features import chart_png, series
+from advanced_features import chart_png, chart_text, series
 from telegram_i18n import tr
 
 
@@ -111,6 +114,38 @@ class VoltageChartUiTests(unittest.TestCase):
         ink = {b"\x25\x63\xeb", b"\xdc\x26\x26"}
         center = [pixel_at(pixels, width, 520, y) for y in range(108, 485)]
         self.assertTrue(all(point not in ink for point in center))
+
+    def test_chart_marks_old_last_sample_as_historical(self):
+        """A disconnected meter must not look like current 193.8 V."""
+
+        measured_at = self.now - 4 * 3600
+        self.store.add(measured_at, 193.8, 50.0)
+        expected = datetime.fromtimestamp(
+            measured_at, ZoneInfo("Europe/Kyiv")
+        ).strftime("%d.%m %H:%M")
+        with mock.patch(
+            "advanced_features.chart_text", wraps=chart_text
+        ) as text_writer:
+            chart_png(self.db, "L1", 24, self.root / "old.png")
+        labels = [call.args[3] for call in text_writer.call_args_list]
+        self.assertIn(f"LAST AT {expected} / HISTORICAL", labels)
+        self.assertNotIn(f"LAST AT {expected} / RECENT", labels)
+
+    def test_chart_marks_recent_sample_without_claiming_live_status(self):
+        """Fresh readings may be recent without claiming power state."""
+
+        measured_at = self.now - 10
+        self.store.add(measured_at, 225.2, 50.0)
+        expected = datetime.fromtimestamp(
+            measured_at, ZoneInfo("Europe/Kyiv")
+        ).strftime("%d.%m %H:%M")
+        with mock.patch(
+            "advanced_features.chart_text", wraps=chart_text
+        ) as text_writer:
+            chart_png(self.db, "L1", 1, self.root / "recent.png")
+        labels = [call.args[3] for call in text_writer.call_args_list]
+        self.assertIn(f"LAST AT {expected} / RECENT", labels)
+        self.assertFalse(any(" / HISTORICAL" in value for value in labels))
 
     def test_empty_graph_has_no_invented_voltage_values(self):
         """The PNG must render a no-data state when SQLite has no readings."""
