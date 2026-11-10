@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / (
@@ -24,17 +25,19 @@ class GraphicMigrationPreflightTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.database = Path(self.temp.name) / "voltage.sqlite3"
-        with sqlite3.connect(self.database) as db:
+        with closing(sqlite3.connect(self.database)) as db:
             db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)")
+            db.commit()
         self.write_meta("telegram_status_message_id", "101")
 
     def write_meta(self, key: str, value: str) -> None:
         """Insert exactly one source-only fixture metadata value."""
 
-        with sqlite3.connect(self.database) as db:
+        with closing(sqlite3.connect(self.database)) as db:
             db.execute(
                 "INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, value)
             )
+            db.commit()
 
     def run_check(
         self, database: Path | None = None

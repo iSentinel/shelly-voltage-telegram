@@ -7,6 +7,7 @@ import argparse
 import os
 import re
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 STATUS_KEY = "telegram_status_message_id"
@@ -37,8 +38,10 @@ def read_metadata(path: Path) -> tuple[dict[str, str], str]:
     if path.is_symlink() or not path.is_file():
         raise ValueError("database path is absent or a symlink")
     try:
-        with sqlite3.connect(
-            path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5
+        with closing(
+            sqlite3.connect(
+                path.resolve().as_uri() + "?mode=ro", uri=True, timeout=5
+            )
         ) as db:
             check = str(db.execute("PRAGMA quick_check").fetchone()[0])
             rows = db.execute(
