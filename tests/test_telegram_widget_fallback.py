@@ -85,6 +85,51 @@ class FallbackCaptionTests(unittest.TestCase):
         self.assertIn("Данные устарели", caption)
         self.assertNotIn("225.3", caption)
 
+    def test_zero_and_tiny_online_voltage_is_not_displayed(self):
+        """Never announce a zero as measured live voltage in any locale."""
+
+        for language in ("uk", "ru", "en"):
+            for voltage in (0, 0.0, 0.04):
+                with self.subTest(language=language, voltage=voltage):
+                    state = {
+                        "schema": 1,
+                        "s": "online",
+                        "l": language,
+                        "v": voltage,
+                        "f": 50.0,
+                        "t": NOW - 1,
+                    }
+                    caption = widget_fallback_text(json.dumps(state), now=NOW)
+                    self.assertNotIn("0.0 V", caption)
+                    self.assertNotIn("0.0 В", caption)
+                    self.assertNotIn("50.0", caption)
+        live = {
+            "schema": 1,
+            "s": "online",
+            "l": "uk",
+            "v": 176.2,
+            "f": 50.0,
+            "t": NOW - 1,
+        }
+        caption = widget_fallback_text(json.dumps(live), now=NOW)
+        self.assertIn("176.2", caption)
+
+    def test_zero_secondary_phase_is_hidden(self):
+        """A synthetic L2 zero must not be presented as a live phase."""
+
+        data = {
+            "schema": 1,
+            "s": "offline",
+            "l": "uk",
+            "p": {
+                "L2": {"s": "online", "v": 0.0, "t": NOW - 1},
+                "L3": {"s": "online", "v": 176.2, "t": NOW - 1},
+            },
+        }
+        caption = widget_fallback_text(json.dumps(data), now=NOW)
+        self.assertIn("L2: —", caption)
+        self.assertIn("L3: 176.2 В", caption)
+
     def test_invalid_voltage_and_frequency_rejected(self):
         """Accept only numeric, finite readings with sensible ranges."""
 

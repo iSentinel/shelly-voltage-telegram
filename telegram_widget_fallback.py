@@ -10,6 +10,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from outage_data_ua import windows
+from telegram_widget_data import MIN_VISIBLE_VOLTAGE
 
 KYIV = ZoneInfo("Europe/Kyiv")
 WORDS = {
@@ -89,7 +90,7 @@ def measured_lines(
         if (
             bounded(ts, 1, now)
             and 0 <= now - ts <= 60
-            and bounded(voltage, 0, 400)
+            and bounded(voltage, MIN_VISIBLE_VOLTAGE, 400)
         ):
             lines = [f"⚡ {words[0]}: {voltage:.1f} {words[12]}"]
             frequency = data.get("f")
@@ -120,7 +121,7 @@ def secondary_phase_lines(
             snap.get("s") == "online"
             and bounded(stamp, 1, now)
             and 0 <= now - stamp <= 60
-            and bounded(voltage, 0, 400)
+            and bounded(voltage, MIN_VISIBLE_VOLTAGE, 400)
         )
         label = f"{voltage:.1f} {words[12]}" if fresh else "—"
         result.append(f"🔌 {phase}: {label}")

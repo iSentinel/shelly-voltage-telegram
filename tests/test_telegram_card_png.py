@@ -184,7 +184,7 @@ class TelegramGraphicWidgetTests(unittest.TestCase):
     def test_boolean_nan_and_out_of_range_are_never_live(self):
         """Invalid sensor readings must fail closed."""
 
-        for voltage in (True, float("nan"), -1, 600, None):
+        for voltage in (True, float("nan"), -1, 0, 0.04, 600, None):
             with self.subTest(voltage=voltage):
                 reading = fixture()
                 reading["v"] = voltage

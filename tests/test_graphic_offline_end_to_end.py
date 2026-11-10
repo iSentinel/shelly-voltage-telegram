@@ -213,6 +213,16 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         self.assertTrue(report["live_voltage_visible"])
         self.assertEqual(report["forecast_off_slots"], 48)
 
+    def test_fresh_but_zero_online_value_cannot_be_a_live_card(self):
+        """An online flag plus zero volts is not physical supply proof."""
+
+        state = make_card_state("online", voltage=0, age_seconds=1)
+        self.assertEqual(state["s"], "unknown")
+        self.assertTrue({"v", "f", "t"}.isdisjoint(state))
+        report, _ = self.render(state)
+        self.assertEqual(report["status"], "unknown")
+        self.assertFalse(report["live_voltage_visible"])
+
     def test_offline_zero_never_leaks_into_public_widget_state(self):
         """Synthetic zero is not substituted for a disconnected meter."""
 

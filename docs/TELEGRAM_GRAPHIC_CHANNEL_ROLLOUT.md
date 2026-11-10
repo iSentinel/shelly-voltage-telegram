@@ -467,3 +467,19 @@ The text fallback and PNG must both discard yesterday's forecast at the
 same instant; unsupported Telegram clients must not show an older schedule.
 No network calls, live message edits, or SQLite writes occur. This source
 acceptance does not authorize a public Telegram migration.
+
+
+## Zero-voltage presentation safety
+
+This Shelly is installed on the measured mains side ahead of ZUBR. When its
+supply is lost it typically becomes unreachable; a synthetic 0.0 V value
+must not become evidence of live supply. The Telegram widget encoder,
+source-only PNG renderer and text fallback now require a fresh voltage of
+at least 0.1 V to display live measurements (including L2/L3 fallback).
+A zero or sub-displayable 0.04 V reading while connectivity says online
+is shown as UNKNOWN, never as confirmed offline or an outage. Genuine
+positive low readings such as 176.2 V remain accepted. This is a
+presentation-only fail-closed boundary: it does not change the Shelly RPC,
+production SQLite, outage event history, or bot's deployment defaults.
+The physical recovery acceptance still requires independently fresh
+hardware readings and a closed incident; no forecast can close it.

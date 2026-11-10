@@ -14,7 +14,12 @@ from zoneinfo import ZoneInfo
 from advanced_features import CHART_FONT, write_png
 from telegram_schedule_periods import duration_label, schedule_periods
 from telegram_uk_bitmap import UKRAINIAN_FONT
-from telegram_widget_data import MAX_FORECAST_AGE, MAX_SAMPLE_AGE, numeric
+from telegram_widget_data import (
+    MAX_FORECAST_AGE,
+    MAX_SAMPLE_AGE,
+    MIN_VISIBLE_VOLTAGE,
+    numeric,
+)
 
 WIDTH = 960
 HEIGHT = 800
@@ -117,7 +122,7 @@ def current_measurement(state: dict, now: float) -> dict:
             "status": status if status in ("offline", "stale") else "unknown"
         }
     timestamp = numeric(state.get("t"), 1, now + 2)
-    voltage = numeric(state.get("v"), 0, 400)
+    voltage = numeric(state.get("v"), MIN_VISIBLE_VOLTAGE, 400)
     if timestamp is None or not 0 <= now - timestamp <= MAX_SAMPLE_AGE:
         return {"status": "stale"}
     if voltage is None:
