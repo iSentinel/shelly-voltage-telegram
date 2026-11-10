@@ -63,6 +63,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         telegram.enabled = True
         telegram.status_chat_id = "-100123"
         telegram.send_status_photo.return_value = 555
+        telegram.edit_photo.return_value = True
         telegram.send.return_value = 555
         monitor = SimpleNamespace(
             cfg=SimpleNamespace(telegram_status_chat_id="-100123"),

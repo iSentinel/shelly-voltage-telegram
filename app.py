@@ -1538,9 +1538,35 @@ class Telegram:
             "sendPhoto", "photo", path, caption, chat_id, notify=notify
         )
 
+    @staticmethod
+    def validate_edited_photo_receipt(
+        result: object, message_id: int, chat_id: str, caption: str
+    ) -> None:
+        """Only a matching Telegram photo reply proves media conversion."""
+
+        if (
+            not isinstance(result, dict)
+            or type(result.get("message_id")) is not int
+            or result["message_id"] != message_id
+        ):
+            raise RuntimeError("Telegram returned unexpected edited message")
+        chat = result.get("chat")
+        if not isinstance(chat, dict) or str(chat.get("id")) != chat_id:
+            raise RuntimeError("Telegram returned unexpected edited chat")
+        photos = result.get("photo")
+        if not isinstance(photos, list) or not photos:
+            raise RuntimeError("Telegram did not confirm photo media")
+        if not any(
+            isinstance(photo, dict) and photo.get("file_id")
+            for photo in photos
+        ):
+            raise RuntimeError("Telegram returned invalid photo media")
+        if result.get("caption") != caption:
+            raise RuntimeError("Telegram did not confirm requested caption")
+
     def edit_photo(
         self, message_id: int, path: Path, caption: str, chat_id: str
-    ) -> None:
+    ) -> bool:
         """Edit a known bot message into PNG media without creating a post."""
 
         if (
@@ -1558,17 +1584,12 @@ class Telegram:
         if not payload.get("ok"):
             error = RuntimeError(safe_telegram_api_error(payload))
             if message_not_modified(error):
-                return
+                return False  # A no-op cannot prove text-to-photo conversion.
             raise error
-        result = payload.get("result")
-        if (
-            not isinstance(result, dict)
-            or result.get("message_id") != message_id
-        ):
-            raise RuntimeError("Telegram returned unexpected edited message")
-        chat = result.get("chat")
-        if isinstance(chat, dict) and str(chat.get("id")) != chat_id:
-            raise RuntimeError("Telegram returned unexpected edited chat")
+        self.validate_edited_photo_receipt(
+            payload.get("result"), message_id, chat_id, caption
+        )
+        return True
 
     def edit_photo_caption(
         self, message_id: int, caption: str, chat_id: str
@@ -2931,11 +2952,13 @@ class Monitor:
             chat = self.telegram.status_chat_id
             if action == "edit_photo":
                 if kind == "text":
-                    self.storage.set_meta(
-                        "telegram_status_media_identity",
-                        f"unknown:{chat}:{message_id}",
-                    )
-                self.telegram.edit_photo(message_id, photo, caption, chat)
+                    key = "telegram_status_media_identity"
+                    self.storage.set_meta(key, f"unknown:{chat}:{message_id}")
+                edit_confirmed = self.telegram.edit_photo(
+                    message_id, photo, caption, chat
+                )
+                if kind == "text" and edit_confirmed is not True:
+                    raise ValueError("text-to-photo conversion is unverified")
             elif action == "edit_caption":
                 self.telegram.edit_photo_caption(message_id, caption, chat)
             else:

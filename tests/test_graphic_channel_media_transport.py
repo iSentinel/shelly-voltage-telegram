@@ -37,10 +37,22 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         self.bot.api_session.post = Mock(return_value=result)
 
     def test_edit_existing_channel_message_without_new_post(self):
-        """Use multipart editMessageMedia with an unchanged message ID."""
+        """Use multipart editMessageMedia with a verified unchanged ID."""
 
-        self.response({"ok": True, "result": {"message_id": 811}})
-        self.bot.edit_photo(811, self.card, "План YASNO", "-100123")
+        self.response(
+            {
+                "ok": True,
+                "result": {
+                    "message_id": 811,
+                    "chat": {"id": -100123},
+                    "photo": [{"file_id": "test-photo"}],
+                    "caption": "План YASNO",
+                },
+            }
+        )
+        self.assertTrue(
+            self.bot.edit_photo(811, self.card, "План YASNO", "-100123")
+        )
         self.bot.api_session.post.assert_called_once()
         call = self.bot.api_session.post.call_args
         self.assertTrue(call.args[0].endswith("/editMessageMedia"))
@@ -125,7 +137,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 "description": "Bad Request: message is not modified",
             }
         )
-        self.bot.edit_photo(811, self.card, "Same card", "-100123")
+        self.assertFalse(
+            self.bot.edit_photo(811, self.card, "Same card", "-100123")
+        )
         self.bot.api_session.post.assert_called_once()
 
     def test_media_response_must_match_destination_chat(self):
@@ -139,6 +153,30 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(RuntimeError, "unexpected edited chat"):
             self.bot.edit_photo(811, self.card, "Card", "-100123")
+
+    def test_ambiguous_success_is_not_a_verified_photo(self):
+        """Never persist photo identity from a text or malformed reply."""
+
+        valid = {
+            "message_id": 811,
+            "chat": {"id": -100123},
+            "photo": [{"file_id": "photo-fixture"}],
+            "caption": "Card",
+        }
+        for missing in ("chat", "photo", "caption"):
+            with self.subTest(missing=missing):
+                self.response(
+                    {
+                        "ok": True,
+                        "result": {
+                            key: value
+                            for key, value in valid.items()
+                            if key != missing
+                        },
+                    }
+                )
+                with self.assertRaises(RuntimeError):
+                    self.bot.edit_photo(811, self.card, "Card", "-100123")
 
     def test_blank_channel_target_rejected_before_network(self):
         """Whitespace is never an acceptable media destination."""
@@ -466,6 +504,7 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 "telegram_status_media_identity": "text:-100123:101",
             }
         )
+        monitor.telegram.edit_photo.return_value = True
         self.assertTrue(
             APP.Monitor.edit_existing_status_media(
                 monitor, "Text", "Caption", self.card
@@ -478,6 +517,26 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         self.assertEqual(
             state["telegram_status_media_identity"], "photo:-100123:101"
         )
+
+    def test_conversion_noop_cannot_promote_a_text_status(self):
+        """An unverified Telegram no-op leaves the post in UNKNOWN state."""
+
+        monitor, state = self.editor_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "text:-100123:101",
+            }
+        )
+        monitor.telegram.edit_photo.return_value = False
+        self.assertFalse(
+            APP.Monitor.edit_existing_status_media(
+                monitor, "Text", "Caption", self.card
+            )
+        )
+        self.assertEqual(
+            state["telegram_status_media_identity"], "unknown:-100123:101"
+        )
+        monitor.telegram.send.assert_not_called()
 
     def test_conversion_timeout_leaves_unknown_marker_not_stale_text(self):
         """Ambiguous media result must block future text-on-photo edits."""
@@ -581,7 +640,12 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
             result = Mock()
             result.json.return_value = {
                 "ok": True,
-                "result": {"message_id": 811},
+                "result": {
+                    "message_id": 811,
+                    "chat": {"id": -100123},
+                    "photo": [{"file_id": "photo-fixture"}],
+                    "caption": "Status",
+                },
             }
             return result
 

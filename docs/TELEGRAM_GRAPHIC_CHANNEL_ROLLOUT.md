@@ -523,3 +523,20 @@ of its last measurement in its header and labels samples older than
 60 seconds as HISTORICAL. A recent sample is called RECENT, not LIVE.
 The chart retains its original sample count and min/max statistics;
 no outage, database, or Telegram channel metadata is changed.
+
+
+## Strict media conversion receipt validation
+
+Telegram Bot API editMessageMedia supports conversion of a text message
+to a photo with the SAME exact message ID. The channel cutover must use
+this edit path rather than creating a new post then deleting the pinned
+text. The transport checks the returned message ID and chat ID,
+a nonempty photo media object with a file_id, and the exact requested
+caption before a successful conversion can be persisted in SQLite.
+A 400 "message is not modified" is an accepted no-op for an already
+known photo, but is NOT sufficient proof of a text-to-photo conversion.
+If the response is ambiguous, including transport timeout or missing
+photo data, the media identity becomes UNKNOWN, and unattended retries
+must be blocked. No new channel status may be sent as a fallback.
+The exact legacy message identity, independent backup, and rollback
+plan remain separate prerequisites for public deployment.
