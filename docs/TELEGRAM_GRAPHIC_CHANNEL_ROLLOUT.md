@@ -224,3 +224,33 @@ measured voltage remains hidden and the warning is
 slots remain forecast only and must never indicate actual mains status.
 Units use Ukrainian В and ГЦ; Shelly and YASNO remain product names.
 Localization does not enable Telegram publishing or change storage.
+
+## Reproducible source-only offline PNG acceptance
+
+Run the dependency-free local audit on a saved, sanitized JSON health
+snapshot rather than querying Telegram or Shelly. The command must see
+`connectivity=offline`; it **never** certifies live voltage, energy
+availability, or an actual mains outage.
+
+```bash
+python3 scripts/graphic-offline-acceptance.py --help
+python3 scripts/graphic-offline-acceptance.py \
+  --health-file /var/tmp/health-snapshot.json \
+  --output /var/tmp/graphic-offline-acceptance.png \
+  --group 10.1 --jsonl
+```
+
+Optional `--forecast-file` is a local JSON object with exactly
+`bars` (48 half-hour slots), `day` (Kyiv date), `updated` (Unix
+timestamp) and `source` (`yasno`). Expired or mismatched forecast
+dates are rejected. `--now` accepts an explicit Unix timestamp for
+deterministic fixture tests. The script does not fetch any API URLs.
+
+A `PASS` (exit 0) verifies the 960x560 PNG, offline state, absence
+of live voltage/frequency/time fields and correct forecast separation.
+A `FAIL` (exit 2) emits a safe reason code without credentials or
+paths. Repeated runs with identical input reuse the same PNG. Existing
+different or oversized files, links and unsafe input files are never
+overwritten or followed. Existing PNGs are compared with bounded
+streaming SHA256 checks rather than loaded unbounded into memory. Neither outcome authorizes a public Telegram message or a
+production installation.
