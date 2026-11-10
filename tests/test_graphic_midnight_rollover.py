@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from telegram_card_png import render_card_png, valid_forecast
 from telegram_widget_data import widget_public_data
+from telegram_widget_fallback import widget_fallback_text
 
 KYIV = ZoneInfo("Europe/Kyiv")
 HISTORIC_VOLTAGE = 193.8
@@ -109,6 +110,26 @@ class GraphicMidnightRolloverTests(unittest.TestCase):
         self.assertFalse(
             self.render(state, midnight, "dst.png")["forecast_visible"]
         )
+
+    def test_fallback_text_and_png_agree_across_midnight(self):
+        """Text clients and PNG cards must discard the old YASNO day."""
+
+        before = kyiv_time(2026, 11, 10, 23, 59) + 59
+        midnight = kyiv_time(2026, 11, 11, 0)
+        state = offline_state(before, "2026-11-10")
+        encoded = json.dumps(state, ensure_ascii=False)
+        before_text = widget_fallback_text(encoded, now=before)
+        after_text = widget_fallback_text(encoded, now=midnight)
+        before_png = self.render(state, before, "text-before.png")
+        after_png = self.render(state, midnight, "text-after.png")
+        self.assertTrue(before_png["forecast_visible"])
+        self.assertIn("Прогноз", before_text)
+        self.assertFalse(after_png["forecast_visible"])
+        self.assertNotIn("Прогноз", after_text)
+        self.assertNotIn("193.8", before_text)
+        self.assertNotIn("193.8", after_text)
+        self.assertFalse(before_png["live_voltage_visible"])
+        self.assertFalse(after_png["live_voltage_visible"])
 
     def test_reused_old_state_never_revives_historic_voltage(self):
         """Even a post-midnight offline retry cannot reveal 193.8 V."""
