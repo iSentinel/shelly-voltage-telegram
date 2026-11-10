@@ -360,3 +360,26 @@ further conversion. Do not stamp a text marker based on HTML alone.
 Refresh a matching source+SQLite rollback snapshot immediately before
 any approved production rollout and perform recipient-visible private
 acceptance before public status replacement.
+
+## Actual 17:30 cutover against planned YASNO outage
+
+The source-only acceptance suite includes a reproducible Kyiv-local
+2026-11-10 transition. The trusted YASNO group 10.1 plan switches
+from on to off at 17:30, but Shelly continued measuring real voltage
+(203.2 V at 17:30:04 and 197.4 V at 17:31:04). The status card must
+remain ONLINE while the meter is connected and reporting fresh valid
+samples, even when the schedule says planned outage.
+
+When Shelly becomes unreachable, the card must instead report OFFLINE
+without a current voltage/frequency/timestamp and must not display its
+historical last-valid voltage (193.8 V) as live. The 48-slot YASNO plan
+remains explicitly a forecast, independent of what Shelly measured.
+Neither a planned blackout nor the loss of Shelly alone is conclusive
+proof of why the meter became unreachable.
+
+The eight scenarios in tests/test_graphic_scheduled_cutover.py exercise
+this exact boundary, low-but-valid voltage, stale online readings,
+offline historical-value secrecy, and absence of trusted YASNO data.
+The read-only real-device observation was recorded separately; no
+public Telegram post or production database value was modified as part
+of this regression.
