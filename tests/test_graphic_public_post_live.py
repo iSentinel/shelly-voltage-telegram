@@ -88,6 +88,24 @@ class PublicPostLiveTests(unittest.TestCase):
         self.assertFalse(result["sqlite_modified"])
         self.assertFalse(result["telegram_posts_or_edits"])
 
+    def test_live_photo_with_caption_remains_review_only(self):
+        """A captioned image is photo evidence, never an install permit."""
+
+        photo_page = (
+            '<div class="tgme_widget_message" '
+            'data-post="sample_status/101">'
+            '<a class="tgme_widget_message_photo_wrap"></a>'
+            '<div class="tgme_widget_message_text">Caption</div>'
+            "</div>"
+        )
+        result = self.check_live(self.getchat(), page=photo_page)
+        self.assertEqual(result["status"], "PUBLIC_POST_MATCH_FOR_REVIEW")
+        self.assertEqual(result["media_kind"], "photo")
+        self.assertTrue(result["live_page_checked"])
+        self.assertFalse(result["deployment_allowed"])
+        self.assertFalse(result["sqlite_modified"])
+        self.assertFalse(result["telegram_posts_or_edits"])
+
     def test_other_api_channel_is_blocked(self):
         """A public page from a different channel is not evidence."""
 

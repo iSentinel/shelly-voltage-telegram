@@ -483,3 +483,17 @@ presentation-only fail-closed boundary: it does not change the Shelly RPC,
 production SQLite, outage event history, or bot's deployment defaults.
 The physical recovery acceptance still requires independently fresh
 hardware readings and a closed incident; no forecast can close it.
+
+
+## Public photo-caption identity audit
+
+The public Telegram embed normally includes tgme_widget_message_text
+for a caption on a photo. If the same exact post has a
+tgme_widget_message_photo_wrap or tgme_widget_message_photo marker,
+the read-only audit classifies it as photo, including when a text
+caption also exists. Text without photo markers remains text.
+Unsupported document/video markers, ambiguous missing media, mismatched
+channel/message IDs, unresolved sends and conflicting persisted SQLite
+media identity remain BLOCKED. The audit stays read-only and returns
+PUBLIC_POST_MATCH_FOR_REVIEW / FIXTURE_MATCH_ONLY; neither result grants
+permission to write the production media-identity marker or to deploy.

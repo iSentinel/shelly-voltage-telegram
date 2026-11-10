@@ -149,9 +149,10 @@ def determine_kind(html: str, username: str, status_id: str) -> str:
             }
         )
     )
-    if unsupported or text == photo:
+    if unsupported or not (text or photo):
         raise ValueError("POST_MEDIA_AMBIGUOUS")
-    return "text" if text else "photo"
+    # A photo caption also uses tgme_widget_message_text.
+    return "photo" if photo else "text"
 
 
 def validate_consistency(

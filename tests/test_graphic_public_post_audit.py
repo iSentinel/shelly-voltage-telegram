@@ -160,11 +160,47 @@ class PublicPostAuditTests(unittest.TestCase):
         self.html.write_text(sample_page() + sample_page())
         self.assert_blocked("EXACT_POST_MISMATCH")
 
-    def test_mixed_media_is_ambiguous(self):
-        """Reject HTML that advertises both text and photo."""
+    def test_photo_with_text_caption_is_photo(self):
+        """An ordinary photo caption must not trigger an ambiguity error."""
 
         self.html.write_text(sample_page(text=True, photo=True))
+        answer = self.run_check()
+        self.assertEqual(answer.returncode, 0, answer.stderr)
+        result = json.loads(answer.stdout)
+        self.assertEqual(result["media_kind"], "photo")
+        self.assertEqual(result["status"], "FIXTURE_MATCH_ONLY")
+        self.assertFalse(result["deployment_allowed"])
+
+    def test_photo_caption_with_video_is_ambiguous(self):
+        """A photo plus unsupported video markers must fail closed."""
+
+        self.html.write_text(
+            sample_page(text=True, photo=True).replace(
+                '<a class="tgme_widget_message_photo_wrap"></a>',
+                '<a class="tgme_widget_message_photo_wrap"></a>'
+                '<div class="tgme_widget_message_video_player"></div>',
+            )
+        )
         self.assert_blocked("POST_MEDIA_AMBIGUOUS")
+
+    def test_photo_caption_with_document_is_ambiguous(self):
+        """Never classify a mixed photo/document as one safe image."""
+
+        self.html.write_text(
+            sample_page(text=True, photo=True).replace(
+                '<a class="tgme_widget_message_photo_wrap"></a>',
+                '<a class="tgme_widget_message_photo_wrap"></a>'
+                '<div class="tgme_widget_message_document"></div>',
+            )
+        )
+        self.assert_blocked("POST_MEDIA_AMBIGUOUS")
+
+    def test_photo_caption_conflicting_marker_is_blocked(self):
+        """A persisted text identity cannot be overridden by public HTML."""
+
+        self.set_meta("telegram_status_media_identity", f"text:{CHAT}:101")
+        self.html.write_text(sample_page(text=True, photo=True))
+        self.assert_blocked("MEDIA_MARKER_CONFLICT")
 
     def test_empty_media_is_ambiguous(self):
         """Author avatars are not real media attachments."""
