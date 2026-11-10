@@ -15,6 +15,17 @@ SQLite, Telegram, the running Docker container, or systemd.
     python3 scripts/em50-natural-recovery-audit.py --help
     python3 scripts/em50-natural-recovery-audit.py --json
 
+During an open outage the CLI reports PENDING (exit code 2) instead
+of a generic HTTP /ready error. Its JSON result explicitly says
+mains_restoration_verified=false, telegram_delivery_verified=false and
+release_authorized=false. The PENDING path reads SQLite only and
+never probes Shelly, Telegram or even local HTTP. If outage metadata is
+corrupt, parallel outages exist, or synthetic zero-voltage rows
+appear, it fails closed (exit code 1). Initial valid samples during
+recovery hysteresis still return PENDING with reason
+open_incident_with_unconfirmed_samples; they never prove restoration.
+The successful closed-outage acceptance still returns PASS (exit 0).
+
 The tool uses the existing /var/lib/shelly-voltage/voltage.sqlite3
 in SQLite mode=ro. The only HTTP requests are local /health and /ready,
 with redirects, credentials, arbitrary paths and remote hosts rejected.

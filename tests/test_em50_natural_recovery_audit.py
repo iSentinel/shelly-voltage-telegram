@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import io
 import json
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
@@ -107,6 +109,91 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
             AUDIT.check_recovery(
                 state, health(self.now), {"ready": True}, self.now, 60
             )
+
+    def test_open_incident_returns_pending_without_http(self):
+        """Natural blackout is pending, never a false recovery or API error."""
+
+        fixture_db = self.db
+        with contextlib.closing(sqlite3.connect(fixture_db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.commit()
+        output = io.StringIO()
+        argv = ["audit", "--db", str(fixture_db), "--json"]
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 2)
+        answer = json.loads(output.getvalue())
+        self.assertEqual(answer["status"], "PENDING")
+        self.assertEqual(answer["outage_id"], 18)
+        self.assertFalse(answer["mains_restoration_verified"])
+        self.assertFalse(answer["telegram_delivery_verified"])
+        self.assertFalse(answer["release_authorized"])
+        network.assert_not_called()
+
+    def test_first_samples_stay_pending_until_outage_closes(self):
+        """Recovery hysteresis cannot declare physical restoration early."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 20, 223.0, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        result = AUDIT.pending_record(state, self.now)
+        self.assertEqual(result["status"], "PENDING")
+        self.assertEqual(
+            result["reason"], "open_incident_with_unconfirmed_samples"
+        )
+        self.assertFalse(result["mains_restoration_verified"])
+
+    def test_pending_rejects_synthetic_zero_sample(self):
+        """A forged zero-voltage reading never becomes recovery evidence."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 20, 0.0, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
+
+    def test_pending_rejects_parallel_open_outages(self):
+        """Never accept two overlapping physical connectivity incidents."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute(
+                "INSERT INTO outages VALUES (19,?,?,?)",
+                (self.now - 60, None, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        self.assertEqual(state["active"], 2)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
+
+    def test_pending_rejects_missing_stable_status(self):
+        """An open outage cannot be accepted without saved status metadata."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute("DELETE FROM meta")
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
 
     def test_early_measurement_during_offline_fails(self):
         """Reject fabricated or leaking data during an extended blackout."""

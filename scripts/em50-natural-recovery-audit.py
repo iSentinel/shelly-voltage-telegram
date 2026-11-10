@@ -181,8 +181,47 @@ def report(state: dict, health: dict, now: float, grace: int) -> dict:
     }
 
 
-def main() -> int:
-    """Show PASS or fail safely without altering live state."""
+def pending_record(state: dict, now: float) -> dict | None:
+    """Report an intact open outage without claiming recovery."""
+
+    if state["end"] is not None:
+        return None
+    valid = (
+        state["integrity"] == "ok"
+        and state["active"] == 1
+        and 0 < state["start"] <= now
+        and state["zero_count"] == 0
+        and state["status_saved"]
+    )
+    if not valid:
+        raise ValueError("open outage evidence is inconsistent")
+    return {
+        "status": "PENDING",
+        "reason": (
+            "open_incident_with_unconfirmed_samples"
+            if state["after_count"]
+            else "shelly_connectivity_loss_open"
+        ),
+        "outage_id": state["outage_id"],
+        "phase": state["phase"],
+        "mains_restoration_verified": False,
+        "telegram_delivery_verified": False,
+        "release_authorized": False,
+    }
+
+
+def emit_pending(record: dict, json_mode: bool) -> int:
+    """Use a distinct pending exit code without exposing identifiers."""
+
+    if json_mode:
+        print(json.dumps(record, ensure_ascii=False, sort_keys=True))
+    else:
+        print(f"PENDING natural_recovery incident={record['outage_id']}")
+    return 2
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse explicit read-only recovery audit options."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -192,12 +231,21 @@ def main() -> int:
     parser.add_argument("--ready-url", default="http://127.0.0.1:8080/ready")
     parser.add_argument("--grace-seconds", type=int, default=60)
     parser.add_argument("--json", action="store_true")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> int:
+    """Distinguish PASS, PENDING and FAIL without changing live state."""
+
+    args = parse_args()
     try:
         if not 0 <= args.grace_seconds <= 120:
             raise ValueError("invalid recovery grace")
         now = time.time()
         state = read_state(Path(args.db), args.grace_seconds)
+        pending = pending_record(state, now)
+        if pending is not None:
+            return emit_pending(pending, args.json)
         health = local_json(args.health_url, "/health")
         ready = local_json(args.ready_url, "/ready")
         check_recovery(state, health, ready, now, args.grace_seconds)
