@@ -1509,6 +1509,64 @@ class Telegram:
 
         return self.send_file("sendDocument", "document", path, caption)
 
+    def edit_photo(
+        self, message_id: int, path: Path, caption: str, chat_id: str
+    ) -> None:
+        """Edit a known bot message into PNG media without creating a post."""
+
+        if (
+            isinstance(message_id, bool)
+            or not isinstance(message_id, int)
+            or message_id < 1
+            or not chat_id
+        ):
+            raise ValueError("explicit channel and valid message ID required")
+        if len(caption) > 1024 or path.is_symlink() or not path.is_file():
+            raise ValueError("invalid caption or media path")
+        if path.stat().st_size > 10_000_000:
+            raise ValueError("Telegram photo exceeds limit")
+        with path.open("rb") as handle:
+            if handle.read(8) != bytes.fromhex("89504e470d0a1a0a"):
+                raise ValueError("media is not a PNG")
+        payload = self._edit_photo_payload(message_id, path, caption, chat_id)
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
+        if not payload.get("ok"):
+            raise RuntimeError(safe_telegram_api_error(payload))
+        result = payload.get("result")
+        if (
+            not isinstance(result, dict)
+            or result.get("message_id") != message_id
+        ):
+            raise RuntimeError("Telegram returned unexpected edited message")
+
+    def _edit_photo_payload(
+        self, message_id: int, path: Path, caption: str, chat_id: str
+    ) -> object:
+        """Upload multipart media to an explicit, already-owned message."""
+
+        media = json.dumps(
+            {"type": "photo", "media": "attach://photo", "caption": caption},
+            ensure_ascii=False,
+        )
+        try:
+            with path.open("rb") as handle:
+                response = self.api_session.post(
+                    f"{self.base}/editMessageMedia",
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": str(message_id),
+                        "media": media,
+                    },
+                    files={"photo": (path.name, handle, "image/png")},
+                    timeout=30,
+                )
+            return response.json()
+        except (OSError, requests.RequestException, ValueError) as exc:
+            raise RuntimeError(
+                f"Telegram media edit failed: {type(exc).__name__}"
+            ) from None
+
     def delete(self, message_id: int, chat_id: str | None = None) -> None:
         """Delete one Telegram message."""
 

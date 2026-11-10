@@ -60,9 +60,16 @@ The state file must contain a validated schema-1 JSON widget state.
 
 ## Future channel rollout (not enabled)
 
-Before implementing channel photo edits, require an explicit owner opt-in,
-a separate photo message ID, safe text fallback and verified rollback.
-A text message cannot be assumed to be convertible into photo media.
-Guard against duplicate posts, excessive updates and unapproved pins.
+Telegram Bot API 10.4 documents editMessageMedia support for changing
+a text message into a media message. See the official specification:
+https://core.telegram.org/bots/api#editmessagemedia
+
+A source-only multipart edit_photo transport is included but has NO
+callers in the live status loop. The current status lifecycle still
+uses editMessageText and sometimes rotates a status ID. Before enabling
+channel graphics, migrate ALL status update paths together, preserve
+the channel/pinned message IDs, enforce edit frequency and safe text
+fallback, and require a verified rollback. Do not use the media method
+in production until a new owner-approved maintenance window.
 Require Bot API acceptance, actual recipient-visible Android validation,
 SQLite parity and a NEW owner-approved production maintenance window.
