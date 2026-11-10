@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from telegram_schedule_periods import format_schedule_rows
 from yasno_cache import read_verified_cache
 from yasno_schedule import clock_for_slot, parse_schedule
 
@@ -59,18 +60,22 @@ def join_windows(values: list[str]) -> str:
 
 
 def forecast_section(group: str, bars: str, language: str) -> str:
-    """Render forecast lines without treating them as actual outages."""
+    """Render chronological off/on windows with durations and source label."""
 
     words = MESSAGES.get(language, MESSAGES["uk"])
     certain = time_windows(bars, "X")
     possible = time_windows(bars, "?")
     lines = [f"🗓 YASNO · ДТЕК Київ | {words[0]} {group}"]
     if certain:
-        lines.append(f"🪫 {words[1]}: {join_windows(certain)}")
+        lines.append(f"🪫 {words[1]}:")
     if possible:
-        lines.append(f"⚠️ {words[2]}: {join_windows(possible)}")
+        lines.append(f"⚠️ {words[2]}:")
     if not certain and not possible:
         lines.append(f"ℹ️ {words[3]}")
+    intervals = format_schedule_rows(bars, language)
+    lines.extend(intervals[:8])
+    if len(intervals) > 8:
+        lines.append(f"… (+{len(intervals) - 8})")
     lines.append(f"ℹ️ {words[5]}")
     return "\n".join(lines)
 

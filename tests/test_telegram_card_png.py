@@ -8,6 +8,7 @@ import unittest
 import zlib
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from telegram_card_png import (
@@ -15,6 +16,7 @@ from telegram_card_png import (
     HEIGHT,
     RED,
     WIDTH,
+    label,
     render_card_png,
 )
 
@@ -102,19 +104,59 @@ class TelegramGraphicWidgetTests(unittest.TestCase):
         self.assertEqual(result["forecast_off_slots"], 15)
         width, height, rgb = read_png(self.root / "status.png")
         self.assertEqual((width, height), (WIDTH, HEIGHT))
+        red_x = 60 + 3 * 140 + 60
+        green_x = 60 + 60
         self.assertEqual(
-            rgb[
-                (430 * width + 60 + 17 * 17 + 8) * 3 : (
-                    430 * width + 60 + 17 * 17 + 8
-                )
-                * 3
-                + 3
-            ],
+            rgb[(463 * width + red_x) * 3 : (463 * width + red_x) * 3 + 3],
             RED,
         )
         self.assertEqual(
-            rgb[(430 * width + 68) * 3 : (430 * width + 68) * 3 + 3], GREEN
+            rgb[(463 * width + green_x) * 3 : (463 * width + green_x) * 3 + 3],
+            GREEN,
         )
+
+    def test_half_hour_transition_has_split_hour_tile(self):
+        """At 08:30 the hour tile must be half green and half red."""
+
+        _, _ = self.render(fixture())
+        width, _, rgb = read_png(self.root / "status.png")
+        hour_x = 60 + 2 * 140
+        left = (463 * width + hour_x + 30) * 3
+        right = (463 * width + hour_x + 100) * 3
+        self.assertEqual(rgb[left : left + 3], GREEN)
+        self.assertEqual(rgb[right : right + 3], RED)
+
+    def test_hour_grid_contains_all_twenty_four_time_labels(self):
+        """A complete forecast shows every hour once in a 6x4 grid."""
+
+        with mock.patch("telegram_card_png.label", wraps=label) as writer:
+            self.render(fixture())
+        placements = {
+            call.args[1]: (call.args[2], call.args[3])
+            for call in writer.call_args_list
+        }
+        for hour in range(24):
+            with self.subTest(hour=hour):
+                timestamp = f"{hour:02d}:00"
+                self.assertEqual(
+                    placements[timestamp],
+                    (80 + 140 * (hour % 6), 392 + 45 * (hour // 6)),
+                )
+
+    def test_1730_sample_has_green_red_split_tile(self):
+        """The user's 17:30 change gets a two-color 17:00 tile."""
+
+        state = fixture(online=False)
+        state["b"] = "X" * 8 + "O" * 9 + "X" * 15 + "O" * 3 + "X" * 13
+        report, _ = self.render(state)
+        width, _, rgb = read_png(self.root / "status.png")
+        tile_x = 60 + 5 * 140
+        tile_y = 383 + 2 * 45 + 35
+        left = (tile_y * width + tile_x + 30) * 3
+        right = (tile_y * width + tile_x + 100) * 3
+        self.assertEqual(rgb[left : left + 3], GREEN)
+        self.assertEqual(rgb[right : right + 3], RED)
+        self.assertEqual(report["forecast_off_slots"], 36)
 
     def test_offline_ignores_hidden_historical_voltage(self):
         """A planned power-on period cannot make an offline reading live."""

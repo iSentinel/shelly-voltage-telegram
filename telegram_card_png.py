@@ -12,11 +12,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from advanced_features import CHART_FONT, write_png
+from telegram_schedule_periods import duration_label, schedule_periods
 from telegram_uk_bitmap import UKRAINIAN_FONT
 from telegram_widget_data import MAX_FORECAST_AGE, MAX_SAMPLE_AGE, numeric
 
 WIDTH = 960
-HEIGHT = 560
+HEIGHT = 800
 KYIV = ZoneInfo("Europe/Kyiv")
 INK = b"\xed\xf5\xff"
 MUTED = b"\x9c\xaf\xc3"
@@ -46,6 +47,9 @@ FONT = {
     "Q": ("01110", "10001", "10001", "10001", "10101", "10010", "01101"),
     "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
     "?": ("01110", "10001", "00001", "00010", "00100", "00000", "00100"),
+    "(": ("00010", "00100", "01000", "01000", "01000", "00100", "00010"),
+    ")": ("01000", "00100", "00010", "00010", "00010", "00100", "01000"),
+    "≈": ("00000", "01101", "10010", "00000", "01101", "10010", "00000"),
     "=": ("00000", "11111", "00000", "11111", "00000", "00000", "00000"),
 }
 
@@ -186,31 +190,84 @@ def draw_voltage(pixels: bytearray, result: dict, now: float) -> None:
         label(pixels, "ДАНІ НЕДОСТУПНІ", 430, 225, MUTED, 3)
 
 
+def draw_battery(pixels: bytearray, x: int, y: int, kind: str) -> None:
+    """Draw red empty and green full battery icons without emoji fonts."""
+
+    color = {"O": GREEN, "X": RED, "?": AMBER}[kind]
+    rectangle(pixels, x, y, x + 22, y + 15, color, 3)
+    rectangle(pixels, x + 3, y + 3, x + 19, y + 12, PANEL)
+    rectangle(pixels, x + 22, y + 4, x + 26, y + 11, color, 1)
+    if kind == "O":
+        rectangle(pixels, x + 5, y + 5, x + 17, y + 10, GREEN)
+    elif kind == "?":
+        rectangle(pixels, x + 10, y + 4, x + 12, y + 9, AMBER)
+
+
+def draw_schedule_rows(
+    pixels: bytearray, periods: list[tuple[str, str, str, int]]
+) -> None:
+    """Draw five chronological forecast windows; the mini-bar shows all."""
+
+    names = {
+        "X": "ПЛАНОВЕ ВІДКЛЮЧЕННЯ",
+        "O": "ЗА ГРАФІКОМ Є СВІТЛО",
+        "?": "МОЖЛИВЕ ВІДКЛЮЧЕННЯ",
+    }
+    shown = periods[:5] if len(periods) <= 5 else periods[:4]
+    for index, (kind, begin, end, minutes) in enumerate(shown):
+        y = 588 + 30 * index
+        draw_battery(pixels, 60, y + 2, kind)
+        interval = f"{begin} - {end} ({duration_label(minutes)})"
+        label(pixels, interval, 104, y, INK, 3)
+        label(
+            pixels,
+            names[kind],
+            604,
+            y,
+            {"X": RED, "O": GREEN, "?": AMBER}[kind],
+            2,
+        )
+    if len(periods) > 5:
+        label(pixels, f"ЩЕ {len(periods) - 4} ІНТЕРВАЛІВ", 104, 714, AMBER, 3)
+
+
+def draw_hour_tiles(pixels: bytearray, bars: str) -> None:
+    """Draw 24 labeled hours; split an hour when half-hour states differ."""
+
+    colors = {"O": GREEN, "X": RED, "?": AMBER}
+    for hour in range(24):
+        x = 60 + 140 * (hour % 6)
+        y = 383 + 45 * (hour // 6)
+        first, second = bars[2 * hour : 2 * hour + 2]
+        if first == second:
+            rectangle(pixels, x, y, x + 132, y + 40, colors[first], 7)
+        else:
+            rectangle(pixels, x, y, x + 66, y + 40, colors[first], 5)
+            rectangle(pixels, x + 66, y, x + 132, y + 40, colors[second], 5)
+        label(pixels, f"{hour:02d}:00", x + 20, y + 9, INK, 3)
+
+
 def draw_timeline(
     pixels: bytearray, state: dict, bars: str, now: float
 ) -> None:
-    """Draw precisely 48 half-hour slots, never infer live electricity."""
+    """Combine 48 colored slots with explicit batteries and durations."""
 
-    rectangle(pixels, 28, 336, 932, 520, PANEL, 16)
-    label(pixels, "ГРАФІК YASNO / ДТЕК", 60, 362, INK, 3)
+    rectangle(pixels, 28, 336, 932, 788, PANEL, 16)
+    label(pixels, "ГРАФІК YASNO / ДТЕК", 60, 347, INK, 3)
     if not bars:
-        label(pixels, "НЕМАЄ АКТУАЛЬНОГО ГРАФІКА", 60, 414, MUTED, 3)
+        label(pixels, "НЕМАЄ АКТУАЛЬНОГО ГРАФІКА", 60, 572, MUTED, 3)
         hint = OFFLINE_HINT if state.get("s") == "offline" else "НЕМАЄ ДАНИХ"
-        label(pixels, hint, 60, 469, MUTED, 2)
+        label(pixels, hint, 60, 758, MUTED, 2)
         return
-    label(pixels, "ГРУПА " + str(state["g"]), 734, 362, BLUE, 3)
-    colors = {"O": GREEN, "X": RED, "?": AMBER}
-    for i, symbol in enumerate(bars):
-        x = 60 + i * 17
-        rectangle(pixels, x, 414, x + 15, 447, colors[symbol], 3)
-    for i, value in enumerate(("00:00", "06:00", "12:00", "18:00", "24:00")):
-        label(pixels, value, 60 + i * 199, 457, MUTED, 2)
+    label(pixels, "ГРУПА " + str(state["g"]), 734, 347, BLUE, 3)
+    draw_hour_tiles(pixels, bars)
+    draw_schedule_rows(pixels, schedule_periods(bars))
     hint = (
         "ЛИШЕ ПРОГНОЗ / " + OFFLINE_HINT
         if state.get("s") == "offline"
         else "ЛИШЕ ПРОГНОЗ / ФАКТ ЗА SHELLY"
     )
-    label(pixels, hint, 60, 491, MUTED, 2)
+    label(pixels, hint, 60, 758, MUTED, 2)
 
 
 def render_card_png(
@@ -218,7 +275,7 @@ def render_card_png(
     target: Path,
     now: float | None = None,
 ) -> dict:
-    """Create one 960x560 PNG and return non-sensitive rendering metadata."""
+    """Create one 960x800 PNG and return non-sensitive rendering metadata."""
 
     if not isinstance(state, dict) or state.get("schema") != 1:
         raise ValueError("invalid widget state")

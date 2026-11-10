@@ -62,7 +62,7 @@ class ScheduledCutoverGraphicTests(unittest.TestCase):
         self.root = Path(folder.name)
 
     def render(self, state: dict, clock: float, name: str = "card.png"):
-        """Render the exact 960x560 card and return its output metadata."""
+        """Render the exact 960x800 card and return its output metadata."""
 
         path = self.root / name
         result = render_card_png(state, path, now=clock)

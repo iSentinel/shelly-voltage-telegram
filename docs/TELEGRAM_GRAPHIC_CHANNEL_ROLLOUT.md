@@ -246,7 +246,7 @@ timestamp) and `source` (`yasno`). Expired or mismatched forecast
 dates are rejected. `--now` accepts an explicit Unix timestamp for
 deterministic fixture tests. The script does not fetch any API URLs.
 
-A `PASS` (exit 0) verifies the 960x560 PNG, offline state, absence
+A `PASS` (exit 0) verifies the 960x800 PNG, offline state, absence
 of live voltage/frequency/time fields and correct forecast separation.
 A `FAIL` (exit 2) emits a safe reason code without credentials or
 paths. Repeated runs with identical input reuse the same PNG. Existing
@@ -310,7 +310,7 @@ python3 scripts/graphic-online-acceptance.py \
 An optional --forecast-file follows the same local 48-slot YASNO format
 as the offline CLI; it must represent the current Kyiv calendar day and
 pass source/freshness checks. PASS (exit 0) includes measured voltage
-and optional frequency, verifies the PNG is 960x560, and reports no
+and optional frequency, verifies the PNG is 960x800, and reports no
 Telegram sends. FAIL (exit 2) gives a path-free reason code. Offline,
 missing, stale or invalid voltage samples are rejected. Existing
 different PNG files, links and oversized inputs are not replaced or
@@ -400,7 +400,7 @@ predicts planned electricity loss.
 The Ukrainian offline PNG uses the qualified text
 "ЙМОВІРНЕ ЗНЕСТРУМЛЕННЯ / ЗБІЙ SHELLY ЧИ МЕРЕЖІ".
 A separate prefix identifies YASNO as a forecast, not a measurement.
-The full text fits inside the 960x560 bitmap panel, and all required
+The full text fits inside the 960x800 bitmap panel, and all required
 Ukrainian glyphs are available. Six source-only regression cases in
 tests/test_graphic_supply_topology.py enforce this, including stale
 connectivity, unavailable live readings, and low but valid voltage.
@@ -408,3 +408,42 @@ connectivity, unavailable live readings, and low but valid voltage.
 Public deployment remains blocked until the existing Telegram media
 identity is verified by a guarded operation and a fresh matching
 source+SQLite snapshot passes the rollback readiness gate.
+
+## YASNO planned off/on intervals and 24-hour battery grid
+
+The public status text now derives all scheduled intervals from the
+same validated 48 half-hour YASNO slots. Each consecutive known
+offline period gets a red empty battery (🪫), while a period with
+electricity forecast by the schedule gets a green battery (🔋).
+Each text line includes start/end time and an exact whole- or
+half-hour duration. An unknown/Possible interval receives ⚠️ instead;
+the parser never interprets it as a confirmed outage.
+
+For the supplied Kyiv DTEK group 10.1 day:
+
+~~~text
+🪫00:00 - 04:00 (≈4 год.)
+🔋04:00 - 08:30 (≈4.5 год.)
+🪫08:30 - 16:00 (≈7.5 год.)
+🔋16:00 - 17:30 (≈1.5 год.)
+🪫17:30 - 24:00 (≈6.5 год.)
+~~~
+
+The schedule has 18 planned hours off and 6 forecast hours on.
+The text formatter shows up to eight periods and an explicit
+overflow count if more exist. Never use this independent forecast
+as a substitute for fresh Shelly voltage or loss-of-connectivity
+measurements.
+
+The PNG is a 960×800 Ukrainian graphic with 24 large color-coded
+hour tiles in a 6-by-4 grid. When the forecast changes inside an
+hour, the tile has two halves (for example, 08:30 and 17:30).
+Below the tiles, the graphic shows the five chronological intervals
+with small drawn green/red battery icons and durations. For unusually
+fragmented days, the PNG summarizes overflow while the grid still
+shows all 48 half-hour states. Stale/unverified YASNO data is hidden.
+No inference of 0 V is made when Shelly becomes unreachable.
+
+The source-only acceptance suite covers 24 labels, split hour tiles,
+individual periods and safe truncation, 24:00, unknown slots,
+off/on totals, and separate online/offline Shelly states.

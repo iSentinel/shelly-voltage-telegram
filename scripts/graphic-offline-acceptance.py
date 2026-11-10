@@ -106,7 +106,7 @@ def verify_png(path: Path, result: dict) -> None:
         not image.startswith(PNG_HEADER)
         or len(image) < 1024
         or len(image) > 2_000_000
-        or struct.unpack(">II", image[16:24]) != (960, 560)
+        or struct.unpack(">II", image[16:24]) != (960, 800)
         or result.get("status") != "offline"
         or result.get("live_voltage_visible") is not False
     ):
@@ -172,7 +172,7 @@ def accept(args: argparse.Namespace) -> dict:
         "status": "PASS",
         "live_voltage_visible": False,
         "forecast_visible": result["forecast_visible"],
-        "image_size": "960x560",
+        "image_size": "960x800",
         "output_action": action,
         "telegram_sent": False,
     }

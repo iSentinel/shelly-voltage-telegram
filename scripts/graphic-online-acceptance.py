@@ -82,7 +82,7 @@ def check_png(path: Path, result: dict) -> None:
         not image.startswith(b"\x89PNG\r\n\x1a\n")
         or len(image) < 1024
         or len(image) > 2_000_000
-        or struct.unpack(">II", image[16:24]) != (960, 560)
+        or struct.unpack(">II", image[16:24]) != (960, 800)
         or result.get("status") != "online"
         or result.get("live_voltage_visible") is not True
     ):
@@ -117,7 +117,7 @@ def accept(args: argparse.Namespace, checks) -> dict:
         "voltage_v": state["v"],
         "frequency_hz": state.get("f"),
         "forecast_visible": report["forecast_visible"],
-        "image_size": "960x560",
+        "image_size": "960x800",
         "output_action": action,
         "telegram_sent": False,
     }

@@ -91,7 +91,7 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         self.assertTrue(record["live_voltage_visible"])
         self.assertFalse(record["forecast_visible"])
         self.assertFalse(record["telegram_sent"])
-        self.assertEqual(record["image_size"], "960x560")
+        self.assertEqual(record["image_size"], "960x800")
         self.assertTrue(
             self.output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
         )

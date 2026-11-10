@@ -1,3 +1,34 @@
+## 2026-11-10T18:45:01+02:00 Gateway: 24 hourly YASNO tiles + battery windows
+
+- User requested layout resembling a colored hourly Telegram schedule:
+  24 blocks 6x4, each 00:00..23:00; 08:30 and 17:30 are split
+  green/red hours; show offline/on periods with exact durations.
+- Updated source-only PNG renderer 960x800, red/green hour tiles,
+  green battery for forecast power and red for planned outage.
+- Updated standard Telegram channel YASNO text to include ordered
+  forecast windows with battery emoji and exact durations.
+- Example 10 Nov 2026 group 10.1: off 00:00-04:00 (4h),
+  on 04:00-08:30 (4.5h), off 08:30-16:00 (7.5h),
+  on 16:00-17:30 (1.5h), off 17:30-24:00 (6.5h).
+  Total planned off=18h, planned on=6h.
+- Edge handling: 24:00, 30-minute boundaries, ? uncertain
+  periods, invalid/short inputs blocked, 8 text rows with
+  overflow count for fragmented days.
+- 12/12 PNG tests PASS incl all 24 labels, split hour at 17:30,
+  11/11 schedule-period tests, 14/14 text status tests,
+  offline safety 13/13 and online acceptance 13/13 PASS.
+- Production remains 0.5.15-hw, Docker healthy, Shelly offline
+  (last verified 193.8 V aged ~54 minutes at 18:25);
+  SQLite integrity ok, zero 0-V measurements.
+- One Telegram transport failure observed around 18:05,
+  transient ConnectionError; no source-only changes deployed.
+- Last published Draft PR300 commit 6aa8da37877579f35be50fb23cf3fc9ea35c898b,
+  GitHub CI 42852214234 SUCCESS before this new source-only stage.
+- NEXT: full offline Docker regression, candidate PR300 publish,
+  exact-head GitHub CI, refreshed graphic preview from trusted
+  YASNO cache, then guarded media migration/rollback readiness.
+- Public channel never edited by this stage.
+
 ## 2026-11-10T07:12:34+02:00 Gateway: PR300 opt-in graphic lifecycle full regression PASS
 
 - Exact source ancestor: 025592f966faa0b6a78d9f9a8a4ec567a713153f.
