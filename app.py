@@ -2365,6 +2365,7 @@ class Monitor:
         """Create storage, meter clients, Telegram, and runtime state."""
         self.cfg = cfg
         self.config_lock = threading.RLock()
+        self.status_publish_lock = threading.RLock()
         self.storage = Storage(cfg.database_path, cfg.timezone)
         self.meter_type = cfg.shelly_meter_type
         self.state = RuntimeState()
@@ -2982,8 +2983,152 @@ class Monitor:
             return False
         return True
 
+    def graphic_channel_opted_in(self) -> bool:
+        """Require an explicit channel and two independent deployment gates."""
+
+        return bool(
+            self.cfg.telegram_status_chat_id
+            and os.getenv("TELEGRAM_GRAPHIC_CHANNEL_ENABLED") == "1"
+            and os.getenv("TELEGRAM_GRAPHIC_OWNER_APPROVED") == "1"
+        )
+
+    def graphic_status_media(
+        self, text: str, folder: str
+    ) -> tuple[Path | None, str]:
+        """Build one guarded card with an accessible, bounded caption."""
+
+        caption = text[:1024]
+        image = Path(folder) / "channel-status.png"
+        try:
+            payload = private_graphic_preview_state(self)
+            render_card_png(json.loads(payload), image)
+        except Exception as exc:
+            logger.warning("Graphic render fallback: {}", type(exc).__name__)
+            return None, caption
+        return image, caption
+
+    def send_graphic_candidate(
+        self, text: str, folder: str, notify: bool
+    ) -> tuple[int, str]:
+        """Upload one candidate; never retry a possibly successful send."""
+
+        image, caption = self.graphic_status_media(text, folder)
+        if image is None:
+            result = self.telegram.send(
+                text, notify=notify, chat_id=self.telegram.status_chat_id
+            )
+            return result, "text"
+        result = self.telegram.send_status_photo(
+            image, caption, self.telegram.status_chat_id, notify=notify
+        )
+        return result, "photo"
+
+    def publish_graphic_status(self, text: str, notify: bool = False) -> bool:
+        """Serialize channel mutations and preserve status identity."""
+
+        with self.status_publish_lock:
+            return self._publish_graphic_status_locked(text, notify)
+
+    def _publish_graphic_status_locked(
+        self, text: str, notify: bool = False
+    ) -> bool:
+        """Persist unresolved uploads so retries cannot duplicate posts."""
+
+        key = self.status_message_key()
+        old_id = self.storage.get_meta(key)
+        pending_key = "telegram_graphic_publish_pending"
+        if self.storage.get_meta(pending_key):
+            return False
+        if old_id and self.status_media_kind() not in {"photo", "text"}:
+            return False
+        try:
+            self.storage.set_meta(
+                pending_key,
+                f"{self.telegram.status_chat_id}:{old_id or 'new'}",
+            )
+            with tempfile.TemporaryDirectory(
+                prefix="shelly-status-"
+            ) as folder:
+                new_id, kind = self.send_graphic_candidate(
+                    text, folder, notify
+                )
+            self.storage.set_meta(key, str(new_id))
+            self.record_status_media_kind(
+                new_id, kind, self.telegram.status_chat_id
+            )
+            self.storage.delete_meta(pending_key)
+        except Exception as exc:
+            logger.warning("Graphic publish pending: {}", type(exc).__name__)
+            return False
+        self.delete_previous_voltage_status(old_id, new_id)
+        self.storage.delete_meta("telegram_status_pinned_id")
+        self.ensure_status_pinned(new_id)
+        return True
+
+    def update_graphic_status(self, text: str) -> bool:
+        """Serialize verified edits with any concurrent new publication."""
+
+        with self.status_publish_lock:
+            return self._update_graphic_status_locked(text)
+
+    def _update_graphic_status_locked(self, text: str) -> bool:
+        """Edit only a known post; never race an uncertain publish."""
+
+        if self.storage.get_meta("telegram_graphic_publish_pending"):
+            return False
+        if not self.storage.get_meta(self.status_message_key()):
+            return self._publish_graphic_status_locked(text, notify=False)
+        with tempfile.TemporaryDirectory(prefix="shelly-status-") as folder:
+            image, caption = self.graphic_status_media(text, folder)
+            return self.edit_existing_status_media(text, caption, image)
+
+    def legacy_media_guard(self, text: str) -> bool | None:
+        """Keep rollback text safe when a photo or uncertain upload exists."""
+
+        if not self.cfg.telegram_status_chat_id:
+            return None
+        pending = self.storage.get_meta("telegram_graphic_publish_pending")
+        if isinstance(pending, str) and pending:
+            return False
+        marker = self.storage.get_meta("telegram_status_media_identity")
+        if not isinstance(marker, str) or not marker:
+            return None
+        kind = self.status_media_kind()
+        if kind == "text":
+            return None
+        if kind != "photo":
+            return False
+        try:
+            current = int(self.storage.get_meta(self.status_message_key()))
+            self.telegram.edit_photo_caption(
+                current, text[:1024], self.telegram.status_chat_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "Photo rollback edit blocked: {}", type(exc).__name__
+            )
+            return False
+        return True
+
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
-        """Edit the stable status or recreate a missing Telegram message."""
+        """Route status edits to the explicitly selected presentation mode."""
+
+        if self.graphic_channel_opted_in():
+            if (
+                key != self.status_message_key()
+                or target != self.telegram.status_chat_id
+            ):
+                return False
+            return self.update_graphic_status(text)
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            return fallback
+        return self.upsert_text_status_message(text, key, target)
+
+    def upsert_text_status_message(
+        self, text: str, key: str, target: str
+    ) -> bool:
+        """Preserve the existing plain-text status lifecycle."""
 
         stored = self.storage.get_meta(key)
         markup = self.status_keyboard()
@@ -3116,6 +3261,11 @@ class Monitor:
         )
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
+        if self.graphic_channel_opted_in():
+            self.rotate_graphic_status_after_recovery()
+            return
+        if self.rotate_legacy_photo_after_recovery():
+            return
         try:
             new_id = self.telegram.send(
                 multiphase_status_text(self),
@@ -3137,6 +3287,31 @@ class Monitor:
         self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         self.finish_voltage_status_update()
+
+    def rotate_legacy_photo_after_recovery(self) -> bool:
+        """Keep a rollback photo current without publishing another post."""
+
+        fallback = self.legacy_media_guard(multiphase_status_text(self))
+        if fallback is None:
+            return False
+        if fallback:
+            self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
+            self.finish_voltage_status_update()
+        return True
+
+    def rotate_graphic_status_after_recovery(self) -> None:
+        """Preserve pending recovery on an unverified media publish."""
+
+        if self.publish_graphic_status(multiphase_status_text(self)):
+            self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
+            self.storage.delete_meta("voltage_status_edit_window_started_at")
+            self.finish_voltage_status_update()
+            return
+        self.storage.set_meta(
+            RECOVERY_ROTATION_PENDING_KEY, str(self.last_recovery_at)
+        )
+        self.last_telegram = 0.0
+        self.last_sent_connectivity = None
 
     def maybe_availability_alert(
         self, state: str, duration: float | None = None
@@ -3291,6 +3466,13 @@ class Monitor:
         current = self.storage.get_meta(self.status_message_key())
         if not self.telegram.enabled or not current:
             return
+        text = multiphase_status_text(self)
+        if self.graphic_channel_opted_in():
+            if not self.update_graphic_status(text):
+                logger.warning("Graphic episode summary edit failed")
+            return
+        if self.legacy_media_guard(text) is not None:
+            return
         try:
             self.telegram.edit(
                 int(current),
@@ -3361,6 +3543,17 @@ class Monitor:
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         text = multiphase_status_text(self, include_event_context=False)
+        if self.graphic_channel_opted_in():
+            if self.publish_graphic_status(text, notify=False):
+                self.clear_stable_recovery_context()
+                self.finish_voltage_status_update()
+            return
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            if fallback:
+                self.clear_stable_recovery_context()
+                self.finish_voltage_status_update()
+            return
         try:
             new_id = self.telegram.send(
                 text, notify=False, chat_id=self.telegram.status_chat_id
@@ -3435,6 +3628,17 @@ class Monitor:
     def edit_voltage_status(self, old_id: str) -> bool | None:
         """Return success, failure, or None if the message needs replacing."""
 
+        text = multiphase_status_text(self)
+        if self.graphic_channel_opted_in():
+            if not self.update_graphic_status(text):
+                return False
+            self.finish_voltage_status_update()
+            return True
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            if fallback:
+                self.finish_voltage_status_update()
+            return fallback
         try:
             self.telegram.edit(
                 int(old_id),
@@ -3450,9 +3654,38 @@ class Monitor:
         self.finish_voltage_status_update()
         return True
 
+    def replace_graphic_voltage_status(
+        self, notify: bool, happened_at: float
+    ) -> bool:
+        """Keep voltage notification semantics with a verified photo status."""
+
+        old_id = self.storage.get_meta(self.status_message_key())
+        if old_id and self.voltage_status_edit_window_active(happened_at):
+            return self.edit_voltage_status(old_id) is True
+        if not self.publish_graphic_status(
+            multiphase_status_text(self), notify=notify
+        ):
+            return False
+        if notify:
+            self.storage.set_meta(
+                "last_voltage_notification_at", str(happened_at)
+            )
+        self.storage.set_meta(
+            "voltage_status_edit_window_started_at", str(happened_at)
+        )
+        self.finish_voltage_status_update()
+        return True
+
     def replace_voltage_status(self, notify: bool, happened_at: float) -> bool:
         """Edit an active episode or safely replace the shared status."""
 
+        if self.graphic_channel_opted_in():
+            return self.replace_graphic_voltage_status(notify, happened_at)
+        fallback = self.legacy_media_guard(multiphase_status_text(self))
+        if fallback is not None:
+            if fallback:
+                self.finish_voltage_status_update()
+            return fallback
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         if old_id and self.voltage_status_edit_window_active(happened_at):

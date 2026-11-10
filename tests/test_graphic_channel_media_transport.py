@@ -189,8 +189,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
     def test_current_status_loop_does_not_publish_photos_yet(self):
         """Source-only transport must not silently activate public photos."""
 
-        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
+        source = self.live_status_source()
         self.assertNotIn("self.telegram.send_status_photo(", source)
+        self.assertIn("self.graphic_channel_opted_in(", source)
 
     def media_monitor(self, initial: dict) -> tuple[object, dict]:
         """Build a storage-only monitor without production components."""

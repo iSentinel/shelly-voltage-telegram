@@ -1,3 +1,66 @@
+## 2026-11-10T07:12:34+02:00 Gateway: PR300 opt-in graphic lifecycle full regression PASS
+
+- Exact source ancestor: 025592f966faa0b6a78d9f9a8a4ec567a713153f.
+- Full isolated Docker regression (job QA-C): 1446 tests OK
+  (1 skipped), exit code 0. This supersedes a prior QA-B run where
+  3 old private-only text tests failed; guarded channel-only fallback
+  corrected and all 158 baseline test_app scenarios passed.
+- 21/21 lifecycle integration tests, 45/45 graphic media tests PASS.
+- Ruff 0.14.2, 169 format files, source maintainability PASS.
+- Strict dual opt-in plus dedicated status channel; all main status
+  paths coordinated for periodic, voltage transition, offline,
+  recovering and stable recovery.
+- Concurrent refresh serialization: one new message ID; subsequent
+  refresh edits same post. Ambiguous publish markers prevent retries.
+- Text-only/non-channel deployments unchanged by default; verified
+  photo rollback uses caption-only edits. Stale/offline reading guard
+  remains in PNG renderer, not confused with YASNO forecasts.
+- NO production changes: v0.5.15-hw continues to run, no channel API
+  requests, no merge, install or owner approval implied.
+- NEXT: publish Draft PR300 candidate, wait CI on exact commit, inspect
+  release/archive fixtures, capture QA evidence and request separate
+  Owner Approval before any public activation.
+
+## 2026-11-10T07:08:29+02:00 Gateway: graphic lifecycle concurrency and legacy safety QA
+
+- Source-only opt-in lifecycle integrated behind two explicit deployment
+  flags; production v0.5.15-hw remains untouched/healthy.
+- Added per-monitor RLock guarding status ID decisions, publish/edits.
+  Two simulated simultaneous refreshes create only one new channel post.
+- Disabled-graphics fallback updates verified existing photo captions
+  without text/media type confusion, repin or duplicate new posts.
+- Kept old text behavior fully unchanged for deployments lacking a
+  dedicated channel. Original test_app suite 158/158 PASS after fix.
+- Integration networkless suite 21/21 PASS; Telegram media 45/45 PASS.
+- Full QA snapshot before latest race fix: 1445 tests, 3 failures
+  only from legacy private-only fixtures; corrected and rechecked
+  in 158/158 targeted regression. Final complete QA still pending.
+- Ruff 0.14.2, all 169 file format checks and maintainability PASS.
+- NEXT: full offline container regression, GitHub Draft PR + CI, and
+  dry-run proof of offline/recovery/pending state with fresh data.
+- No public Telegram changes, version bump, merge or deployment.
+
+## 2026-11-10T07:02:18+02:00 Gateway: opt-in graphic channel lifecycle integrated (source only)
+
+- Source branch from verified PR300 head 025592f966faa0b6a78d9f9a8a4ec567a713153f,
+  unchanged released runtime v0.5.15-hw, no public Telegram API sends.
+- All principal status paths gated by explicit pair of flags plus separate
+  status destination; without opt-in preserve prior text behavior.
+- Periodic updates, voltage-event edit windows, episode finalization,
+  recovery rotation and stable-recovery cleanup route through coherent
+  text/photo handling with verified channel-bound message identity.
+- Uncertain publish persists fail-closed pending marker before Telegram
+  send; retry and disabled-feature rollback cannot duplicate messages.
+- On graphic mode rollback, verified photo remains available via
+  caption-only edits. Unknown media or pending sends block.
+- Source-only networkless tests: 20/20 integrated lifecycle, 45/45
+  graphic media transport, Ruff 0.14.2 and quality gate PASS.
+- Earlier isolated full integration QA snapshot: 1433 tests OK
+  (1 skipped), including all tests before rollback-specific additions.
+- NEXT: run full fresh regression of final integrated candidate, verify
+  source/SQLite rollback fixtures, prepare Draft PR review and CI.
+- Activation/installation requires separate Owner Approval and visual QA.
+
 ## 2026-11-10T04:05:28+02:00 Gateway: legacy text media preflight (source only)
 
 - Added confirm_legacy_text_status to verify an existing unbound text post.

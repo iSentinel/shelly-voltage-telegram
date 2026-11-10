@@ -66,11 +66,45 @@ authorize public message changes, publishing, or a production upgrade.
 - Obtain **separate Owner Approval** before changing the production channel.
 - Check Android/desktop recipient-visible card rendering and YASNO content.
 
-PR300 now supplies rendering, private preview, source-only multipart edit
-transport and validated **send_status_photo** with explicit destination and
-quiet-hours handling. Neither public send nor public edit has a live caller.
-Public status paths have **not** been switched. A pure
-plan_graphic_status_action helper now selects send_photo, send_text,
-edit_photo, edit_caption, edit_text or blocked based on a verified
-existing message kind and successful PNG generation. This helper is not
-called by production status paths. This is not release approval.
+## Source-only integrated lifecycle (not deployed)
+
+The PR300 candidate now routes all main public-status mutation paths
+through guarded photo/text operations **only when both** settings are
+explicitly 1: `TELEGRAM_GRAPHIC_CHANNEL_ENABLED` and
+`TELEGRAM_GRAPHIC_OWNER_APPROVED`. It also requires a separate configured
+public status channel. The production release has neither the code nor these
+settings. Environment flags do **not** constitute actual Owner Approval.
+
+- A new status publishes one photo if its renderer succeeds, or a normal
+  text status on rendering failure. Message identity and media kind are
+  recorded after Telegram returns the new message ID.
+- Existing verified text/photo posts are edited in place; unknown,
+  unverified, cross-chat or stale status identities refuse public mutation.
+- Every possibly ambiguous *new* Telegram send stores
+  `telegram_graphic_publish_pending` **before** making the request.
+  Retries and text rollback block while this marker exists. Clear it only
+  after independent owner reconciliation of Telegram channel history and
+  SQLite; never clear it just because a timeout has elapsed.
+- A per-monitor reentrant status lock serializes ID checks and all media
+  mutations against simultaneous status refresh and voltage callbacks.
+  The Telegram API session lock separately serializes actual HTTP calls.
+- The voltage-episode edit window, periodic update cadence, notification
+  cooldown and silent recovery path retain their existing outer policies.
+- Switching off the flags while a verified photo remains updates only
+  its caption. It does not convert it to text, resend, repin or delete it.
+  This rollback guard applies only to installations with a dedicated
+  status channel; private/text-only installations retain their legacy
+  behavior unchanged. This is not the final visual rollback.
+- Unknown legacy text posts are never auto-confirmed. A separate,
+  expressly owner-authorized preflight must establish their exact media
+  type before graphical publication can proceed.
+- A private `/graphic_preview` is still the only acceptable visual
+  recipient test before a separately approved maintenance window.
+
+## Production activation still blocked
+
+Prior to activation, the owner must approve a versioned release and a
+specific maintenance plan, including source+SQLite snapshot, verification
+of the current channel's message ID/type, safe migration, post-change
+recipient-visible confirmation, offline/recovery tests and actual rollback.
+No source-only candidate is authorization to edit public Telegram messages.
