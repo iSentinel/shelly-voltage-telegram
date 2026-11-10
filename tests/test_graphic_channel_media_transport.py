@@ -359,6 +359,66 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
         self.assertNotIn("self.telegram.edit_photo_caption(", source)
 
+    def test_status_planner_chooses_initial_text_or_photo(self):
+        """No existing message can be published once, with safe fallback."""
+
+        self.assertEqual(
+            APP.plan_graphic_status_action(None, "missing", True),
+            "send_photo",
+        )
+        self.assertEqual(
+            APP.plan_graphic_status_action(None, "missing", False),
+            "send_text",
+        )
+
+    def test_status_planner_never_edits_photo_as_text(self):
+        """Photo updates use media or caption, not editMessageText."""
+
+        cases = (
+            ("text", True, "edit_photo"),
+            ("text", False, "edit_text"),
+            ("photo", True, "edit_photo"),
+            ("photo", False, "edit_caption"),
+        )
+        for kind, ready, expected in cases:
+            with self.subTest(kind=kind, ready=ready):
+                self.assertEqual(
+                    APP.plan_graphic_status_action("811", kind, ready),
+                    expected,
+                )
+
+    def test_status_planner_blocks_unverified_message_kind(self):
+        """Unknown format never causes an unguarded send or edit."""
+
+        for kind in ("unknown", "missing", "video", ""):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    APP.plan_graphic_status_action("811", kind, True),
+                    "blocked",
+                )
+
+    def test_status_planner_blocks_invalid_message_identity(self):
+        """Malformatted persisted IDs are never sent to the API."""
+
+        for message_id in ("0", "  ", "-1", "abc", "9" * 100, True):
+            with self.subTest(message_id=message_id):
+                self.assertEqual(
+                    APP.plan_graphic_status_action(message_id, "text", True),
+                    "blocked",
+                )
+
+    def test_status_planner_requires_boolean_render_readiness(self):
+        """An unvalidated renderer result cannot accidentally enable media."""
+
+        with self.assertRaises(ValueError):
+            APP.plan_graphic_status_action("811", "text", "yes")
+
+    def test_status_planner_is_source_only(self):
+        """No production status path calls the new planner yet."""
+
+        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
+        self.assertNotIn("self.plan_graphic_status_action(", source)
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 

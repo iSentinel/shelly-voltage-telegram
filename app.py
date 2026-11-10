@@ -2019,6 +2019,30 @@ def private_widget_preview_text(monitor: Monitor) -> str:
     )
 
 
+def plan_graphic_status_action(
+    message_id: str | None, media_kind: str, png_ready: bool
+) -> str:
+    """Choose a fail-closed photo update without touching Telegram."""
+
+    if type(png_ready) is not bool:
+        raise ValueError("photo readiness must be explicit")
+    if not message_id:
+        return "send_photo" if png_ready else "send_text"
+    if (
+        type(message_id) is not str
+        or len(message_id) > 20
+        or not message_id.isascii()
+        or not message_id.isdecimal()
+        or int(message_id) < 1
+    ):
+        return "blocked"
+    if media_kind not in {"text", "photo"}:
+        return "blocked"
+    if png_ready:
+        return "edit_photo"
+    return "edit_caption" if media_kind == "photo" else "edit_text"
+
+
 def private_graphic_preview_state(monitor: Monitor) -> str:
     """Create private read-only meter state and fresh verified YASNO data."""
 

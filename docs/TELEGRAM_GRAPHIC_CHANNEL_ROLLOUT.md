@@ -60,4 +60,8 @@ authorize public message changes, publishing, or a production upgrade.
 PR300 now supplies rendering, private preview, source-only multipart edit
 transport and validated **send_status_photo** with explicit destination and
 quiet-hours handling. Neither public send nor public edit has a live caller.
-Public status paths have **not** been switched. This is not release approval.
+Public status paths have **not** been switched. A pure
+plan_graphic_status_action helper now selects send_photo, send_text,
+edit_photo, edit_caption, edit_text or blocked based on a verified
+existing message kind and successful PNG generation. This helper is not
+called by production status paths. This is not release approval.

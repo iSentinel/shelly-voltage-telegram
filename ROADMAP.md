@@ -1,3 +1,16 @@
+## 2026-11-10T03:47:29+02:00 Gateway: photo status transition planner (source only)
+
+- Created fail-closed pure plan_graphic_status_action helper with no API IO.
+- Initial new status chooses photo if validated image exists, else text.
+- Existing known text may edit as text or convert via editMessageMedia.
+- Existing known photo may edit media or caption; never editMessageText.
+- Unknown or invalid persisted message identity returns blocked.
+- 31/31 targeted transport tests PASS; pinned Ruff quality gate PASS.
+- Full isolated regression 1411 tests OK (1 skipped); no live caller.
+- NEXT: unify all status paths behind an explicit owner opt-in, with
+  rate-limits, rollback, channel acceptance and Owner Approval.
+- Do not install or activate until full source/SQLite acceptance.
+
 ## 2026-11-10T03:43:43+02:00 Gateway: guarded caption-only transport for photo status
 
 - Added source-only Telegram editMessageCaption for a known photo ID.
