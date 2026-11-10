@@ -1518,7 +1518,8 @@ class Telegram:
             isinstance(message_id, bool)
             or not isinstance(message_id, int)
             or message_id < 1
-            or not chat_id
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
         ):
             raise ValueError("explicit channel and valid message ID required")
         if len(caption) > 1024 or path.is_symlink() or not path.is_file():
@@ -1532,13 +1533,19 @@ class Telegram:
         if not isinstance(payload, dict):
             raise RuntimeError("Telegram returned invalid JSON object")
         if not payload.get("ok"):
-            raise RuntimeError(safe_telegram_api_error(payload))
+            error = RuntimeError(safe_telegram_api_error(payload))
+            if message_not_modified(error):
+                return
+            raise error
         result = payload.get("result")
         if (
             not isinstance(result, dict)
             or result.get("message_id") != message_id
         ):
             raise RuntimeError("Telegram returned unexpected edited message")
+        chat = result.get("chat")
+        if isinstance(chat, dict) and str(chat.get("id")) != chat_id:
+            raise RuntimeError("Telegram returned unexpected edited chat")
 
     def _edit_photo_payload(
         self, message_id: int, path: Path, caption: str, chat_id: str

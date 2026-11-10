@@ -1,3 +1,18 @@
+## 2026-11-10T03:16:15+02:00 Gateway: PR300 graphic media transport hardening (source only)
+
+- Created a separate Git source checkout at the exact PR300 commit,
+  without changing the installed 0.5.15-hw runtime or Telegram channel.
+- Hardened editMessageMedia: identical edit is idempotent, explicit channel
+  destination is validated, returned chat identity is checked when supplied.
+- New targeted regression: 9/9 PASS in offline read-only Docker.
+- Ruff 0.14.2 formatting/lint, source check-quality and git diff --check PASS.
+- Full networkless Docker regression is running with executable isolated
+  /tmp fixtures; results must be recorded before any promotion.
+- Lifecycle audit and fail-closed rollout plan:
+  docs/TELEGRAM_GRAPHIC_CHANNEL_ROLLOUT.md
+- NEXT: finish full regression, commit source-only safety stage, then
+  implement coherent opt-in status lifecycle. No public activation or release.
+
 ## 2026-11-08 QA: protected EM-50 predeploy snapshot window
 
 - Real Shelly 0.5.13-hw recovered and is healthy; actual

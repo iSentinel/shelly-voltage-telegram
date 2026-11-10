@@ -111,6 +111,39 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 self.assertNotIn("secret", str(failure.exception))
                 self.bot.api_session.post.assert_called_once()
 
+    def test_repeated_identical_media_edit_keeps_stable_message(self):
+        """Telegram no-op edit is success, not a reason to replace the post."""
+
+        self.response(
+            {
+                "ok": False,
+                "error_code": 400,
+                "description": "Bad Request: message is not modified",
+            }
+        )
+        self.bot.edit_photo(811, self.card, "Same card", "-100123")
+        self.bot.api_session.post.assert_called_once()
+
+    def test_media_response_must_match_destination_chat(self):
+        """Refuse to mark an edit successful for a different channel."""
+
+        self.response(
+            {
+                "ok": True,
+                "result": {"message_id": 811, "chat": {"id": -100999}},
+            }
+        )
+        with self.assertRaisesRegex(RuntimeError, "unexpected edited chat"):
+            self.bot.edit_photo(811, self.card, "Card", "-100123")
+
+    def test_blank_channel_target_rejected_before_network(self):
+        """Whitespace is never an acceptable media destination."""
+
+        self.bot.api_session.post = Mock()
+        with self.assertRaises(ValueError):
+            self.bot.edit_photo(811, self.card, "Card", "   ")
+        self.bot.api_session.post.assert_not_called()
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 
