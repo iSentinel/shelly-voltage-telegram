@@ -143,6 +143,35 @@ These tests use invented fixtures, not user telemetry. Physical restoration
 requires actual fresh Shelly measurements and a separate owner-approved
 maintenance window; the graphical public channel remains disabled.
 
+## Combined migration and rollback readiness audit
+
+The additional `scripts/graphic-rollout-readiness.py` is a read-only
+predeployment **gate**, not a deployment or an authorization. It combines
+verified channel-bound status metadata with a fresh, independently
+checksummed rollback snapshot of **source and SQLite**. It uses the
+existing source/SQLite archive validators and reveals no Telegram IDs.
+Checks run without Telegram networking or a database write.
+
+```bash
+python3 scripts/graphic-rollout-readiness.py --help
+python3 scripts/graphic-rollout-readiness.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --snapshot /var/backups/shelly-voltage/upgrades/SELECTED-SNAPSHOT \
+  --max-snapshot-age-hours 2
+```
+
+A status of `BLOCKED` (exit 2) is expected with the current production
+legacy text status, which lacks a verified media marker. An older upgrade
+snapshot is also not accepted as proof of a fresh predeployment copy.
+Do not clear markers or fabricate timestamps to make the check pass.
+
+A `READY FOR OWNER REVIEW` result (exit 0) confirms only that the
+selected archive and status metadata passed these static checks.
+Fresh SQLite parity across a *stopped* writer, the approval record,
+Telegram message verification and recipient-visible acceptance remain
+mandatory before any channel change. Actual installation and rollback
+are separate operations; this script never performs them.
+
 ## Production activation still blocked
 
 Prior to activation, the owner must approve a versioned release and a

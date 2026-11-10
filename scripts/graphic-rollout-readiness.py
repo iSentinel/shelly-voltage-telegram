@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Audit status identity and rollback archives without live modifications."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import importlib.util
+import os
+import re
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+MAX_SNAPSHOT_AGE_HOURS = 2
+
+
+def parse_args() -> argparse.Namespace:
+    """Require explicit source, database and independently copied snapshot."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--database", required=True, type=Path)
+    parser.add_argument("--snapshot", required=True, type=Path)
+    parser.add_argument("--chat-env", default="TELEGRAM_STATUS_CHAT_ID")
+    parser.add_argument(
+        "--max-snapshot-age-hours",
+        type=float,
+        default=MAX_SNAPSHOT_AGE_HOURS,
+    )
+    return parser.parse_args()
+
+
+def read_media_gate(database: Path, chat_env: str) -> list[str]:
+    """Reuse the existing fail-closed, read-only Telegram status preflight."""
+
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", chat_env):
+        return ["invalid channel environment name"]
+    source = Path(__file__).with_name("graphic-migration-preflight.py")
+    spec = importlib.util.spec_from_file_location("graphic_preflight", source)
+    if spec is None or spec.loader is None:
+        return ["migration preflight is unavailable"]
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        metadata, check = module.read_metadata(database)
+    except ValueError:
+        return ["SQLite metadata cannot be safely inspected"]
+    return module.readiness_issues(metadata, check, os.getenv(chat_env, ""))
+
+
+def safe_regular_file(path: Path) -> bool:
+    """Reject links and paths with linked parents before accessing a file."""
+
+    if any(part.is_symlink() for part in (path, *path.parents)):
+        return False
+    try:
+        info = path.stat()
+    except OSError:
+        return False
+    return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+
+
+def snapshot_archives(snapshot: Path) -> tuple[Path, Path]:
+    """Locate a source tarball and exactly one independent SQLite archive."""
+
+    if snapshot.is_symlink() or not snapshot.is_dir():
+        raise ValueError("snapshot directory missing or linked")
+    if any(parent.is_symlink() for parent in snapshot.parents):
+        raise ValueError("snapshot parent path is linked")
+    archives = sorted(snapshot.glob("voltage-*.sqlite3.gz"))
+    if len(archives) != 1:
+        raise ValueError("snapshot must contain one SQLite archive")
+    source = snapshot / "source.tar.gz"
+    for archive in (source, archives[0]):
+        if not safe_regular_file(archive):
+            raise ValueError("snapshot archive missing or linked")
+        if not safe_regular_file(Path(str(archive) + ".sha256")):
+            raise ValueError("archive checksum missing or linked")
+    return source, archives[0]
+
+
+def verify_sha256(archive: Path) -> bool:
+    """Require a checksum sidecar bound to the exact archived path."""
+
+    try:
+        manifest = Path(str(archive) + ".sha256").read_text()
+        if len(manifest) > 512:
+            return False
+        digest = hashlib.sha256()
+        with archive.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        return manifest == f"{digest.hexdigest()}  {archive}\n"
+    except (OSError, ValueError):
+        return False
+
+
+def age_issues(archives: tuple[Path, Path], hours: float) -> list[str]:
+    """Reject future-dated or stale archives before expensive verification."""
+
+    if not 0 < hours <= 168:
+        return ["invalid maximum snapshot age"]
+    now = time.time()
+    for file in archives:
+        age = now - file.stat().st_mtime
+        if age < -60 or age > hours * 3600:
+            return ["rollback snapshot is stale or future-dated"]
+    return []
+
+
+def run_archive_validator(script: str, args: list[str]) -> bool:
+    """Invoke the pinned source validator, suppressing private paths."""
+
+    validator = Path(__file__).with_name(script)
+    try:
+        result = subprocess.run(
+            [sys.executable, str(validator), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def snapshot_issues(snapshot: Path, max_age: float) -> list[str]:
+    """Validate independent checksums, freshness and archive contents."""
+
+    try:
+        archives = snapshot_archives(snapshot)
+    except (OSError, ValueError):
+        return ["rollback snapshot is absent or unsafe"]
+    problems = age_issues(archives, max_age)
+    if problems:
+        return problems
+    if any(not verify_sha256(archive) for archive in archives):
+        return ["rollback archive checksum mismatch"]
+    source, sqlite = archives
+    if not run_archive_validator("validate-source-archive.py", [str(source)]):
+        return ["rollback source archive is invalid"]
+    if not run_archive_validator(
+        "validate-sqlite-archive.py", ["--archive", str(sqlite)]
+    ):
+        return ["rollback SQLite archive is invalid"]
+    return []
+
+
+def main() -> int:
+    """Print a private-identifier-free decision; never activate graphics."""
+
+    args = parse_args()
+    issues = read_media_gate(args.database, args.chat_env)
+    issues.extend(snapshot_issues(args.snapshot, args.max_snapshot_age_hours))
+    if issues:
+        print("GRAPHIC ROLLOUT: BLOCKED (read-only)")
+        for issue in issues:
+            print(f" - {issue}")
+        return 2
+    print("GRAPHIC ROLLOUT: READY FOR OWNER REVIEW (not deployment)")
+    print("Production activation still requires separate Owner Approval.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
