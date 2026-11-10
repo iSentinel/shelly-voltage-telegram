@@ -12,6 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from advanced_features import CHART_FONT, write_png
+from telegram_uk_bitmap import UKRAINIAN_FONT
 from telegram_widget_data import MAX_FORECAST_AGE, MAX_SAMPLE_AGE, numeric
 
 WIDTH = 960
@@ -26,10 +27,17 @@ GREEN = b"\x35\xd0\x92"
 RED = b"\xff\x70\x7a"
 AMBER = b"\xff\xc3\x64"
 BLUE = b"\x66\xb1\xfa"
-OFFLINE_HINT = "POWER OUTAGE LIKELY / NOT CONFIRMED"
+OFFLINE_HINT = "ЙМОВІРНЕ ВІДКЛЮЧЕННЯ / НЕ ПІДТВЕРДЖЕНО"
+STATUS_LABELS = {
+    "online": "ОНЛАЙН",
+    "offline": "ОФЛАЙН",
+    "stale": "ЗАСТАРІЛО",
+    "unknown": "НЕВІДОМО",
+}
 
 FONT = {
     **CHART_FONT,
+    **UKRAINIAN_FONT,
     "C": ("01111", "10000", "10000", "10000", "10000", "10000", "01111"),
     "F": ("11111", "10000", "10000", "11110", "10000", "10000", "10000"),
     "J": ("00111", "00010", "00010", "00010", "10010", "10010", "01100"),
@@ -147,35 +155,35 @@ def draw_header(pixels: bytearray, result: dict) -> None:
     """Render the device identity and measured connectivity state."""
 
     rectangle(pixels, 28, 24, 932, 112, PANEL, 16)
-    label(pixels, "SHELLY  /  GRID STATUS", 60, 54, INK, 4)
+    label(pixels, "SHELLY / СТАН МЕРЕЖІ", 60, 54, INK, 4)
     status = result["status"]
     color = (
         GREEN if status == "online" else RED if status == "offline" else AMBER
     )
     rectangle(pixels, 690, 42, 900, 93, PANEL_LIGHT, 14)
     rectangle(pixels, 708, 57, 726, 75, color, 9)
-    label(pixels, status, 746, 55, color, 3)
+    label(pixels, STATUS_LABELS.get(status, "НЕВІДОМО"), 738, 55, color, 3)
 
 
 def draw_voltage(pixels: bytearray, result: dict, now: float) -> None:
     """Make live voltage prominent and stale voltage invisible."""
 
     rectangle(pixels, 28, 127, 932, 320, PANEL, 16)
-    label(pixels, "MEASURED VOLTAGE  /  L1", 60, 153, MUTED, 3)
+    label(pixels, "НАПРУГА МЕРЕЖІ / L1", 60, 153, MUTED, 3)
     if result["status"] == "online":
         voltage = f"{result['voltage']:.1f}"
         label(pixels, voltage, 60, 199, INK, 9)
-        label(pixels, "V", 350, 230, GREEN, 6)
+        label(pixels, "В", 350, 230, GREEN, 6)
         frequency = result.get("frequency")
-        freq_text = f"{frequency:.2f} HZ" if frequency is not None else "-- HZ"
+        freq_text = f"{frequency:.2f} ГЦ" if frequency is not None else "-- ГЦ"
         label(pixels, freq_text, 653, 195, INK, 4)
         last = datetime.fromtimestamp(result["time"], KYIV).strftime(
             "%H:%M:%S"
         )
-        label(pixels, "LAST " + last, 653, 255, MUTED, 2)
+        label(pixels, "ОНОВЛЕНО " + last, 653, 255, MUTED, 2)
     else:
-        label(pixels, "--- V", 60, 205, AMBER, 8)
-        label(pixels, "CURRENT VALUE UNKNOWN", 430, 225, MUTED, 3)
+        label(pixels, "--- В", 60, 205, AMBER, 8)
+        label(pixels, "ДАНІ НЕДОСТУПНІ", 430, 225, MUTED, 3)
 
 
 def draw_timeline(
@@ -184,13 +192,13 @@ def draw_timeline(
     """Draw precisely 48 half-hour slots, never infer live electricity."""
 
     rectangle(pixels, 28, 336, 932, 520, PANEL, 16)
-    label(pixels, "YASNO / DTEK FORECAST", 60, 362, INK, 3)
+    label(pixels, "ГРАФІК YASNO / ДТЕК", 60, 362, INK, 3)
     if not bars:
-        label(pixels, "NO CURRENT FORECAST", 60, 414, MUTED, 3)
-        hint = OFFLINE_HINT if state.get("s") == "offline" else "NO LIVE DATA"
+        label(pixels, "НЕМАЄ АКТУАЛЬНОГО ГРАФІКА", 60, 414, MUTED, 3)
+        hint = OFFLINE_HINT if state.get("s") == "offline" else "НЕМАЄ ДАНИХ"
         label(pixels, hint, 60, 469, MUTED, 2)
         return
-    label(pixels, "GROUP " + str(state["g"]), 734, 362, BLUE, 3)
+    label(pixels, "ГРУПА " + str(state["g"]), 734, 362, BLUE, 3)
     colors = {"O": GREEN, "X": RED, "?": AMBER}
     for i, symbol in enumerate(bars):
         x = 60 + i * 17
@@ -198,9 +206,9 @@ def draw_timeline(
     for i, value in enumerate(("00:00", "06:00", "12:00", "18:00", "24:00")):
         label(pixels, value, 60 + i * 199, 457, MUTED, 2)
     hint = (
-        "FORECAST ONLY  /  " + OFFLINE_HINT
+        "ЛИШЕ ПРОГНОЗ / " + OFFLINE_HINT
         if state.get("s") == "offline"
-        else "FORECAST ONLY  /  SHELLY IS LIVE DATA"
+        else "ЛИШЕ ПРОГНОЗ / ФАКТ ЗА SHELLY"
     )
     label(pixels, hint, 60, 491, MUTED, 2)
 

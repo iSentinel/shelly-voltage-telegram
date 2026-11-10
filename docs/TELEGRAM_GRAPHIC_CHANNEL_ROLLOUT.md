@@ -209,3 +209,14 @@ correlates with a mains outage, but Wi-Fi or device faults can also
 produce the same symptom. This wording is advisory, not evidence of
 zero measured voltage. The YASNO forecast remains labelled as forecast
 and must not override live telemetry.
+## Ukrainian 5×7 raster captions (draft)
+
+PNG labels now use built-in 5×7 Ukrainian bitmap glyphs, without fonts,
+image packages or external API calls at runtime. The card shows
+SHELLY / СТАН МЕРЕЖІ, НАПРУГА МЕРЕЖІ / L1, ГРАФІК YASNO / ДТЕК,
+ГРУПА 10.1, and localized status labels. If Shelly is offline, the
+measured voltage remains hidden and the warning is
+ЙМОВІРНЕ ВІДКЛЮЧЕННЯ / НЕ ПІДТВЕРДЖЕНО. The source-labelled YASNO
+slots remain forecast only and must never indicate actual mains status.
+Units use Ukrainian В and ГЦ; Shelly and YASNO remain product names.
+Localization does not enable Telegram publishing or change storage.

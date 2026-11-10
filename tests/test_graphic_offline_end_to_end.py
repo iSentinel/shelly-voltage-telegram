@@ -10,7 +10,13 @@ from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfo
 
-from telegram_card_png import label, render_card_png
+from telegram_card_png import (
+    FONT,
+    OFFLINE_HINT,
+    draw_header,
+    label,
+    render_card_png,
+)
 from telegram_widget_data import widget_public_data
 
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -89,7 +95,7 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         with mock.patch("telegram_card_png.label", wraps=label) as painter:
             self.render(state)
         labels = [call.args[1] for call in painter.call_args_list]
-        self.assertIn("POWER OUTAGE LIKELY / NOT CONFIRMED", labels)
+        self.assertIn(OFFLINE_HINT, labels)
         self.assertNotIn("CHECK SHELLY FOR ACTUAL POWER", labels)
 
     def test_offline_with_yasno_does_not_claim_mains_confirmed(self):
@@ -99,9 +105,7 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         with mock.patch("telegram_card_png.label", wraps=label) as painter:
             self.render(state)
         labels = [call.args[1] for call in painter.call_args_list]
-        self.assertIn(
-            "FORECAST ONLY  /  POWER OUTAGE LIKELY / NOT CONFIRMED", labels
-        )
+        self.assertIn("ЛИШЕ ПРОГНОЗ / " + OFFLINE_HINT, labels)
 
     def test_online_card_has_no_offline_warning(self):
         """Fresh measurements override the outage suspicion."""
@@ -110,8 +114,74 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         with mock.patch("telegram_card_png.label", wraps=label) as painter:
             self.render(state)
         labels = [call.args[1] for call in painter.call_args_list]
-        self.assertFalse(any("OUTAGE LIKELY" in item for item in labels))
-        self.assertIn("FORECAST ONLY  /  SHELLY IS LIVE DATA", labels)
+        self.assertFalse(any(OFFLINE_HINT in item for item in labels))
+        self.assertIn("ЛИШЕ ПРОГНОЗ / ФАКТ ЗА SHELLY", labels)
+
+    def test_ukrainian_all_labels_have_nonblank_bitmap_glyphs(self):
+        """Every Ukrainian label has real bitmap pixels."""
+
+        phrases = (
+            "SHELLY / СТАН МЕРЕЖІ",
+            "НАПРУГА МЕРЕЖІ / L1",
+            "ДАНІ НЕДОСТУПНІ",
+            "ГРАФІК YASNO / ДТЕК",
+            "НЕМАЄ АКТУАЛЬНОГО ГРАФІКА",
+            "ГРУПА 10.1",
+            "ЛИШЕ ПРОГНОЗ / ФАКТ ЗА SHELLY",
+            "ОНОВЛЕНО 12:34:56",
+            OFFLINE_HINT,
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                for glyph in phrase:
+                    self.assertIn(glyph, FONT)
+                    if not glyph.isspace():
+                        self.assertIn("1", "".join(FONT[glyph]))
+
+    def test_offline_main_card_uses_ukrainian_status_and_hint(self):
+        """An outage reports likely loss of mains, not a measured zero."""
+
+        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+            result, _ = self.render(make_card_state("offline", bars=None))
+        captions = [call.args[1] for call in painter.call_args_list]
+        self.assertEqual(result["status"], "offline")
+        self.assertIn("ОФЛАЙН", captions)
+        self.assertIn("ДАНІ НЕДОСТУПНІ", captions)
+        self.assertIn("--- В", captions)
+        self.assertIn(OFFLINE_HINT, captions)
+        self.assertNotIn("CURRENT VALUE UNKNOWN", captions)
+
+    def test_ukrainian_status_badge_never_overflows(self):
+        """All translated statuses stay inside the top-right badge."""
+
+        background = bytearray(b"\x00" * (960 * 560 * 3))
+        for status in ("online", "offline", "stale", "unknown"):
+            with self.subTest(status=status):
+                with mock.patch(
+                    "telegram_card_png.label", wraps=label
+                ) as painter:
+                    draw_header(background, {"status": status})
+                right = [
+                    call.args[2] + len(call.args[1]) * call.args[5] * 6
+                    for call in painter.call_args_list
+                    if call.args[2] >= 700
+                ]
+                self.assertTrue(right)
+                self.assertLessEqual(max(right), 900)
+
+    def test_online_main_card_uses_ukrainian_labels(self):
+        """Fresh voltage/frequency and source labels stay legible."""
+
+        state = make_card_state("online", age_seconds=5, bars="O" * 48)
+        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+            result, _ = self.render(state)
+        captions = [call.args[1] for call in painter.call_args_list]
+        self.assertEqual(result["status"], "online")
+        self.assertIn("ОНЛАЙН", captions)
+        self.assertIn("НАПРУГА МЕРЕЖІ / L1", captions)
+        self.assertIn("В", captions)
+        self.assertIn("ГРАФІК YASNO / ДТЕК", captions)
+        self.assertIn("ГРУПА 10.1", captions)
 
     def test_stale_online_flag_is_not_accepted_as_fresh(self):
         """Old successful reads are unknown even before offline detection."""

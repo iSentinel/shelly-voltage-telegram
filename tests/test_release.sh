@@ -66,7 +66,7 @@ echo "RELEASE_REPRODUCIBILITY PASS"
 FIXTURE="$TMP/private-source"
 mkdir -p "$FIXTURE/scripts" "$FIXTURE/secrets" "$FIXTURE/nested"
 cp "$PROJECT/scripts/release.sh" "$FIXTURE/scripts/release.sh"
-for file in VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py Dockerfile compose.yaml requirements.txt README.md .env.example; do
+for file in VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_uk_bitmap.py Dockerfile compose.yaml requirements.txt README.md .env.example; do
     cp "$PROJECT/$file" "$FIXTURE/$file"
 done
 printf "%s\n" "SHELLY_HOST=private.invalid" > "$FIXTURE/.env"
