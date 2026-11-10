@@ -33,8 +33,11 @@ authorize public message changes, publishing, or a production upgrade.
 6. The image must hide stale, invalid and offline physical readings and
    expired YASNO forecasts independently. Caption must remain accessible,
    localized and at most Telegram's 1024-character photo-caption limit.
-7. Message edit frequency is bounded. Alert sound/quiet-hours behavior,
-   voltage episode windows and recovery silence must remain unchanged.
+7. Message edit frequency is bounded. Multipart sendPhoto and
+   editMessageMedia use the same per-bot API lock as JSON methods.
+   A transport exception must always release that lock. Alert sound,
+   quiet-hours behavior, voltage episode windows and recovery silence
+   remain unchanged.
 8. New status rotations publish first, then persist the successful new ID;
    only then unpin/delete the old one. A failed delete is retriable.
 9. Turning graphics off while the current post is a photo must not attempt

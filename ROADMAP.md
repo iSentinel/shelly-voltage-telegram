@@ -1,3 +1,15 @@
+## 2026-11-10T04:00:49+02:00 Gateway: serialize Telegram multipart transport (source only)
+
+- Shared Telegram api_lock now protects send_file/sendPhoto uploads and
+  editMessageMedia multipart uploads, like existing JSON API calls.
+- Lock is released after request exceptions; no long-polling lock added.
+- 39/39 targeted graphic transport tests PASS, including normal and
+  failed uploads; pinned Ruff/quality gate PASS.
+- Full read-only Docker regression 1419 tests OK (1 skipped).
+- NO production deployment or real Telegram API sends from this stage.
+- NEXT: complete coordinated opt-in status routing, rate limits,
+  fallbacks, rollback and separate Owner Approval.
+
 ## 2026-11-10T03:54:40+02:00 Gateway: guarded edit-only photo status executor (source only)
 
 - Added edit_existing_status_media for a verified persisted message ID.

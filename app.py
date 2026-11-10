@@ -1484,7 +1484,7 @@ class Telegram:
         if caption:
             data["caption"] = caption
         try:
-            with path.open("rb") as handle:
+            with self.api_lock, path.open("rb") as handle:
                 response = self.api_session.post(
                     f"{self.base}/{method}",
                     data=data,
@@ -1618,7 +1618,7 @@ class Telegram:
             ensure_ascii=False,
         )
         try:
-            with path.open("rb") as handle:
+            with self.api_lock, path.open("rb") as handle:
                 response = self.api_session.post(
                     f"{self.base}/editMessageMedia",
                     data={

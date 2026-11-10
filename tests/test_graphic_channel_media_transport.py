@@ -5,11 +5,13 @@ from __future__ import annotations
 import inspect
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import requests
 from test_app import APP, config
 
 
@@ -564,6 +566,46 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         self.assertFalse(
             "self.edit_existing_status_media(" in self.live_status_source()
         )
+
+    def test_multipart_telegram_uploads_share_api_lock(self):
+        """Status media and photo send serialize with ordinary API calls."""
+
+        self.bot.api_lock = threading.Lock()
+        self.bot.quiet_now = Mock(return_value=False)
+        called = []
+
+        def locked_post(url, **kwargs):
+            self.assertTrue(self.bot.api_lock.locked())
+            called.append(url)
+            result = Mock()
+            result.json.return_value = {
+                "ok": True,
+                "result": {"message_id": 811},
+            }
+            return result
+
+        self.bot.api_session.post = Mock(side_effect=locked_post)
+        self.bot.edit_photo(811, self.card, "Status", "-100123")
+        self.bot.send_status_photo(self.card, "Status", "-100123")
+        self.assertEqual(len(called), 2)
+        self.assertFalse(self.bot.api_lock.locked())
+
+    def test_multipart_upload_failure_releases_lock(self):
+        """A transient transport error cannot leave future edits blocked."""
+
+        self.bot.api_lock = threading.Lock()
+        self.bot.api_session.post = Mock(
+            side_effect=requests.ConnectionError("private endpoint")
+        )
+        for operation in (
+            lambda: self.bot.edit_photo(811, self.card, "Status", "-100123"),
+            lambda: self.bot.send_status_photo(self.card, "Status", "-100123"),
+        ):
+            with self.subTest(operation=operation):
+                with self.assertRaises(RuntimeError) as error:
+                    operation()
+                self.assertNotIn("private endpoint", str(error.exception))
+                self.assertFalse(self.bot.api_lock.locked())
 
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
