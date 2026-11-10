@@ -123,6 +123,26 @@ production 0.5.15-hw database, the channel ID is known but the media-kind
 marker is not yet verified, so migration remains blocked until a
 separately approved Telegram/SQLite reconciliation.
 
+## Power-outage renderer acceptance
+
+The synthetic acceptance suite
+`tests/test_graphic_offline_end_to_end.py` validates the health-state
+encoder and PNG renderer together, without Shelly, Telegram or the internet.
+
+- An offline health state with historical 216.9 V does not include
+  current voltage or frequency in public widget data.
+- A forecast predicting electricity cannot override an offline meter.
+  Missing forecast information does not imply restored power.
+- A recovering or stale meter remains unknown until a fresh successful
+  sample is available.
+- A new verified online sample takes precedence over a forecast predicting
+  an outage. Synthetic zero in an offline snapshot cannot be displayed
+  as a live voltage.
+
+These tests use invented fixtures, not user telemetry. Physical restoration
+requires actual fresh Shelly measurements and a separate owner-approved
+maintenance window; the graphical public channel remains disabled.
+
 ## Production activation still blocked
 
 Prior to activation, the owner must approve a versioned release and a
