@@ -497,3 +497,17 @@ channel/message IDs, unresolved sends and conflicting persisted SQLite
 media identity remain BLOCKED. The audit stays read-only and returns
 PUBLIC_POST_MATCH_FOR_REVIEW / FIXTURE_MATCH_ONLY; neither result grants
 permission to write the production media-identity marker or to deploy.
+
+
+## Forecast legend and daily totals (Design Polish)
+
+The main 960x800 PNG adopts the useful 24-hour, two-half-hour-per-cell
+schedule layout from the supplied DTEK example without replacing the
+separate **historical** voltage/statistics report. A legend labels
+green as expected power, red as expected scheduled outage, and amber
+as a possible outage. The source publication time and Kyiv calendar
+date are printed only after the trusted YASNO forecast passes current-day,
+age, and source checks. Totals count exactly 48 half-hour slots with
+unrounded whole/half hours; the forecast is never evidence of physical
+power. Offline Shelly still displays unknown live voltage, not zero or
+its last historical sample. This candidate is not installed in production.

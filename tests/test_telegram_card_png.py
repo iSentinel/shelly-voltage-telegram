@@ -12,10 +12,12 @@ from unittest import mock
 from zoneinfo import ZoneInfo
 
 from telegram_card_png import (
+    AMBER,
     GREEN,
     HEIGHT,
     RED,
     WIDTH,
+    half_hour_total,
     label,
     render_card_png,
 )
@@ -157,6 +159,48 @@ class TelegramGraphicWidgetTests(unittest.TestCase):
         self.assertEqual(rgb[left : left + 3], GREEN)
         self.assertEqual(rgb[right : right + 3], RED)
         self.assertEqual(report["forecast_off_slots"], 36)
+
+    def test_forecast_legend_uses_distinct_semantic_colors(self):
+        """The mobile legend must distinguish power, outage and possible."""
+
+        self.render(fixture(online=False))
+        width, _, rgb = read_png(self.root / "status.png")
+        for x, color in ((66, GREEN), (250, RED), (511, AMBER)):
+            with self.subTest(x=x):
+                start = (569 * width + x) * 3
+                self.assertEqual(rgb[start : start + 3], color)
+
+    def test_daily_totals_and_source_update_are_rendered(self):
+        """A complete grid reports exact 24h totals and its update time."""
+
+        with mock.patch("telegram_card_png.label", wraps=label) as writer:
+            self.render(fixture(online=False))
+        labels = {call.args[1] for call in writer.call_args_list}
+        self.assertIn("10.11.2026", labels)
+        self.assertIn("СВІТЛО: 8,5 ГОД", labels)
+        self.assertIn("НЕМАЄ: 7,5 ГОД", labels)
+        self.assertIn("МОЖЛИВО: 8 ГОД", labels)
+        self.assertIn("ОНОВЛЕНО 02:08", labels)
+
+    def test_half_hour_totals_never_round_up(self):
+        """Keep half-hours and a full-day 24h bound exactly."""
+
+        self.assertEqual(half_hour_total(1), "0,5 ГОД")
+        self.assertEqual(half_hour_total(15), "7,5 ГОД")
+        self.assertEqual(half_hour_total(36), "18 ГОД")
+        self.assertEqual(half_hour_total(48), "24 ГОД")
+        for invalid in (-1, 49):
+            with self.assertRaises(ValueError):
+                half_hour_total(invalid)
+
+    def test_forecast_totals_do_not_change_offline_voltage(self):
+        """Schedule summaries must never turn an old sample into live V."""
+
+        card = fixture(online=False)
+        card.update({"v": 193.8, "t": NOW - 18000})
+        report, _ = self.render(card)
+        self.assertFalse(report["live_voltage_visible"])
+        self.assertTrue(report["forecast_visible"])
 
     def test_offline_ignores_hidden_historical_voltage(self):
         """A planned power-on period cannot make an offline reading live."""

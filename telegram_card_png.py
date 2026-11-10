@@ -252,6 +252,45 @@ def draw_hour_tiles(pixels: bytearray, bars: str) -> None:
         label(pixels, f"{hour:02d}:00", x + 20, y + 9, INK, 3)
 
 
+def half_hour_total(slots: int) -> str:
+    """Format an exact number of 30-minute YASNO slots, never round it."""
+
+    if not 0 <= slots <= 48:
+        raise ValueError("invalid number of forecast slots")
+    hours = str(slots // 2)
+    if slots % 2:
+        hours += ",5"
+    return hours + " ГОД"
+
+
+def draw_forecast_legend(pixels: bytearray, state: dict) -> None:
+    """Explain the schedule colors and identify the source update clock."""
+
+    for x, kind, name in (
+        (60, "O", "СВІТЛО"),
+        (244, "X", "ВІДКЛЮЧЕННЯ"),
+        (505, "?", "МОЖЛИВО"),
+    ):
+        color = {"O": GREEN, "X": RED, "?": AMBER}[kind]
+        rectangle(pixels, x, 564, x + 15, 578, color, 3)
+        label(pixels, name, x + 24, 564, MUTED, 2)
+    updated = datetime.fromtimestamp(state["u"], KYIV).strftime("%H:%M")
+    label(pixels, "ОНОВЛЕНО " + updated, 722, 564, MUTED, 2)
+
+
+def draw_forecast_totals(pixels: bytearray, bars: str) -> None:
+    """Present all 24 forecast hours without treating them as telemetry."""
+
+    for x, kind, name in (
+        (60, "O", "СВІТЛО: "),
+        (342, "X", "НЕМАЄ: "),
+        (651, "?", "МОЖЛИВО: "),
+    ):
+        minutes = half_hour_total(bars.count(kind))
+        color = {"O": GREEN, "X": RED, "?": AMBER}[kind]
+        label(pixels, name + minutes, x, 739, color, 2)
+
+
 def draw_timeline(
     pixels: bytearray, state: dict, bars: str, now: float
 ) -> None:
@@ -264,9 +303,13 @@ def draw_timeline(
         hint = OFFLINE_HINT if state.get("s") == "offline" else "НЕМАЄ ДАНИХ"
         label(pixels, hint, 60, 758, MUTED, 2)
         return
+    local_day = datetime.fromtimestamp(now, KYIV).strftime("%d.%m.%Y")
+    label(pixels, local_day, 516, 352, MUTED, 2)
     label(pixels, "ГРУПА " + str(state["g"]), 734, 347, BLUE, 3)
     draw_hour_tiles(pixels, bars)
+    draw_forecast_legend(pixels, state)
     draw_schedule_rows(pixels, schedule_periods(bars))
+    draw_forecast_totals(pixels, bars)
     hint = (
         "ЛИШЕ ПРОГНОЗ / " + OFFLINE_HINT
         if state.get("s") == "offline"
