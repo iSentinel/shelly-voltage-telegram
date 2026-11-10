@@ -485,6 +485,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, state = self.media_monitor(values)
         monitor.telegram = Mock()
         monitor.telegram.status_chat_id = "-100123"
+        monitor.valid_legacy_status_target = (
+            APP.Monitor.valid_legacy_status_target
+        )
         monitor.status_media_kind = lambda: APP.Monitor.status_media_kind(
             monitor
         )
@@ -685,7 +688,7 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                         monitor, "Status", approval
                     )
                 )
-        monitor.telegram.edit.assert_not_called()
+        monitor.telegram.verify_existing_text.assert_not_called()
         self.assertNotIn("telegram_status_media_identity", state)
 
     def test_legacy_confirmation_refuses_unresolved_publish(self):
@@ -704,7 +707,7 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                         monitor, "Status", True
                     )
                 )
-                monitor.telegram.edit.assert_not_called()
+                monitor.telegram.verify_existing_text.assert_not_called()
                 self.assertNotIn("telegram_status_media_identity", state)
 
     def test_legacy_text_confirmation_binds_verified_channel_and_id(self):
@@ -713,11 +716,12 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, state = self.editor_monitor(
             {"telegram_status_message_id": "101"}
         )
+        monitor.telegram.verify_existing_text.return_value = True
         self.assertTrue(
             APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
         )
-        monitor.telegram.edit.assert_called_once_with(
-            101, "Status", chat_id="-100123"
+        monitor.telegram.verify_existing_text.assert_called_once_with(
+            101, "Status", "-100123"
         )
         self.assertEqual(
             state["telegram_status_media_identity"], "text:-100123:101"
@@ -738,7 +742,7 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
             )
             self.assertEqual(state["telegram_status_media_identity"], marker)
-            monitor.telegram.edit.assert_not_called()
+            monitor.telegram.verify_existing_text.assert_not_called()
 
     def test_legacy_text_failed_edit_never_claims_verified_identity(self):
         """A Telegram transport error cannot promote unverifiable text."""
@@ -746,7 +750,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, state = self.editor_monitor(
             {"telegram_status_message_id": "101"}
         )
-        monitor.telegram.edit.side_effect = RuntimeError("timeout")
+        monitor.telegram.verify_existing_text.side_effect = RuntimeError(
+            "timeout"
+        )
         self.assertFalse(
             APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
         )
@@ -768,7 +774,79 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 self.assertFalse(
                     APP.Monitor.confirm_legacy_text_status(monitor, text, True)
                 )
-                monitor.telegram.edit.assert_not_called()
+                monitor.telegram.verify_existing_text.assert_not_called()
+
+    def test_exact_text_receipt_requires_chat_id_and_original_text(self):
+        """A successful HTTP response alone cannot seed a text marker."""
+
+        expected = {
+            "message_id": 101,
+            "chat": {"id": -100123},
+            "text": "Status (confirmed)",
+        }
+        for field in ("message_id", "chat", "text"):
+            with self.subTest(missing=field):
+                reply = {
+                    key: val for key, val in expected.items() if key != field
+                }
+                self.bot.call = Mock(return_value=reply)
+                with self.assertRaises(RuntimeError):
+                    self.bot.verify_existing_text(
+                        101, "Status (confirmed)", "-100123"
+                    )
+        for bad in (
+            {**expected, "message_id": 102},
+            {**expected, "chat": {"id": -100456}},
+            {**expected, "text": "Different text"},
+            {**expected, "photo": [{"file_id": "photo"}]},
+            True,
+        ):
+            with self.subTest(bad_type=type(bad).__name__):
+                self.bot.call = Mock(return_value=bad)
+                with self.assertRaises(RuntimeError):
+                    self.bot.verify_existing_text(
+                        101, "Status (confirmed)", "-100123"
+                    )
+
+    def test_exact_text_receipt_accepts_matching_message(self):
+        """The verified method returns only after an exact editMessageText."""
+
+        expected = {
+            "message_id": 101,
+            "chat": {"id": -100123},
+            "text": "Status (confirmed)",
+        }
+        self.bot.call = Mock(return_value=expected)
+        self.assertTrue(
+            self.bot.verify_existing_text(101, "Status (confirmed)", "-100123")
+        )
+        self.bot.call.assert_called_once_with(
+            "editMessageText",
+            {
+                "chat_id": "-100123",
+                "message_id": 101,
+                "text": "Status (confirmed)",
+            },
+        )
+
+    def test_telegram_noop_cannot_verify_legacy_text_identity(self):
+        """Never accept message-is-not-modified as proof of a known post."""
+
+        self.bot.call = Mock(
+            side_effect=RuntimeError(
+                "Telegram API error 400: message is not modified"
+            )
+        )
+        with self.assertRaises(RuntimeError):
+            self.bot.verify_existing_text(101, "Status", "-100123")
+        monitor, state = self.editor_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        monitor.telegram.verify_existing_text.return_value = False
+        self.assertFalse(
+            APP.Monitor.confirm_legacy_text_status(monitor, "Status", True)
+        )
+        self.assertNotIn("telegram_status_media_identity", state)
 
     def test_legacy_confirmation_has_no_live_status_caller(self):
         """No legacy post is touched by default when a feature is installed."""

@@ -562,3 +562,19 @@ is a safe media rollback. Full source restoration must be separately
 validated against the already converted Telegram media type. Never
 claim the offline forecast proves mains power or restore stale SQLite
 that omits later historical samples.
+
+
+## Strong legacy text confirmation receipt
+
+Never persist a legacy text media marker solely because Telegram
+editMessageText returned without an exception. Normal text updates
+intentionally accept "message is not modified" as idempotent, which
+is not sufficient for initial identity confirmation. The separate,
+owner-approved confirmation now invokes strict verify_existing_text:
+a genuinely changed text post must return a Telegram Message with
+matching message ID, chat ID and exact requested plain text, and no
+photo. Wrong/partial replies, HTTP 400 no-op, timeout and invalid
+targets fail closed without writing SQLite media metadata. This is
+not invoked by the automatic status loop. A controlled, paused-writer
+migration and deliberately changed confirmation text are required.
+Owner Approval is already granted for this one-time guarded cutover.

@@ -1438,6 +1438,38 @@ class Telegram:
             if not message_not_modified(exc):
                 raise
 
+    def verify_existing_text(
+        self, message_id: int, text: str, chat_id: str
+    ) -> bool:
+        """Confirm exactly one existing text post via Telegram's Message."""
+
+        if (
+            type(message_id) is not int
+            or message_id <= 0
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 4096
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
+        ):
+            raise ValueError("invalid legacy status confirmation")
+        result = self.call(
+            "editMessageText",
+            {"chat_id": chat_id, "message_id": message_id, "text": text},
+        )
+        if (
+            not isinstance(result, dict)
+            or type(result.get("message_id")) is not int
+            or result["message_id"] != message_id
+        ):
+            raise RuntimeError("Telegram did not confirm exact text message")
+        chat = result.get("chat")
+        if not isinstance(chat, dict) or str(chat.get("id")) != chat_id:
+            raise RuntimeError("Telegram did not confirm exact chat")
+        if result.get("text") != text or result.get("photo") is not None:
+            raise RuntimeError("Telegram did not confirm text media")
+        return True
+
     def clear_reply_markup(
         self, message_id: int, chat_id: str | None = None
     ) -> None:
@@ -2970,6 +3002,20 @@ class Monitor:
             return False
         return True
 
+    @staticmethod
+    def valid_legacy_status_target(stored: object, target: object) -> bool:
+        """Reject malformed status IDs and missing destination chats."""
+
+        return bool(
+            isinstance(stored, str)
+            and len(stored) <= 20
+            and stored.isascii()
+            and stored.isdecimal()
+            and int(stored) > 0
+            and isinstance(target, str)
+            and target.strip()
+        )
+
     def confirm_legacy_text_status(
         self, text: str, owner_approved: bool
     ) -> bool:
@@ -2991,18 +3037,14 @@ class Monitor:
             return False
         stored = self.storage.get_meta(self.status_message_key())
         target = self.telegram.status_chat_id
-        if (
-            not isinstance(stored, str)
-            or len(stored) > 20
-            or not stored.isascii()
-            or not stored.isdecimal()
-            or int(stored) < 1
-            or not isinstance(target, str)
-            or not target.strip()
-        ):
+        if not self.valid_legacy_status_target(stored, target):
             return False
         try:
-            self.telegram.edit(int(stored), text, chat_id=target)
+            confirmed = self.telegram.verify_existing_text(
+                int(stored), text, target
+            )
+            if confirmed is not True:
+                return False
             self.record_status_media_kind(int(stored), "text", target)
         except Exception as exc:
             logger.warning(
