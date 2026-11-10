@@ -161,6 +161,14 @@ python3 scripts/graphic-rollout-readiness.py \
   --max-snapshot-age-hours 2
 ```
 
+For automated release checks, append --jsonl to produce exactly
+one JSON Lines record with ok, status, reasons, owner_approval_required
+and deployment_allowed. The record includes no chat IDs, message IDs,
+secrets, or local file paths. Its exit code remains zero for a passed
+preflight and two for a blocked one. Even when all static checks pass,
+deployment_allowed is deliberately false because separate Owner Approval
+is mandatory.
+
 A status of `BLOCKED` (exit 2) is expected with the current production
 legacy text status, which lacks a verified media marker. An older upgrade
 snapshot is also not accepted as proof of a fresh predeployment copy.

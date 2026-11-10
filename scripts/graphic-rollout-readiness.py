@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import json
 import os
 import re
 import stat
@@ -26,6 +27,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snapshot", required=True, type=Path)
     parser.add_argument("--installed-version-file", required=True, type=Path)
     parser.add_argument("--chat-env", default="TELEGRAM_STATUS_CHAT_ID")
+    parser.add_argument(
+        "--jsonl",
+        action="store_true",
+        help="Emit exactly one machine-readable PASS/BLOCKED JSON object",
+    )
     parser.add_argument(
         "--max-snapshot-age-hours",
         type=float,
@@ -201,6 +207,36 @@ def version_issues(snapshot: Path, installed: Path) -> list[str]:
     return []
 
 
+def output_decision(issues: list[str], jsonl: bool) -> int:
+    """Emit a safe outcome without exposing channel or message IDs."""
+
+    allowed = not issues
+    if jsonl:
+        print(
+            json.dumps(
+                {
+                    "ok": allowed,
+                    "status": "READY_FOR_OWNER_REVIEW"
+                    if allowed
+                    else "BLOCKED",
+                    "deployment_allowed": False,
+                    "owner_approval_required": True,
+                    "reasons": issues,
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
+    elif issues:
+        print("GRAPHIC ROLLOUT: BLOCKED (read-only)")
+        for issue in issues:
+            print(f" - {issue}")
+    else:
+        print("GRAPHIC ROLLOUT: READY FOR OWNER REVIEW (not deployment)")
+        print("Production activation still requires separate Owner Approval.")
+    return 0 if allowed else 2
+
+
 def main() -> int:
     """Print a private-identifier-free decision; never activate graphics."""
 
@@ -212,14 +248,7 @@ def main() -> int:
         issues.extend(
             version_issues(args.snapshot, args.installed_version_file)
         )
-    if issues:
-        print("GRAPHIC ROLLOUT: BLOCKED (read-only)")
-        for issue in issues:
-            print(f" - {issue}")
-        return 2
-    print("GRAPHIC ROLLOUT: READY FOR OWNER REVIEW (not deployment)")
-    print("Production activation still requires separate Owner Approval.")
-    return 0
+    return output_decision(issues, args.jsonl)
 
 
 if __name__ == "__main__":

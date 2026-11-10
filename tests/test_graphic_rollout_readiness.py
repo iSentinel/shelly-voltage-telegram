@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import io
+import json
 import os
 import sqlite3
 import subprocess
@@ -277,6 +278,34 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.assertNotIn("-100123", result.stdout + result.stderr)
         self.assertNotIn(":101", result.stdout + result.stderr)
 
+    def test_blocked_jsonl_has_single_safe_machine_record(self):
+        """Automation consumes one record without private identifiers."""
+
+        self.installed_version.write_text("0.5.14-hw\n")
+        result = self.run_gate("--jsonl")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "BLOCKED")
+        self.assertFalse(payload["deployment_allowed"])
+        self.assertTrue(payload["owner_approval_required"])
+        self.assertTrue(payload["reasons"])
+        self.assertNotIn("-100123", result.stdout)
+
+    def test_ready_jsonl_does_not_grant_approval(self):
+        """Metadata success never becomes permission to deploy."""
+
+        result = self.run_gate("--jsonl")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["status"], "READY_FOR_OWNER_REVIEW")
+        self.assertFalse(payload["deployment_allowed"])
+        self.assertTrue(payload["owner_approval_required"])
+        self.assertEqual(payload["reasons"], [])
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+
     def test_help_lists_noninteractive_options(self):
         """Operators can inspect exact arguments before any access."""
 
@@ -291,6 +320,7 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.assertIn("--snapshot", result.stdout)
         self.assertIn("--installed-version-file", result.stdout)
         self.assertIn("--max-snapshot-age-hours", result.stdout)
+        self.assertIn("--jsonl", result.stdout)
 
 
 if __name__ == "__main__":
