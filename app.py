@@ -2808,6 +2808,43 @@ class Monitor:
             return "telegram_status_message_id"
         return "telegram_message_id"
 
+    def status_media_kind(self) -> str:
+        """Read the message-bound format without trusting stale metadata."""
+
+        current = self.storage.get_meta(self.status_message_key())
+        if not current:
+            return "missing"
+        target = self.telegram.status_chat_id
+        if not isinstance(target, str) or not target.strip():
+            return "unknown"
+        bound = self.storage.get_meta("telegram_status_media_identity")
+        if bound == f"text:{target}:{current}":
+            return "text"
+        if bound == f"photo:{target}:{current}":
+            return "photo"
+        return "unknown"
+
+    def record_status_media_kind(
+        self, message_id: int, kind: str, chat_id: str
+    ) -> None:
+        """Bind a verified message format to its channel and stored ID."""
+
+        if type(message_id) is not int or message_id <= 0:
+            raise ValueError("invalid status message ID")
+        if kind not in {"text", "photo"}:
+            raise ValueError("invalid status media kind")
+        if (
+            not isinstance(chat_id, str)
+            or not chat_id.strip()
+            or chat_id != self.telegram.status_chat_id
+        ):
+            raise ValueError("status media destination mismatch")
+        if self.storage.get_meta(self.status_message_key()) != str(message_id):
+            raise ValueError("status media identity mismatch")
+        self.storage.set_meta(
+            "telegram_status_media_identity", f"{kind}:{chat_id}:{message_id}"
+        )
+
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
         """Edit the stable status or recreate a missing Telegram message."""
 

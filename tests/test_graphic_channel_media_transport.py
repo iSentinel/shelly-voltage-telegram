@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from test_app import APP, config
@@ -187,6 +188,107 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
 
         source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
         self.assertNotIn("self.telegram.send_status_photo(", source)
+
+    def media_monitor(self, initial: dict) -> tuple[object, dict]:
+        """Build a storage-only monitor without production components."""
+
+        state = dict(initial)
+        storage = Mock()
+        storage.get_meta.side_effect = state.get
+        storage.set_meta.side_effect = state.__setitem__
+        monitor = SimpleNamespace(
+            storage=storage,
+            telegram=SimpleNamespace(status_chat_id="-100123"),
+            status_message_key=lambda: "telegram_status_message_id",
+        )
+        return monitor, state
+
+    def test_status_media_kind_is_unknown_for_legacy_text(self):
+        """Never infer photo or text from an unbound old message ID."""
+
+        monitor, state = self.media_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "unknown")
+        self.assertNotIn("telegram_status_media_identity", state)
+
+    def test_status_media_kind_stays_bound_to_same_message(self):
+        """Known text or photo format survives a restart with the same ID."""
+
+        monitor, _ = self.media_monitor({"telegram_status_message_id": "101"})
+        APP.Monitor.record_status_media_kind(monitor, 101, "text", "-100123")
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "text")
+        APP.Monitor.record_status_media_kind(monitor, 101, "photo", "-100123")
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "photo")
+
+    def test_rotated_message_does_not_inherit_old_media_kind(self):
+        """A prior photo marker cannot affect a newly created text status."""
+
+        monitor, state = self.media_monitor(
+            {
+                "telegram_status_message_id": "102",
+                "telegram_status_media_identity": "photo:-100123:101",
+            }
+        )
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "unknown")
+        state["telegram_status_message_id"] = "101"
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "photo")
+
+    def test_status_format_write_rejects_unpersisted_identity(self):
+        """Never record an ID before Telegram and SQLite agree on it."""
+
+        monitor, state = self.media_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        for message_id, kind in (
+            (102, "photo"),
+            (0, "photo"),
+            (True, "text"),
+            (101, "video"),
+        ):
+            with (
+                self.subTest(message_id=message_id, kind=kind),
+                self.assertRaises(ValueError),
+            ):
+                APP.Monitor.record_status_media_kind(
+                    monitor, message_id, kind, "-100123"
+                )
+        self.assertNotIn("telegram_status_media_identity", state)
+
+    def test_chat_rotation_invalidates_message_media_kind(self):
+        """Even an identical numeric message ID is unknown in a new chat."""
+
+        monitor, _ = self.media_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+            }
+        )
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "photo")
+        monitor.telegram.status_chat_id = "-100456"
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "unknown")
+
+    def test_refuse_storing_media_for_another_chat(self):
+        """Reject cross-channel format metadata before database mutation."""
+
+        monitor, state = self.media_monitor(
+            {"telegram_status_message_id": "101"}
+        )
+        for target in ("-100456", "", "  ", None):
+            with (
+                self.subTest(target=target),
+                self.assertRaises(ValueError),
+            ):
+                APP.Monitor.record_status_media_kind(
+                    monitor, 101, "photo", target
+                )
+        self.assertNotIn("telegram_status_media_identity", state)
+
+    def test_missing_message_format_is_distinct_from_unknown(self):
+        """No message is not the same state as unverified message type."""
+
+        monitor, _ = self.media_monitor({})
+        self.assertEqual(APP.Monitor.status_media_kind(monitor), "missing")
 
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""

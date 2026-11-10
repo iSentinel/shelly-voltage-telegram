@@ -1,3 +1,16 @@
+## 2026-11-10T03:39:00+02:00 Gateway: PR300 media-format identity bound to chat and message ID
+
+- Isolated source-only format binding; no production status callers changed.
+- New SQLite metadata format includes exact chat ID and persisted message ID
+  after successful Telegram response; old/foreign/unbound markers are unknown.
+- Reject mismatched or blank channel, stale/invalid ID and unsupported kind.
+- Targeted media transport + persisted-format suite: 20/20 PASS.
+- Pinned Ruff 0.14.2 and complete quality gate PASS.
+- Full Docker regression 1400 tests OK (1 skipped), exit code zero.
+- NEXT: consistent optional media lifecycle, fail-closed text/photo
+  fallback and all offline/recovery/voltage status paths with Owner Approval.
+- Production remains on 0.5.15-hw; no channel send, restart or rollback.
+
 ## 2026-11-10T03:30:29+02:00 Gateway: PR300 explicit channel photo send (source only)
 
 - Stage after exact candidate 9e0b72b: added send_status_photo with

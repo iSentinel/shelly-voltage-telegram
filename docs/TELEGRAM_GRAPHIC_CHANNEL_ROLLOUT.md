@@ -19,7 +19,8 @@ authorize public message changes, publishing, or a production upgrade.
 1. The new channel feature stays **off by default** and is not set by
    installation, update, CLI examples or old database metadata.
 2. Every public update path uses the same persisted status message identity
-   and a known text/photo kind. Never call editMessageText on a photo.
+   and a known text/photo kind, bound to **both** exact chat and message ID.
+   Missing, old or cross-channel markers are unknown; never edit text on photo.
 3. Text-to-photo conversion uses editMessageMedia on the existing message
    when supported, and verifies the returned message ID and destination.
 4. Media edits treat Telegram's "message is not modified" as success.
