@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -16,6 +17,7 @@ import time
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / (
     "scripts/graphic-rollout-readiness.py"
@@ -30,6 +32,16 @@ FILES = (
     "systemd/shelly-voltage-compose.service",
     "systemd/shelly-voltage-backup.service",
 )
+
+
+def load_audit_module():
+    """Import the audit helpers for deterministic race injection."""
+
+    spec = importlib.util.spec_from_file_location("graphic_audit_race", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def seal_file(path: Path) -> None:
@@ -305,6 +317,64 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.assertTrue(payload["owner_approval_required"])
         self.assertEqual(payload["reasons"], [])
         self.assertEqual(len(result.stdout.splitlines()), 1)
+
+    def test_snapshot_age_race_fails_closed(self):
+        """Removed archives cannot produce an unhandled private traceback."""
+
+        audit = load_audit_module()
+        with mock.patch.object(
+            audit,
+            "age_issues",
+            side_effect=FileNotFoundError("/secret/source.tar.gz"),
+        ):
+            issues = audit.snapshot_issues(self.snapshot, 2)
+        self.assertEqual(
+            issues, ["rollback snapshot cannot be safely inspected"]
+        )
+        self.assertNotIn("/secret/", str(issues))
+
+    def test_installed_version_race_fails_closed(self):
+        """A VERSION file disappearing after lstat is not a crash."""
+
+        audit = load_audit_module()
+        with (
+            mock.patch.object(audit, "safe_regular_file", return_value=True),
+            mock.patch.object(
+                Path,
+                "stat",
+                side_effect=FileNotFoundError("/secret/VERSION"),
+            ),
+        ):
+            self.assertIsNone(audit.expected_version(self.installed_version))
+
+    def test_tar_eof_during_version_check_fails_closed(self):
+        """A truncated tar stream is treated as an unknown release."""
+
+        audit = load_audit_module()
+        with mock.patch.object(
+            audit.tarfile,
+            "open",
+            side_effect=EOFError("/secret/source.tar.gz"),
+        ):
+            self.assertIsNone(audit.snapshot_version(self.source))
+
+    def test_blob_status_metadata_returns_single_blocked_jsonl(self):
+        """SQLite type corruption is denied without private byte output."""
+
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key=?",
+                (sqlite3.Binary(b"\\x00secret"), "telegram_status_message_id"),
+            )
+            db.commit()
+        result = self.run_gate("--jsonl")
+        self.assertEqual(result.returncode, 2)
+        record = json.loads(result.stdout)
+        self.assertEqual(record["status"], "BLOCKED")
+        self.assertFalse(record["deployment_allowed"])
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotIn("secret", result.stdout + result.stderr)
 
     def test_help_lists_noninteractive_options(self):
         """Operators can inspect exact arguments before any access."""

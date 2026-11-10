@@ -141,13 +141,13 @@ def snapshot_issues(snapshot: Path, max_age: float) -> list[str]:
 
     try:
         archives = snapshot_archives(snapshot)
+        problems = age_issues(archives, max_age)
+        if problems:
+            return problems
+        if any(not verify_sha256(archive) for archive in archives):
+            return ["rollback archive checksum mismatch"]
     except (OSError, ValueError):
-        return ["rollback snapshot is absent or unsafe"]
-    problems = age_issues(archives, max_age)
-    if problems:
-        return problems
-    if any(not verify_sha256(archive) for archive in archives):
-        return ["rollback archive checksum mismatch"]
+        return ["rollback snapshot cannot be safely inspected"]
     source, sqlite = archives
     if not run_archive_validator("validate-source-archive.py", [str(source)]):
         return ["rollback source archive is invalid"]
@@ -161,9 +161,9 @@ def snapshot_issues(snapshot: Path, max_age: float) -> list[str]:
 def expected_version(path: Path) -> str | None:
     """Read a bounded, unlinked installed release identifier."""
 
-    if not safe_regular_file(path) or path.stat().st_size > 128:
-        return None
     try:
+        if not safe_regular_file(path) or path.stat().st_size > 128:
+            return None
         value = path.read_bytes().decode("ascii").strip()
     except (OSError, UnicodeError):
         return None
@@ -191,7 +191,7 @@ def snapshot_version(archive: Path) -> str | None:
                 return None
             with handle:
                 return handle.read(129).decode("ascii").strip()
-    except (OSError, UnicodeError, tarfile.TarError):
+    except (EOFError, OSError, UnicodeError, ValueError, tarfile.TarError):
         return None
 
 

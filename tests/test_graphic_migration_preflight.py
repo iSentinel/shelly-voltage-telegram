@@ -103,6 +103,21 @@ class GraphicMigrationPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("requires reconciliation", result.stdout)
 
+    def test_blob_status_id_is_blocked_without_traceback(self):
+        """Corrupt SQLite value types must fail closed, never traceback."""
+
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key=?",
+                (sqlite3.Binary(b"\\x00secret"), "telegram_status_message_id"),
+            )
+            db.commit()
+        result = self.run_check()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("non-text", result.stdout)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertNotIn("secret", result.stdout + result.stderr)
+
     def test_missing_database_is_never_created(self):
         """A nonexistent database path fails without side effects."""
 

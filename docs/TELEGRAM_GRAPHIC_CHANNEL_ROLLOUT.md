@@ -169,6 +169,13 @@ preflight and two for a blocked one. Even when all static checks pass,
 deployment_allowed is deliberately false because separate Owner Approval
 is mandatory.
 
+Filesystem races are handled as fail-closed decisions. If a snapshot is
+renamed or disappears between the initial check and checksum/freshness
+validation, the audit returns a generic BLOCKED reason, not a Python
+traceback with a private path. Malformed SQLite status metadata, including
+non-text values, is also blocked. Re-run the check only after verifying the
+fresh snapshot and exact channel message type; never bypass the gate.
+
 A status of `BLOCKED` (exit 2) is expected with the current production
 legacy text status, which lacks a verified media marker. An older upgrade
 snapshot is also not accepted as proof of a fresh predeployment copy.

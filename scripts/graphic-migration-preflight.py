@@ -58,6 +58,8 @@ def readiness_issues(
 ) -> list[str]:
     """Refuse any unverified status or ambiguous Telegram send."""
 
+    if any(not isinstance(value, str) for value in metadata.values()):
+        return ["SQLite status metadata contains non-text values"]
     issues = []
     current = metadata.get(STATUS_KEY)
     media = metadata.get(MEDIA_KEY)
