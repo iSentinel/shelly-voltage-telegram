@@ -289,3 +289,34 @@ remain separate from this CLI. Do not invent a marker, auto-pin a post,
 send a duplicate or claim a mismatched pin is verified. The operator's
 conditional approval to switch the public design does not bypass
 snapshot, media identity or private visual acceptance requirements.
+
+## Source-only online PNG acceptance
+
+The offline and online acceptance CLIs use the same safe local file
+checks. Neither contacts Telegram or Shelly: provide an existing,
+sanitized health JSON captured by an authorized operator. This test
+accepts online telemetry only if the sample timestamp is no more than
+60 seconds old, voltage is a finite bounded measurement, and the rendered
+status is ONLINE. A connectivity flag alone is never enough.
+
+~~~bash
+python3 scripts/graphic-online-acceptance.py --help
+python3 scripts/graphic-online-acceptance.py \
+  --health-file /var/tmp/health-snapshot.json \
+  --output /var/tmp/graphic-online-acceptance.png \
+  --group 10.1 --jsonl
+~~~
+
+An optional --forecast-file follows the same local 48-slot YASNO format
+as the offline CLI; it must represent the current Kyiv calendar day and
+pass source/freshness checks. PASS (exit 0) includes measured voltage
+and optional frequency, verifies the PNG is 960x560, and reports no
+Telegram sends. FAIL (exit 2) gives a path-free reason code. Offline,
+missing, stale or invalid voltage samples are rejected. Existing
+different PNG files, links and oversized inputs are not replaced or
+followed. Repeating an identical preview is idempotent.
+
+An online-preview PASS does not confirm that the real Telegram status
+message is text/photo, or that a historical rollback snapshot
+still matches the latest source/SQLite state. Public rollout requires
+separate exact-message verification and fresh rollback validation.
