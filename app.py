@@ -10,6 +10,7 @@ import os
 import signal
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from contextlib import closing, suppress
@@ -47,6 +48,7 @@ from notification_features import (
     update_history,
 )
 from outage_data_ua import read_snapshot
+from telegram_card_png import render_card_png
 from telegram_channel_yasno import append_yasno_forecast
 from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
@@ -1463,12 +1465,17 @@ class Telegram:
         self.call("answerCallbackQuery", payload)
 
     def send_file(
-        self, method: str, field: str, path: Path, caption: str = ""
+        self,
+        method: str,
+        field: str,
+        path: Path,
+        caption: str = "",
+        chat_id: str | None = None,
     ) -> int:
         """Upload one generated file to the private control chat."""
 
         data = {
-            "chat_id": self.cfg.telegram_chat_id,
+            "chat_id": chat_id or self.cfg.telegram_chat_id,
             "disable_notification": "true",
         }
         if caption:
@@ -1884,6 +1891,16 @@ def private_widget_preview_text(monitor: Monitor) -> str:
             reading, language=language, phases=phases, **forecast
         )
     )
+
+
+def private_graphic_preview_state(monitor: Monitor) -> str:
+    """Create private read-only meter state and fresh verified YASNO data."""
+
+    with monitor.config_lock:
+        snapshot = monitor.state.snapshot()
+        language = monitor.language
+    forecast = cached_yasno_preview_args() or {}
+    return widget_public_data(snapshot, language=language, **forecast)
 
 
 def compact_preview_text(monitor: Monitor) -> str:
@@ -5305,6 +5322,8 @@ class Monitor:
             self.send_compact_preview(sender_id)
         elif command == "/widget_preview":
             self.send_private_widget_preview(sender_id)
+        elif command == "/graphic_preview":
+            self.send_private_graphic_preview(sender_id)
         elif command == "/view":
             self.change_private_preview_layout(sender_id, parts)
         elif command == "/week":
@@ -5436,6 +5455,28 @@ class Monitor:
                 "Private widget preview failed: {}", type(exc).__name__
             )
 
+    def send_private_graphic_preview(self, sender_id: str) -> None:
+        """Send a single private PNG; never edit the public status channel."""
+
+        try:
+            payload = private_graphic_preview_state(self)
+            caption = widget_fallback_text(payload)
+            with tempfile.TemporaryDirectory(prefix="shelly-card-") as folder:
+                image = Path(folder) / "status.png"
+                render_card_png(json.loads(payload), image)
+                self.telegram.send_file(
+                    "sendPhoto", "photo", image, caption, chat_id=sender_id
+                )
+        except Exception as exc:
+            logger.warning(
+                "Private graphic preview failed: {}", type(exc).__name__
+            )
+            self.telegram.send(
+                tr(self.language, "command_error", error="PreviewUnavailable"),
+                notify=False,
+                chat_id=sender_id,
+            )
+
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
 
@@ -5453,7 +5494,7 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
-        if command in {"/schedule", "/widget_preview"}:
+        if command in {"/schedule", "/widget_preview", "/graphic_preview"}:
             return  # Private admin only; never publish to the channel.
         if command == "/week" and len(parts) != 1:
             return
