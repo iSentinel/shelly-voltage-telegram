@@ -101,6 +101,28 @@ settings. Environment flags do **not** constitute actual Owner Approval.
 - A private `/graphic_preview` is still the only acceptable visual
   recipient test before a separately approved maintenance window.
 
+## Read-only migration preflight
+
+The source-only tool `scripts/graphic-migration-preflight.py` never calls
+Telegram and never modifies SQLite. It requires an existing database and
+reads the expected chat from an environment variable; it does not print
+the chat ID or message ID. Blocked conditions exit with code 2.
+
+Example for an authorized maintenance operator with an already configured
+`TELEGRAM_STATUS_CHAT_ID` environment variable:
+
+```bash
+python3 scripts/graphic-migration-preflight.py --help
+python3 scripts/graphic-migration-preflight.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3
+```
+
+A `PREFLIGHT: PASS` means only that SQLite metadata is internally
+consistent. **It does not authorize deployment**. For the existing
+production 0.5.15-hw database, the channel ID is known but the media-kind
+marker is not yet verified, so migration remains blocked until a
+separately approved Telegram/SQLite reconciliation.
+
 ## Production activation still blocked
 
 Prior to activation, the owner must approve a versioned release and a
