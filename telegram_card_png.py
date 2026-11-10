@@ -26,6 +26,7 @@ GREEN = b"\x35\xd0\x92"
 RED = b"\xff\x70\x7a"
 AMBER = b"\xff\xc3\x64"
 BLUE = b"\x66\xb1\xfa"
+OFFLINE_HINT = "POWER OUTAGE LIKELY / NOT CONFIRMED"
 
 FONT = {
     **CHART_FONT,
@@ -186,7 +187,8 @@ def draw_timeline(
     label(pixels, "YASNO / DTEK FORECAST", 60, 362, INK, 3)
     if not bars:
         label(pixels, "NO CURRENT FORECAST", 60, 414, MUTED, 3)
-        label(pixels, "CHECK SHELLY FOR ACTUAL POWER", 60, 469, MUTED, 2)
+        hint = OFFLINE_HINT if state.get("s") == "offline" else "NO LIVE DATA"
+        label(pixels, hint, 60, 469, MUTED, 2)
         return
     label(pixels, "GROUP " + str(state["g"]), 734, 362, BLUE, 3)
     colors = {"O": GREEN, "X": RED, "?": AMBER}
@@ -195,7 +197,12 @@ def draw_timeline(
         rectangle(pixels, x, 414, x + 15, 447, colors[symbol], 3)
     for i, value in enumerate(("00:00", "06:00", "12:00", "18:00", "24:00")):
         label(pixels, value, 60 + i * 199, 457, MUTED, 2)
-    label(pixels, "FORECAST ONLY  /  SHELLY IS LIVE DATA", 60, 491, MUTED, 2)
+    hint = (
+        "FORECAST ONLY  /  " + OFFLINE_HINT
+        if state.get("s") == "offline"
+        else "FORECAST ONLY  /  SHELLY IS LIVE DATA"
+    )
+    label(pixels, hint, 60, 491, MUTED, 2)
 
 
 def render_card_png(

@@ -7,9 +7,10 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 from zoneinfo import ZoneInfo
 
-from telegram_card_png import render_card_png
+from telegram_card_png import label, render_card_png
 from telegram_widget_data import widget_public_data
 
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -80,6 +81,37 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         self.assertEqual(report["status"], "offline")
         self.assertFalse(report["live_voltage_visible"])
         self.assertFalse(report["forecast_visible"])
+
+    def test_offline_no_forecast_mentions_likely_not_proven_outage(self):
+        """An unreachable meter suggests a blackout without proving it."""
+
+        state = make_card_state("offline", bars=None)
+        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+            self.render(state)
+        labels = [call.args[1] for call in painter.call_args_list]
+        self.assertIn("POWER OUTAGE LIKELY / NOT CONFIRMED", labels)
+        self.assertNotIn("CHECK SHELLY FOR ACTUAL POWER", labels)
+
+    def test_offline_with_yasno_does_not_claim_mains_confirmed(self):
+        """A fresh forecast remains independent of live power telemetry."""
+
+        state = make_card_state("offline", bars="X" * 48)
+        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+            self.render(state)
+        labels = [call.args[1] for call in painter.call_args_list]
+        self.assertIn(
+            "FORECAST ONLY  /  POWER OUTAGE LIKELY / NOT CONFIRMED", labels
+        )
+
+    def test_online_card_has_no_offline_warning(self):
+        """Fresh measurements override the outage suspicion."""
+
+        state = make_card_state("online", age_seconds=5, bars="O" * 48)
+        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+            self.render(state)
+        labels = [call.args[1] for call in painter.call_args_list]
+        self.assertFalse(any("OUTAGE LIKELY" in item for item in labels))
+        self.assertIn("FORECAST ONLY  /  SHELLY IS LIVE DATA", labels)
 
     def test_stale_online_flag_is_not_accepted_as_fresh(self):
         """Old successful reads are unknown even before offline detection."""

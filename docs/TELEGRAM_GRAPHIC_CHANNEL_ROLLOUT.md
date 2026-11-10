@@ -199,3 +199,13 @@ specific maintenance plan, including source+SQLite snapshot, verification
 of the current channel's message ID/type, safe migration, post-change
 recipient-visible confirmation, offline/recovery tests and actual rollback.
 No source-only candidate is authorization to edit public Telegram messages.
+
+## Offline presentation: mains outage likely, not confirmed
+
+On an unreachable Shelly, the PNG retains the measured connectivity
+state OFFLINE, hides historic voltage and frequency, and uses
+POWER OUTAGE LIKELY / NOT CONFIRMED. A disconnected Shelly commonly
+correlates with a mains outage, but Wi-Fi or device faults can also
+produce the same symptom. This wording is advisory, not evidence of
+zero measured voltage. The YASNO forecast remains labelled as forecast
+and must not override live telemetry.
