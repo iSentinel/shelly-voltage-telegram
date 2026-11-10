@@ -1,3 +1,20 @@
+## 2026-11-10T03:30:29+02:00 Gateway: PR300 explicit channel photo send (source only)
+
+- Stage after exact candidate 9e0b72b: added send_status_photo with
+  required explicit destination, accessible caption and validated PNG.
+- Sound policy uses existing quiet hours; private file exports remain
+  silent by default. No public status caller invokes send_status_photo.
+- Factored guarded media validation shared with editMessageMedia.
+- Telegram media transport regression: 13/13 PASS; private graphic
+  preview: 6/6 PASS; full QA: 1393 tests OK (1 skipped).
+- Pinned Ruff 0.14.2, all 168 file format checks and source quality PASS.
+- Isolated Docker: --network none, --read-only, exec /tmp and test-only
+  Git mount; no production container restart or public Telegram sends.
+- Telegram Bot API officially supports text-to-media editMessageMedia
+  and photo editMessageCaption; photo caption limit is 1024 characters.
+- NEXT: implement consistent opt-in status media kind for ALL update and
+  recovery paths with rollback and Owner Approval. Activation is BLOCKED.
+
 ## 2026-11-10T03:16:15+02:00 Gateway: PR300 graphic media transport hardening (source only)
 
 - Created a separate Git source checkout at the exact PR300 commit,

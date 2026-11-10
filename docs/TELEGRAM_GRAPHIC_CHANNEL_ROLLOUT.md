@@ -53,5 +53,7 @@ authorize public message changes, publishing, or a production upgrade.
 - Obtain **separate Owner Approval** before changing the production channel.
 - Check Android/desktop recipient-visible card rendering and YASNO content.
 
-The current PR300 only supplies rendering, private preview and source-only
-multipart edit transport. Public status paths have **not** been switched.
+PR300 now supplies rendering, private preview, source-only multipart edit
+transport and validated **send_status_photo** with explicit destination and
+quiet-hours handling. Neither public send nor public edit has a live caller.
+Public status paths have **not** been switched. This is not release approval.

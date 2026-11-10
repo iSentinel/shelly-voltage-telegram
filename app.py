@@ -1471,12 +1471,15 @@ class Telegram:
         path: Path,
         caption: str = "",
         chat_id: str | None = None,
+        notify: bool = False,
     ) -> int:
-        """Upload one generated file to the private control chat."""
+        """Upload one file, silent unless explicitly allowed to notify."""
 
         data = {
             "chat_id": chat_id or self.cfg.telegram_chat_id,
-            "disable_notification": "true",
+            "disable_notification": str(
+                not notify or self.quiet_now()
+            ).lower(),
         }
         if caption:
             data["caption"] = caption
@@ -1509,6 +1512,32 @@ class Telegram:
 
         return self.send_file("sendDocument", "document", path, caption)
 
+    @staticmethod
+    def validate_status_photo(path: Path, caption: str) -> None:
+        """Fail closed before sending an invalid public status image."""
+
+        if len(caption) > 1024 or path.is_symlink() or not path.is_file():
+            raise ValueError("invalid caption or media path")
+        if path.stat().st_size > 10_000_000:
+            raise ValueError("Telegram photo exceeds limit")
+        with path.open("rb") as handle:
+            if handle.read(8) != bytes.fromhex("89504e470d0a1a0a"):
+                raise ValueError("media is not a PNG")
+
+    def send_status_photo(
+        self, path: Path, caption: str, chat_id: str, notify: bool = False
+    ) -> int:
+        """Publish one photo to an explicit channel; no implicit fallback."""
+
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            raise ValueError("explicit channel required")
+        if not isinstance(caption, str) or not caption.strip():
+            raise ValueError("accessible caption required")
+        self.validate_status_photo(path, caption)
+        return self.send_file(
+            "sendPhoto", "photo", path, caption, chat_id, notify=notify
+        )
+
     def edit_photo(
         self, message_id: int, path: Path, caption: str, chat_id: str
     ) -> None:
@@ -1522,13 +1551,7 @@ class Telegram:
             or not chat_id.strip()
         ):
             raise ValueError("explicit channel and valid message ID required")
-        if len(caption) > 1024 or path.is_symlink() or not path.is_file():
-            raise ValueError("invalid caption or media path")
-        if path.stat().st_size > 10_000_000:
-            raise ValueError("Telegram photo exceeds limit")
-        with path.open("rb") as handle:
-            if handle.read(8) != bytes.fromhex("89504e470d0a1a0a"):
-                raise ValueError("media is not a PNG")
+        self.validate_status_photo(path, caption)
         payload = self._edit_photo_payload(message_id, path, caption, chat_id)
         if not isinstance(payload, dict):
             raise RuntimeError("Telegram returned invalid JSON object")

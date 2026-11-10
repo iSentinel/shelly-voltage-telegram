@@ -144,6 +144,50 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
             self.bot.edit_photo(811, self.card, "Card", "   ")
         self.bot.api_session.post.assert_not_called()
 
+    def test_future_public_photo_send_respects_sound_policy(self):
+        """Explicit public photo sends use the intended chat and cooldown."""
+
+        self.response({"ok": True, "result": {"message_id": 930}})
+        self.bot.quiet_now = Mock(return_value=False)
+        posted = self.bot.send_status_photo(
+            self.card, "Current grid", "-100456", notify=True
+        )
+        self.assertEqual(posted, 930)
+        call = self.bot.api_session.post.call_args
+        self.assertTrue(call.args[0].endswith("/sendPhoto"))
+        self.assertEqual(call.kwargs["data"]["chat_id"], "-100456")
+        self.assertEqual(call.kwargs["data"]["disable_notification"], "false")
+
+    def test_future_public_photo_send_is_quiet_during_quiet_hours(self):
+        """Quiet hours override any requested audible photo alert."""
+
+        self.response({"ok": True, "result": {"message_id": 930}})
+        self.bot.quiet_now = Mock(return_value=True)
+        self.bot.send_status_photo(
+            self.card, "Grid status", "-100456", notify=True
+        )
+        self.assertEqual(
+            self.bot.api_session.post.call_args.kwargs["data"][
+                "disable_notification"
+            ],
+            "true",
+        )
+
+    def test_future_public_photo_never_defaults_to_private_chat(self):
+        """Reject an empty destination or inaccessible caption before API."""
+
+        self.bot.api_session.post = Mock()
+        for channel, caption in (("", "Grid"), ("  ", "Grid"), ("-100", "")):
+            with self.subTest(channel=channel), self.assertRaises(ValueError):
+                self.bot.send_status_photo(self.card, caption, channel)
+        self.bot.api_session.post.assert_not_called()
+
+    def test_current_status_loop_does_not_publish_photos_yet(self):
+        """Source-only transport must not silently activate public photos."""
+
+        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
+        self.assertNotIn("self.telegram.send_status_photo(", source)
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 
