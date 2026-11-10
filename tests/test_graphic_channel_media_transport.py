@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import tempfile
 import unittest
@@ -353,11 +354,29 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
                 self.bot.edit_photo_caption(message_id, caption, chat_id)
         self.bot.call.assert_not_called()
 
+    @staticmethod
+    def live_status_source() -> str:
+        """Inspect only production status handlers, not source-only helpers."""
+
+        handlers = (
+            "upsert_status_message",
+            "update_status",
+            "rotate_status_after_recovery",
+            "maybe_finalize_voltage_episode",
+            "maybe_rotate_stable_recovery_status",
+            "edit_voltage_status",
+            "replace_voltage_status",
+        )
+        return "\n".join(
+            inspect.getsource(getattr(APP.Monitor, name)) for name in handlers
+        )
+
     def test_caption_edits_have_no_public_status_caller(self):
         """New transport cannot activate photos without owner approval."""
 
-        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
-        self.assertNotIn("self.telegram.edit_photo_caption(", source)
+        self.assertFalse(
+            "self.telegram.edit_photo_caption(" in self.live_status_source()
+        )
 
     def test_status_planner_chooses_initial_text_or_photo(self):
         """No existing message can be published once, with safe fallback."""
@@ -419,13 +438,140 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
         self.assertNotIn("self.plan_graphic_status_action(", source)
 
+    def editor_monitor(self, values: dict) -> tuple[object, dict]:
+        """Build an isolated fake with source-only status edit methods."""
+
+        monitor, state = self.media_monitor(values)
+        monitor.telegram = Mock()
+        monitor.telegram.status_chat_id = "-100123"
+        monitor.status_media_kind = lambda: APP.Monitor.status_media_kind(
+            monitor
+        )
+        monitor.record_status_media_kind = (
+            lambda mid, kind, chat: APP.Monitor.record_status_media_kind(
+                monitor, mid, kind, chat
+            )
+        )
+        return monitor, state
+
+    def test_existing_text_can_convert_to_photo_without_new_post(self):
+        """Edit the same ID and persist photo only after Telegram success."""
+
+        monitor, state = self.editor_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "text:-100123:101",
+            }
+        )
+        self.assertTrue(
+            APP.Monitor.edit_existing_status_media(
+                monitor, "Text", "Caption", self.card
+            )
+        )
+        monitor.telegram.edit_photo.assert_called_once_with(
+            101, self.card, "Caption", "-100123"
+        )
+        monitor.telegram.send.assert_not_called()
+        self.assertEqual(
+            state["telegram_status_media_identity"], "photo:-100123:101"
+        )
+
+    def test_conversion_timeout_leaves_unknown_marker_not_stale_text(self):
+        """Ambiguous media result must block future text-on-photo edits."""
+
+        monitor, state = self.editor_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "text:-100123:101",
+            }
+        )
+        monitor.telegram.edit_photo.side_effect = RuntimeError("timeout")
+        self.assertFalse(
+            APP.Monitor.edit_existing_status_media(
+                monitor, "Text", "Caption", self.card
+            )
+        )
+        self.assertEqual(
+            state["telegram_status_media_identity"], "unknown:-100123:101"
+        )
+        monitor.telegram.send.assert_not_called()
+
+    def test_existing_photo_can_update_caption_without_new_post(self):
+        """Offline-safe fallback keeps the stable photo message identity."""
+
+        monitor, state = self.editor_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+            }
+        )
+        self.assertTrue(
+            APP.Monitor.edit_existing_status_media(
+                monitor, "Text", "Offline", None
+            )
+        )
+        monitor.telegram.edit_photo_caption.assert_called_once_with(
+            101, "Offline", "-100123"
+        )
+        monitor.telegram.edit.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        self.assertEqual(
+            state["telegram_status_media_identity"], "photo:-100123:101"
+        )
+
+    def test_existing_text_can_remain_text_if_rendering_fails(self):
+        """Graphic rendering failure must not break known text status."""
+
+        monitor, _ = self.editor_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "text:-100123:101",
+            }
+        )
+        self.assertTrue(
+            APP.Monitor.edit_existing_status_media(
+                monitor, "Fallback", "Caption", None
+            )
+        )
+        monitor.telegram.edit.assert_called_once_with(
+            101, "Fallback", chat_id="-100123"
+        )
+        monitor.telegram.edit_photo.assert_not_called()
+
+    def test_existing_media_editor_blocks_missing_or_unknown(self):
+        """Never publish a duplicate when old status kind is unverified."""
+
+        for data in (
+            {},
+            {"telegram_status_message_id": "101"},
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100456:101",
+            },
+        ):
+            monitor, _ = self.editor_monitor(data)
+            self.assertFalse(
+                APP.Monitor.edit_existing_status_media(
+                    monitor, "Text", "Caption", self.card
+                )
+            )
+            monitor.telegram.send.assert_not_called()
+            monitor.telegram.edit_photo.assert_not_called()
+
+    def test_existing_media_editor_does_not_activate_public_status(self):
+        """The guarded editor has no caller in live status update paths."""
+
+        self.assertFalse(
+            "self.edit_existing_status_media(" in self.live_status_source()
+        )
+
     def test_live_status_loop_does_not_call_media_edit_yet(self):
         """Do not silently convert the deployed channel status to a photo."""
 
-        source = (Path(__file__).resolve().parents[1] / "app.py").read_text()
-        self.assertNotIn("self.telegram.edit_photo(", source)
-        self.assertIn("self.telegram.edit(", source)
-        self.assertNotIn("TELEGRAM_GRAPHIC_CHANNEL_ENABLED", source)
+        source = self.live_status_source()
+        self.assertFalse("self.telegram.edit_photo(" in source)
+        self.assertTrue("self.telegram.edit(" in source)
+        self.assertFalse("TELEGRAM_GRAPHIC_CHANNEL_ENABLED" in source)
 
 
 if __name__ == "__main__":

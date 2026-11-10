@@ -1,3 +1,16 @@
+## 2026-11-10T03:54:40+02:00 Gateway: guarded edit-only photo status executor (source only)
+
+- Added edit_existing_status_media for a verified persisted message ID.
+- Applies only edit_photo, edit_photo_caption or editMessageText according
+  to known source message type. Missing/unknown IDs produce no send.
+- Text-to-photo conversion pre-marks the exact status as unknown; failed
+  Telegram edit cannot leave a misleading text marker.
+- No replacement post, pin, delete, status-rotation or production caller.
+- 37/37 targeted tests PASS; pinned Ruff + maintainability PASS.
+- Full isolated regression 1417 tests OK (1 skipped); no public sends.
+- NEXT: coherent opt-in all status paths, frequency caps, transactional
+  migration/recovery, rollback evidence and separate Owner Approval.
+
 ## 2026-11-10T03:47:29+02:00 Gateway: photo status transition planner (source only)
 
 - Created fail-closed pure plan_graphic_status_action helper with no API IO.

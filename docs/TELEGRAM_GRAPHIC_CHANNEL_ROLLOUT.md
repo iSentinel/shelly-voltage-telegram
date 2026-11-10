@@ -27,6 +27,9 @@ authorize public message changes, publishing, or a production upgrade.
    Transient failures must not trigger a duplicate public post.
 5. A rejected or ambiguous API response cannot advance persisted message
    state. Unknown media state requires a guarded reconciliation path.
+   Before text-to-photo conversion, record an explicit unknown format for
+   the exact chat and message ID; only a verified successful edit records
+   photo, so a timeout never leaves stale text metadata for a photo.
 6. The image must hide stale, invalid and offline physical readings and
    expired YASNO forecasts independently. Caption must remain accessible,
    localized and at most Telegram's 1024-character photo-caption limit.

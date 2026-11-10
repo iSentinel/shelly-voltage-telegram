@@ -2907,6 +2907,45 @@ class Monitor:
             "telegram_status_media_identity", f"{kind}:{chat_id}:{message_id}"
         )
 
+    def edit_existing_status_media(
+        self, text: str, caption: str, photo: Path | None
+    ) -> bool:
+        """Safely edit only an existing, format-verified status message."""
+
+        if (
+            not isinstance(text, str)
+            or not text.strip()
+            or not isinstance(caption, str)
+            or not caption.strip()
+            or len(caption) > 1024
+        ):
+            return False
+        stored = self.storage.get_meta(self.status_message_key())
+        kind = self.status_media_kind()
+        action = plan_graphic_status_action(stored, kind, photo is not None)
+        if action not in {"edit_photo", "edit_caption", "edit_text"}:
+            return False
+        try:
+            message_id = int(stored)
+            chat = self.telegram.status_chat_id
+            if action == "edit_photo":
+                if kind == "text":
+                    self.storage.set_meta(
+                        "telegram_status_media_identity",
+                        f"unknown:{chat}:{message_id}",
+                    )
+                self.telegram.edit_photo(message_id, photo, caption, chat)
+            elif action == "edit_caption":
+                self.telegram.edit_photo_caption(message_id, caption, chat)
+            else:
+                self.telegram.edit(message_id, text, chat_id=chat)
+            new_kind = "text" if action == "edit_text" else "photo"
+            self.record_status_media_kind(message_id, new_kind, chat)
+        except Exception as exc:
+            logger.warning("Graphic status edit: {}", type(exc).__name__)
+            return False
+        return True
+
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
         """Edit the stable status or recreate a missing Telegram message."""
 
