@@ -252,5 +252,40 @@ A `FAIL` (exit 2) emits a safe reason code without credentials or
 paths. Repeated runs with identical input reuse the same PNG. Existing
 different or oversized files, links and unsafe input files are never
 overwritten or followed. Existing PNGs are compared with bounded
-streaming SHA256 checks rather than loaded unbounded into memory. Neither outcome authorizes a public Telegram message or a
+streaming SHA256 checks rather than loaded unbounded into memory.
+Neither outcome authorizes a public Telegram message or a
 production installation.
+
+## Read-only pinned-message identity audit
+
+An independent Telegram Bot API `getChat` query exposes only the most
+recent pinned message, not arbitrary older channel messages. The new
+CLI requires an exact channel/chat/message ID match and unambiguous
+text/photo fields. A different latest pinned message is **BLOCKED**
+and cannot justify writing media identity metadata or rotating a post.
+
+```bash
+python3 scripts/graphic-pinned-media-audit.py --help
+python3 scripts/graphic-pinned-media-audit.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --response-file /path/to/private-getchat-response.json \
+  --jsonl
+```
+
+The `--response-file` mode is for isolated, networkless tests:
+`FIXTURE_MATCH_ONLY` is *not* live evidence and never permits rollout.
+An authorized, network-connected maintenance operator may use
+`--token-file /path/to/private/bot-token` instead. That mode
+calls only `getChat` and returns `MATCH_FOR_REVIEW` when the
+**current** latest pinned message has the exact stored status ID,
+channel ID and a single supported media type. Both modes leave
+Telegram and SQLite unchanged and always report
+`deployment_allowed=false`; no identifiers, message content or
+bot token are printed.
+
+If pinned IDs differ (as observed on the existing production channel),
+the owner-authorized, exact-message text verification workflow must
+remain separate from this CLI. Do not invent a marker, auto-pin a post,
+send a duplicate or claim a mismatched pin is verified. The operator's
+conditional approval to switch the public design does not bypass
+snapshot, media identity or private visual acceptance requirements.
