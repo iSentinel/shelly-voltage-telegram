@@ -301,6 +301,43 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor.telegram.send.assert_not_called()
         self.assertEqual(state["telegram_status_message_id"], "101")
 
+    def test_different_pinned_post_is_never_unpinned_by_cutover(self):
+        """Status conversion and fallback must not remove another pin."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "text:-100123:101",
+                "telegram_status_pinned_id": "909",
+            }
+        )
+        self.assertTrue(monitor.update_graphic_status("Offline"))
+        self.assertEqual(
+            state["telegram_status_media_identity"], "photo:-100123:101"
+        )
+        self.assertEqual(state["telegram_status_pinned_id"], "909")
+        with patch.dict(
+            os.environ,
+            {
+                "TELEGRAM_GRAPHIC_CHANNEL_ENABLED": "0",
+                "TELEGRAM_GRAPHIC_OWNER_APPROVED": "0",
+            },
+        ):
+            self.assertTrue(
+                monitor.upsert_status_message(
+                    "Offline", "telegram_status_message_id", "-100123"
+                )
+            )
+        monitor.telegram.edit_photo_caption.assert_called_once_with(
+            101, "Offline", "-100123"
+        )
+        monitor.telegram.pin.assert_not_called()
+        monitor.telegram.unpin.assert_not_called()
+        monitor.telegram.delete.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        monitor.ensure_status_pinned.assert_not_called()
+        self.assertEqual(state["telegram_status_pinned_id"], "909")
+
     def test_rollback_unknown_media_refuses_any_public_send(self):
         """Uncertain photo conversion cannot publish a duplicate status."""
 

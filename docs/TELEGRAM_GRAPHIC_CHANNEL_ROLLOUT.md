@@ -540,3 +540,25 @@ photo data, the media identity becomes UNKNOWN, and unattended retries
 must be blocked. No new channel status may be sent as a fallback.
 The exact legacy message identity, independent backup, and rollback
 plan remain separate prerequisites for public deployment.
+
+
+## Existing unrelated pinned message and reversible fallback
+
+The live getChat pinned_message is currently **not** the same as the
+dedicated channel status message stored in SQLite. The exact public
+status was separately found as a legacy text post, but this public
+HTML proof alone is not a Bot API edit acknowledgment. Do not treat the
+unrelated pin as the status; do not unpin/delete it to satisfy a migration
+preflight. A verified, owner-approved in-place editMessageMedia can retain
+the original status ID, and the later pin operation (if desired) must
+be an explicit, independently checked step. Conversion itself must
+not unpin or replace another message.
+
+If a verified photo card requires a safe visual fallback, disable the
+graphic flags while continuing to run the upgraded media-aware code:
+it can edit the *same photo's caption* in place without sending a
+new message. Do NOT assume restoring the old text-only source alone
+is a safe media rollback. Full source restoration must be separately
+validated against the already converted Telegram media type. Never
+claim the offline forecast proves mains power or restore stale SQLite
+that omits later historical samples.
