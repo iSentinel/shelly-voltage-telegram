@@ -320,3 +320,43 @@ An online-preview PASS does not confirm that the real Telegram status
 message is text/photo, or that a historical rollback snapshot
 still matches the latest source/SQLite state. Public rollout requires
 separate exact-message verification and fresh rollback validation.
+
+## Exact public post evidence (read-only, no Telegram edits)
+
+A public channel may have a different **latest pinned** message from the
+stable voltage status saved in SQLite. In that case, getChat's pinned
+message alone cannot verify the status media kind. Use the source-only
+exact-public-post audit instead:
+
+~~~bash
+python3 scripts/graphic-public-post-audit.py --help
+python3 scripts/graphic-public-post-audit.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --chat-env TELEGRAM_STATUS_CHAT_ID \
+  --token-file /path/to/telegram_token \
+  --jsonl
+~~~
+
+The live mode calls only Bot API getChat, checks the channel's numeric ID,
+derives its public username, then GETs that exact status ID's t.me embed
+page. It accepts only one matching data-post wrapper and a single
+recognizable text or photo marker in the matched post. Surrounding
+avatars, other posts, unknown types, linked input files, unresolved
+publications and conflicting persisted markers fail closed.
+
+For networkless tests, --html-file and --public-username accept a
+bounded local HTML fixture. FIXTURE_MATCH_ONLY is never live proof.
+PUBLIC_POST_MATCH_FOR_REVIEW from the live checks is useful independent
+evidence but remains provisional: HTML is a public preview, not a
+Telegram Bot API message object. Both modes leave deployment_allowed
+false; neither writes SQLite, posts, edits, pins, or deletes messages.
+No message ID, chat ID, body text, username, URL or bot token is printed.
+
+When exact public HTML indicates text, the next operational requirement
+is still the separately guarded, owner-authorized exact-message text
+verification by Telegram editMessageText and a success response bound
+to the existing chat/message. A timeout or ambiguous result must block
+further conversion. Do not stamp a text marker based on HTML alone.
+Refresh a matching source+SQLite rollback snapshot immediately before
+any approved production rollout and perform recipient-visible private
+acceptance before public status replacement.
