@@ -820,3 +820,41 @@ The normal graphic rollout readiness must accept the B snapshot
 and its exact source version before candidate installation.
 Retaining A for disaster recovery never makes an old text-only
 source compatible with a Telegram photo.
+
+
+## Independent unrelated pin continuity audit
+
+The current public pinned message is not the saved Shelly status
+message. Do NOT unpin, delete, or overwrite that unrelated post to
+make a single-message pin audit pass. Use the separate read-only
+scripts/graphic-unrelated-pin-continuity.py to protect it before and
+after an approved cutover.
+
+Run --capture only with live Telegram Bot API getChat evidence,
+then run the same command without --capture to verify the pin
+has not changed. Both calls contact only getChat and never send,
+edit, pin, unpin or delete any message. The private baseline is an
+independent 0600 file with a randomly keyed fingerprint, no raw
+chat/status/pin IDs. A fixture-sourced baseline is explicitly
+marked FIXTURE and can NEVER be verified as live proof.
+Captured proof expires after 24 hours; refresh it under a new
+filename before a later maintenance window. A changed pinned post
+returns BLOCKED, not an instruction to repin.
+
+Example commands, assuming trusted local credentials and the
+private baseline pathname is known:
+
+~~~bash
+set -a; source /opt/shelly-voltage/.env; set +a
+python3 scripts/graphic-unrelated-pin-continuity.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --token-file /opt/shelly-voltage/secrets/telegram_token \
+  --baseline /opt/shelly-voltage/validation/telegram-unrelated-pin-baseline-20261111-122458.json \
+  --jsonl
+~~~
+
+Even a successful live comparison only proves the **unrelated
+pinned post** stayed the same. It DOES NOT prove the saved status ID
+is text/photo, establish a Telegram edit receipt, authorize
+deployment, or replace snapshots A and B. It is one independent
+recipient-visible post-preservation check.
