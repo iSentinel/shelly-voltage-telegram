@@ -660,7 +660,8 @@ Therefore a stopped Docker container is not enough for the maintenance
 window: a restarted legacy writer could edit or rotate the Telegram post.
 The one-shot confirmation helper now requires **all three** conditions:
 
-- `shelly-voltage-compose.service` is inactive or failed;
+- `shelly-voltage-compose.service` reports `inactive` or `failed`
+  from `systemctl is-active` (not `active`, `activating` or `unknown`);
 - its `systemctl is-enabled` state is `disabled` or `masked`;
 - `shelly-voltage-bot` is stopped with Docker restart policy `no`.
 
