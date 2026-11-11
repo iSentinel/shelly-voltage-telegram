@@ -91,7 +91,7 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
                 "insert into meta values ('telegram_status_message_id','101')"
             )
 
-    def fake_guards(self, stopped=True, approved=True):
+    def fake_guards(self, stopped=True, approved=True, fenced=True):
         """Replace only external state checks with explicit return values."""
 
         def resolve(filename, alias):
@@ -100,7 +100,10 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
                     owner_approval_verified=lambda _: approved
                 )
             if "confirm-legacy-text" in filename:
-                return SimpleNamespace(writer_stopped=stopped)
+                restart = fenced if callable(fenced) else lambda: fenced
+                return SimpleNamespace(
+                    writer_stopped=stopped, restart_fenced=restart
+                )
             raise AssertionError("unrecognized guarded module")
 
         return mock.patch.object(SNAP, "module", side_effect=resolve)
@@ -148,6 +151,45 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         ):
             SNAP.run(self.args)
         self.assertFalse(self.archive_root.exists())
+
+    def test_missing_restart_fence_blocks_before_archive_creation(self):
+        """Stop alone is insufficient while legacy services can restart."""
+
+        self.args.execute = True
+        with (
+            self.fake_guards(stopped=lambda: True, fenced=lambda: False),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "RESTART_FENCE_MISSING"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertFalse(self.archive_root.exists())
+
+    def test_fence_lost_during_archive_disposes_staging(self):
+        """A/B staging is deleted if restart protection is lost."""
+
+        self.args.execute = True
+        fence = mock.Mock(side_effect=[True, False])
+        with (
+            self.fake_guards(stopped=lambda: True, fenced=fence),
+            self.assertRaisesRegex(SNAP.SnapshotBlocked, "RESTART_FENCE_LOST"),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(fence.call_count, 2)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
+    def test_fence_lost_after_archive_validation_blocks_publish(self):
+        """No snapshot may publish after the maintenance fence disappears."""
+
+        self.args.execute = True
+        fence = mock.Mock(side_effect=[True, True, True, False])
+        with (
+            self.fake_guards(stopped=lambda: True, fenced=fence),
+            self.assertRaisesRegex(SNAP.SnapshotBlocked, "RESTART_FENCE_LOST"),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(fence.call_count, 4)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
 
     def test_phase_a_requires_execute_and_excludes_private_config(self):
         """A captures the original text state and complete history."""
