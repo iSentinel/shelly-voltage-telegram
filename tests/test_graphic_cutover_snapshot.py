@@ -7,6 +7,7 @@ import gzip
 import importlib.util
 import io
 import os
+import signal
 import sqlite3
 import stat
 import subprocess
@@ -390,8 +391,8 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
             SNAP.run(self.args)
         self.assertEqual(list(self.archive_root.iterdir()), [])
 
-    def test_failed_source_stream_is_killed_and_reaped(self):
-        """Bounded digest failure must not leave an orphan tar writer."""
+    def test_failed_source_stream_kills_full_process_group(self):
+        """A failed digest must kill Bash and its tar descendants."""
 
         archive = self.folder / "source-test.tar.gz"
         with gzip.open(archive, "wb") as output:
@@ -406,31 +407,80 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
                 ],
             ),
             mock.patch.object(SNAP.subprocess, "Popen") as spawn,
+            mock.patch.object(SNAP.os, "killpg") as kill_group,
             self.assertRaisesRegex(
                 SNAP.SnapshotBlocked, "SOURCE_PARITY_UNAVAILABLE"
             ),
         ):
             child = spawn.return_value
+            child.pid = 4321
             child.stdout = io.BytesIO(b"streamed tar payload")
             child.poll.return_value = None
             SNAP.source_parity(archive, self.source)
-        child.kill.assert_called_once()
+        self.assertTrue(spawn.call_args.kwargs["start_new_session"])
+        kill_group.assert_called_once_with(4321, signal.SIGKILL)
         child.wait.assert_called_once_with(timeout=6)
 
-    def test_timed_out_tar_wait_is_killed_and_reaped(self):
-        """A tar child timing out must be cleaned up before refusing."""
+    def test_source_digest_timeout_kills_full_process_group(self):
+        """A timed-out tar wait must reap every child before refusing."""
 
         with (
             mock.patch.object(SNAP.subprocess, "Popen") as spawn,
+            mock.patch.object(SNAP.os, "killpg") as kill_group,
             mock.patch.object(SNAP, "tar_digest", return_value="hash"),
             self.assertRaises(subprocess.TimeoutExpired),
         ):
             child = spawn.return_value
+            child.pid = 4322
             child.stdout = io.BytesIO(b"streamed tar payload")
             child.poll.return_value = None
             child.wait.side_effect = [subprocess.TimeoutExpired("tar", 90), 0]
             SNAP.fresh_source_digest(self.source)
-        child.kill.assert_called_once()
+        kill_group.assert_called_once_with(4322, signal.SIGKILL)
+        self.assertEqual(child.wait.call_count, 2)
+
+    def test_source_creation_broken_pipe_reaps_full_process_group(self):
+        """Archive creation must close orphaned tar on an I/O failure."""
+
+        class BrokenStream(io.BytesIO):
+            """Simulate the source-tar pipe failing during copying."""
+
+            def read(self, size=-1):
+                """Report a local pipe read failure."""
+                raise OSError("broken source stream")
+
+        with (
+            mock.patch.object(SNAP, "source_tar") as spawn,
+            mock.patch.object(SNAP.os, "killpg") as kill_group,
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_FAILED"
+            ),
+        ):
+            child = spawn.return_value
+            child.pid = 4323
+            child.stdout = BrokenStream(b"broken")
+            child.poll.return_value = None
+            SNAP.gzip_source(self.source, self.folder / "bad-source.tar.gz")
+        kill_group.assert_called_once_with(4323, signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=6)
+
+    def test_source_creation_timeout_reaps_full_process_group(self):
+        """A timed-out source archive must fail without a stray tar job."""
+
+        with (
+            mock.patch.object(SNAP, "source_tar") as spawn,
+            mock.patch.object(SNAP.os, "killpg") as kill_group,
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_FAILED"
+            ),
+        ):
+            child = spawn.return_value
+            child.pid = 4324
+            child.stdout = io.BytesIO(b"small tar")
+            child.poll.return_value = None
+            child.wait.side_effect = [subprocess.TimeoutExpired("tar", 90), 0]
+            SNAP.gzip_source(self.source, self.folder / "late-source.tar.gz")
+        kill_group.assert_called_once_with(4324, signal.SIGKILL)
         self.assertEqual(child.wait.call_count, 2)
 
     def test_source_mutation_without_version_change_discards_archive(self):
