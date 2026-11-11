@@ -217,6 +217,19 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
             gate.snapshot_parity_issues(phase_b, self.database), []
         )
 
+    def assert_pending_before_telegram(self, token, chat, message_id, body):
+        """Require saved one-shot intent before mocked Telegram transport."""
+
+        self.assertEqual((chat, message_id), ("-100123", 101))
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(
+                db.execute(
+                    "select value from meta "
+                    "where key='telegram_legacy_text_confirm_pending'"
+                ).fetchone(),
+                ("pending",),
+            )
+
     def test_one_shot_text_confirmation_creates_eligible_second_snapshot(self):
         """A genuine SQLite one-shot commit makes B valid but not A."""
 
@@ -224,20 +237,12 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         with self.fake_guards(stopped=lambda: True):
             a = Path(SNAP.run(self.args)["archive"])
 
-        def fake_telegram_edit(token, chat, message_id, body):
-            """Check committed pending marker before acknowledging any edit."""
-
-            self.assertEqual((chat, message_id), ("-100123", 101))
-            with closing(sqlite3.connect(self.database)) as db:
-                self.assertEqual(
-                    db.execute(
-                        "select value from meta "
-                        "where key='telegram_legacy_text_confirm_pending'"
-                    ).fetchone(),
-                    ("pending",),
-                )
-
-        with mock.patch.object(CONFIRM, "edit_text_once", fake_telegram_edit):
+        with (
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(
+                CONFIRM, "edit_text_once", self.assert_pending_before_telegram
+            ),
+        ):
             CONFIRM.verify_and_record(
                 SimpleNamespace(database=self.database),
                 101,
@@ -265,6 +270,7 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         with self.fake_guards(stopped=lambda: True):
             a = Path(SNAP.run(self.args)["archive"])
         with (
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
             mock.patch.object(
                 CONFIRM,
                 "edit_text_once",
