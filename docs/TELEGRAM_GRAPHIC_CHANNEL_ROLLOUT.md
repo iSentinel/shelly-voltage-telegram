@@ -623,3 +623,45 @@ fresh checksummed source and SQLite snapshot, recipient-visible
 acceptance, or the prohibition on changing a different pinned post.
 Invalid, linked, world-readable or wrong-PR records are BLOCKED.
 No bot token or private channel ID is printed.
+
+
+## One-shot existing text confirmation CLI (source-only)
+
+The candidate scripts/graphic-confirm-legacy-text.py defaults to
+a non-mutating inspection (--jsonl, without --execute). It refuses
+to proceed while the Compose service OR Docker process is running,
+without the exact protected PR300 Owner Approval record, if SQLite
+media metadata is already present/ambiguous, or unless an
+independent recent exact-version source+SQLite snapshot passes
+whole-database parity. The token is read only in explicit execution
+mode, from a regular, unlinked 0600 private file. The only possible
+Telegram operation is one editMessageText call against the
+already persisted status message ID. No send, delete, pin, unpin,
+retry or new message ID is allowed. Its Ukrainian temporary text
+marks the last voltage as HISTORICAL because the writer is stopped.
+A fully verified Telegram Message reply is required before storing
+the text media marker in SQLite. A network timeout or malformed reply
+returns an explicit UNKNOWN edit outcome and blocks automated cutover.
+Do not repeat it until the exact public status is reconciled by a
+separate read-only recipient-side audit.
+
+Example dry-run (when a matching-version stopped-writer snapshot
+exists; never paste actual Bot tokens or channel/message IDs):
+
+~~~bash
+set -a; source /opt/shelly-voltage/.env; set +a
+python3 scripts/graphic-confirm-legacy-text.py \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --snapshot /var/backups/shelly-voltage/upgrades/APPROVED_SNAPSHOT \
+  --installed-version-file /opt/shelly-voltage/VERSION \
+  --owner-approval-file /opt/shelly-voltage/validation/APPROVAL_RECEIPT \
+  --token-file /opt/shelly-voltage/secrets/telegram_token --jsonl
+~~~
+
+The explicit --execute variant is permitted only within the
+separately reviewed and quiesced change window after the dry-run
+passes. This source code and its tests are NOT an authorization to
+stop the live monitor, overwrite its database, or replace the
+public channel status. After successful text identity confirmation,
+deploy the media-aware code only with a known-good rollback and
+recipient-visible photo/card inspection.
