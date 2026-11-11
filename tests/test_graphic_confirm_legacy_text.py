@@ -298,30 +298,62 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         ):
             CONFIRM.current_status(self.db)
 
-    def test_restart_fence_needs_disabled_service_and_docker_no(self):
-        """Both automatic activation paths must be disabled for cutover."""
+    def test_restart_fence_needs_inactive_unit_and_docker_no(self):
+        """Disabling autostart alone must not trust a running unit."""
 
-        def result(output: str):
-            """Represent a command response without affecting host state."""
-            return subprocess.CompletedProcess([], 0, stdout=output)
+        def result(output: str, code: int = 0):
+            """Represent a local state command with no side effects."""
+            return subprocess.CompletedProcess([], code, stdout=output)
 
-        for service, policy, expected in (
-            ("enabled", "unless-stopped", False),
-            ("disabled", "unless-stopped", False),
-            ("enabled", "no", False),
-            ("disabled", "no", True),
-            ("masked", "no", True),
+        for enabled, active, policy, expected in (
+            ("enabled", "inactive", "no", False),
+            ("disabled", "active", "no", False),
+            ("disabled", "activating", "no", False),
+            ("disabled", "deactivating", "no", False),
+            ("disabled", "unknown", "no", False),
+            ("disabled", "inactive", "unless-stopped", False),
+            ("disabled", "inactive", "no", True),
+            ("masked", "failed", "no", True),
+            ("masked-runtime", "inactive", "", True),
         ):
             with (
-                self.subTest(service=service, policy=policy),
+                self.subTest(enabled=enabled, active=active, policy=policy),
                 mock.patch.object(
                     CONFIRM.subprocess,
                     "run",
-                    side_effect=[result(service), result(policy)],
+                    side_effect=[
+                        result(enabled),
+                        result(active),
+                        result(policy),
+                    ],
                 ) as commands,
             ):
                 self.assertEqual(FENCE_FUNCTION(), expected)
-                self.assertEqual(commands.call_count, 2)
+                expected_calls = (
+                    1
+                    if enabled == "enabled"
+                    else (2 if active not in {"inactive", "failed"} else 3)
+                )
+                self.assertEqual(commands.call_count, expected_calls)
+
+    def test_restart_fence_rejects_unavailable_or_failed_probes(self):
+        """Missing command results and failed Docker inspection are unsafe."""
+
+        reply = subprocess.CompletedProcess([], 0, stdout="disabled")
+        inactive = subprocess.CompletedProcess([], 3, stdout="inactive")
+        bad_docker = subprocess.CompletedProcess([], 1, stdout="no")
+        for probes in (
+            [reply, inactive, bad_docker],
+            [reply, subprocess.TimeoutExpired("systemctl", 6)],
+            [OSError("unavailable")],
+        ):
+            with (
+                self.subTest(probes=len(probes)),
+                mock.patch.object(
+                    CONFIRM.subprocess, "run", side_effect=probes
+                ),
+            ):
+                self.assertFalse(FENCE_FUNCTION())
 
     def test_missing_restart_fence_blocks_before_reservation(self):
         """An enabled old service cannot perform the one-shot edit."""
