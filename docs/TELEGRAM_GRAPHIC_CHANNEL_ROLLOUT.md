@@ -690,3 +690,19 @@ fresh stopped-writer source+SQLite snapshot checked before any
 Telegram edit. Never repair this by overwriting current SQLite
 with an older backup. Rollback itself requires a separate safe
 reconciliation of Telegram message media.
+
+
+## Pending confirmation blocks all status mutations
+
+An uncertain single-shot legacy text edit persists
+telegram_legacy_text_confirm_pending. The live Monitor checks this
+marker before every status text/photo edit, new graphic status send,
+status creation, post-outage replacement, pin/unpin operation and
+status control cleanup. This guard prevents a later timer callback or
+restart from racing the owner-approved confirmation. Unrelated
+availability alerts and physical measurements are independent: the
+marker does NOT suppress Shelly polling or corrupt history. It is
+never cleared merely by a new worker restart. Only a verified
+same-chat/same-ID/same-text Telegram receipt permits atomic clearing
+together with the confirmed text marker. The preflight also refuses
+graphic migration while the pending key exists.

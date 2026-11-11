@@ -17,6 +17,7 @@ from test_app import APP
 
 METHODS = (
     "status_message_key",
+    "legacy_confirmation_pending",
     "status_media_kind",
     "record_status_media_kind",
     "graphic_channel_opted_in",
@@ -163,6 +164,71 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor.telegram.send_status_photo.assert_not_called()
         monitor.telegram.send.assert_not_called()
         self.assertNotIn("telegram_graphic_publish_pending", state)
+
+    def test_unresolved_legacy_text_confirm_blocks_all_status_paths(self):
+        """A prior timeout cannot be bypassed by disabled graphic flags."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+                "telegram_legacy_text_confirm_pending": "pending",
+            }
+        )
+        self.assertFalse(monitor.update_graphic_status("Online"))
+        self.assertFalse(monitor.publish_graphic_status("Online"))
+        self.assertFalse(
+            monitor.upsert_status_message(
+                "Online", "telegram_status_message_id", "-100123"
+            )
+        )
+        self.assertFalse(monitor.legacy_media_guard("Online"))
+        self.assertFalse(
+            monitor.edit_existing_status_media("Online", "Caption", self.card)
+        )
+        self.assertEqual(
+            state["telegram_legacy_text_confirm_pending"], "pending"
+        )
+        monitor.telegram.send.assert_not_called()
+        monitor.telegram.send_status_photo.assert_not_called()
+        monitor.telegram.edit_photo.assert_not_called()
+        monitor.telegram.edit_photo_caption.assert_not_called()
+        monitor.telegram.edit.assert_not_called()
+        monitor.telegram.delete.assert_not_called()
+        monitor.telegram.unpin.assert_not_called()
+
+    def test_unresolved_legacy_confirm_blocks_recovery_rotation(self):
+        """Natural recovery cannot silently replace a blocked status."""
+
+        monitor, state = self.make_monitor(
+            {"telegram_legacy_text_confirm_pending": "pending"}
+        )
+        monitor.rotate_status_after_recovery(87.5)
+        monitor.telegram.send.assert_not_called()
+        monitor.telegram.send_status_photo.assert_not_called()
+        self.assertNotIn("telegram_status_message_id", state)
+        self.assertEqual(
+            state["telegram_legacy_text_confirm_pending"], "pending"
+        )
+
+    def test_unresolved_legacy_confirm_does_not_pin_or_unpin(self):
+        """Uncertain channel status cannot trigger unrelated pin changes."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_pinned_id": "909",
+                "telegram_legacy_text_confirm_pending": "pending",
+            }
+        )
+        monitor.pin_status = True
+        APP.Monitor.ensure_status_pinned(monitor, 101)
+        APP.Monitor.disable_status_pin(monitor)
+        APP.Monitor.clear_status_controls(monitor)
+        monitor.telegram.pin.assert_not_called()
+        monitor.telegram.unpin.assert_not_called()
+        monitor.telegram.clear_reply_markup.assert_not_called()
+        self.assertEqual(state["telegram_status_pinned_id"], "909")
 
     def test_empty_pending_marker_blocks_new_status_publication(self):
         """Malformed existing marker must not create a duplicate message."""

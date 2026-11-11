@@ -2924,6 +2924,14 @@ class Monitor:
             return "telegram_status_message_id"
         return "telegram_message_id"
 
+    def legacy_confirmation_pending(self) -> bool:
+        """Never mutate a status after an ambiguous one-shot text edit."""
+
+        return (
+            self.storage.get_meta("telegram_legacy_text_confirm_pending")
+            is not None
+        )
+
     def status_media_kind(self) -> str:
         """Read the message-bound format without trusting stale metadata."""
 
@@ -2965,9 +2973,9 @@ class Monitor:
         self, text: str, caption: str, photo: Path | None
     ) -> bool:
         """Safely edit only an existing, format-verified status message."""
-
         if (
-            not isinstance(text, str)
+            self.legacy_confirmation_pending()
+            or not isinstance(text, str)
             or not text.strip()
             or not isinstance(caption, str)
             or not caption.strip()
@@ -3021,6 +3029,8 @@ class Monitor:
     ) -> bool:
         """Verify a legacy text post before any owner-approved conversion."""
 
+        if self.legacy_confirmation_pending():
+            return False
         if (
             owner_approved is not True
             or not isinstance(text, str)
@@ -3104,6 +3114,8 @@ class Monitor:
     ) -> bool:
         """Persist unresolved uploads so retries cannot duplicate posts."""
 
+        if self.legacy_confirmation_pending():
+            return False
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         pending_key = "telegram_graphic_publish_pending"
@@ -3144,6 +3156,8 @@ class Monitor:
     def _update_graphic_status_locked(self, text: str) -> bool:
         """Edit only a known post; never race an uncertain publish."""
 
+        if self.legacy_confirmation_pending():
+            return False
         if (
             self.storage.get_meta("telegram_graphic_publish_pending")
             is not None
@@ -3158,6 +3172,8 @@ class Monitor:
     def legacy_media_guard(self, text: str) -> bool | None:
         """Keep rollback text safe when a photo or uncertain upload exists."""
 
+        if self.legacy_confirmation_pending():
+            return False
         if not self.cfg.telegram_status_chat_id:
             return None
         pending = self.storage.get_meta("telegram_graphic_publish_pending")
@@ -3186,6 +3202,8 @@ class Monitor:
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
         """Route status edits to the explicitly selected presentation mode."""
 
+        if self.legacy_confirmation_pending():
+            return False
         if self.graphic_channel_opted_in():
             if (
                 key != self.status_message_key()
@@ -3270,6 +3288,8 @@ class Monitor:
     def ensure_status_pinned(self, message_id: int) -> None:
         """Pin a channel status once; failures are non-fatal."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.pin_status or not self.cfg.telegram_status_chat_id:
             return
         stored = self.storage.get_meta("telegram_status_pinned_id")
@@ -3284,6 +3304,8 @@ class Monitor:
     def disable_status_pin(self) -> None:
         """Unpin the current status when pinning is disabled."""
 
+        if self.legacy_confirmation_pending():
+            return
         pinned = self.storage.get_meta("telegram_status_pinned_id")
         if not pinned or not self.cfg.telegram_status_chat_id:
             return
@@ -3307,6 +3329,8 @@ class Monitor:
     def clear_status_controls(self) -> None:
         """Remove legacy inline buttons from the current public status."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.cfg.telegram_status_chat_id:
             return
         current = self.storage.get_meta(self.status_message_key())
@@ -3325,6 +3349,8 @@ class Monitor:
     def rotate_status_after_recovery(self, duration: float) -> None:
         """Keep the old channel status until its replacement is published."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.telegram.enabled:
             return
         pending_at = self.storage.get_meta(RECOVERY_ROTATION_PENDING_KEY)

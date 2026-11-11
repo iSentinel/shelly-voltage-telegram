@@ -485,6 +485,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, state = self.media_monitor(values)
         monitor.telegram = Mock()
         monitor.telegram.status_chat_id = "-100123"
+        monitor.legacy_confirmation_pending = (
+            lambda: APP.Monitor.legacy_confirmation_pending(monitor)
+        )
         monitor.valid_legacy_status_target = (
             APP.Monitor.valid_legacy_status_target
         )
