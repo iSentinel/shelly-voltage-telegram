@@ -297,7 +297,11 @@ def verify_and_record(
 ) -> None:
     """Prevent blind retries after a request or client process crash."""
 
+    if not writer_stopped():
+        raise VerificationError("WRITER_RESTARTED")
     reserve_confirmation(args, mid)
+    if not writer_stopped():
+        raise VerificationError("WRITER_RESTARTED")
     edit_text_once(token, chat, mid, body)
     finish_confirmation(args, mid, chat)
 
