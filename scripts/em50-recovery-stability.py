@@ -98,6 +98,33 @@ def inspect(args: argparse.Namespace, now: float) -> dict:
     }
 
 
+def pending_stability(args: argparse.Namespace, now: float) -> dict | None:
+    """Describe an open natural outage before probing offline HTTP."""
+
+    state = NATURAL.read_state(Path(args.db), 60)
+    return NATURAL.pending_record(state, now)
+
+
+def validate_thresholds(args: argparse.Namespace) -> None:
+    """Refuse unsafe physical acceptance limits during outage too."""
+
+    if not 5 <= args.max_gap_seconds <= 60:
+        raise ValueError("invalid maximum physical sample gap")
+    if not 50 <= args.min_samples <= 180:
+        raise ValueError("invalid minimum physical sample count")
+
+
+def emit_pending(pending: dict, json_mode: bool) -> int:
+    """Report unavailable recovery while keeping the release blocked."""
+
+    if json_mode:
+        print(json.dumps(pending, ensure_ascii=False, sort_keys=True))
+    else:
+        incident = pending["outage_id"]
+        print(f"PENDING recovery_stability incident={incident}")
+    return 2
+
+
 def main() -> int:
     """Print a non-secret stable/unstable decision without side effects."""
 
@@ -112,7 +139,12 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     try:
-        result = inspect(args, time.time())
+        now = time.time()
+        validate_thresholds(args)
+        pending = pending_stability(args, now)
+        if pending is not None:
+            return emit_pending(pending, args.json)
+        result = inspect(args, now)
     except (
         ValueError,
         TypeError,
