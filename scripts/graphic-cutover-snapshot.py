@@ -208,21 +208,36 @@ def tar_digest(stream) -> str:
     return digest.hexdigest()
 
 
+def fresh_source_digest(current: Path) -> str:
+    """Reap a filtered-tar child even when reading its pipe fails."""
+
+    proc = subprocess.Popen(
+        ["bash", str(ROOT / "source-tar.sh"), str(current)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        if proc.stdout is None:
+            raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE")
+        with proc.stdout:
+            digest = tar_digest(proc.stdout)
+        if proc.wait(timeout=90) != 0:
+            raise SnapshotBlocked("SOURCE_ARCHIVE_MISMATCH")
+        return digest
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=6)
+
+
 def source_parity(archive: Path, current: Path) -> None:
-    """Compare the archived filtered source with its current full tree."""
+    """Compare archived and current filtered source without lingering jobs."""
 
     try:
         with gzip.open(archive, "rb") as stored:
             archived = tar_digest(stored)
-        proc = subprocess.Popen(
-            ["bash", str(ROOT / "source-tar.sh"), str(current)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        assert proc.stdout is not None
-        with proc.stdout:
-            live = tar_digest(proc.stdout)
-        if proc.wait(timeout=90) != 0 or archived != live:
+        live = fresh_source_digest(current)
+        if archived != live:
             raise SnapshotBlocked("SOURCE_ARCHIVE_MISMATCH")
     except (OSError, EOFError, subprocess.TimeoutExpired):
         raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE") from None
