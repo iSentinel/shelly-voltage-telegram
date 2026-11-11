@@ -81,6 +81,17 @@ def regular_file(path: Path) -> bool:
     return stat.S_ISREG(info.st_mode) and info.st_nlink == 1
 
 
+def assert_quiescent(confirmation, before: bool = False) -> None:
+    """Require stopped writer and disabled automatic service restarts."""
+
+    if not confirmation.writer_stopped():
+        label = "WRITER_NOT_STOPPED" if before else "WRITER_RESTARTED"
+        raise SnapshotBlocked(label)
+    if not confirmation.restart_fenced():
+        label = "RESTART_FENCE_MISSING" if before else "RESTART_FENCE_LOST"
+        raise SnapshotBlocked(label)
+
+
 def preconditions(options) -> tuple[int, str]:
     """Require protected approval, exact release and stopped writer."""
 
@@ -106,8 +117,7 @@ def preconditions(options) -> tuple[int, str]:
     confirmation = module(
         "graphic-confirm-legacy-text.py", "snapshot_writer_gate"
     )
-    if not confirmation.writer_stopped():
-        raise SnapshotBlocked("WRITER_NOT_STOPPED")
+    assert_quiescent(confirmation, before=True)
     return status_identity(options.database, options.phase)
 
 
@@ -253,8 +263,7 @@ def build_archives(
     confirmation = module(
         "graphic-confirm-legacy-text.py", "snapshot_final_writer_gate"
     )
-    if not confirmation.writer_stopped():
-        raise SnapshotBlocked("WRITER_RESTARTED")
+    assert_quiescent(confirmation)
     after, _ = status_identity(options.database, options.phase)
     if after != count:
         raise SnapshotBlocked("DATABASE_CHANGED_DURING_CAPTURE")
@@ -278,8 +287,7 @@ def final_publication_preflight(
     confirmation = module(
         "graphic-confirm-legacy-text.py", "snapshot_publish_writer_gate"
     )
-    if not confirmation.writer_stopped():
-        raise SnapshotBlocked("WRITER_RESTARTED")
+    assert_quiescent(confirmation)
     after, _ = status_identity(options.database, options.phase)
     if after != count:
         raise SnapshotBlocked("DATABASE_CHANGED_BEFORE_PUBLICATION")
@@ -290,6 +298,7 @@ def final_publication_preflight(
         staging / "source.tar.gz",
         options.database,
     )
+    assert_quiescent(confirmation)
 
 
 def capture(options, count: int) -> dict:
