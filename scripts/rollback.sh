@@ -354,6 +354,19 @@ main() {
         compose_prepare true
     fi
     stop_service
+    # A Telegram callback may change status media while Docker is stopping.
+    # No source or SQLite restore is permitted after an identity race.
+    if ! python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
+        --database "$DB"; then
+        echo "ERROR: Telegram status changed during writer stop; rollback blocked." >&2
+        if [[ "$NO_START" == false && "$DRY_RUN" == false ]]; then
+            echo "NOTICE: restoring the still-installed service, not old SQLite." >&2
+            start_service
+        else
+            echo "NOTICE: writer remains stopped by operator request." >&2
+        fi
+        exit 6
+    fi
     rescue_current_db
     assert_writer_stopped
     restore_source

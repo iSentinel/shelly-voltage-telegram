@@ -758,3 +758,73 @@ PY
     test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$database_digest"
     printf 'ROLLBACK_GRAPHIC_%s_PRESTOP=BLOCKED\n' "$mode"
 done
+
+
+# Simulate Telegram photo conversion after preflight but before stop returns.
+python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute(
+        "delete from meta where key in "
+        "('telegram_status_media_identity',"
+        "'telegram_graphic_publish_pending',"
+        "'telegram_legacy_text_confirm_pending')"
+    )
+PY
+mkdir -p "$TMP/media-race-bin"
+cat > "$TMP/media-race-bin/docker" <<'MOCK_MEDIA_RACE'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == compose ]]; then
+    python3 - "$MEDIA_RACE_DB" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute(
+        "insert or replace into meta(key,value) values (?,?)",
+        ("telegram_status_media_identity", "photo:-100123:101"),
+    )
+PY
+    exit 0
+fi
+if [[ "$1" == inspect ]]; then
+    printf 'false\n'
+    exit 0
+fi
+exit 97
+MOCK_MEDIA_RACE
+chmod 0755 "$TMP/media-race-bin/docker"
+source_before="$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)"
+source_count_before="$(find "$TARGET" -mindepth 1 -maxdepth 1 | wc -l)"
+rescue_dirs_before="$(find "$RESCUE" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+readings_before="$(python3 - "$DB_DIR/voltage.sqlite3" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    print(db.execute("select count(*) from measurements").fetchone()[0])
+PY
+)"
+set +e
+env PATH="$TMP/media-race-bin:$PATH"     MEDIA_RACE_DB="$DB_DIR/voltage.sqlite3"     SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3"     SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE"     "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP"     --no-start --confirm-db-replacement     > "$TMP/photo-change-after-stop.log" 2>&1
+media_race_rc=$?
+set -e
+test "$media_race_rc" -eq 6
+grep -q 'Telegram media requires separate reconciliation'     "$TMP/photo-change-after-stop.log"
+test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_before"
+test "$(find "$TARGET" -mindepth 1 -maxdepth 1 | wc -l)"     = "$source_count_before"
+test "$(find "$RESCUE" -mindepth 1 -maxdepth 1 -type d | wc -l)"     = "$rescue_dirs_before"
+python3 - "$DB_DIR/voltage.sqlite3" "$readings_before" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    assert db.execute("select count(*) from measurements").fetchone()[0] == int(sys.argv[2])
+    assert db.execute(
+        "select value from meta where key='telegram_status_media_identity'"
+    ).fetchone()[0] == "photo:-100123:101"
+PY
+echo "ROLLBACK_PHOTO_RACE_AFTER_STOP=BLOCKED_BEFORE_RESTORE"

@@ -755,3 +755,19 @@ fresh installation when no orphan WAL, shared-memory or rollback
 journal sidecar remains; otherwise the guard refuses a restore.
 On BLOCKED, never bypass the guard or delete the pending marker;
 reconcile the exact public Telegram post first.
+
+
+## Media transition during writer stop
+
+The rollback helper verifies Telegram media identity twice: before
+stopping the Docker writer and again after writer shutdown, before
+any rescue/source/SQLite restoration. This closes the stop-time
+race in which a callback writes a photo/unknown marker after the
+first read. A failed post-stop check blocks source/SQLite restoration.
+With normal startup enabled, it attempts to restart the
+still-installed current release; with explicit --no-start, the writer
+remains stopped and the operator must restart the compatible current
+version manually. A failed restart is an incident, not a successful
+rollback. An isolated shell test mutates SQLite during fake
+docker compose stop and verifies that source and measurements remain
+unchanged after the second guard blocks.
