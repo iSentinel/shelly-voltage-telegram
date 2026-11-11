@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+import urllib.error
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch
@@ -191,6 +192,64 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
         self.assertFalse(response["mains_restoration_verified"])
         self.assertFalse(response["release_authorized"])
         network.assert_not_called()
+
+    def test_multiday_blackout_remains_pending_and_read_only(self):
+        """A 26-hour blackout cannot silently become an online incident."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "UPDATE outages SET started_at=?,ended_at=NULL",
+                (self.now - 26 * 3600,),
+            )
+            db.execute("DELETE FROM measurements")
+            db.commit()
+        before = self.db.read_bytes()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            patch.object(AUDIT.time, "time", return_value=self.now),
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        record = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(record["status"], "PENDING")
+        self.assertFalse(record["mains_restoration_verified"])
+        self.assertFalse(record["telegram_delivery_verified"])
+        self.assertFalse(record["release_authorized"])
+        self.assertEqual(self.db.read_bytes(), before)
+        network.assert_not_called()
+
+    def test_closed_incident_http_503_never_claims_recovery(self):
+        """An HTTP 503 is a failure, not proof of power restoration."""
+
+        def offline_ready(url: str, expected: str) -> dict:
+            """Return health, but simulate the real unavailable /ready."""
+            if expected == "/health":
+                return health(self.now)
+            raise urllib.error.HTTPError(
+                url, 503, "Service Unavailable", None, io.BytesIO(b"")
+            )
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        before = self.db.read_bytes()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json", side_effect=offline_ready),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("FAIL natural_recovery HTTPError", stderr.getvalue())
+        self.assertEqual(self.db.read_bytes(), before)
 
     def test_first_samples_stay_pending_until_outage_closes(self):
         """Recovery hysteresis cannot declare physical restoration early."""
