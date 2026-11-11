@@ -270,6 +270,28 @@ def build_archives(
     manifest.chmod(0o600)
 
 
+def final_publication_preflight(
+    options, staging: Path, count: int, version: str
+) -> None:
+    """Refuse a stale archive even after initial validation succeeded."""
+
+    confirmation = module(
+        "graphic-confirm-legacy-text.py", "snapshot_publish_writer_gate"
+    )
+    if not confirmation.writer_stopped():
+        raise SnapshotBlocked("WRITER_RESTARTED")
+    after, _ = status_identity(options.database, options.phase)
+    if after != count:
+        raise SnapshotBlocked("DATABASE_CHANGED_BEFORE_PUBLICATION")
+    if (options.source / "VERSION").read_text().strip() != version:
+        raise SnapshotBlocked("SOURCE_CHANGED_BEFORE_PUBLICATION")
+    validate(
+        staging / "voltage-cutover.sqlite3.gz",
+        staging / "source.tar.gz",
+        options.database,
+    )
+
+
 def capture(options, count: int) -> dict:
     """Atomically publish one private, fully validated rollback snapshot."""
 
@@ -291,6 +313,7 @@ def capture(options, count: int) -> dict:
         if final.exists():
             raise SnapshotBlocked("SNAPSHOT_TARGET_ALREADY_EXISTS")
         build_archives(options, staging, final, count, version)
+        final_publication_preflight(options, staging, count, version)
         staging.rename(final)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

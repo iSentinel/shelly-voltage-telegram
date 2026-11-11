@@ -244,6 +244,48 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
             SNAP.run(self.args)
         self.assertEqual(list(self.archive_root.iterdir()), [])
 
+    def test_writer_restarts_after_validation_before_publication(self):
+        """Last-moment writer restart must prevent an apparently valid B."""
+
+        self.args.execute = True
+        writer = mock.Mock(side_effect=[True, True, False])
+        with (
+            self.fake_guards(stopped=writer),
+            self.assertRaisesRegex(SNAP.SnapshotBlocked, "WRITER_RESTARTED"),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
+    def test_metadata_mutation_after_first_validation_discards_archive(self):
+        """Full logical parity also detects a metadata-only late write."""
+
+        self.args.execute = True
+        real_validate = SNAP.validate
+        calls = [0]
+
+        def change_after_first(*args):
+            real_validate(*args)
+            calls[0] += 1
+            if calls[0] == 1:
+                with closing(sqlite3.connect(self.database)) as db, db:
+                    db.execute(
+                        "insert into meta values (?,?)",
+                        ("live_setting_changed", "unexpected"),
+                    )
+
+        with (
+            self.fake_guards(stopped=lambda: True),
+            mock.patch.object(
+                SNAP, "validate", side_effect=change_after_first
+            ),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SNAPSHOT_VALIDATION_FAILED"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(calls[0], 1)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
     def test_owner_rejected_or_linked_output_root_blocks(self):
         """Approvals and safe output directories are mandatory."""
 

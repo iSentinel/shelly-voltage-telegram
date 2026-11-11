@@ -805,8 +805,12 @@ directories containing a 0600 source archive, complete SQLite gzip,
 exact-final-path SHA256 sidecars and a versioned manifest. Source
 archives exclude .env, tokens, secrets and local validation data.
 Each archive must pass both validators, full current SQLite parity,
-and the post-capture stopped-writer check. Incomplete staging is
-deleted on error. A requires no Telegram media marker; B requires
+and the post-capture stopped-writer check. Immediately before atomic
+publication the snapshot helper repeats the stopped-writer, installed
+source version, status metadata and full-SQLite parity checks. If a
+writer restarts or metadata changes after the first validation, no
+archive is published and staging is removed. A requires no Telegram
+media marker; B requires
 verified text media matching the configured public status channel
 and the exact persisted message ID. Photo/unknown media, unresolved
 requests, invalid approval or active writer are BLOCKED.
