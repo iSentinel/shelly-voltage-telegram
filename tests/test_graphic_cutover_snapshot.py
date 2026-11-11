@@ -36,6 +36,25 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         self.folder = Path(temp.name)
         self.source = self.folder / "installed"
         self.source.mkdir()
+        self.make_source_fixture()
+        private_data = self.folder / "sqlite-data"
+        private_data.mkdir()
+        self.database = private_data / "history.sqlite3"
+        self.make_db()
+        self.archive_root = self.folder / "graphic-cutover"
+        self.args = argparse.Namespace(
+            phase="A",
+            source=self.source,
+            database=self.database,
+            owner_approval_file=self.folder / "owner.json",
+            output_root=self.archive_root,
+            execute=False,
+            jsonl=True,
+        )
+
+    def make_source_fixture(self) -> None:
+        """Seed minimum archive inputs and deliberate excluded secrets."""
+
         files = (
             "VERSION",
             "app.py",
@@ -55,18 +74,6 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         (self.source / ".env").write_text("TOP_SECRET=never_archive\n")
         (self.source / "secrets").mkdir()
         (self.source / "secrets/token").write_text("secret-token")
-        self.database = self.folder / "history.sqlite3"
-        self.make_db()
-        self.archive_root = self.folder / "graphic-cutover"
-        self.args = argparse.Namespace(
-            phase="A",
-            source=self.source,
-            database=self.database,
-            owner_approval_file=self.folder / "owner.json",
-            output_root=self.archive_root,
-            execute=False,
-            jsonl=True,
-        )
 
     def make_db(self):
         """Record real rows and metadata without a running writer."""
@@ -104,6 +111,30 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
                 "insert or replace into meta(key,value) values (?,?)",
                 ("telegram_status_media_identity", value),
             )
+
+    def test_backup_root_must_not_overlap_source_or_live_sqlite(self):
+        """Reject recursive archives and backup paths inside live data."""
+
+        candidates = (
+            self.source,
+            self.source / "backups",
+            self.database.parent,
+            self.database.parent / "backups",
+            self.folder,
+        )
+        for output in candidates:
+            with self.subTest(output=output):
+                self.args.output_root = output
+                with (
+                    self.fake_guards(stopped=lambda: True),
+                    self.assertRaisesRegex(
+                        SNAP.SnapshotBlocked, "BACKUP_OVERLAPS_LIVE_DATA"
+                    ),
+                ):
+                    SNAP.run(self.args)
+                self.assertFalse(
+                    (self.source / ".graphic-stage-test").exists()
+                )
 
     def test_live_writer_is_blocked_without_creating_backup_path(self):
         """Running production must not create A or B snapshots."""

@@ -61,6 +61,14 @@ def safe_path(path: Path) -> bool:
     return not any(part.is_symlink() for part in (path, *path.parents))
 
 
+def paths_overlap(one: Path, other: Path) -> bool:
+    """Disallow destinations enclosing or nested inside protected trees."""
+
+    return (
+        one == other or one.is_relative_to(other) or other.is_relative_to(one)
+    )
+
+
 def regular_file(path: Path) -> bool:
     """Require one independent file without symlink traversal."""
 
@@ -81,6 +89,10 @@ def preconditions(options) -> tuple[int, str]:
         for p in (options.source, options.database, options.output_root)
     ):
         raise SnapshotBlocked("PATH_UNSAFE")
+    if paths_overlap(options.output_root, options.source) or paths_overlap(
+        options.output_root, options.database.parent
+    ):
+        raise SnapshotBlocked("BACKUP_OVERLAPS_LIVE_DATA")
     guard = module("graphic-rollout-readiness.py", "snapshot_owner_gate")
     if not guard.owner_approval_verified(options.owner_approval_file):
         raise SnapshotBlocked("OWNER_APPROVAL_INVALID")

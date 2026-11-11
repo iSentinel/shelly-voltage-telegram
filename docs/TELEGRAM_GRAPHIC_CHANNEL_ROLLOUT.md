@@ -811,6 +811,11 @@ verified text media matching the configured public status channel
 and the exact persisted message ID. Photo/unknown media, unresolved
 requests, invalid approval or active writer are BLOCKED.
 
+The chosen archive root must be disjoint from both the installed
+source tree and the entire live SQLite directory. Source-nested or
+database-nested backups can accidentally include their own staging
+files or mingle with WAL state and are always BLOCKED before writing.
+
 The normal graphic rollout readiness must accept the B snapshot
 and its exact source version before candidate installation.
 Retaining A for disaster recovery never makes an old text-only
