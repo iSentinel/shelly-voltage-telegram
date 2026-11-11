@@ -127,6 +127,81 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
             timeout=25,
         )
 
+    def write_owner_approval(self, **overrides) -> Path:
+        """Create a disposable, private and scoped Owner Approval record."""
+
+        record = {
+            "approval_scope": (
+                "One controlled migration of the existing Shelly Telegram "
+                "status to the PR300 graphic design"
+            ),
+            "graphic_candidate_pr": 300,
+            "owner_approval": "GRANTED",
+            "additional_owner_approval_required_for_same_scope": False,
+            "no_automatic_force": True,
+            "production_changed": False,
+            "telegram_modified": False,
+        }
+        record.update(overrides)
+        path = self.snapshot.parent / "owner-approval.json"
+        path.write_text(json.dumps(record), encoding="utf8")
+        path.chmod(0o600)
+        return path
+
+    def test_verified_owner_record_changes_label_not_deployment_rights(self):
+        """Acknowledged approval still cannot trigger channel changes."""
+
+        owner = self.write_owner_approval()
+        result = self.run_gate("--jsonl", "--owner-approval-file", str(owner))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "READY_FOR_TECHNICAL_REVIEW")
+        self.assertFalse(payload["owner_approval_required"])
+        self.assertFalse(payload["deployment_allowed"])
+        self.assertEqual(payload["reasons"], [])
+
+    def test_owner_record_cannot_bypass_unverified_media_or_stale_copy(self):
+        """Operator approval never overrides media identity or backup gates."""
+
+        owner = self.write_owner_approval()
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "DELETE FROM meta WHERE key='telegram_status_media_identity'"
+            )
+            db.commit()
+        result = self.run_gate("--jsonl", "--owner-approval-file", str(owner))
+        record = json.loads(result.stdout)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(record["owner_approval_required"])
+        self.assertFalse(record["deployment_allowed"])
+        self.assertIn(
+            "channel media identity is not verified", record["reasons"]
+        )
+        old = time.time() - 5 * 3600
+        os.utime(self.archive, (old, old))
+        again = self.run_gate("--jsonl", "--owner-approval-file", str(owner))
+        self.assertEqual(again.returncode, 2)
+        self.assertFalse(json.loads(again.stdout)["deployment_allowed"])
+
+    def test_bad_owner_evidence_cannot_approve_the_cutover(self):
+        """Reject wrong PR, weak permissions and linked approval files."""
+
+        owner = self.write_owner_approval(graphic_candidate_pr=999)
+        invalid = self.run_gate("--jsonl", "--owner-approval-file", str(owner))
+        self.assertEqual(invalid.returncode, 2)
+        self.assertTrue(json.loads(invalid.stdout)["owner_approval_required"])
+        owner = self.write_owner_approval()
+        owner.chmod(0o644)
+        self.assertEqual(
+            self.run_gate("--owner-approval-file", str(owner)).returncode, 2
+        )
+        owner.chmod(0o600)
+        linked = owner.with_name("linked-approval.json")
+        linked.symlink_to(owner)
+        self.assertEqual(
+            self.run_gate("--owner-approval-file", str(linked)).returncode, 2
+        )
+
     def test_verified_snapshot_is_ready_for_owner_not_deployment(self):
         """Passing file checks never imply automatic approval."""
 
@@ -407,6 +482,7 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.assertIn("--installed-version-file", result.stdout)
         self.assertIn("--max-snapshot-age-hours", result.stdout)
         self.assertIn("--jsonl", result.stdout)
+        self.assertIn("--owner-approval-file", result.stdout)
 
 
 if __name__ == "__main__":

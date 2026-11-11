@@ -608,3 +608,18 @@ moment. The supplied test checks a four-hour-old publication against
 a fresh cryptographically hashed cache, and still rejects stale fetch
 or source publications beyond the original 36-hour limit. This never
 turns planned schedules into physical measurement evidence.
+
+
+## Owner Approval evidence in read-only rollout readiness
+
+Run the exact rollout readiness preflight with the optional
+--owner-approval-file parameter, pointing only to the existing
+root-owned 0600 immutable PR300 scope record. A validated receipt
+changes the result to owner_approval_required=false and, if the
+technical gate passes, READY_FOR_TECHNICAL_REVIEW. This is NOT
+a deployment command: deployment_allowed remains false even for
+valid approval. It cannot waive the exact Telegram media identity,
+fresh checksummed source and SQLite snapshot, recipient-visible
+acceptance, or the prohibition on changing a different pinned post.
+Invalid, linked, world-readable or wrong-PR records are BLOCKED.
+No bot token or private channel ID is printed.

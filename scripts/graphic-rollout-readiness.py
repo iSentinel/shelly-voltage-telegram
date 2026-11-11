@@ -28,6 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--installed-version-file", required=True, type=Path)
     parser.add_argument("--chat-env", default="TELEGRAM_STATUS_CHAT_ID")
     parser.add_argument(
+        "--owner-approval-file",
+        type=Path,
+        help="Optional protected Owner Approval receipt (read-only)",
+    )
+    parser.add_argument(
         "--jsonl",
         action="store_true",
         help="Emit exactly one machine-readable PASS/BLOCKED JSON object",
@@ -207,7 +212,40 @@ def version_issues(snapshot: Path, installed: Path) -> list[str]:
     return []
 
 
-def output_decision(issues: list[str], jsonl: bool) -> int:
+def owner_approval_verified(path: Path) -> bool:
+    """Trust only a private, root-owned, single-use PR300 approval file."""
+
+    if not safe_regular_file(path):
+        return False
+    try:
+        info = path.stat()
+        if (
+            info.st_uid != os.geteuid()
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or not 0 < info.st_size <= 8192
+        ):
+            return False
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return False
+    scope = record.get("approval_scope") if isinstance(record, dict) else None
+    return bool(
+        isinstance(scope, str)
+        and "existing Shelly Telegram status" in scope
+        and "PR300 graphic design" in scope
+        and record.get("graphic_candidate_pr") == 300
+        and record.get("owner_approval") == "GRANTED"
+        and record.get("additional_owner_approval_required_for_same_scope")
+        is False
+        and record.get("no_automatic_force") is True
+        and record.get("production_changed") is False
+        and record.get("telegram_modified") is False
+    )
+
+
+def output_decision(
+    issues: list[str], jsonl: bool, owner_approved: bool = False
+) -> int:
     """Emit a safe outcome without exposing channel or message IDs."""
 
     allowed = not issues
@@ -216,11 +254,15 @@ def output_decision(issues: list[str], jsonl: bool) -> int:
             json.dumps(
                 {
                     "ok": allowed,
-                    "status": "READY_FOR_OWNER_REVIEW"
+                    "status": (
+                        "READY_FOR_TECHNICAL_REVIEW"
+                        if owner_approved
+                        else "READY_FOR_OWNER_REVIEW"
+                    )
                     if allowed
                     else "BLOCKED",
                     "deployment_allowed": False,
-                    "owner_approval_required": True,
+                    "owner_approval_required": not owner_approved,
                     "reasons": issues,
                 },
                 ensure_ascii=False,
@@ -231,6 +273,9 @@ def output_decision(issues: list[str], jsonl: bool) -> int:
         print("GRAPHIC ROLLOUT: BLOCKED (read-only)")
         for issue in issues:
             print(f" - {issue}")
+    elif owner_approved:
+        print("GRAPHIC ROLLOUT: READY FOR TECHNICAL REVIEW (not deployment)")
+        print("Owner Approval recorded; deployment remains separately gated.")
     else:
         print("GRAPHIC ROLLOUT: READY FOR OWNER REVIEW (not deployment)")
         print("Production activation still requires separate Owner Approval.")
@@ -241,14 +286,19 @@ def main() -> int:
     """Print a private-identifier-free decision; never activate graphics."""
 
     args = parse_args()
+    owner_approved = False
+    if args.owner_approval_file is not None:
+        owner_approved = owner_approval_verified(args.owner_approval_file)
     issues = read_media_gate(args.database, args.chat_env)
+    if args.owner_approval_file is not None and not owner_approved:
+        issues.append("owner approval evidence is invalid")
     snapshots = snapshot_issues(args.snapshot, args.max_snapshot_age_hours)
     issues.extend(snapshots)
     if not snapshots:
         issues.extend(
             version_issues(args.snapshot, args.installed_version_file)
         )
-    return output_decision(issues, args.jsonl)
+    return output_decision(issues, args.jsonl, owner_approved)
 
 
 if __name__ == "__main__":
