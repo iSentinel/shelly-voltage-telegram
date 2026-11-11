@@ -706,3 +706,49 @@ never cleared merely by a new worker restart. Only a verified
 same-chat/same-ID/same-text Telegram receipt permits atomic clearing
 together with the confirmed text marker. The preflight also refuses
 graphic migration while the pending key exists.
+
+
+## Dual-snapshot cutover and media-safe rollback
+
+The owner-approved cutover requires two distinct writer-stopped
+backups (the previous warm backup is not a replacement):
+
+1. Stop the Compose service and verify that the Docker writer is truly
+   stopped. Make snapshot A: exact installed 0.5.15-hw source and
+   complete SQLite with authenticated SHA256, rollback dry-run and
+   full logical parity against the stopped database. This is the
+   original legacy-text recovery checkpoint.
+2. With the writer still stopped, run the one-shot
+   graphic-confirm-legacy-text.py first without --execute (dry-run),
+   then once explicitly with --execute. It may update only the known
+   existing status ID by editMessageText, requiring a Telegram
+   Message receipt with exact chat, status ID and requested text.
+   On uncertain result, stop. Do not retry or delete the pending
+   marker automatically.
+3. After confirmed text identity has been committed, create
+   snapshot B from the still-stopped writer, containing the new
+   telegram_status_media_identity=text binding. Verify all full-DB
+   tables, row counts and SHA256 against newly modified SQLite.
+   General graphic rollout readiness MUST use snapshot B, NOT A.
+   Snapshot A is no longer byte-for-byte current after confirmation.
+4. Install the exact-head CI-successful media-aware candidate only
+   with a separately verified disaster recovery procedure and
+   source+SQLite snapshot B. Never enable photo conversion if an
+   owner or technical gate is blocked. Check the same original
+   Telegram status message and that the different pinned message
+   remains untouched.
+5. After an in-place editMessageMedia converts that text to a photo,
+   restoring legacy 0.5.15-hw source over the public photo is NOT a
+   safe visual rollback. A compatible media-aware release with
+   graphic flags OFF may update only the existing photo caption.
+   Reverting source and SQLite cannot revert an external Telegram
+   photo. For a full source rollback, reconcile the public message
+   separately under explicit operator control.
+
+Source-only rollback.sh now invokes
+scripts/graphic-rollback-media-guard.py BEFORE stopping Compose or
+touching SQLite. This read-only check blocks photo/unknown media and
+both unresolved publication markers, even with
+--confirm-db-replacement. It permits legacy unbound or verified
+same-ID text states. On BLOCKED, never bypass the guard or delete
+the pending marker; reconcile the exact public Telegram post first.

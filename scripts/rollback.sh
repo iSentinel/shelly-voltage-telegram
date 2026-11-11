@@ -345,6 +345,8 @@ main() {
     echo "Rollback snapshot: $SNAPSHOT"
     require_db_replacement_approval
     preflight_backup_paths
+    python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
+        --database "$DB"
     if [[ "$NO_START" == false ]]; then
         # Load secure layer checks BEFORE restore_source replaces scripts.
         # Keep the functions in memory for starting the restored version.

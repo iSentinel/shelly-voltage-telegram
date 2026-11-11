@@ -716,3 +716,45 @@ set -e
 test "$invalid_status" -eq 2
 ! grep -q "DRY-RUN: stop Compose service" "$TMP/corrupt-sqlite-rollback.log"
 echo "ROLLBACK_BAD_SQLITE_REJECTED_BEFORE_STOP=PASS"
+
+
+# A public photo or unresolved Telegram edit must block before writer stop.
+for mode in photo unknown legacy-pending graphic-pending; do
+    python3 - "$DB_DIR/voltage.sqlite3" "$mode" <<'PY'
+import sqlite3
+import sys
+
+with sqlite3.connect(sys.argv[1]) as db:
+    db.execute(
+        "delete from meta where key in "
+        "('telegram_status_media_identity',"
+        "'telegram_graphic_publish_pending',"
+        "'telegram_legacy_text_confirm_pending')"
+    )
+    mode = sys.argv[2]
+    if mode in ("photo", "unknown"):
+        db.execute(
+            "insert into meta values (?,?)",
+            ("telegram_status_media_identity", f"{mode}:-100123:101"),
+        )
+    else:
+        key = (
+            "telegram_legacy_text_confirm_pending"
+            if mode == "legacy-pending"
+            else "telegram_graphic_publish_pending"
+        )
+        db.execute("insert into meta values (?,?)", (key, "pending"))
+PY
+    source_digest="$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)"
+    database_digest="$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)"
+    set +e
+    SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3"         SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE"         "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP"         --dry-run --no-start --confirm-db-replacement         > "$TMP/graphic-media-$mode.log" 2>&1
+    status=$?
+    set -e
+    test "$status" -eq 6
+    grep -q "Telegram media requires separate reconciliation"         "$TMP/graphic-media-$mode.log"
+    ! grep -q "DRY-RUN: stop Compose service"         "$TMP/graphic-media-$mode.log"
+    test "$(sha256sum "$TARGET/VERSION" | cut -d' ' -f1)" = "$source_digest"
+    test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$database_digest"
+    printf 'ROLLBACK_GRAPHIC_%s_PRESTOP=BLOCKED\n' "$mode"
+done
