@@ -288,7 +288,7 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
                 CONFIRM, "edit_text_once", side_effect=rotate_during_edit
             ) as edit,
             self.assertRaisesRegex(
-                CONFIRM.VerificationError, "STATUS_ID_CHANGED"
+                CONFIRM.VerificationError, "STATUS_CHANGED_AFTER_EDIT"
             ),
         ):
             CONFIRM.run(self.args)
@@ -489,19 +489,24 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         """A database failure after API transport is explicitly uncertain."""
 
         self.args.execute = True
-        output = io.StringIO()
-        with (
-            mock.patch.object(CONFIRM, "arguments", return_value=self.args),
-            mock.patch.object(
-                CONFIRM,
-                "run",
-                side_effect=CONFIRM.VerificationError("DB_COMMIT_UNCERTAIN"),
-            ),
-            redirect_stdout(output),
-        ):
-            self.assertEqual(CONFIRM.main(), 2)
-        state = json.loads(output.getvalue())
-        self.assertEqual(state["telegram_edited"], "UNKNOWN")
+        for reason in ("DB_COMMIT_UNCERTAIN", "STATUS_CHANGED_AFTER_EDIT"):
+            with self.subTest(reason=reason):
+                output = io.StringIO()
+                with (
+                    mock.patch.object(
+                        CONFIRM, "arguments", return_value=self.args
+                    ),
+                    mock.patch.object(
+                        CONFIRM,
+                        "run",
+                        side_effect=CONFIRM.VerificationError(reason),
+                    ),
+                    redirect_stdout(output),
+                ):
+                    self.assertEqual(CONFIRM.main(), 2)
+                state = json.loads(output.getvalue())
+                self.assertEqual(state["telegram_edited"], "UNKNOWN")
+                self.assertEqual(state["reason"], reason)
 
 
 if __name__ == "__main__":
