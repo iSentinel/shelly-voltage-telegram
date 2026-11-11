@@ -18,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+PENDING_KEY = "telegram_legacy_text_confirm_pending"
+
 
 class VerificationError(Exception):
     """Safe reason code that never contains Telegram credentials or IDs."""
@@ -122,7 +124,8 @@ def current_status(database: Path) -> tuple[int, float, float]:
                     "select key,value from meta where key in "
                     "('telegram_status_message_id',"
                     "'telegram_status_media_identity',"
-                    "'telegram_graphic_publish_pending')"
+                    "'telegram_graphic_publish_pending',"
+                    "'telegram_legacy_text_confirm_pending')"
                 ).fetchall()
             )
             row = db.execute(
@@ -140,7 +143,7 @@ def current_status(database: Path) -> tuple[int, float, float]:
         raise VerificationError("STATUS_ID_INVALID")
     if "telegram_status_media_identity" in meta:
         raise VerificationError("MEDIA_IDENTITY_ALREADY_SET")
-    if "telegram_graphic_publish_pending" in meta:
+    if "telegram_graphic_publish_pending" in meta or PENDING_KEY in meta:
         raise VerificationError("PUBLICATION_UNRESOLVED")
     if not row or not isinstance(row[1], (float, int)):
         raise VerificationError("NO_HISTORICAL_SAMPLE")
@@ -233,10 +236,8 @@ def edit_text_once(token: str, chat: str, mid: int, body: str) -> None:
     verify_receipt(decoded, mid, chat, body)
 
 
-def verify_and_record(
-    args, mid: int, chat: str, token: str, body: str
-) -> None:
-    """Commit a text marker only after a verified one-message edit."""
+def reserve_confirmation(args, mid: int) -> None:
+    """Persist an irreversible intent before any Telegram network call."""
 
     try:
         with (
@@ -247,21 +248,58 @@ def verify_and_record(
             saved = db.execute(
                 "select value from meta where key='telegram_status_message_id'"
             ).fetchone()
-            marker = db.execute(
-                "select 1 from meta where key in "
-                "('telegram_status_media_identity',"
-                "'telegram_graphic_publish_pending')"
+            markers = db.execute(
+                "select key from meta where key in (?,?,?)",
+                (
+                    "telegram_status_media_identity",
+                    "telegram_graphic_publish_pending",
+                    PENDING_KEY,
+                ),
             ).fetchone()
-            if saved != (str(mid),) or marker:
+            if saved != (str(mid),) or markers:
                 raise VerificationError("STATUS_ID_CHANGED")
-            edit_text_once(token, chat, mid, body)
+            db.execute(
+                "insert into meta(key,value) values (?,?)",
+                (PENDING_KEY, "pending"),
+            )
+    except sqlite3.Error:
+        raise VerificationError("RESERVATION_FAILED") from None
+
+
+def finish_confirmation(args, mid: int, chat: str) -> None:
+    """Mark text only after receipt; clear pending atomically."""
+
+    try:
+        with (
+            closing(sqlite3.connect(str(args.database), timeout=4)) as db,
+            db,
+        ):
+            db.execute("BEGIN IMMEDIATE")
+            status = db.execute(
+                "select value from meta where key='telegram_status_message_id'"
+            ).fetchone()
+            pending = db.execute(
+                "select value from meta where key=?", (PENDING_KEY,)
+            ).fetchone()
+            if status != (str(mid),) or pending != ("pending",):
+                raise VerificationError("STATUS_ID_CHANGED")
             db.execute(
                 "insert into meta(key,value) values (?,?)",
                 ("telegram_status_media_identity", f"text:{chat}:{mid}"),
             )
-            db.commit()
+            db.execute("delete from meta where key=?", (PENDING_KEY,))
     except sqlite3.Error:
         raise VerificationError("DB_COMMIT_UNCERTAIN") from None
+
+
+def verify_and_record(
+    args, mid: int, chat: str, token: str, body: str
+) -> None:
+    """Prevent blind retries after a request or client process crash."""
+
+    reserve_confirmation(args, mid)
+    edit_text_once(token, chat, mid, body)
+    finish_confirmation(args, mid, chat)
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -270,6 +308,10 @@ def run(args: argparse.Namespace) -> dict:
     guard = gate_module()
     if not guard.owner_approval_verified(args.owner_approval_file):
         raise VerificationError("OWNER_APPROVAL_INVALID")
+    if not guard.safe_regular_file(args.database):
+        raise VerificationError("DATABASE_PATH_UNSAFE")
+    if args.execute and args.chat_env != "TELEGRAM_STATUS_CHAT_ID":
+        raise VerificationError("CHAT_ENV_NOT_PRODUCTION")
     if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", args.chat_env):
         raise VerificationError("CHAT_ENV_INVALID")
     chat = os.getenv(args.chat_env, "")

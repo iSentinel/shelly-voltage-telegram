@@ -69,7 +69,7 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         )
         self.gate.run_archive_validator.return_value = True
         env = mock.patch.dict(
-            os.environ, {"TEST_GRAPHIC_STATUS_CHAT": "-100123"}
+            os.environ, {"TELEGRAM_STATUS_CHAT_ID": "-100123"}
         )
         env.start()
         self.addCleanup(env.stop)
@@ -93,11 +93,20 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
             installed_version_file=self.dir / "VERSION",
             owner_approval_file=self.dir / "approval.json",
             token_file=self.dir / "token",
-            chat_env="TEST_GRAPHIC_STATUS_CHAT",
+            chat_env="TELEGRAM_STATUS_CHAT_ID",
             execute=False,
             jsonl=True,
         )
         self.stub_release_gate()
+
+    def pending_marker(self):
+        """Return the crash-safe one-shot marker without writing."""
+
+        with closing(sqlite3.connect(self.db)) as db:
+            return db.execute(
+                "select value from meta "
+                "where key='telegram_legacy_text_confirm_pending'"
+            ).fetchone()
 
     def marker(self):
         """Read the media marker without mutating the test database."""
@@ -145,6 +154,33 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         edit.assert_not_called()
         self.assertIsNone(self.marker())
 
+    def test_unsafe_database_path_blocks_before_any_network(self):
+        """Only an unlinked regular SQLite source is eligible."""
+
+        self.gate.safe_regular_file.return_value = False
+        with (
+            mock.patch.object(CONFIRM, "writer_stopped") as stopped,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "DATABASE_PATH_UNSAFE"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        stopped.assert_not_called()
+
+    def test_execute_requires_approved_production_chat_environment(self):
+        """A caller cannot switch the editing target by env-name override."""
+
+        self.args.execute = True
+        self.args.chat_env = "TEST_OTHER_CHAT"
+        with (
+            mock.patch.object(CONFIRM, "writer_stopped") as stopped,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "CHAT_ENV_NOT_PRODUCTION"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        stopped.assert_not_called()
+
     def test_owner_approval_is_required_before_writer_checks(self):
         """Missing owner evidence never invokes Telegram."""
 
@@ -190,6 +226,7 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
             ):
                 CONFIRM.run(self.args)
         self.assertEqual(self.marker(), ("text:-100123:101",))
+        self.assertIsNone(self.pending_marker())
 
     def test_timeout_leaves_unverified_marker_absent(self):
         """A possibly successful Telegram request cannot be auto-retried."""
@@ -209,6 +246,11 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         ):
             CONFIRM.run(self.args)
         self.assertIsNone(self.marker())
+        self.assertEqual(self.pending_marker(), ("pending",))
+        with self.assertRaisesRegex(
+            CONFIRM.VerificationError, "PUBLICATION_UNRESOLVED"
+        ):
+            CONFIRM.current_status(self.db)
 
     def test_invalid_status_id_and_pending_send_block(self):
         """Never edit an ID if the persisted migration is unresolved."""

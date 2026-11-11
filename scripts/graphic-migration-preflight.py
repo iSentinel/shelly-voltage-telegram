@@ -13,6 +13,7 @@ from pathlib import Path
 STATUS_KEY = "telegram_status_message_id"
 MEDIA_KEY = "telegram_status_media_identity"
 PENDING_KEY = "telegram_graphic_publish_pending"
+LEGACY_PENDING_KEY = "telegram_legacy_text_confirm_pending"
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,8 +46,8 @@ def read_metadata(path: Path) -> tuple[dict[str, str], str]:
         ) as db:
             check = str(db.execute("PRAGMA quick_check").fetchone()[0])
             rows = db.execute(
-                "SELECT key, value FROM meta WHERE key IN (?, ?, ?)",
-                (STATUS_KEY, MEDIA_KEY, PENDING_KEY),
+                "SELECT key, value FROM meta WHERE key IN (?, ?, ?, ?)",
+                (STATUS_KEY, MEDIA_KEY, PENDING_KEY, LEGACY_PENDING_KEY),
             ).fetchall()
     except sqlite3.Error:
         raise ValueError("read-only SQLite inspection failed") from None
@@ -84,7 +85,7 @@ def readiness_issues(
         not in (f"text:{channel}:{current}", f"photo:{channel}:{current}")
     ):
         issues.append("channel media identity is not verified")
-    if PENDING_KEY in metadata:
+    if PENDING_KEY in metadata or LEGACY_PENDING_KEY in metadata:
         issues.append(
             "unresolved Telegram publication requires reconciliation"
         )

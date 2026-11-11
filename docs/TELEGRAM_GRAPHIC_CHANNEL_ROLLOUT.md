@@ -642,8 +642,15 @@ marks the last voltage as HISTORICAL because the writer is stopped.
 A fully verified Telegram Message reply is required before storing
 the text media marker in SQLite. A network timeout or malformed reply
 returns an explicit UNKNOWN edit outcome and blocks automated cutover.
-Do not repeat it until the exact public status is reconciled by a
-separate read-only recipient-side audit.
+Before the one outbound request, the helper commits
+telegram_legacy_text_confirm_pending=pending in SQLite. If the
+client crashes or the API reply is lost, the marker survives and
+blocks both repeated confirmation and the graphic rollout readiness
+gate. The marker is cleared only in the same transaction that stores
+a strictly verified text media identity after a genuine Telegram
+Message receipt. Do not delete the marker or repeat the edit until
+the exact public status is reconciled by an independent recipient-side
+read-only audit. A failing request may have succeeded remotely.
 
 Example dry-run (when a matching-version stopped-writer snapshot
 exists; never paste actual Bot tokens or channel/message IDs):

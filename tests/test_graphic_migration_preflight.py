@@ -103,6 +103,15 @@ class GraphicMigrationPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("requires reconciliation", result.stdout)
 
+    def test_uncertain_legacy_text_edit_blocks_public_photo_migration(self):
+        """An HTTP timeout remains blocking even if no media ID exists."""
+
+        self.write_meta("telegram_legacy_text_confirm_pending", "pending")
+        result = self.run_check()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("requires reconciliation", result.stdout)
+        self.assertNotIn("-100123", result.stdout)
+
     def test_blob_status_id_is_blocked_without_traceback(self):
         """Corrupt SQLite value types must fail closed, never traceback."""
 
