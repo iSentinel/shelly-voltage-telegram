@@ -303,7 +303,14 @@ def verify_and_record(
     if not writer_stopped():
         raise VerificationError("WRITER_RESTARTED")
     edit_text_once(token, chat, mid, body)
-    finish_confirmation(args, mid, chat)
+    try:
+        finish_confirmation(args, mid, chat)
+    except VerificationError as exc:
+        if str(exc) == "STATUS_ID_CHANGED":
+            raise VerificationError("STATUS_CHANGED_AFTER_EDIT") from None
+        raise
+    except Exception:
+        raise VerificationError("DB_COMMIT_UNCERTAIN") from None
 
 
 def run(args: argparse.Namespace) -> dict:
@@ -348,6 +355,7 @@ def main() -> int:
             "TELEGRAM_RECEIPT_MISMATCH",
             "TELEGRAM_MEDIA_MISMATCH",
             "DB_COMMIT_UNCERTAIN",
+            "STATUS_CHANGED_AFTER_EDIT",
         }
         result = {
             "status": "BLOCKED",
