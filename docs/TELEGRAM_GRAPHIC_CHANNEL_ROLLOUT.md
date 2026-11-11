@@ -771,3 +771,47 @@ version manually. A failed restart is an incident, not a successful
 rollback. An isolated shell test mutates SQLite during fake
 docker compose stop and verifies that source and measurements remain
 unchanged after the second guard blocks.
+
+
+## A/B snapshot tool (source-only)
+
+scripts/graphic-cutover-snapshot.py captures two independent,
+full-parity source+SQLite checkpoints only after the systemd Compose
+unit and Docker writer have both been stopped. It does not stop/start
+services and never contacts Telegram. Its default is read-only;
+explicit --execute is required to publish archives.
+
+Example operator commands for review only, with the writer already
+stopped and the source-only candidate tested:
+
+~~~bash
+set -a; source /opt/shelly-voltage/.env; set +a
+python3 scripts/graphic-cutover-snapshot.py \
+  --phase A --source /opt/shelly-voltage \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --owner-approval-file /opt/shelly-voltage/validation/telegram-graphic-owner-approval-20261110-223420.json \
+  --output-root /var/backups/shelly-voltage/graphic-cutover --jsonl
+python3 scripts/graphic-cutover-snapshot.py \
+  --phase B --source /opt/shelly-voltage \
+  --database /var/lib/shelly-voltage/voltage.sqlite3 \
+  --owner-approval-file /opt/shelly-voltage/validation/telegram-graphic-owner-approval-20261110-223420.json \
+  --output-root /var/backups/shelly-voltage/graphic-cutover --jsonl
+~~~
+
+For the authorized maintenance operation repeat the A invocation with
+--execute, perform the single approved Telegram exact-text confirmation,
+then repeat B with --execute. A and B are different protected 0700
+directories containing a 0600 source archive, complete SQLite gzip,
+exact-final-path SHA256 sidecars and a versioned manifest. Source
+archives exclude .env, tokens, secrets and local validation data.
+Each archive must pass both validators, full current SQLite parity,
+and the post-capture stopped-writer check. Incomplete staging is
+deleted on error. A requires no Telegram media marker; B requires
+verified text media matching the configured public status channel
+and the exact persisted message ID. Photo/unknown media, unresolved
+requests, invalid approval or active writer are BLOCKED.
+
+The normal graphic rollout readiness must accept the B snapshot
+and its exact source version before candidate installation.
+Retaining A for disaster recovery never makes an old text-only
+source compatible with a Telegram photo.
