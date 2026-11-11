@@ -77,6 +77,65 @@ class GraphicMidnightRolloverTests(unittest.TestCase):
         self.assertFalse(accepted["live_voltage_visible"])
         self.assertFalse(expired["live_voltage_visible"])
 
+    def test_online_voltage_survives_old_forecast_midnight_expiry(self):
+        """Keep fresh physical voltage as yesterday's forecast disappears."""
+
+        before = kyiv_time(2026, 11, 11, 23, 59) + 59
+        after = kyiv_time(2026, 11, 12, 0) + 1
+        payload = widget_public_data(
+            {
+                "connectivity": "online",
+                "voltage": 213.8,
+                "frequency": 50.0,
+                "last_success": before - 1,
+            },
+            group="10.1",
+            bars="X" * 48,
+            day="2026-11-11",
+            forecast_updated=before - 60,
+            forecast_source="yasno",
+            now=before,
+            language="uk",
+        )
+        state = json.loads(payload)
+        old = self.render(state, before, "old-online.png")
+        new = self.render(state, after, "new-online.png")
+        caption = widget_fallback_text(payload, now=after)
+        self.assertEqual(old["status"], "online")
+        self.assertTrue(old["forecast_visible"])
+        self.assertEqual(new["status"], "online")
+        self.assertTrue(new["live_voltage_visible"])
+        self.assertFalse(new["forecast_visible"])
+        self.assertEqual(new["forecast_off_slots"], 0)
+        self.assertIn("213.8", caption)
+        self.assertNotIn("Прогноз", caption)
+
+    def test_online_meter_without_new_day_forecast_keeps_voltage(self):
+        """Absent tomorrow's YASNO data is not evidence of power loss."""
+
+        next_day = kyiv_time(2026, 11, 12, 0) + 1
+        payload = widget_public_data(
+            {
+                "connectivity": "online",
+                "voltage": 214.5,
+                "frequency": 50.0,
+                "last_success": next_day - 2,
+            },
+            group="10.1",
+            bars=None,
+            now=next_day,
+            language="uk",
+        )
+        state = json.loads(payload)
+        card = self.render(state, next_day, "online-no-schedule.png")
+        caption = widget_fallback_text(payload, now=next_day)
+        self.assertEqual(card["status"], "online")
+        self.assertTrue(card["live_voltage_visible"])
+        self.assertFalse(card["forecast_visible"])
+        self.assertNotIn("b", state)
+        self.assertIn("214.5", caption)
+        self.assertNotIn("Прогноз", caption)
+
     def test_new_day_fresh_forecast_works_with_shelly_offline(self):
         """A genuinely current forecast can appear with unknown mains."""
 
