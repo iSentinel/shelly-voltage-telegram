@@ -652,6 +652,59 @@ Message receipt. Do not delete the marker or repeat the edit until
 the exact public status is reconciled by an independent recipient-side
 read-only audit. A failing request may have succeeded remotely.
 
+### Explicit restart fence for the legacy writer
+
+The installed 0.5.15-hw `app.py` does **not** recognize
+`telegram_legacy_text_confirm_pending`; only the new candidate does.
+Therefore a stopped Docker container is not enough for the maintenance
+window: a restarted legacy writer could edit or rotate the Telegram post.
+The one-shot confirmation helper now requires **all three** conditions:
+
+- `shelly-voltage-compose.service` is inactive or failed;
+- its `systemctl is-enabled` state is `disabled` or `masked`;
+- `shelly-voltage-bot` is stopped with Docker restart policy `no`.
+
+The CLI checks this restart fence before snapshot validation and again
+before reservation, before the Telegram request, and after the reply.
+A lost fence before the request preserves the `pending` intent without
+sending. A lost fence after a possible edit returns
+`RESTART_FENCE_LOST_AFTER_EDIT` and `telegram_edited=UNKNOWN`; never
+automatically resend or clear the marker. Disabling an enabled unit
+prevents its normal boot activation, but does not prevent an authorized
+operator from manually starting it; independent stopped-writer checks
+remain mandatory.
+
+These commands are **an operator-only example for an already approved,
+bounded maintenance window**, not instructions for a routine health check.
+Do not run them while regular monitoring must continue:
+
+```bash
+systemctl disable --now shelly-voltage-compose.service
+docker update --restart=no shelly-voltage-bot
+systemctl is-active shelly-voltage-compose.service || true
+systemctl is-enabled shelly-voltage-compose.service || true
+docker inspect --format '{{.State.Running}} {{.HostConfig.RestartPolicy.Name}}' shelly-voltage-bot
+```
+
+After source+SQLite snapshot A, perform the one-shot confirmation and
+snapshot B only while the fence remains intact. Once the confirmed
+cutover, status-media reconciliation and safe release are complete,
+restore the operational restart configuration and recheck health:
+
+```bash
+docker update --restart=unless-stopped shelly-voltage-bot
+systemctl enable --now shelly-voltage-compose.service
+docker inspect --format '{{.State.Running}} {{.HostConfig.RestartPolicy.Name}}' shelly-voltage-bot
+```
+
+A power loss or crash during this intentional fence may leave
+monitoring stopped until an operator reconciles the Telegram status.
+If any edit is `UNKNOWN` or a pending marker remains, **do not blindly
+reactivate the old 0.5.15-hw writer**: it cannot honor that marker.
+Escalate to explicit status reconciliation and a safe media-aware
+resume/rollback plan first. These commands were not run in source-only
+QA and are not authorization to modify the production service.
+
 Example dry-run (when a matching-version stopped-writer snapshot
 exists; never paste actual Bot tokens or channel/message IDs):
 
