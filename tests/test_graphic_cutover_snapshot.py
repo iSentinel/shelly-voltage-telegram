@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import importlib.util
+import io
 import os
 import sqlite3
 import stat
@@ -387,6 +389,49 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         ):
             SNAP.run(self.args)
         self.assertEqual(list(self.archive_root.iterdir()), [])
+
+    def test_failed_source_stream_is_killed_and_reaped(self):
+        """Bounded digest failure must not leave an orphan tar writer."""
+
+        archive = self.folder / "source-test.tar.gz"
+        with gzip.open(archive, "wb") as output:
+            output.write(b"stored tar payload")
+        with (
+            mock.patch.object(
+                SNAP,
+                "tar_digest",
+                side_effect=[
+                    "archived-checksum",
+                    SNAP.SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE"),
+                ],
+            ),
+            mock.patch.object(SNAP.subprocess, "Popen") as spawn,
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_PARITY_UNAVAILABLE"
+            ),
+        ):
+            child = spawn.return_value
+            child.stdout = io.BytesIO(b"streamed tar payload")
+            child.poll.return_value = None
+            SNAP.source_parity(archive, self.source)
+        child.kill.assert_called_once()
+        child.wait.assert_called_once_with(timeout=6)
+
+    def test_timed_out_tar_wait_is_killed_and_reaped(self):
+        """A tar child timing out must be cleaned up before refusing."""
+
+        with (
+            mock.patch.object(SNAP.subprocess, "Popen") as spawn,
+            mock.patch.object(SNAP, "tar_digest", return_value="hash"),
+            self.assertRaises(subprocess.TimeoutExpired),
+        ):
+            child = spawn.return_value
+            child.stdout = io.BytesIO(b"streamed tar payload")
+            child.poll.return_value = None
+            child.wait.side_effect = [subprocess.TimeoutExpired("tar", 90), 0]
+            SNAP.fresh_source_digest(self.source)
+        child.kill.assert_called_once()
+        self.assertEqual(child.wait.call_count, 2)
 
     def test_source_mutation_without_version_change_discards_archive(self):
         """Reject an A snapshot after any included source file changes."""
