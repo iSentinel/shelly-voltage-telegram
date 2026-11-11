@@ -163,6 +163,21 @@ def snapshot_issues(snapshot: Path, max_age: float) -> list[str]:
     return []
 
 
+def snapshot_parity_issues(snapshot: Path, database: Path) -> list[str]:
+    """A fresh backup must contain ALL currently persisted SQLite state."""
+
+    try:
+        _, archive = snapshot_archives(snapshot)
+    except (OSError, ValueError):
+        return ["rollback SQLite parity archive is unavailable"]
+    if not run_archive_validator(
+        "validate-sqlite-archive.py",
+        ["--archive", str(archive), "--compare-db", str(database)],
+    ):
+        return ["rollback SQLite snapshot differs from live database"]
+    return []
+
+
 def expected_version(path: Path) -> str | None:
     """Read a bounded, unlinked installed release identifier."""
 
@@ -298,6 +313,7 @@ def main() -> int:
         issues.extend(
             version_issues(args.snapshot, args.installed_version_file)
         )
+        issues.extend(snapshot_parity_issues(args.snapshot, args.database))
     return output_decision(issues, args.jsonl, owner_approved)
 
 

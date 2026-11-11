@@ -672,3 +672,21 @@ stop the live monitor, overwrite its database, or replace the
 public channel status. After successful text identity confirmation,
 deploy the media-aware code only with a known-good rollback and
 recipient-visible photo/card inspection.
+
+
+## Whole-SQLite parity in the shared rollout gate
+
+The protected graphic rollout readiness script now requires a live
+full-logical-SQLite digest match against the restored archive, using
+the same strict validator as the one-shot confirmation CLI. A backup
+that is recent, internally consistent and has valid SHA256 is still
+NOT sufficient if it omits even one measurement, outage, metadata
+item or SQLite header field. The CLI fails with
+"rollback SQLite snapshot differs from live database" and never
+sets deployment_allowed=true. As long as the writer keeps collecting
+new readings, an older online warm backup will generally fail this
+exact parity check. The production rollout therefore requires a
+fresh stopped-writer source+SQLite snapshot checked before any
+Telegram edit. Never repair this by overwriting current SQLite
+with an older backup. Rollback itself requires a separate safe
+reconciliation of Telegram message media.

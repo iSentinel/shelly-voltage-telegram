@@ -54,6 +54,28 @@ def seal_file(path: Path) -> None:
 class GraphicRolloutReadinessTests(unittest.TestCase):
     """Use disposable independent snapshots to prove the rollout gate."""
 
+    def create_live_fixture_db(self) -> None:
+        """Use a real measurement table for full SQLite parity checks."""
+
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)")
+            db.execute(
+                "CREATE TABLE measurements "
+                "(id INTEGER PRIMARY KEY, ts REAL, voltage REAL)"
+            )
+            db.execute(
+                "INSERT INTO measurements VALUES (1, ?, ?)", (10.0, 225.0)
+            )
+            db.execute(
+                "INSERT INTO meta VALUES (?, ?)",
+                ("telegram_status_message_id", "101"),
+            )
+            db.execute(
+                "INSERT INTO meta VALUES (?, ?)",
+                ("telegram_status_media_identity", "text:-100123:101"),
+            )
+            db.commit()
+
     def setUp(self):
         """Prepare synthetic sqlite files and valid source rollback tarball."""
 
@@ -65,24 +87,15 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.installed_version.write_text("0.5.15-hw\n")
         self.snapshot = root / "upgrade"
         self.snapshot.mkdir()
-        with closing(sqlite3.connect(self.database)) as db:
-            db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)")
-            db.execute(
-                "INSERT INTO meta VALUES (?, ?)",
-                ("telegram_status_message_id", "101"),
-            )
-            db.execute(
-                "INSERT INTO meta VALUES (?, ?)",
-                ("telegram_status_media_identity", "text:-100123:101"),
-            )
-            db.commit()
+        self.create_live_fixture_db()
         self.source = self.snapshot / "source.tar.gz"
         self.write_source_archive()
         db_copy = root / "archive.sqlite3"
-        with closing(sqlite3.connect(db_copy)) as db:
-            db.execute("CREATE TABLE measurements(ts REAL, voltage REAL)")
-            db.execute("INSERT INTO measurements VALUES (?, ?)", (10, 225))
-            db.commit()
+        with (
+            closing(sqlite3.connect(self.database)) as live,
+            closing(sqlite3.connect(db_copy)) as saved,
+        ):
+            live.backup(saved)
         self.archive = self.snapshot / "voltage-fixture.sqlite3.gz"
         with gzip.open(self.archive, "wb") as handle:
             handle.write(db_copy.read_bytes())
@@ -211,6 +224,24 @@ class GraphicRolloutReadinessTests(unittest.TestCase):
         self.assertIn("READY FOR OWNER REVIEW", result.stdout)
         self.assertIn("Owner Approval", result.stdout)
         self.assertEqual(before, self.database.read_bytes())
+
+    def test_recent_checksum_valid_snapshot_with_lost_rows_is_blocked(self):
+        """Fresh archives cannot silently omit later SQLite metadata."""
+
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute(
+                "insert into meta(key,value) values (?,?)",
+                ("later_sample_marker", "written_after_backup"),
+            )
+            db.commit()
+        result = self.run_gate("--jsonl")
+        self.assertEqual(result.returncode, 2)
+        record = json.loads(result.stdout)
+        self.assertIn(
+            "rollback SQLite snapshot differs from live database",
+            record["reasons"],
+        )
+        self.assertFalse(record["deployment_allowed"])
 
     def test_unverified_legacy_text_remains_blocked(self):
         """Even a fresh recovery snapshot cannot bless a legacy status."""
