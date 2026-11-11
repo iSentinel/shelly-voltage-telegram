@@ -158,6 +158,60 @@ class NaturalOutage25GraphicTests(unittest.TestCase):
         self.assertFalse(report["live_voltage_visible"])
         self.assertTrue(report["forecast_visible"])
 
+    def test_planned_on_at_1905_cannot_close_physical_outage(self):
+        """A YASNO on-slot does not prove that Shelly returned."""
+
+        clock = moment(19, 5, 0)
+        state = public_state(clock, "offline", 216.5, age_seconds=7200)
+        self.assertEqual(state["b"][38], "O")
+        self.assertTrue({"v", "f", "t"}.isdisjoint(state))
+        result, _ = self.render(state, clock, "planned-on-still-offline.png")
+        self.assertEqual(result["status"], "offline")
+        self.assertTrue(result["forecast_visible"])
+        self.assertFalse(result["live_voltage_visible"])
+
+    def test_expired_yasno_cache_cannot_resurrect_old_forecast(self):
+        """Stale forecasts must fail closed even when Shelly is offline."""
+
+        clock = moment(19, 15, 0)
+        health = {
+            "connectivity": "offline",
+            "voltage": 216.5,
+            "last_success": clock - 7200,
+        }
+        with self.assertRaisesRegex(ValueError, "forecast is stale"):
+            widget_public_data(
+                health,
+                group="10.1",
+                bars=BARS,
+                day=DAY,
+                now=clock,
+                forecast_source="yasno",
+                forecast_updated=clock - 7201,
+            )
+
+    def test_day_rollover_requires_a_new_yasno_forecast(self):
+        """At midnight, yesterday's plan must never appear current."""
+
+        clock = datetime(2026, 11, 12, 0, 2, tzinfo=KYIV).timestamp()
+        health = {
+            "connectivity": "offline",
+            "voltage": 216.5,
+            "last_success": clock - 7200,
+        }
+        with self.assertRaisesRegex(
+            ValueError, "forecast day differs from today"
+        ):
+            widget_public_data(
+                health,
+                group="10.1",
+                bars=BARS,
+                day=DAY,
+                now=clock,
+                forecast_source="yasno",
+                forecast_updated=clock - 60,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
