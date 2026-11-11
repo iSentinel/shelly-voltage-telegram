@@ -135,6 +135,63 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
         self.assertFalse(answer["release_authorized"])
         network.assert_not_called()
 
+    def test_stale_historical_voltage_stays_hidden_in_offline_cli(self):
+        """The last good 216.5 V sample must never become a live reading."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 1000, 216.5, 50.0, "L1"),
+            )
+            db.commit()
+        original = self.db.read_bytes()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 2)
+        response = json.loads(output.getvalue())
+        self.assertEqual(response["status"], "PENDING")
+        self.assertEqual(response["reason"], "shelly_connectivity_loss_open")
+        self.assertNotIn("216.5", output.getvalue())
+        self.assertNotIn("current_voltage_v", response)
+        self.assertFalse(response["mains_restoration_verified"])
+        self.assertFalse(response["telegram_delivery_verified"])
+        self.assertEqual(self.db.read_bytes(), original)
+        network.assert_not_called()
+
+    def test_hysteresis_does_not_use_http_503_to_claim_recovery(self):
+        """A fresh sample without a closed outage remains unverified."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.commit()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        response = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(response["status"], "PENDING")
+        self.assertEqual(
+            response["reason"], "open_incident_with_unconfirmed_samples"
+        )
+        self.assertFalse(response["mains_restoration_verified"])
+        self.assertFalse(response["release_authorized"])
+        network.assert_not_called()
+
     def test_first_samples_stay_pending_until_outage_closes(self):
         """Recovery hysteresis cannot declare physical restoration early."""
 
