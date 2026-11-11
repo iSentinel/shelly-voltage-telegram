@@ -764,6 +764,14 @@ graphic migration while the pending key exists.
 
 ## Dual-snapshot cutover and media-safe rollback
 
+Both snapshot A and snapshot B also require complete source-tree parity:
+the exact filtered tar bytes in the rollback archive are compared against
+a fresh source-tar pass after archive construction and immediately before
+publication. An application file changed with an unchanged VERSION
+causes SOURCE_ARCHIVE_MISMATCH and deletion of the temporary archive.
+Source parity complements whole-SQLite logical parity; neither can be
+replaced by a version-only check.
+
 Both snapshot A and snapshot B now enforce the same stopped-writer
 and automatic-restart fence as the one-shot Telegram confirmation.
 The snapshot CLI rechecks both conditions before staging, after
