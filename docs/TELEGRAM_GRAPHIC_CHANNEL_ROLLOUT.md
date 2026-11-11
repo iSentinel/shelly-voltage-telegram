@@ -750,5 +750,8 @@ scripts/graphic-rollback-media-guard.py BEFORE stopping Compose or
 touching SQLite. This read-only check blocks photo/unknown media and
 both unresolved publication markers, even with
 --confirm-db-replacement. It permits legacy unbound or verified
-same-ID text states. On BLOCKED, never bypass the guard or delete
-the pending marker; reconcile the exact public Telegram post first.
+same-ID text states. A missing main SQLite file only counts as a
+fresh installation when no orphan WAL, shared-memory or rollback
+journal sidecar remains; otherwise the guard refuses a restore.
+On BLOCKED, never bypass the guard or delete the pending marker;
+reconcile the exact public Telegram post first.

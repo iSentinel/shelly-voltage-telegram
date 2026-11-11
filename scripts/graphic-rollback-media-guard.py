@@ -22,6 +22,10 @@ def guarded_database(path: Path) -> bool:
     if path.is_symlink():
         raise ValueError("UNSAFE_DATABASE_PATH")
     if not path.exists():
+        for suffix in ("-wal", "-shm", "-journal"):
+            sidecar = Path(str(path) + suffix)
+            if sidecar.exists() or sidecar.is_symlink():
+                raise ValueError("ORPHAN_SQLITE_JOURNAL")
         return False
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:

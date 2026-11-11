@@ -132,6 +132,23 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
             conn.execute("drop table meta")
         self.assertEqual(self.call()[0], 6)
 
+    def test_missing_db_with_orphan_wal_or_journal_is_blocked(self) -> None:
+        """An absent main file is not proof that SQLite state is empty."""
+
+        self.db.unlink()
+        self.assertEqual(GUARD.inspect(self.db)["reason"], "DATABASE_MISSING")
+        for suffix in ("-wal", "-shm", "-journal"):
+            with self.subTest(suffix=suffix):
+                sidecar = Path(str(self.db) + suffix)
+                sidecar.write_bytes(b"unrecovered database state")
+                with self.assertRaises(ValueError):
+                    GUARD.inspect(self.db)
+                sidecar.unlink()
+        linked = Path(str(self.db) + "-wal")
+        linked.symlink_to(self.folder / "nonexistent-sidecar")
+        with self.assertRaises(ValueError):
+            GUARD.inspect(self.db)
+
     def test_guard_runs_before_service_stop_and_db_replacement(self) -> None:
         """Shell rollback must check live media before mutation."""
 
