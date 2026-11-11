@@ -771,9 +771,11 @@ publication. An application file changed with an unchanged VERSION
 causes SOURCE_ARCHIVE_MISMATCH and deletion of the temporary archive.
 Source parity complements whole-SQLite logical parity; neither can be
 replaced by a version-only check. The bounded streaming parity check
-also kills and reaps the child source-tar process if the pipe fails,
-exceeds its size limit, or times out; a failed check cannot publish
-an A/B snapshot or leave an intentional long-running archive job.
+starts Bash and its tar children in a private process group and
+kills/reaps that group if the pipe fails, exceeds its size limit,
+or times out. This applies to both archive creation and parity
+comparison, so an interrupted A/B snapshot cannot leave orphan tar
+processes behind. No group-kill operation is performed on production.
 
 Both snapshot A and snapshot B now enforce the same stopped-writer
 and automatic-restart fence as the one-shot Telegram confirmation.
