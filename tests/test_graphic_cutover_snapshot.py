@@ -388,6 +388,56 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
             SNAP.run(self.args)
         self.assertEqual(list(self.archive_root.iterdir()), [])
 
+    def test_source_mutation_without_version_change_discards_archive(self):
+        """Reject an A snapshot after any included source file changes."""
+
+        self.args.execute = True
+        original = SNAP.gzip_sqlite
+
+        def change_source(*args):
+            """Modify app.py only after the source archive is captured."""
+            original(*args)
+            (self.source / "app.py").write_text("changed during backup\n")
+
+        with (
+            self.fake_guards(stopped=lambda: True),
+            mock.patch.object(SNAP, "gzip_sqlite", side_effect=change_source),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_MISMATCH"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
+    def test_source_mutation_after_first_parity_blocks_publication(self):
+        """Reject late source edits even when the archive passed once."""
+
+        self.args.execute = True
+        original = SNAP.source_parity
+        calls = [0]
+
+        def change_after_first(*args):
+            """Change another bundled file after the first parity check."""
+            calls[0] += 1
+            original(*args)
+            if calls[0] == 1:
+                (self.source / "Dockerfile").write_text(
+                    "changed after parity\n"
+                )
+
+        with (
+            self.fake_guards(stopped=lambda: True),
+            mock.patch.object(
+                SNAP, "source_parity", side_effect=change_after_first
+            ),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_MISMATCH"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(calls[0], 2)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
     def test_metadata_mutation_after_first_validation_discards_archive(self):
         """Full logical parity also detects a metadata-only late write."""
 
