@@ -775,7 +775,11 @@ starts Bash and its tar children in a private process group and
 kills/reaps that group if the pipe fails, exceeds its size limit,
 or times out. This applies to both archive creation and parity
 comparison, so an interrupted A/B snapshot cannot leave orphan tar
-processes behind. No group-kill operation is performed on production.
+processes behind. Source capture and both parity reads share a
+600 MiB uncompressed-tar limit: exceeding the cap fails closed with
+SOURCE_ARCHIVE_TOO_LARGE before filling the private backup disk,
+and any unfinished staging archive is removed. No group-kill
+operation is performed on production.
 
 Both snapshot A and snapshot B now enforce the same stopped-writer
 and automatic-restart fence as the one-shot Telegram confirmation.
