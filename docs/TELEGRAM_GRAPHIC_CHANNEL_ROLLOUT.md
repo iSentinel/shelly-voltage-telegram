@@ -862,3 +862,31 @@ pinned post** stayed the same. It DOES NOT prove the saved status ID
 is text/photo, establish a Telegram edit receipt, authorize
 deployment, or replace snapshots A and B. It is one independent
 recipient-visible post-preservation check.
+
+
+## Natural outage #25 and 11 November forecast independence
+
+The protected November 11, 2026 YASNO group 10.1 source supplied a
+frozen 48-half-hour-slot plan with 29 planned OFF slots (14.5 hours)
+and 19 ON slots (9.5 hours). The 13:00-19:00 window is forecast OFF.
+The real Shelly Pro EM-50 last returned a legitimate L1 reading
+before losing connectivity: outage #25 opened at 13:09:55
+Europe/Kyiv. At 13:21, /status.json reported connectivity=offline,
+live_voltage=null, live_frequency=null and sample_is_stale=true;
+/ready returned 503. A physical zero-voltage sample was NOT
+recorded. The power-off report was supplied separately by the owner.
+
+tests/test_graphic_nov11_outage25.py deliberately freezes this
+schedule and checks the 12:59 -> 13:00 forecast boundary and
+13:09:55 real connectivity-loss boundary independently. It renders
+full offline PNGs for different historical voltage values and
+requires identical pixels; a last good voltage must never appear
+as current on an offline card. It also checks absent schedule,
+stale-online flags, and a synthetic possible recovery while YASNO
+still predicts OFF. A synthetic recovery in QA is not a claim that
+the actual outage closed. No Telegram message is edited, sent or
+pinned by these offline regressions.
+
+The verified forecast is not a physical measurement. The actual
+meter source always wins when live and fresh; loss of connectivity
+makes instantaneous voltage unknown even if YASNO indicates OFF.
