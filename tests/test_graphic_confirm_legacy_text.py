@@ -228,6 +228,74 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         self.assertEqual(self.marker(), ("text:-100123:101",))
         self.assertIsNone(self.pending_marker())
 
+    def test_writer_restart_after_snapshot_blocks_before_reservation(self):
+        """A stale stopped-writer result must not authorize Telegram edits."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(
+                CONFIRM, "writer_stopped", side_effect=[True, False]
+            ) as writer,
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "WRITER_RESTARTED"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertEqual(writer.call_count, 2)
+        self.assertIsNone(self.pending_marker())
+        self.assertIsNone(self.marker())
+        edit.assert_not_called()
+
+    def test_writer_restart_after_reservation_blocks_api_request(self):
+        """Block editing after writer restart; preserve pending intent."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(
+                CONFIRM, "writer_stopped", side_effect=[True, True, False]
+            ) as writer,
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "WRITER_RESTARTED"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertEqual(writer.call_count, 3)
+        self.assertEqual(self.pending_marker(), ("pending",))
+        self.assertIsNone(self.marker())
+        edit.assert_not_called()
+
+    def test_status_rotation_during_edit_never_confirms_wrong_id(self):
+        """An externally rotated status cannot inherit old media identity."""
+
+        self.args.execute = True
+
+        def rotate_during_edit(*_):
+            """Simulate a status-ID update while the API call is underway."""
+            with closing(sqlite3.connect(self.db)) as db, db:
+                db.execute(
+                    "UPDATE meta SET value='102' "
+                    "WHERE key='telegram_status_message_id'"
+                )
+
+        with (
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(
+                CONFIRM, "edit_text_once", side_effect=rotate_during_edit
+            ) as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "STATUS_ID_CHANGED"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        edit.assert_called_once()
+        self.assertEqual(self.pending_marker(), ("pending",))
+        self.assertIsNone(self.marker())
+
     def test_timeout_leaves_unverified_marker_absent(self):
         """A possibly successful Telegram request cannot be auto-retried."""
 
