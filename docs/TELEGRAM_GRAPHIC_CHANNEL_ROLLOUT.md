@@ -763,6 +763,16 @@ graphic migration while the pending key exists.
 
 ## Dual-snapshot cutover and media-safe rollback
 
+Both snapshot A and snapshot B now enforce the same stopped-writer
+and automatic-restart fence as the one-shot Telegram confirmation.
+The snapshot CLI rechecks both conditions before staging, after
+source+SQLite archives are constructed, immediately before final
+parity validation, and after validation before publication. A lost
+fence rejects the snapshot and deletes the unfinished staging tree;
+an apparently valid earlier checksum never overrides this gate.
+The operator-only service/Docker fencing and restoration steps are
+documented above. The live 0.5.15-hw installation remains unchanged.
+
 The owner-approved cutover requires two distinct writer-stopped
 backups (the previous warm backup is not a replacement):
 
