@@ -11,11 +11,12 @@ import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import stat
 import subprocess
 import tempfile
-from contextlib import closing
+from contextlib import closing, suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -176,23 +177,45 @@ def valid_text_marker(value: str | None, message_id: str) -> bool:
     )
 
 
+def source_tar(source: Path):
+    """Start the Bash/tar pipeline in a private OS process group."""
+
+    return subprocess.Popen(
+        ["bash", str(ROOT / "source-tar.sh"), str(source)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def reap_tar(proc) -> None:
+    """Terminate Bash and any descendant tar processes after failure."""
+
+    if proc.poll() is None:
+        with suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=6)
+
+
 def gzip_source(source: Path, output: Path) -> None:
-    """Stream filtered source to gzip without capturing private bytes."""
+    """Stream filtered source into gzip and reap failed child processes."""
 
     with (
         output.open("xb") as raw,
         gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz,
     ):
-        proc = subprocess.Popen(
-            ["bash", str(ROOT / "source-tar.sh"), str(source)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        assert proc.stdout is not None
-        shutil.copyfileobj(proc.stdout, gz)
-        proc.stdout.close()
-        if proc.wait(timeout=90) != 0:
-            raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
+        proc = source_tar(source)
+        try:
+            if proc.stdout is None:
+                raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
+            with proc.stdout:
+                shutil.copyfileobj(proc.stdout, gz)
+            if proc.wait(timeout=90) != 0:
+                raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
+        except (OSError, subprocess.TimeoutExpired):
+            raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED") from None
+        finally:
+            reap_tar(proc)
 
 
 def tar_digest(stream) -> str:
@@ -209,13 +232,9 @@ def tar_digest(stream) -> str:
 
 
 def fresh_source_digest(current: Path) -> str:
-    """Reap a filtered-tar child even when reading its pipe fails."""
+    """Reap the entire filtered-tar process group on failed reads."""
 
-    proc = subprocess.Popen(
-        ["bash", str(ROOT / "source-tar.sh"), str(current)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
+    proc = source_tar(current)
     try:
         if proc.stdout is None:
             raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE")
@@ -225,9 +244,7 @@ def fresh_source_digest(current: Path) -> str:
             raise SnapshotBlocked("SOURCE_ARCHIVE_MISMATCH")
         return digest
     finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait(timeout=6)
+        reap_tar(proc)
 
 
 def source_parity(archive: Path, current: Path) -> None:
