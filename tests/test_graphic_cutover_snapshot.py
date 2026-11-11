@@ -239,6 +239,7 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
 
         with (
             mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "restart_fenced", return_value=True),
             mock.patch.object(
                 CONFIRM, "edit_text_once", self.assert_pending_before_telegram
             ),
@@ -271,6 +272,7 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
             a = Path(SNAP.run(self.args)["archive"])
         with (
             mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "restart_fenced", return_value=True),
             mock.patch.object(
                 CONFIRM,
                 "edit_text_once",
