@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 EXPECTED_VERSION = "0.5.15-hw"
+MAX_SOURCE_TAR_BYTES = 600 * 1024 * 1024
 
 
 class SnapshotBlocked(Exception):
@@ -197,6 +198,17 @@ def reap_tar(proc) -> None:
         proc.wait(timeout=6)
 
 
+def copy_bounded_tar(stream, output) -> None:
+    """Refuse oversized uncompressed source streams before gzip writes."""
+
+    size = 0
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        size += len(block)
+        if size > MAX_SOURCE_TAR_BYTES:
+            raise SnapshotBlocked("SOURCE_ARCHIVE_TOO_LARGE")
+        output.write(block)
+
+
 def gzip_source(source: Path, output: Path) -> None:
     """Stream filtered source into gzip and reap failed child processes."""
 
@@ -209,7 +221,7 @@ def gzip_source(source: Path, output: Path) -> None:
             if proc.stdout is None:
                 raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
             with proc.stdout:
-                shutil.copyfileobj(proc.stdout, gz)
+                copy_bounded_tar(proc.stdout, gz)
             if proc.wait(timeout=90) != 0:
                 raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
         except (OSError, subprocess.TimeoutExpired):
@@ -225,7 +237,7 @@ def tar_digest(stream) -> str:
     size = 0
     for block in iter(lambda: stream.read(1024 * 1024), b""):
         size += len(block)
-        if size > 600 * 1024 * 1024:
+        if size > MAX_SOURCE_TAR_BYTES:
             raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE")
         digest.update(block)
     return digest.hexdigest()
