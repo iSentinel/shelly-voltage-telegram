@@ -268,6 +268,32 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         self.assertIsNone(self.marker())
         edit.assert_not_called()
 
+    def test_writer_restart_after_telegram_edit_keeps_uncertain_intent(self):
+        """A post-API restart must not confirm media or allow retry."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(
+                CONFIRM,
+                "writer_stopped",
+                side_effect=[True, True, True, False],
+            ) as writer,
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "WRITER_RESTARTED_AFTER_EDIT"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertEqual(writer.call_count, 4)
+        edit.assert_called_once()
+        self.assertEqual(self.pending_marker(), ("pending",))
+        self.assertIsNone(self.marker())
+        with self.assertRaisesRegex(
+            CONFIRM.VerificationError, "PUBLICATION_UNRESOLVED"
+        ):
+            CONFIRM.current_status(self.db)
+
     def test_status_rotation_during_edit_never_confirms_wrong_id(self):
         """An externally rotated status cannot inherit old media identity."""
 
@@ -489,7 +515,11 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
         """A database failure after API transport is explicitly uncertain."""
 
         self.args.execute = True
-        for reason in ("DB_COMMIT_UNCERTAIN", "STATUS_CHANGED_AFTER_EDIT"):
+        for reason in (
+            "DB_COMMIT_UNCERTAIN",
+            "STATUS_CHANGED_AFTER_EDIT",
+            "WRITER_RESTARTED_AFTER_EDIT",
+        ):
             with self.subTest(reason=reason):
                 output = io.StringIO()
                 with (
