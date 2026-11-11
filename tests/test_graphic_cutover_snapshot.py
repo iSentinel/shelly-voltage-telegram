@@ -17,6 +17,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from test_graphic_confirm_legacy_text import CONFIRM
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/graphic-cutover-snapshot.py"
 SPEC = importlib.util.spec_from_file_location("graphic_snapshot", SCRIPT)
@@ -214,6 +216,86 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         self.assertEqual(
             gate.snapshot_parity_issues(phase_b, self.database), []
         )
+
+    def test_one_shot_text_confirmation_creates_eligible_second_snapshot(self):
+        """A genuine SQLite one-shot commit makes B valid but not A."""
+
+        self.args.execute = True
+        with self.fake_guards(stopped=lambda: True):
+            a = Path(SNAP.run(self.args)["archive"])
+
+        def fake_telegram_edit(token, chat, message_id, body):
+            """Check committed pending marker before acknowledging any edit."""
+
+            self.assertEqual((chat, message_id), ("-100123", 101))
+            with closing(sqlite3.connect(self.database)) as db:
+                self.assertEqual(
+                    db.execute(
+                        "select value from meta "
+                        "where key='telegram_legacy_text_confirm_pending'"
+                    ).fetchone(),
+                    ("pending",),
+                )
+
+        with mock.patch.object(CONFIRM, "edit_text_once", fake_telegram_edit):
+            CONFIRM.verify_and_record(
+                SimpleNamespace(database=self.database),
+                101,
+                "-100123",
+                "test-token",
+                "Synthetic status",
+            )
+        self.args.phase = "B"
+        with (
+            mock.patch.dict(
+                os.environ, {"TELEGRAM_STATUS_CHAT_ID": "-100123"}
+            ),
+            self.fake_guards(stopped=lambda: True),
+        ):
+            b = Path(SNAP.run(self.args)["archive"])
+        gate = SNAP.module("graphic-rollout-readiness.py", "ab_check")
+        self.assertNotEqual(a, b)
+        self.assertNotEqual(gate.snapshot_parity_issues(a, self.database), [])
+        self.assertEqual(gate.snapshot_parity_issues(b, self.database), [])
+
+    def test_ambiguous_one_shot_edit_refuses_second_snapshot(self):
+        """A timeout preserves pending intent and prohibits snapshot B."""
+
+        self.args.execute = True
+        with self.fake_guards(stopped=lambda: True):
+            a = Path(SNAP.run(self.args)["archive"])
+        with (
+            mock.patch.object(
+                CONFIRM,
+                "edit_text_once",
+                side_effect=CONFIRM.VerificationError(
+                    "TELEGRAM_REPLY_UNCERTAIN"
+                ),
+            ),
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "TELEGRAM_REPLY_UNCERTAIN"
+            ),
+        ):
+            CONFIRM.verify_and_record(
+                SimpleNamespace(database=self.database),
+                101,
+                "-100123",
+                "test-token",
+                "Synthetic status",
+            )
+        self.args.phase = "B"
+        with (
+            mock.patch.dict(
+                os.environ, {"TELEGRAM_STATUS_CHAT_ID": "-100123"}
+            ),
+            self.fake_guards(stopped=lambda: True),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "UNRESOLVED_TELEGRAM_STATUS"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(len(list(self.archive_root.iterdir())), 1)
+        self.assertTrue(a.exists())
 
     def test_photo_marker_is_not_a_valid_phase_b(self):
         """Photo/unknown media is never eligible for B confirmation."""
