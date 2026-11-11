@@ -592,3 +592,19 @@ stopped-writer snapshot with complete table parity, and monitoring
 of the existing Telegram status after the in-place photo edit.
 Owner Approval was already granted for this specific migration, but
 version numbering and CI never waive the technical rollout gates.
+
+
+## Verification clock is not the YASNO publication clock
+
+The trusted YASNO/DTEK endpoint can republish the same applicable daily
+plan infrequently. A source updatedOn timestamp older than two hours is
+not inherently stale if it is within the source parser's separate
+36-hour publication bound AND the current-day ScheduleApplies record is
+present AND the trusted authenticated-envelope cache was retrieved
+within two hours. The graphic widget receives the *verified retrieval*
+clock (retrieved_at), not published_at. For accuracy the PNG labels it
+"ПЕРЕВІРЕНО", rather than implying YASNO created a new schedule at that
+moment. The supplied test checks a four-hour-old publication against
+a fresh cryptographically hashed cache, and still rejects stale fetch
+or source publications beyond the original 36-hour limit. This never
+turns planned schedules into physical measurement evidence.

@@ -275,7 +275,7 @@ def draw_forecast_legend(pixels: bytearray, state: dict) -> None:
         rectangle(pixels, x, 564, x + 15, 578, color, 3)
         label(pixels, name, x + 24, 564, MUTED, 2)
     updated = datetime.fromtimestamp(state["u"], KYIV).strftime("%H:%M")
-    label(pixels, "ОНОВЛЕНО " + updated, 722, 564, MUTED, 2)
+    label(pixels, "ПЕРЕВІРЕНО " + updated, 722, 564, MUTED, 2)
 
 
 def draw_forecast_totals(pixels: bytearray, bars: str) -> None:

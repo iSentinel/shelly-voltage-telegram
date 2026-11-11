@@ -180,7 +180,7 @@ class TelegramGraphicWidgetTests(unittest.TestCase):
         self.assertIn("СВІТЛО: 8,5 ГОД", labels)
         self.assertIn("НЕМАЄ: 7,5 ГОД", labels)
         self.assertIn("МОЖЛИВО: 8 ГОД", labels)
-        self.assertIn("ОНОВЛЕНО 02:08", labels)
+        self.assertIn("ПЕРЕВІРЕНО 02:08", labels)
 
     def test_half_hour_totals_never_round_up(self):
         """Keep half-hours and a full-day 24h bound exactly."""

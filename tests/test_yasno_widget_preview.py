@@ -7,7 +7,7 @@ import os
 import tempfile
 import time
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
@@ -161,6 +161,37 @@ class YasnoWidgetPreviewTests(unittest.TestCase):
                 text = APP.private_widget_preview_text(monitor)
         self.assertIn("Источник: YASNO", text)
         self.assertIn("04:00–11:30", text)
+
+    def test_fresh_verified_retrieval_keeps_older_daily_publication(self):
+        """Display a published today's plan using its verified fetch clock."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            now = datetime.now(KYIV)
+            source = response(now)
+            source["10.1"]["updatedOn"] = (
+                now - timedelta(hours=4)
+            ).isoformat()
+            trusted = Path(tmp) / "yasno.json"
+            atomic_write(str(trusted), build_cache(source, now))
+            env = settings("")
+            env["YASNO_TRUSTED_CACHE_FILE"] = str(trusted)
+            with patch.dict(os.environ, env):
+                options = APP.cached_yasno_preview_args()
+            self.assertIsNotNone(options)
+            self.assertAlmostEqual(
+                options["forecast_updated"], now.timestamp(), delta=5
+            )
+            state = json.loads(
+                widget_public_data(
+                    {"connectivity": "offline"},
+                    now=now.timestamp(),
+                    language="uk",
+                    **options,
+                )
+            )
+        self.assertEqual(state["src"], "yasno")
+        self.assertEqual(state["d"], now.date().isoformat())
+        self.assertEqual(len(state["b"]), 48)
 
     def test_corrupt_trusted_cache_does_not_downgrade_to_raw(self):
         """A configured trusted source cannot silently become raw data."""
