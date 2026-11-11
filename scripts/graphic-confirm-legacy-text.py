@@ -87,6 +87,39 @@ def writer_stopped() -> bool:
     )
 
 
+def restart_fenced() -> bool:
+    """Require disabled service activation and Docker automatic restarts."""
+
+    try:
+        service = subprocess.run(
+            ["systemctl", "is-enabled", "shelly-voltage-compose.service"],
+            capture_output=True,
+            text=True,
+            timeout=6,
+            check=False,
+        )
+        container = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.HostConfig.RestartPolicy.Name}}",
+                "shelly-voltage-bot",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=6,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return (
+        service.stdout.strip() in {"disabled", "masked", "masked-runtime"}
+        and container.returncode == 0
+        and container.stdout.strip() in {"no", ""}
+    )
+
+
 def safe_token(path: Path, gate) -> str:
     """Read the private Bot API token without logging or printing it."""
 
@@ -299,13 +332,19 @@ def verify_and_record(
 
     if not writer_stopped():
         raise VerificationError("WRITER_RESTARTED")
+    if not restart_fenced():
+        raise VerificationError("RESTART_FENCE_LOST")
     reserve_confirmation(args, mid)
     if not writer_stopped():
         raise VerificationError("WRITER_RESTARTED")
+    if not restart_fenced():
+        raise VerificationError("RESTART_FENCE_LOST")
     edit_text_once(token, chat, mid, body)
     try:
         if not writer_stopped():
             raise VerificationError("WRITER_RESTARTED_AFTER_EDIT")
+        if not restart_fenced():
+            raise VerificationError("RESTART_FENCE_LOST_AFTER_EDIT")
         finish_confirmation(args, mid, chat)
     except VerificationError as exc:
         if str(exc) == "STATUS_ID_CHANGED":
@@ -333,6 +372,8 @@ def run(args: argparse.Namespace) -> dict:
     mid, measured_at, voltage = current_status(args.database)
     if not writer_stopped():
         raise VerificationError("WRITER_NOT_STOPPED")
+    if not restart_fenced():
+        raise VerificationError("RESTART_FENCE_MISSING")
     validate_snapshot(args, guard)
     if not args.execute:
         return {"status": "DRY_RUN_PASS", "telegram_edited": False}
@@ -359,6 +400,7 @@ def main() -> int:
             "DB_COMMIT_UNCERTAIN",
             "STATUS_CHANGED_AFTER_EDIT",
             "WRITER_RESTARTED_AFTER_EDIT",
+            "RESTART_FENCE_LOST_AFTER_EDIT",
         }
         result = {
             "status": "BLOCKED",
