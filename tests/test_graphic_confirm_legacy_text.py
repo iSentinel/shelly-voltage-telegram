@@ -33,6 +33,7 @@ def module():
 
 
 CONFIRM = module()
+FENCE_FUNCTION = CONFIRM.restart_fenced
 
 
 class GraphicLegacyConfirmationTests(unittest.TestCase):
@@ -98,6 +99,9 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
             jsonl=True,
         )
         self.stub_release_gate()
+        guard = mock.patch.object(CONFIRM, "restart_fenced", return_value=True)
+        guard.start()
+        self.addCleanup(guard.stop)
 
     def pending_marker(self):
         """Return the crash-safe one-shot marker without writing."""
@@ -293,6 +297,92 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
             CONFIRM.VerificationError, "PUBLICATION_UNRESOLVED"
         ):
             CONFIRM.current_status(self.db)
+
+    def test_restart_fence_needs_disabled_service_and_docker_no(self):
+        """Both automatic activation paths must be disabled for cutover."""
+
+        def result(output: str):
+            """Represent a command response without affecting host state."""
+            return subprocess.CompletedProcess([], 0, stdout=output)
+
+        for service, policy, expected in (
+            ("enabled", "unless-stopped", False),
+            ("disabled", "unless-stopped", False),
+            ("enabled", "no", False),
+            ("disabled", "no", True),
+            ("masked", "no", True),
+        ):
+            with (
+                self.subTest(service=service, policy=policy),
+                mock.patch.object(
+                    CONFIRM.subprocess,
+                    "run",
+                    side_effect=[result(service), result(policy)],
+                ) as commands,
+            ):
+                self.assertEqual(FENCE_FUNCTION(), expected)
+                self.assertEqual(commands.call_count, 2)
+
+    def test_missing_restart_fence_blocks_before_reservation(self):
+        """An enabled old service cannot perform the one-shot edit."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(CONFIRM, "restart_fenced", return_value=False),
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "safe_token") as token,
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "RESTART_FENCE_MISSING"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertIsNone(self.pending_marker())
+        token.assert_not_called()
+        edit.assert_not_called()
+
+    def test_fence_lost_after_reserve_prevents_telegram_edit(self):
+        """If service restart protection disappears, keep intent pending."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(
+                CONFIRM, "restart_fenced", side_effect=[True, True, False]
+            ),
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "RESTART_FENCE_LOST"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertEqual(self.pending_marker(), ("pending",))
+        self.assertIsNone(self.marker())
+        edit.assert_not_called()
+
+    def test_fence_lost_after_api_keeps_outcome_unknown(self):
+        """Do not commit text identity when restart protection disappears."""
+
+        self.args.execute = True
+        with (
+            mock.patch.object(
+                CONFIRM,
+                "restart_fenced",
+                side_effect=[True, True, True, False],
+            ) as fence,
+            mock.patch.object(CONFIRM, "writer_stopped", return_value=True),
+            mock.patch.object(CONFIRM, "safe_token", return_value="test"),
+            mock.patch.object(CONFIRM, "edit_text_once") as edit,
+            self.assertRaisesRegex(
+                CONFIRM.VerificationError, "RESTART_FENCE_LOST_AFTER_EDIT"
+            ),
+        ):
+            CONFIRM.run(self.args)
+        self.assertEqual(fence.call_count, 4)
+        edit.assert_called_once()
+        self.assertEqual(self.pending_marker(), ("pending",))
+        self.assertIsNone(self.marker())
 
     def test_status_rotation_during_edit_never_confirms_wrong_id(self):
         """An externally rotated status cannot inherit old media identity."""
@@ -519,6 +609,7 @@ class GraphicLegacyConfirmationTests(unittest.TestCase):
             "DB_COMMIT_UNCERTAIN",
             "STATUS_CHANGED_AFTER_EDIT",
             "WRITER_RESTARTED_AFTER_EDIT",
+            "RESTART_FENCE_LOST_AFTER_EDIT",
         ):
             with self.subTest(reason=reason):
                 output = io.StringIO()
