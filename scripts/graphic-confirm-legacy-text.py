@@ -87,36 +87,44 @@ def writer_stopped() -> bool:
     )
 
 
-def restart_fenced() -> bool:
-    """Require disabled service activation and Docker automatic restarts."""
+def fence_command(command: list[str]) -> subprocess.CompletedProcess | None:
+    """Run one bounded local state query, rejecting unavailable commands."""
 
     try:
-        service = subprocess.run(
-            ["systemctl", "is-enabled", "shelly-voltage-compose.service"],
-            capture_output=True,
-            text=True,
-            timeout=6,
-            check=False,
-        )
-        container = subprocess.run(
-            [
-                "docker",
-                "inspect",
-                "--format",
-                "{{.HostConfig.RestartPolicy.Name}}",
-                "shelly-voltage-bot",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=6,
-            check=False,
+        return subprocess.run(
+            command, capture_output=True, text=True, timeout=6, check=False
         )
     except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def restart_fenced() -> bool:
+    """Require inactive systemd, disabled activation and Docker restart=no."""
+
+    unit = "shelly-voltage-compose.service"
+    enabled = fence_command(["systemctl", "is-enabled", unit])
+    if enabled is None or enabled.stdout.strip() not in {
+        "disabled",
+        "masked",
+        "masked-runtime",
+    }:
         return False
+    active = fence_command(["systemctl", "is-active", unit])
+    if active is None or active.stdout.strip() not in {"inactive", "failed"}:
+        return False
+    docker = fence_command(
+        [
+            "docker",
+            "inspect",
+            "--format",
+            "{{.HostConfig.RestartPolicy.Name}}",
+            "shelly-voltage-bot",
+        ]
+    )
     return (
-        service.stdout.strip() in {"disabled", "masked", "masked-runtime"}
-        and container.returncode == 0
-        and container.stdout.strip() in {"no", ""}
+        docker is not None
+        and docker.returncode == 0
+        and docker.stdout.strip() in {"no", ""}
     )
 
 
