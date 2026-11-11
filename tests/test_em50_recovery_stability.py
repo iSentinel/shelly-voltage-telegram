@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import io
 import json
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -165,6 +167,135 @@ class RecoveryStabilityTests(unittest.TestCase):
             report["telegram_channel_edit_visible"], "NOT_VERIFIED"
         )
         self.assertNotIn("chat_id", json.dumps(report))
+
+    def test_open_outage_cli_reports_pending_without_http(self):
+        """A long outage is pending, not an HTTP 503 failure."""
+
+        live = {
+            "integrity": "ok",
+            "active": 1,
+            "start": self.now - 4 * 3600,
+            "end": None,
+            "zero_count": 0,
+            "status_saved": True,
+            "after_count": 0,
+            "outage_id": 25,
+            "phase": "L1",
+        }
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["stability", "--db", "/fake", "--json"]
+            ),
+            patch.object(STABLE.time, "time", return_value=self.now),
+            patch.object(STABLE.NATURAL, "read_state", return_value=live),
+            patch.object(STABLE.NATURAL, "local_json") as network,
+            patch.object(STABLE, "inspect") as recovery,
+            contextlib.redirect_stdout(output),
+        ):
+            result = STABLE.main()
+        record = json.loads(output.getvalue())
+        self.assertEqual(result, 2)
+        self.assertEqual(record["status"], "PENDING")
+        self.assertEqual(record["outage_id"], 25)
+        self.assertFalse(record["mains_restoration_verified"])
+        self.assertFalse(record["telegram_delivery_verified"])
+        self.assertFalse(record["release_authorized"])
+        network.assert_not_called()
+        recovery.assert_not_called()
+
+    def test_recovery_hysteresis_keeps_stability_pending(self):
+        """Partial readings while an outage is open cannot pass."""
+
+        ongoing = {
+            "integrity": "ok",
+            "active": 1,
+            "start": self.now - 300,
+            "end": None,
+            "zero_count": 0,
+            "status_saved": True,
+            "after_count": 3,
+            "outage_id": 25,
+            "phase": "L1",
+        }
+        record = STABLE.NATURAL.pending_record(ongoing, self.now)
+        self.assertEqual(record["status"], "PENDING")
+        self.assertEqual(
+            record["reason"], "open_incident_with_unconfirmed_samples"
+        )
+        self.assertFalse(record["release_authorized"])
+
+    def test_corrupt_open_outage_never_returns_pending(self):
+        """Synthetic 0 V means corrupted evidence, not a safe wait."""
+
+        broken = {
+            "integrity": "ok",
+            "active": 1,
+            "start": self.now - 3600,
+            "end": None,
+            "zero_count": 1,
+            "status_saved": True,
+            "after_count": 0,
+            "outage_id": 25,
+        }
+        output = io.StringIO()
+        errors = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["stability", "--db", "/fake", "--json"]
+            ),
+            patch.object(STABLE.time, "time", return_value=self.now),
+            patch.object(STABLE.NATURAL, "read_state", return_value=broken),
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            result = STABLE.main()
+        self.assertEqual(result, 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertIn("FAIL recovery_stability ValueError", errors.getvalue())
+
+    def test_invalid_thresholds_refused_even_while_offline(self):
+        """Offline state cannot bypass configured physical quality bounds."""
+
+        for field, value in (
+            ("--max-gap-seconds", "300"),
+            ("--min-samples", "1"),
+        ):
+            with (
+                self.subTest(field=field),
+                patch.object(
+                    sys, "argv", ["stability", field, value, "--json"]
+                ),
+                patch.object(STABLE.NATURAL, "read_state") as network,
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(STABLE.main(), 1)
+                network.assert_not_called()
+
+    def test_closed_incident_keeps_strict_recovery_evaluation(self):
+        """No PENDING is allowed for a closed but unstable incident."""
+
+        output = io.StringIO()
+        errors = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["stability", "--db", "/fake", "--json"]
+            ),
+            patch.object(STABLE.time, "time", return_value=self.now),
+            patch.object(
+                STABLE.NATURAL, "read_state", return_value={"end": self.now}
+            ),
+            patch.object(
+                STABLE, "inspect", side_effect=ValueError("unstable")
+            ) as recovery,
+            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(errors),
+        ):
+            result = STABLE.main()
+        self.assertEqual(result, 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertIn("FAIL recovery_stability ValueError", errors.getvalue())
+        recovery.assert_called_once()
 
     def test_read_window_opens_existing_sqlite_read_only(self):
         """The monitoring database remains byte-for-byte unchanged."""
