@@ -195,6 +195,39 @@ def gzip_source(source: Path, output: Path) -> None:
             raise SnapshotBlocked("SOURCE_ARCHIVE_FAILED")
 
 
+def tar_digest(stream) -> str:
+    """Hash bounded raw tar bytes without extraction or modification."""
+
+    digest = hashlib.sha256()
+    size = 0
+    for block in iter(lambda: stream.read(1024 * 1024), b""):
+        size += len(block)
+        if size > 600 * 1024 * 1024:
+            raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE")
+        digest.update(block)
+    return digest.hexdigest()
+
+
+def source_parity(archive: Path, current: Path) -> None:
+    """Compare the archived filtered source with its current full tree."""
+
+    try:
+        with gzip.open(archive, "rb") as stored:
+            archived = tar_digest(stored)
+        proc = subprocess.Popen(
+            ["bash", str(ROOT / "source-tar.sh"), str(current)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        assert proc.stdout is not None
+        with proc.stdout:
+            live = tar_digest(proc.stdout)
+        if proc.wait(timeout=90) != 0 or archived != live:
+            raise SnapshotBlocked("SOURCE_ARCHIVE_MISMATCH")
+    except (OSError, EOFError, subprocess.TimeoutExpired):
+        raise SnapshotBlocked("SOURCE_PARITY_UNAVAILABLE") from None
+
+
 def gzip_sqlite(source: Path, output: Path, folder: Path) -> None:
     """Capture a consistent complete SQLite backup and compress it."""
 
@@ -270,6 +303,7 @@ def build_archives(
     if (options.source / "VERSION").read_text().strip() != version:
         raise SnapshotBlocked("SOURCE_CHANGED_DURING_CAPTURE")
     validate(sqlite, source, options.database)
+    source_parity(source, options.source)
     manifest = staging / "manifest.env"
     manifest.write_text(
         f"from_version={version}\nto_version=0.5.16-hw\n"
@@ -298,6 +332,7 @@ def final_publication_preflight(
         staging / "source.tar.gz",
         options.database,
     )
+    source_parity(staging / "source.tar.gz", options.source)
     assert_quiescent(confirmation)
 
 
