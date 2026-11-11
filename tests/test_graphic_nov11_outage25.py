@@ -170,6 +170,46 @@ class NaturalOutage25GraphicTests(unittest.TestCase):
         self.assertTrue(result["forecast_visible"])
         self.assertFalse(result["live_voltage_visible"])
 
+    def test_215959_live_voltage_survives_last_planned_on_slot(self):
+        """Current measured voltage stays independent of the 22:00 plan."""
+
+        clock = moment(21, 59, 59)
+        state = public_state(clock, "online", 220.1)
+        self.assertEqual(state["b"][43:45], "OX")
+        result, _ = self.render(state, clock, "before-2200.png")
+        self.assertEqual(result["status"], "online")
+        self.assertEqual(state["v"], 220.1)
+        self.assertTrue(result["live_voltage_visible"])
+
+    def test_220001_scheduled_off_does_not_hide_live_voltage(self):
+        """A new red X does not overrule a fresh Shelly reading."""
+
+        clock = moment(22, 0, 1)
+        state = public_state(clock, "online", 218.7, age_seconds=2)
+        self.assertEqual(state["b"][44], "X")
+        result, _ = self.render(state, clock, "planned-2200.png")
+        self.assertEqual(result["status"], "online")
+        self.assertEqual(state["v"], 218.7)
+        self.assertTrue(result["live_voltage_visible"])
+        self.assertTrue(result["forecast_visible"])
+
+    def test_220045_offline_hides_last_voltage_despite_forecast(self):
+        """An actual connection loss hides both prior volts and frequency."""
+
+        clock = moment(22, 0, 45)
+        previous = public_state(clock, "offline", 218.7, 50)
+        alternate = public_state(clock, "offline", 173.1, 50)
+        self.assertEqual(previous["b"][44], "X")
+        self.assertTrue({"v", "f", "t"}.isdisjoint(previous))
+        report, old_bytes = self.render(previous, clock, "offline-2200.png")
+        _, alternate_bytes = self.render(
+            alternate, clock, "offline-other-2200.png"
+        )
+        self.assertEqual(report["status"], "offline")
+        self.assertFalse(report["live_voltage_visible"])
+        self.assertTrue(report["forecast_visible"])
+        self.assertEqual(old_bytes, alternate_bytes)
+
     def test_expired_yasno_cache_cannot_resurrect_old_forecast(self):
         """Stale forecasts must fail closed even when Shelly is offline."""
 
