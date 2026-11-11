@@ -483,6 +483,39 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         kill_group.assert_called_once_with(4324, signal.SIGKILL)
         self.assertEqual(child.wait.call_count, 2)
 
+    def test_oversize_source_stream_kills_process_group(self):
+        """Oversized tar must be rejected before its full gzip write."""
+
+        with (
+            mock.patch.object(SNAP, "MAX_SOURCE_TAR_BYTES", 8),
+            mock.patch.object(SNAP, "source_tar") as spawn,
+            mock.patch.object(SNAP.os, "killpg") as kill_group,
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_TOO_LARGE"
+            ),
+        ):
+            child = spawn.return_value
+            child.pid = 4331
+            child.stdout = io.BytesIO(b"large source archive")
+            child.poll.return_value = None
+            SNAP.gzip_source(self.source, self.folder / "oversize.tar.gz")
+        kill_group.assert_called_once_with(4331, signal.SIGKILL)
+        child.wait.assert_called_once_with(timeout=6)
+
+    def test_oversize_source_cannot_publish_snapshot(self):
+        """Archive staging must be deleted if source exceeds its cap."""
+
+        self.args.execute = True
+        with (
+            self.fake_guards(stopped=lambda: True),
+            mock.patch.object(SNAP, "MAX_SOURCE_TAR_BYTES", 32),
+            self.assertRaisesRegex(
+                SNAP.SnapshotBlocked, "SOURCE_ARCHIVE_TOO_LARGE"
+            ),
+        ):
+            SNAP.run(self.args)
+        self.assertEqual(list(self.archive_root.iterdir()), [])
+
     def test_source_mutation_without_version_change_discards_archive(self):
         """Reject an A snapshot after any included source file changes."""
 
