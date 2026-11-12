@@ -6,6 +6,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import image_release_policy as policy
 
@@ -22,26 +23,35 @@ def version(name: str) -> str:
 class Em50ReleaseCandidateTests(unittest.TestCase):
     """Never authorize a stable tag from an unaccepted candidate."""
 
-    def test_candidate_is_not_the_published_release(self):
-        """Draft graphics source cannot claim a finalized release tag."""
+    def test_promotion_target_is_distinct_from_live_device(self):
+        """Release proposal must not pretend the meter has been upgraded."""
 
         self.assertEqual(version("VERSION"), "0.5.16-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.15-hw")
-        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.16-hw")
+        self.assertEqual(version("LIVE_VERSION"), "0.5.6-hw")
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
-    def test_candidate_tag_is_not_yet_authorized(self):
-        """VERSION/RELEASE_VERSION mismatch prevents stable tag pushes."""
+    def test_version_tag_requires_matching_exact_commit(self):
+        """Only an exact matching tag and commit may sign a release."""
 
-        with self.assertRaisesRegex(
-            ValueError, "VERSION differs from RELEASE_VERSION"
+        current = "a" * 40
+        with (
+            mock.patch.object(policy, "tag_commit", return_value=current),
+            mock.patch.object(policy, "current_commit", return_value=current),
         ):
             policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
+            with self.assertRaisesRegex(ValueError, "tag differs"):
+                policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
 
-        with self.assertRaisesRegex(
-            ValueError, "VERSION differs from RELEASE_VERSION"
+    def test_tag_pointing_to_different_commit_is_refused(self):
+        """A same-version tag cannot sign a different source revision."""
+
+        with (
+            mock.patch.object(policy, "tag_commit", return_value="a" * 40),
+            mock.patch.object(policy, "current_commit", return_value="b" * 40),
+            self.assertRaisesRegex(ValueError, "commit differs"),
         ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""
