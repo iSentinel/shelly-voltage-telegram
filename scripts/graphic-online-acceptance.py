@@ -11,7 +11,6 @@ import struct
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -44,30 +43,6 @@ def arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def verified_forecast(cache: Path, clock: float, group: str) -> dict:
-    """Accept only checksum-verified, fresh YASNO source and retrieval time."""
-
-    from yasno_cache import read_verified_cache
-    from yasno_schedule import parse_schedule
-
-    try:
-        payload, captured = read_verified_cache(str(cache))
-        parsed = parse_schedule(
-            payload,
-            group,
-            datetime.fromtimestamp(clock, timezone.utc),
-            captured,
-        )
-    except (ValueError, OSError, KeyError, TypeError):
-        raise ValueError("FORECAST_INVALID") from None
-    return {
-        "bars": parsed.bars,
-        "day": parsed.day,
-        "forecast_updated": parsed.retrieved_at,
-        "forecast_source": "yasno",
-    }
-
-
 def local_state(args: argparse.Namespace, clock: float, checks) -> dict:
     """Require real fresh voltage and optionally fresh YASNO schedule data."""
 
@@ -82,7 +57,9 @@ def local_state(args: argparse.Namespace, clock: float, checks) -> dict:
     options = {"group": args.group, "now": clock, "language": "uk"}
     if args.verified_yasno_cache:
         options.update(
-            verified_forecast(args.verified_yasno_cache, clock, args.group)
+            checks.verified_forecast(
+                args.verified_yasno_cache, clock, args.group
+            )
         )
     elif args.forecast_file:
         forecast = checks.read_fixture(args.forecast_file)
