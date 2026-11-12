@@ -13,7 +13,12 @@ from zoneinfo import ZoneInfo
 from PIL import Image
 
 from telegram_card_png import HEIGHT, WIDTH, render_card_png
-from telegram_card_v5 import font
+from telegram_card_v5 import (
+    PAST_COLORS,
+    Painter,
+    font,
+    visible_periods,
+)
 
 KYIV = ZoneInfo("Europe/Kyiv")
 NOW = datetime(2026, 11, 12, 16, 45, tzinfo=KYIV).timestamp()
@@ -180,6 +185,103 @@ class GraphicV5Tests(unittest.TestCase):
                 payload["v"] = voltage
                 report, _ = self.render(payload)
                 self.assertFalse(report["live_voltage_visible"])
+
+    def test_every_hour_has_a_visible_timestamp(self):
+        """Restore 00:00 through 23:00 labels in a six-by-four grid."""
+
+        original = Painter.text
+        with patch.object(
+            Painter, "text", autospec=True, side_effect=original
+        ) as writer:
+            self.render(state())
+        stamps = {
+            call.args[3]: (call.args[1], call.args[2])
+            for call in writer.call_args_list
+            if isinstance(call.args[3], str)
+        }
+        for hour in range(24):
+            label = f"{hour:02d}:00"
+            with self.subTest(hour=hour):
+                self.assertIn(label, stamps)
+                x, y = stamps[label]
+                self.assertGreaterEqual(x, 64)
+                self.assertLess(x, 893)
+                self.assertEqual(y, 421 + 40 * (hour // 6))
+
+    def test_half_hour_color_changes_survive_hourly_layout(self):
+        """08:00–08:30 light and 08:30–09:00 outage stay distinct."""
+
+        original = Painter.rect
+        with patch.object(
+            Painter, "rect", autospec=True, side_effect=original
+        ) as drawing:
+            self.render(state())
+        rectangles = {
+            (call.args[1], call.args[2]) for call in drawing.call_args_list
+        }
+        self.assertIn(((344, 453, 409, 488), PAST_COLORS["O"]), rectangles)
+        self.assertIn(((409, 453, 474, 488), PAST_COLORS["X"]), rectangles)
+
+    def test_six_exact_periods_return_in_text(self):
+        """Show start/end/duration with 24:00 intact below the tiles."""
+
+        original = Painter.text
+        with patch.object(
+            Painter, "text", autospec=True, side_effect=original
+        ) as writer:
+            self.render(state())
+        text = [call.args[3] for call in writer.call_args_list]
+        expected = (
+            "00:00 – 04:00 (≈4 год.)",
+            "04:00 – 08:30 (≈4.5 год.)",
+            "08:30 – 16:00 (≈7.5 год.)",
+            "16:00 – 17:30 (≈1.5 год.)",
+            "17:30 – 22:00 (≈4.5 год.)",
+            "22:00 – 24:00 (≈2 год.)",
+        )
+        for row in expected:
+            with self.subTest(row=row):
+                self.assertIn(row, text)
+        self.assertEqual(len(visible_periods(state()["b"])), 6)
+
+    def test_overflow_is_disclosed_not_silently_dropped(self):
+        """Rapidly alternating schedules show a clear more-rows label."""
+
+        payload = state()
+        payload["b"] = "OX" * 24
+        original = Painter.text
+        with patch.object(
+            Painter, "text", autospec=True, side_effect=original
+        ) as writer:
+            self.render(payload)
+        content = [call.args[3] for call in writer.call_args_list]
+        self.assertIn("ЩЕ 43 ІНТЕРВАЛІВ", content)
+        self.assertEqual(len(visible_periods(payload["b"])), 5)
+
+    def test_period_labels_fit_without_overlapping_status(self):
+        """Long Ukrainian headings must remain inside their columns."""
+
+        painter = Painter()
+        left = "08:30 – 16:00 (≈7.5 год.)"
+        right = "ПЛАНОВЕ ВІДКЛЮЧЕННЯ"
+        self.assertLess(92 + painter.measure(left, 17, "medium"), 578)
+        self.assertLess(592 + painter.measure(right, 15), 900)
+
+    def test_current_half_hour_keeps_a_visible_outline(self):
+        """The current 16:30 slot must have a white border."""
+
+        original = Painter.rect
+        with patch.object(
+            Painter, "rect", autospec=True, side_effect=original
+        ) as drawing:
+            self.render(state())
+        current = [
+            call
+            for call in drawing.call_args_list
+            if call.kwargs.get("border") == "#F3F7FF"
+        ]
+        self.assertEqual(len(current), 1)
+        self.assertEqual(current[0].args[1], (690, 494, 753, 527))
 
     def test_font_packages_and_pillow_are_built_into_docker(self):
         """Avoid creating a build that works only with host font files."""

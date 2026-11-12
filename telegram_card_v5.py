@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from telegram_schedule_periods import duration_label, schedule_periods
+
 from telegram_card_png import (
     HEIGHT,
     KYIV,
@@ -151,81 +153,91 @@ def unavailable_measurement(painter: Painter, status: str) -> None:
 
 
 def forecast_legend(painter: Painter) -> None:
-    """Use compact, smooth keys instead of pixel icons and crossings."""
+    """Explain each forecast state without confusing it with a meter."""
 
     for x, marker, caption in (
         (64, "O", "Є світло"),
         (290, "X", "Відключення"),
-        (553, "?", "Можливо"),
+        (558, "?", "Можливо"),
     ):
-        painter.rect((x, 447, x + 15, 462), SLOT_COLORS[marker], 7)
-        painter.text(x + 26, 443, caption, 17, MUTED, "medium")
+        painter.rect((x, 580, x + 13, 593), SLOT_COLORS[marker], 6)
+        painter.text(x + 21, 577, caption, 15, MUTED, "medium")
 
 
-def halfday_track(
-    painter: Painter, bars: str, current: int, lane: int
-) -> None:
-    """Render one 12-hour lane as 24 anti-aliased half-hour blocks."""
+def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
+    """Render one labelled hour with both independent half-hour states."""
 
-    y, first = 499 + lane * 93, lane * 24
-    for column in range(24):
-        index, x = first + column, 64 + column * 35
-        marker = bars[index]
-        color = PAST_COLORS[marker] if index < current else SLOT_COLORS[marker]
-        painter.rect((x, y, x + 32, y + 38), color, 7)
+    x = 64 + 140 * (hour % 6)
+    y = 413 + 40 * (hour // 6)
+    for half in range(2):
+        index = hour * 2 + half
+        left = x + half * 65
+        kind = bars[index]
+        color = PAST_COLORS[kind] if index < current else SLOT_COLORS[kind]
+        painter.rect((left, y, left + 65, y + 35), color, 5)
         if index == current:
             painter.rect(
-                (x - 2, y - 2, x + 34, y + 40),
+                (left + 1, y + 1, left + 64, y + 34),
                 None,
-                9,
+                5,
                 border=TEXT,
                 stroke=2,
             )
-    for hour in (0, 3, 6, 9, 12):
-        x = min(866, 64 + 70 * hour)
-        painter.text(x, y + 47, f"{lane * 12 + hour:02d}:00", 14, MUTED)
-
-
-def current_forecast(bars: str, now: float) -> str:
-    """Label schedule-only states without asserting actual electricity."""
-
-    timepoint = datetime.fromtimestamp(now, KYIV)
-    index = timepoint.hour * 2 + timepoint.minute // 30
-    return {
-        "O": "За графіком зараз є світло",
-        "X": "За графіком зараз відключення",
-        "?": "За графіком можливе відключення",
-    }[bars[index]]
-
-
-def forecast_footer(
-    painter: Painter, bars: str, state: dict, now: float
-) -> None:
-    """Provide bounded forecast totals with a clear provenance label."""
-
-    painter.rect((62, 677, 898, 729), PANEL_LIGHT, 14)
-    painter.text(80, 692, current_forecast(bars, now), 19, TEXT, "medium")
-    off_hours = f"{bars.count('X') / 2:g}".replace(".", ",")
-    painter.text(729, 692, f"План.: {off_hours} год", 16, RED, "semibold")
-    checked = datetime.fromtimestamp(state["u"], KYIV).strftime("%H:%M")
+    hour_label = f"{hour:02d}:00"
+    advance = painter.measure(hour_label, 18, "semibold")
     painter.text(
-        63,
-        746,
-        "Лише прогноз YASNO · перевірено " + checked,
-        15,
-        MUTED,
+        x + (130 - advance) / 2,
+        y + 8,
+        hour_label,
+        18,
+        TEXT,
+        "semibold",
     )
+
+
+def visible_periods(bars: str) -> list[tuple[str, str, str, int]]:
+    """Retain up to six ordered forecast periods with an overflow marker."""
+
+    intervals = schedule_periods(bars)
+    return intervals if len(intervals) <= 6 else intervals[:5]
+
+
+def forecast_periods(painter: Painter, bars: str) -> None:
+    """Restore the old readable textual outage schedule under the grid."""
+
+    names = {
+        "O": "ЗА ГРАФІКОМ Є СВІТЛО",
+        "X": "ПЛАНОВЕ ВІДКЛЮЧЕННЯ",
+        "?": "МОЖЛИВЕ ВІДКЛЮЧЕННЯ",
+    }
+    rows = visible_periods(bars)
+    for index, (kind, start, end, minutes) in enumerate(rows):
+        y = 608 + 24 * index
+        painter.rect((65, y + 4, 79, y + 18), SLOT_COLORS[kind], 4)
+        window = f"{start} – {end} ({duration_label(minutes)})"
+        painter.text(92, y, window, 17, TEXT, "medium")
+        painter.text(592, y + 1, names[kind], 15, SLOT_COLORS[kind])
+    extra = len(schedule_periods(bars)) - len(rows)
+    if extra:
+        painter.text(
+            92,
+            608 + 24 * len(rows),
+            f"ЩЕ {extra} ІНТЕРВАЛІВ",
+            17,
+            AMBER,
+            "semibold",
+        )
 
 
 def forecast_panel(
     painter: Painter, state: dict, bars: str, now: float
 ) -> None:
-    """Draw readable two-lane YASNO slots, never physical power history."""
+    """Keep all 24 labelled hours and the textual period breakdown."""
 
-    painter.rect((34, 336, 926, 777), PANEL, 26)
-    painter.text(63, 355, "Графік відключень", 29, TEXT, "semibold")
+    painter.rect((34, 336, 926, 787), PANEL, 26)
+    painter.text(63, 352, "Графік відключень", 27, TEXT, "semibold")
     day = datetime.fromtimestamp(now, KYIV).strftime("%d.%m.%Y")
-    painter.text(63, 404, "YASNO · ДТЕК Київ  ·  " + day, 17, MUTED)
+    painter.text(63, 387, "YASNO · ДТЕК Київ  ·  " + day, 16, MUTED)
     painter.rect((737, 356, 898, 396), PANEL_LIGHT, 15)
     painter.text(
         754,
@@ -236,15 +248,23 @@ def forecast_panel(
         "semibold",
     )
     if not bars:
-        painter.text(64, 501, "Актуального графіка немає", 28, MUTED)
-        painter.text(64, 550, "Дані YASNO відсутні або застарілі", 18, MUTED)
+        painter.text(64, 476, "Актуального графіка немає", 28, MUTED)
+        painter.text(64, 532, "Дані YASNO відсутні або застарілі", 18, MUTED)
         return
+    local = datetime.fromtimestamp(now, KYIV)
+    current = local.hour * 2 + local.minute // 30
+    for hour in range(24):
+        hourly_tile(painter, bars, hour, current)
     forecast_legend(painter)
-    current_time = datetime.fromtimestamp(now, KYIV)
-    current = current_time.hour * 2 + current_time.minute // 30
-    halfday_track(painter, bars, current, 0)
-    halfday_track(painter, bars, current, 1)
-    forecast_footer(painter, bars, state, now)
+    forecast_periods(painter, bars)
+    checked = datetime.fromtimestamp(state["u"], KYIV).strftime("%H:%M")
+    painter.text(
+        64,
+        764,
+        "Лише прогноз YASNO · перевірено " + checked,
+        13,
+        MUTED,
+    )
 
 
 def render_card_v5(

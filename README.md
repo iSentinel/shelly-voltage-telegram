@@ -188,6 +188,11 @@ The proposed Docker image installs Debian's Inter and Noto Sans font
 packages and Pillow 11.3.x. It enables TELEGRAM_GRAPHIC_STYLE=v5, a
 FreeType anti-aliased renderer with double-resolution Lanczos downsampling
 to 960x800. No font installation is needed on the production host.
+Design Polish v5.1 restores the detailed YASNO schedule: 24 labelled hours
+in a 6-by-4 grid, independently colored half-hour segments, a clear
+current-interval outline, and up to six chronological text rows showing
+outage/supply start, end and duration (plus overflow count when needed).
+This schedule is a forecast, not a measurement of mains availability.
 The dependency-free v4 bitmap renderer remains available through
 TELEGRAM_GRAPHIC_STYLE=v4. Unknown values fail closed.
 
