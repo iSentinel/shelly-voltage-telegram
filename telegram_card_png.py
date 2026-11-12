@@ -179,7 +179,7 @@ def draw_voltage(pixels: bytearray, result: dict, now: float) -> None:
         )
         label(pixels, "ОНОВЛЕНО " + last, 653, 255, MUTED, 2)
     else:
-        label(pixels, "--- В", 60, 205, AMBER, 8)
+        draw_voltage_type(pixels, WIDTH, "---", 60, 199, AMBER, AMBER)
         label(pixels, "ДАНІ НЕДОСТУПНІ", 430, 225, MUTED, 3)
 
 
