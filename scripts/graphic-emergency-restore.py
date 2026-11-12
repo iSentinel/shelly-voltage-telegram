@@ -45,7 +45,7 @@ def state(args: list[str]) -> str:
 
 
 def production_running() -> bool:
-    """Check current service, boot activation and Docker restart policy."""
+    """Require an active service, healthy container and boot protection."""
 
     try:
         return (
@@ -61,6 +61,16 @@ def production_running() -> bool:
                 ]
             )
             == "true"
+            and state(
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{.State.Health.Status}}",
+                    CONTAINER,
+                ]
+            )
+            == "healthy"
             and state(
                 [
                     "docker",
