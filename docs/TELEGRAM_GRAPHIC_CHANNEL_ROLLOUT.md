@@ -240,6 +240,27 @@ python3 scripts/graphic-offline-acceptance.py \
   --group 10.1 --jsonl
 ```
 
+For an independently verified YASNO forecast, prefer the mutually
+exclusive `--verified-yasno-cache` argument. This uses the same bounded
+cache verifier for online and offline QA, with origin metadata, SHA256
+checksum, actual retrieval freshness, provider publication freshness,
+and the Kyiv calendar day checked before any PNG is written:
+
+~~~bash
+python3 scripts/graphic-offline-acceptance.py \
+  --health-file /run/private-qa/synthetic-offline.json \
+  --verified-yasno-cache /var/lib/shelly-yasno-reader/yasno.json \
+  --output /run/private-qa/graphic-offline-acceptance.png \
+  --group 10.1 --jsonl
+~~~
+
+The health file above is an explicitly **synthetic offline test** while
+production Shelly is online; it must never be described as a real outage.
+The resulting card must hide old voltage even when the verified YASNO
+schedule is visible. A cache checksum is not a cryptographic
+provider signature. Use 0600 private files in a root-only directory and
+delete the disposable PNG after inspection. No Bot API writes occur.
+
 Optional `--forecast-file` is a local JSON object with exactly
 `bars` (48 half-hour slots), `day` (Kyiv date), `updated` (Unix
 timestamp) and `source` (`yasno`). Expired or mismatched forecast
