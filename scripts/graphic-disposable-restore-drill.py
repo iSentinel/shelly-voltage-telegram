@@ -41,8 +41,16 @@ def production_ok() -> bool:
 
     return (
         command(["systemctl", "is-active", WRITER]) == "active"
-        and command(["docker", "inspect", "--format",
-                     "{{.State.Health.Status}}", CONTAINER]) == "healthy"
+        and command(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{.State.Health.Status}}",
+                CONTAINER,
+            ]
+        )
+        == "healthy"
     )
 
 
@@ -92,11 +100,17 @@ def create_disposable(writer: str, watchdog: str, restore: Path) -> None:
     command(["systemctl", "stop", writer])
     if unit_value(writer, "ActiveState") != "inactive":
         raise RuntimeError("DISPOSABLE_WRITER_NOT_STOPPED")
-    command([
-        "systemd-run", f"--unit={watchdog}", "--on-active=2s",
-        "--on-unit-active=2s", "--timer-property=AccuracySec=1s",
-        "/bin/sh", str(restore),
-    ])
+    command(
+        [
+            "systemd-run",
+            f"--unit={watchdog}",
+            "--on-active=2s",
+            "--on-unit-active=2s",
+            "--timer-property=AccuracySec=1s",
+            "/bin/sh",
+            str(restore),
+        ]
+    )
 
 
 def cleanup(writer: str, watchdog: str, work: Path) -> None:
@@ -116,16 +130,12 @@ def verify_retry(work: Path, writer: str, healthy: Path) -> dict:
     if not wait_until(lambda: (work / "failed").is_file()):
         raise RuntimeError("NO_FAILED_HEALTH_RESTORE_ATTEMPT")
     report = {"unhealthy_restore_rejected": True}
-    report["writer_restarted"] = (
-        unit_value(writer, "ActiveState") == "active"
-    )
+    report["writer_restarted"] = unit_value(writer, "ActiveState") == "active"
     healthy.touch(mode=0o600)
     if not wait_until(lambda: (work / "passed").is_file()):
         raise RuntimeError("NO_SUCCESSFUL_TIMER_RETRY")
     report["health_verified_after_retry"] = True
-    report["writer_healthy"] = (
-        unit_value(writer, "ActiveState") == "active"
-    )
+    report["writer_healthy"] = unit_value(writer, "ActiveState") == "active"
     return report
 
 
@@ -148,13 +158,15 @@ def exercise() -> dict:
     finally:
         cleanup(writer, watchdog, work)
     report["production_healthy_after"] = production_ok()
-    report["pass"] = all((
-        report.get("unhealthy_restore_rejected"),
-        report.get("writer_restarted"),
-        report.get("health_verified_after_retry"),
-        report.get("writer_healthy"),
-        report["production_healthy_after"],
-    ))
+    report["pass"] = all(
+        (
+            report.get("unhealthy_restore_rejected"),
+            report.get("writer_restarted"),
+            report.get("health_verified_after_retry"),
+            report.get("writer_healthy"),
+            report["production_healthy_after"],
+        )
+    )
     return report
 
 
