@@ -85,6 +85,8 @@ def read_samples(database: Path, start: float, end: float) -> tuple:
         raise ValueError("DATABASE_UNSAFE")
     uri = "file:" + quote(str(database.resolve())) + "?mode=ro"
     with closing(sqlite3.connect(uri, uri=True)) as db:
+        # One read transaction keeps both SELECTs on the same WAL snapshot.
+        db.execute("BEGIN")
         rows = db.execute(
             "select ts,voltage,frequency from measurements "
             "where ts >= ? and ts < ? order by ts",
@@ -95,6 +97,7 @@ def read_samples(database: Path, start: float, end: float) -> tuple:
             "and (ended_at is null or ended_at > ?)",
             (end, start),
         ).fetchone()[0]
+        db.rollback()
     return rows, outages
 
 
