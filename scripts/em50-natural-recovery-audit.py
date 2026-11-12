@@ -92,6 +92,8 @@ def read_state(db_path: Path, grace: int) -> dict:
     if not db_path.is_file():
         raise ValueError("SQLite database missing")
     with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as db:
+        # Incident, sample counts and metadata must share one WAL snapshot.
+        db.execute("BEGIN")
         integrity = db.execute("PRAGMA quick_check").fetchone()[0]
         outage = db.execute(
             "SELECT id,started_at,ended_at,phase FROM outages "
@@ -108,6 +110,7 @@ def read_state(db_path: Path, grace: int) -> dict:
             "SELECT EXISTS(SELECT 1 FROM meta "
             "WHERE key='telegram_status_message_id' AND value!='')"
         ).fetchone()[0]
+        db.rollback()
     return {
         "integrity": integrity,
         "outage_id": ident,
