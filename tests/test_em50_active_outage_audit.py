@@ -6,6 +6,7 @@ import importlib.util
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,7 +28,7 @@ class ActiveOutageAuditTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.path = Path(temporary.name) / "test.sqlite3"
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.executescript(
                 "CREATE TABLE measurements ("
                 "id INTEGER PRIMARY KEY,ts REAL,voltage REAL,"
@@ -57,7 +58,7 @@ class ActiveOutageAuditTests(unittest.TestCase):
     def update(self, sql: str):
         """Edit only the temporary database used by the test."""
 
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute(sql)
 
     def rejects(self, reason: str):
