@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from telegram_card_png import (
@@ -139,7 +140,13 @@ class GraphicPolishV4Tests(unittest.TestCase):
         state = {"schema": 1, "s": "offline", "v": 213.0}
         with tempfile.TemporaryDirectory(prefix="polish-v4-") as folder:
             target = Path(folder) / "offline.png"
-            report = render_card_png(state, target, now)
+            with mock.patch(
+                "telegram_card_png.draw_voltage_type",
+                wraps=draw_voltage_type,
+            ) as rendered_unit:
+                report = render_card_png(state, target, now)
+            rendered_unit.assert_called_once()
+            self.assertEqual(rendered_unit.call_args.args[2], "---")
             self.assertEqual(report["status"], "offline")
             self.assertFalse(report["live_voltage_visible"])
             self.assertFalse(report["forecast_visible"])
