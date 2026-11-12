@@ -49,28 +49,36 @@ python3 scripts/graphic-emergency-restore.py --arm --execute   --minutes 15 --ow
 systemctl is-active shelly-graphic-emergency-restore.timer
 ~~~
 
-The watchdog must be **active before any stop**. It pins a root-only
-copy outside the candidate checkout and starts a separate systemd
-timer. After 15 minutes it restores the original service and Docker
-restart policy; if restoration fails, it retries every minute.
-The maintenance process must require a VERIFIED watchdog.
+The watchdog must be **active before any stop**, and its separate
+root-only boot-rescue service must be enabled. Before the service
+is disabled, the watchdog installs its own root-owned startup
+unit and a protected armed marker. Its timer restores after the
+approved deadline; if LXC reboots while the writer is stopped,
+the boot-rescue service restarts the monitor and retries failures.
 
-For the writer-stopped window, use a **runtime-only systemd mask**
-rather than permanently disabling the boot-enabled service. This
-allows systemd to start the service again after an LXC reboot.
-Only a reviewed maintenance procedure should then execute:
+Do not use systemctl mask --runtime for the existing installed
+compose unit. On this server with systemd 257, live disposable
+tests showed that it **did not prevent a manual restart**, even
+after daemon-reload. Keep this proven limitation in the runbook.
+
+After the independent timer and boot-rescue service have both
+been verified, a reviewed maintenance procedure may fence the
+writer using Docker restart=no and systemd disable --now:
 
 ~~~bash
 docker update --restart=no shelly-voltage-bot
-systemctl mask --runtime --now shelly-voltage-compose.service
+systemctl disable --now shelly-voltage-compose.service
 systemctl is-active shelly-voltage-compose.service || true
 systemctl is-enabled shelly-voltage-compose.service || true
+systemctl is-active shelly-graphic-emergency-restore.timer
+systemctl is-enabled shelly-graphic-emergency-boot.service
 ~~~
 
-The A/B and exact Telegram guards must see inactive Docker, inactive
-systemd, runtime mask, and Docker restart=no. Revalidate the
-watchdog between each stage. The watchdog may reactivate the writer;
-in that case, stop, discard staged archives, and require fresh A/B.
+A/B and Telegram guards must reject any active writer, enabled
+production startup or Docker restart policy other than no.
+Recheck both independent rescue mechanisms at each stage.
+If the timer restores the writer, stop immediately: do not publish
+stale A/B archives or attempt to repeat a Telegram edit.
 
 After successful restoration and health review, cancel the timer
 using the same copied exact script:
