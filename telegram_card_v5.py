@@ -11,8 +11,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from telegram_schedule_periods import duration_label, schedule_periods
-
 from telegram_card_png import (
     HEIGHT,
     KYIV,
@@ -20,6 +18,7 @@ from telegram_card_png import (
     current_measurement,
     valid_forecast,
 )
+from telegram_schedule_periods import duration_label, schedule_periods
 
 SCALE = 2
 BACKGROUND = "#0B1422"
