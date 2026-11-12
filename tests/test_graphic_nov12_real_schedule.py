@@ -154,6 +154,49 @@ class VerifiedNov12ScheduleTests(unittest.TestCase):
                 self.assertNotIn("213.4", caption)
                 self.assertIn("Немає зв'язку", caption)
 
+    def test_0830_planned_on_to_off_keeps_fresh_shelly_reading(self):
+        """A forecast O-to-X transition cannot conceal live voltage."""
+
+        before = local_time(8, 29, 59)
+        after = local_time(8, 30, 0)
+        self.assertEqual(VERIFIED_BARS[16:18], "OX")
+        for clock, state_letter in ((before, "O"), (after, "X")):
+            with self.subTest(forecast=state_letter):
+                state = self.widget(clock, True, 222.4)
+                card = render_card_png(
+                    json.loads(state),
+                    self.folder / f"0830-online-{state_letter}.png",
+                    now=clock,
+                )
+                caption = widget_fallback_text(state, now=clock)
+                self.assertEqual(card["status"], "online")
+                self.assertTrue(card["live_voltage_visible"])
+                self.assertTrue(card["forecast_visible"])
+                self.assertIn("222.4", caption)
+                self.assertIn("Прогноз", caption)
+
+    def test_0830_forecast_change_never_creates_physical_outage(self):
+        """If the meter is offline, no YASNO state reveals old volts."""
+
+        before = local_time(8, 29, 59)
+        after = local_time(8, 30, 0)
+        for clock, state_letter in ((before, "O"), (after, "X")):
+            with self.subTest(forecast=state_letter):
+                state = self.widget(clock, False, 222.4)
+                data = json.loads(state)
+                card = render_card_png(
+                    data,
+                    self.folder / f"0830-offline-{state_letter}.png",
+                    now=clock,
+                )
+                caption = widget_fallback_text(state, now=clock)
+                self.assertEqual(card["status"], "offline")
+                self.assertFalse(card["live_voltage_visible"])
+                self.assertTrue(card["forecast_visible"])
+                self.assertTrue({"v", "f", "t"}.isdisjoint(data))
+                self.assertNotIn("222.4", caption)
+                self.assertIn("Немає зв'язку", caption)
+
 
 if __name__ == "__main__":
     unittest.main()
