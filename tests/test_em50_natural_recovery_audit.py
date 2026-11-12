@@ -99,6 +99,47 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
         AUDIT.read_state(self.db, 60)
         self.assertEqual(self.db.read_bytes(), before)
 
+    def test_concurrent_writer_cannot_split_incident_snapshot(self):
+        """Closing the incident mid-read cannot produce mixed evidence."""
+        database = self.db
+        now = self.now
+        original_connect = sqlite3.connect
+        with contextlib.closing(original_connect(database)) as db:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.commit()
+
+        class Reader(sqlite3.Connection):
+            """Inject a real committed writer before active-count SELECT."""
+
+            def execute(self, sql, *args, **kwargs):
+                if "SELECT COUNT(*) FROM outages WHERE ended_at" in sql:
+                    with contextlib.closing(
+                        original_connect(database)
+                    ) as writer:
+                        writer.execute(
+                            "UPDATE outages SET ended_at=? WHERE id=18",
+                            (now - 45,),
+                        )
+                        writer.commit()
+                return super().execute(sql, *args, **kwargs)
+
+        def monitored_connect(*args, **kwargs):
+            """Use a read-only instrumented SQLite connection."""
+
+            return original_connect(*args, factory=Reader, **kwargs)
+
+        with patch.object(
+            AUDIT.sqlite3, "connect", side_effect=monitored_connect
+        ):
+            observed = AUDIT.read_state(database, 60)
+        with contextlib.closing(original_connect(database)) as db:
+            closed = db.execute(
+                "SELECT ended_at FROM outages WHERE id=18"
+            ).fetchone()[0]
+        self.assertEqual((observed["end"], observed["active"]), (None, 1))
+        self.assertIsNotNone(closed)
+
     def test_open_incident_is_not_a_recovery(self):
         """Active outage cannot pass despite an optimistic /health."""
 
