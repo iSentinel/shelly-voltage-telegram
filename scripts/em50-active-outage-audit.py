@@ -149,8 +149,9 @@ def inspect_db(path: Path, incident_id: int | None, now: float) -> dict:
     }
 
 
-def verify_health(health: dict, ready_code: int, ready: dict,
-                  state: dict, now: float) -> None:
+def verify_health(
+    health: dict, ready_code: int, ready: dict, state: dict, now: float
+) -> None:
     """Require the offline API state to match historical SQLite data."""
 
     if (
@@ -177,19 +178,13 @@ def verify_health(health: dict, ready_code: int, ready: dict,
 def audit(path: Path, incident_id: int | None, now: float) -> dict:
     """Inspect health before and after an isolated SQLite read."""
 
-    health_code, first = local_json(
-        "http://127.0.0.1:8080/health", "/health"
-    )
-    ready_code, ready = local_json(
-        "http://127.0.0.1:8080/ready", "/ready"
-    )
+    health_code, first = local_json("http://127.0.0.1:8080/health", "/health")
+    ready_code, ready = local_json("http://127.0.0.1:8080/ready", "/ready")
     if health_code != 200:
         raise Blocked("HEALTH_API_INVALID")
     state = inspect_db(path, incident_id, now)
     verify_health(first, ready_code, ready, state, now)
-    after_code, after = local_json(
-        "http://127.0.0.1:8080/health", "/health"
-    )
+    after_code, after = local_json("http://127.0.0.1:8080/health", "/health")
     if (
         after_code != 200
         or after.get("connectivity") != "offline"

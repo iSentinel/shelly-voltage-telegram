@@ -42,8 +42,6 @@ if [[ "$actual_version" != "$REQUIRED_RUFF_VERSION" ]]; then
 fi
 
 cd "$ROOT"
-# Temporary QA diagnostics for Ruff formatting (no source changes).
-ruff format --line-length 79 --diff scripts/em50-active-outage-audit.py tests/test_em50_active_outage_audit.py || true
 ruff format --line-length 79 --check app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_correlation.py dtek_events.py dtek_schedule.py manual_dtek_forecast.py voltage_warning.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_schedule_periods.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_uk_bitmap.py scripts tests
 ruff check --line-length 79 --select E,F,I,UP,SIM app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_correlation.py dtek_events.py dtek_schedule.py manual_dtek_forecast.py voltage_warning.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_schedule_periods.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_uk_bitmap.py scripts tests
 "$PYTHON_BIN" scripts/check-quality.py

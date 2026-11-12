@@ -10,8 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts/em50-active-outage-audit.py"
+    Path(__file__).resolve().parents[1] / "scripts/em50-active-outage-audit.py"
 )
 SPEC = importlib.util.spec_from_file_location("em50_active_outage", SCRIPT)
 AUDIT = importlib.util.module_from_spec(SPEC)
@@ -46,16 +45,12 @@ class ActiveOutageAuditTests(unittest.TestCase):
             "last_success": 1000.01,
             "voltage": 219.9,
         }
-        self.ready = {
-            "ready": False, "reason": "shelly offline"
-        }
+        self.ready = {"ready": False, "reason": "shelly offline"}
 
     def execute(self):
         """Feed two matching offline states around one SQLite read."""
 
-        replies = [
-            (200, self.health), (503, self.ready), (200, self.health)
-        ]
+        replies = [(200, self.health), (503, self.ready), (200, self.health)]
         with patch.object(AUDIT, "local_json", side_effect=replies):
             return AUDIT.audit(self.path, 27, NOW)
 
@@ -84,9 +79,7 @@ class ActiveOutageAuditTests(unittest.TestCase):
     def test_new_sample_during_outage_fails(self):
         """A contradictory new phase sample must invalidate the incident."""
 
-        self.update(
-            "INSERT INTO measurements VALUES (2,1100,224,50,'L1')"
-        )
+        self.update("INSERT INTO measurements VALUES (2,1100,224,50,'L1')")
         self.rejects("INCIDENT_SEQUENCE")
 
     def test_synthetic_zero_fails(self):
@@ -98,9 +91,7 @@ class ActiveOutageAuditTests(unittest.TestCase):
     def test_future_timestamp_fails(self):
         """A future sample is not acceptable even on another phase."""
 
-        self.update(
-            "INSERT INTO measurements VALUES (0,1900,223,50,'L2')"
-        )
+        self.update("INSERT INTO measurements VALUES (0,1900,223,50,'L2')")
         self.rejects("POST_OUTAGE_DATA_CONFLICT")
 
     def test_closed_event_does_not_pass(self):
@@ -112,9 +103,7 @@ class ActiveOutageAuditTests(unittest.TestCase):
     def test_wrong_incident_id_fails(self):
         """Do not silently accept evidence from a different incident."""
 
-        with self.assertRaisesRegex(
-            AUDIT.Blocked, "INCIDENT_ID_MISMATCH"
-        ):
+        with self.assertRaisesRegex(AUDIT.Blocked, "INCIDENT_ID_MISMATCH"):
             AUDIT.inspect_db(self.path, 26, NOW)
 
     def test_online_state_is_not_an_active_outage(self):
@@ -144,12 +133,8 @@ class ActiveOutageAuditTests(unittest.TestCase):
     def test_missing_database_is_rejected(self):
         """A nonexistent SQLite file must never become a PASS."""
 
-        with self.assertRaisesRegex(
-            AUDIT.Blocked, "DATABASE_UNAVAILABLE"
-        ):
-            AUDIT.inspect_db(
-                Path("/nonexistent/em50-test.sqlite3"), 27, NOW
-            )
+        with self.assertRaisesRegex(AUDIT.Blocked, "DATABASE_UNAVAILABLE"):
+            AUDIT.inspect_db(Path("/nonexistent/em50-test.sqlite3"), 27, NOW)
 
     def test_non_loopback_api_is_rejected(self):
         """The command cannot be used as a generic network fetcher."""
