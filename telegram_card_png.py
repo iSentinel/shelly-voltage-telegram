@@ -13,6 +13,8 @@ from zoneinfo import ZoneInfo
 
 from advanced_features import CHART_FONT, write_png
 from telegram_schedule_periods import duration_label, schedule_periods
+from telegram_smooth_bitmap import smooth_label
+from telegram_smooth_type import draw_voltage_type
 from telegram_uk_bitmap import UKRAINIAN_FONT
 from telegram_widget_data import (
     MAX_FORECAST_AGE,
@@ -95,22 +97,9 @@ def label(
     color: bytes = INK,
     size: int = 3,
 ) -> None:
-    """Paint a bounded ASCII glyph label in the image."""
+    """Paint softly antialiased UI labels with no extra dependencies."""
 
-    for char in value.upper()[:85]:
-        glyph = FONT.get(char, FONT[" "])
-        for row, line in enumerate(glyph):
-            for col, enabled in enumerate(line):
-                if enabled == "1":
-                    rectangle(
-                        pixels,
-                        x + col * size,
-                        y + row * size,
-                        x + (col + 1) * size,
-                        y + (row + 1) * size,
-                        color,
-                    )
-        x += 6 * size
+    smooth_label(pixels, value, x, y, color, size, FONT, WIDTH, HEIGHT)
 
 
 def current_measurement(state: dict, now: float) -> dict:
@@ -181,8 +170,7 @@ def draw_voltage(pixels: bytearray, result: dict, now: float) -> None:
     label(pixels, "НАПРУГА МЕРЕЖІ / L1", 60, 153, MUTED, 3)
     if result["status"] == "online":
         voltage = f"{result['voltage']:.1f}"
-        label(pixels, voltage, 60, 199, INK, 9)
-        label(pixels, "В", 350, 230, GREEN, 6)
+        draw_voltage_type(pixels, WIDTH, voltage, 60, 199, INK, GREEN)
         frequency = result.get("frequency")
         freq_text = f"{frequency:.2f} ГЦ" if frequency is not None else "-- ГЦ"
         label(pixels, freq_text, 653, 195, INK, 4)
@@ -236,19 +224,49 @@ def draw_schedule_rows(
         label(pixels, f"ЩЕ {len(periods) - 4} ІНТЕРВАЛІВ", 104, 714, AMBER, 3)
 
 
-def draw_hour_tiles(pixels: bytearray, bars: str) -> None:
-    """Draw 24 labeled hours; split an hour when half-hour states differ."""
+def strike_past_tile(pixels: bytearray, x: int, y: int, color: bytes) -> None:
+    """Dim one completed half-hour and draw a thin upward strike."""
+
+    faded = bytes(
+        (part * 42 + panel * 58) // 100 for part, panel in zip(color, PANEL)
+    )
+    rectangle(pixels, x, y, x + 66, y + 40, faded, 5)
+    for step in range(54):
+        col = x + 6 + step
+        row = y + 34 - (step * 29 // 53)
+        rectangle(pixels, col, row, col + 2, row + 1, MUTED)
+
+
+def outline_current_tile(pixels: bytearray, x: int, y: int) -> None:
+    """Mark the active half-hour without changing the forecast color."""
+
+    rectangle(pixels, x + 2, y + 1, x + 64, y + 3, AMBER)
+    rectangle(pixels, x + 2, y + 37, x + 64, y + 39, AMBER)
+    rectangle(pixels, x + 1, y + 3, x + 3, y + 37, AMBER)
+    rectangle(pixels, x + 63, y + 3, x + 65, y + 37, AMBER)
+
+
+def draw_hour_tiles(pixels: bytearray, bars: str, now: float) -> None:
+    """Differentiate completed, active and future half-hour forecast slots."""
 
     colors = {"O": GREEN, "X": RED, "?": AMBER}
+    local = datetime.fromtimestamp(now, KYIV)
+    current = local.hour * 2 + local.minute // 30
     for hour in range(24):
-        x = 60 + 140 * (hour % 6)
-        y = 383 + 45 * (hour // 6)
+        x, y = 60 + 140 * (hour % 6), 383 + 45 * (hour // 6)
         first, second = bars[2 * hour : 2 * hour + 2]
         if first == second:
             rectangle(pixels, x, y, x + 132, y + 40, colors[first], 7)
         else:
             rectangle(pixels, x, y, x + 66, y + 40, colors[first], 5)
             rectangle(pixels, x + 66, y, x + 132, y + 40, colors[second], 5)
+        for half, kind in enumerate((first, second)):
+            index = hour * 2 + half
+            tile_x = x + half * 66
+            if index < current:
+                strike_past_tile(pixels, tile_x, y, colors[kind])
+            elif index == current:
+                outline_current_tile(pixels, tile_x, y)
         label(pixels, f"{hour:02d}:00", x + 20, y + 9, INK, 3)
 
 
@@ -306,7 +324,7 @@ def draw_timeline(
     local_day = datetime.fromtimestamp(now, KYIV).strftime("%d.%m.%Y")
     label(pixels, local_day, 516, 352, MUTED, 2)
     label(pixels, "ГРУПА " + str(state["g"]), 734, 347, BLUE, 3)
-    draw_hour_tiles(pixels, bars)
+    draw_hour_tiles(pixels, bars, now)
     draw_forecast_legend(pixels, state)
     draw_schedule_rows(pixels, schedule_periods(bars))
     draw_forecast_totals(pixels, bars)
