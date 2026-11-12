@@ -90,7 +90,7 @@ class OfflineYasnoAcceptanceTests(unittest.TestCase):
         self.assertIn("YASNO", result)
         self.assertIn("группа 10.1", result)
         self.assertIn("Прогноз, а не измерение", result)
-        self.assertIn("04:00–11:30", result)
+        self.assertIn("🪫04:00 - 11:30 (≈7.5 ч.)", result)
         self.assert_no_stale_voltage(result)
 
     def test_ru_uk_en_keep_offline_and_forecast_labels(self):

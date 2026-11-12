@@ -121,8 +121,8 @@ class TelegramChannelYasnoTests(unittest.TestCase):
         self.assertIn("YASNO", result)
         self.assertIn("ДТЕК Київ", result)
         self.assertIn("группа 10.1", result)
-        self.assertIn("04:00–11:30", result)
-        self.assertIn("14:30–22:00", result)
+        self.assertIn("04:00 - 11:30", result)
+        self.assertIn("14:30 - 22:00", result)
         self.assertIn("Прогноз, а не измерение", result)
         fetch.assert_not_called()
 
@@ -223,7 +223,8 @@ class TelegramChannelYasnoTests(unittest.TestCase):
 
         bars = "?" * 4 + "O" * 44
         text = CHANNEL.forecast_section("10.1", bars, "en")
-        self.assertIn("Possible outages: 00:00–02:00", text)
+        self.assertIn("Possible outages:", text)
+        self.assertIn("⚠️00:00 - 02:00 (≈2 h)", text)
         self.assertNotIn("Planned outages:", text)
 
     def test_no_planned_outage_does_not_claim_power_present(self):
@@ -239,7 +240,7 @@ class TelegramChannelYasnoTests(unittest.TestCase):
 
         bars = "XO" * 24
         text = CHANNEL.forecast_section("10.1", bars, "en")
-        self.assertIn("(+18)", text)
+        self.assertIn("(+40)", text)
         self.assertLess(len(text), 500)
 
     def test_telegram_message_length_is_bounded(self):

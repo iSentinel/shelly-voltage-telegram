@@ -86,7 +86,9 @@ jobs:
           SHELLY_WIDGET_HTML="${GITHUB_WORKSPACE}/widgets/voltage_status.html" corepack pnpm tsx packages/core/scripts/shelly-widget-stress.ts
       - name: Install headless browser for official renderer layout
         working-directory: ${{ runner.temp }}/telegram-widget-sandbox
-        run: corepack pnpm exec playwright install --with-deps chromium
+        # Ubuntu runners already provide Chromium shared libraries; avoid apt
+        # during PR validation so transient mirror DNS failures are isolated.
+        run: corepack pnpm exec playwright install chromium
       - name: Check narrow and wide Telegram bubble layouts
         working-directory: ${{ runner.temp }}/telegram-widget-sandbox
         run: |

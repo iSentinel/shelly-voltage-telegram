@@ -10,6 +10,7 @@ import os
 import signal
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 from contextlib import closing, suppress
@@ -47,6 +48,7 @@ from notification_features import (
     update_history,
 )
 from outage_data_ua import read_snapshot
+from telegram_card_png import render_card_png
 from telegram_channel_yasno import append_yasno_forecast
 from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
@@ -1436,6 +1438,38 @@ class Telegram:
             if not message_not_modified(exc):
                 raise
 
+    def verify_existing_text(
+        self, message_id: int, text: str, chat_id: str
+    ) -> bool:
+        """Confirm exactly one existing text post via Telegram's Message."""
+
+        if (
+            type(message_id) is not int
+            or message_id <= 0
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 4096
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
+        ):
+            raise ValueError("invalid legacy status confirmation")
+        result = self.call(
+            "editMessageText",
+            {"chat_id": chat_id, "message_id": message_id, "text": text},
+        )
+        if (
+            not isinstance(result, dict)
+            or type(result.get("message_id")) is not int
+            or result["message_id"] != message_id
+        ):
+            raise RuntimeError("Telegram did not confirm exact text message")
+        chat = result.get("chat")
+        if not isinstance(chat, dict) or str(chat.get("id")) != chat_id:
+            raise RuntimeError("Telegram did not confirm exact chat")
+        if result.get("text") != text or result.get("photo") is not None:
+            raise RuntimeError("Telegram did not confirm text media")
+        return True
+
     def clear_reply_markup(
         self, message_id: int, chat_id: str | None = None
     ) -> None:
@@ -1463,18 +1497,26 @@ class Telegram:
         self.call("answerCallbackQuery", payload)
 
     def send_file(
-        self, method: str, field: str, path: Path, caption: str = ""
+        self,
+        method: str,
+        field: str,
+        path: Path,
+        caption: str = "",
+        chat_id: str | None = None,
+        notify: bool = False,
     ) -> int:
-        """Upload one generated file to the private control chat."""
+        """Upload one file, silent unless explicitly allowed to notify."""
 
         data = {
-            "chat_id": self.cfg.telegram_chat_id,
-            "disable_notification": "true",
+            "chat_id": chat_id or self.cfg.telegram_chat_id,
+            "disable_notification": str(
+                not notify or self.quiet_now()
+            ).lower(),
         }
         if caption:
             data["caption"] = caption
         try:
-            with path.open("rb") as handle:
+            with self.api_lock, path.open("rb") as handle:
                 response = self.api_session.post(
                     f"{self.base}/{method}",
                     data=data,
@@ -1501,6 +1543,150 @@ class Telegram:
         """Send one generated export document."""
 
         return self.send_file("sendDocument", "document", path, caption)
+
+    @staticmethod
+    def validate_status_photo(path: Path, caption: str) -> None:
+        """Fail closed before sending an invalid public status image."""
+
+        if len(caption) > 1024 or path.is_symlink() or not path.is_file():
+            raise ValueError("invalid caption or media path")
+        if path.stat().st_size > 10_000_000:
+            raise ValueError("Telegram photo exceeds limit")
+        with path.open("rb") as handle:
+            if handle.read(8) != bytes.fromhex("89504e470d0a1a0a"):
+                raise ValueError("media is not a PNG")
+
+    def send_status_photo(
+        self, path: Path, caption: str, chat_id: str, notify: bool = False
+    ) -> int:
+        """Publish one photo to an explicit channel; no implicit fallback."""
+
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            raise ValueError("explicit channel required")
+        if not isinstance(caption, str) or not caption.strip():
+            raise ValueError("accessible caption required")
+        self.validate_status_photo(path, caption)
+        return self.send_file(
+            "sendPhoto", "photo", path, caption, chat_id, notify=notify
+        )
+
+    @staticmethod
+    def validate_edited_photo_receipt(
+        result: object, message_id: int, chat_id: str, caption: str
+    ) -> None:
+        """Only a matching Telegram photo reply proves media conversion."""
+
+        if (
+            not isinstance(result, dict)
+            or type(result.get("message_id")) is not int
+            or result["message_id"] != message_id
+        ):
+            raise RuntimeError("Telegram returned unexpected edited message")
+        chat = result.get("chat")
+        if not isinstance(chat, dict) or str(chat.get("id")) != chat_id:
+            raise RuntimeError("Telegram returned unexpected edited chat")
+        photos = result.get("photo")
+        if not isinstance(photos, list) or not photos:
+            raise RuntimeError("Telegram did not confirm photo media")
+        if not any(
+            isinstance(photo, dict) and photo.get("file_id")
+            for photo in photos
+        ):
+            raise RuntimeError("Telegram returned invalid photo media")
+        if result.get("caption") != caption:
+            raise RuntimeError("Telegram did not confirm requested caption")
+
+    def edit_photo(
+        self, message_id: int, path: Path, caption: str, chat_id: str
+    ) -> bool:
+        """Edit a known bot message into PNG media without creating a post."""
+
+        if (
+            isinstance(message_id, bool)
+            or not isinstance(message_id, int)
+            or message_id < 1
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
+        ):
+            raise ValueError("explicit channel and valid message ID required")
+        self.validate_status_photo(path, caption)
+        payload = self._edit_photo_payload(message_id, path, caption, chat_id)
+        if not isinstance(payload, dict):
+            raise RuntimeError("Telegram returned invalid JSON object")
+        if not payload.get("ok"):
+            error = RuntimeError(safe_telegram_api_error(payload))
+            if message_not_modified(error):
+                return False  # A no-op cannot prove text-to-photo conversion.
+            raise error
+        self.validate_edited_photo_receipt(
+            payload.get("result"), message_id, chat_id, caption
+        )
+        return True
+
+    def edit_photo_caption(
+        self, message_id: int, caption: str, chat_id: str
+    ) -> None:
+        """Update a known photo caption without sending a new message."""
+
+        if (
+            type(message_id) is not int
+            or message_id < 1
+            or not isinstance(chat_id, str)
+            or not chat_id.strip()
+            or not isinstance(caption, str)
+            or not caption.strip()
+            or len(caption) > 1024
+        ):
+            raise ValueError("explicit photo target and caption required")
+        try:
+            result = self.call(
+                "editMessageCaption",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "caption": caption,
+                },
+            )
+        except RuntimeError as exc:
+            if message_not_modified(exc):
+                return
+            raise
+        if not isinstance(result, dict):
+            raise RuntimeError("Telegram returned unexpected caption edit")
+        chat = result.get("chat")
+        if (
+            result.get("message_id") != message_id
+            or not isinstance(chat, dict)
+            or str(chat.get("id")) != chat_id
+        ):
+            raise RuntimeError("Telegram returned unexpected caption edit")
+
+    def _edit_photo_payload(
+        self, message_id: int, path: Path, caption: str, chat_id: str
+    ) -> object:
+        """Upload multipart media to an explicit, already-owned message."""
+
+        media = json.dumps(
+            {"type": "photo", "media": "attach://photo", "caption": caption},
+            ensure_ascii=False,
+        )
+        try:
+            with self.api_lock, path.open("rb") as handle:
+                response = self.api_session.post(
+                    f"{self.base}/editMessageMedia",
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": str(message_id),
+                        "media": media,
+                    },
+                    files={"photo": (path.name, handle, "image/png")},
+                    timeout=30,
+                )
+            return response.json()
+        except (OSError, requests.RequestException, ValueError) as exc:
+            raise RuntimeError(
+                f"Telegram media edit failed: {type(exc).__name__}"
+            ) from None
 
     def delete(self, message_id: int, chat_id: str | None = None) -> None:
         """Delete one Telegram message."""
@@ -1886,6 +2072,40 @@ def private_widget_preview_text(monitor: Monitor) -> str:
     )
 
 
+def plan_graphic_status_action(
+    message_id: str | None, media_kind: str, png_ready: bool
+) -> str:
+    """Choose a fail-closed photo update without touching Telegram."""
+
+    if type(png_ready) is not bool:
+        raise ValueError("photo readiness must be explicit")
+    if not message_id:
+        return "send_photo" if png_ready else "send_text"
+    if (
+        type(message_id) is not str
+        or len(message_id) > 20
+        or not message_id.isascii()
+        or not message_id.isdecimal()
+        or int(message_id) < 1
+    ):
+        return "blocked"
+    if media_kind not in {"text", "photo"}:
+        return "blocked"
+    if png_ready:
+        return "edit_photo"
+    return "edit_caption" if media_kind == "photo" else "edit_text"
+
+
+def private_graphic_preview_state(monitor: Monitor) -> str:
+    """Create private read-only meter state and fresh verified YASNO data."""
+
+    with monitor.config_lock:
+        snapshot = monitor.state.snapshot()
+        language = monitor.language
+    forecast = cached_yasno_preview_args() or {}
+    return widget_public_data(snapshot, language=language, **forecast)
+
+
 def compact_preview_text(monitor: Monitor) -> str:
     """Show fresh measurements or explicit unknown status privately."""
 
@@ -2198,6 +2418,7 @@ class Monitor:
         """Create storage, meter clients, Telegram, and runtime state."""
         self.cfg = cfg
         self.config_lock = threading.RLock()
+        self.status_publish_lock = threading.RLock()
         self.storage = Storage(cfg.database_path, cfg.timezone)
         self.meter_type = cfg.shelly_meter_type
         self.state = RuntimeState()
@@ -2703,8 +2924,302 @@ class Monitor:
             return "telegram_status_message_id"
         return "telegram_message_id"
 
+    def legacy_confirmation_pending(self) -> bool:
+        """Never mutate a status after an ambiguous one-shot text edit."""
+
+        return (
+            self.storage.get_meta("telegram_legacy_text_confirm_pending")
+            is not None
+        )
+
+    def status_media_kind(self) -> str:
+        """Read the message-bound format without trusting stale metadata."""
+
+        current = self.storage.get_meta(self.status_message_key())
+        if not current:
+            return "missing"
+        target = self.telegram.status_chat_id
+        if not isinstance(target, str) or not target.strip():
+            return "unknown"
+        bound = self.storage.get_meta("telegram_status_media_identity")
+        if bound == f"text:{target}:{current}":
+            return "text"
+        if bound == f"photo:{target}:{current}":
+            return "photo"
+        return "unknown"
+
+    def record_status_media_kind(
+        self, message_id: int, kind: str, chat_id: str
+    ) -> None:
+        """Bind a verified message format to its channel and stored ID."""
+
+        if type(message_id) is not int or message_id <= 0:
+            raise ValueError("invalid status message ID")
+        if kind not in {"text", "photo"}:
+            raise ValueError("invalid status media kind")
+        if (
+            not isinstance(chat_id, str)
+            or not chat_id.strip()
+            or chat_id != self.telegram.status_chat_id
+        ):
+            raise ValueError("status media destination mismatch")
+        if self.storage.get_meta(self.status_message_key()) != str(message_id):
+            raise ValueError("status media identity mismatch")
+        self.storage.set_meta(
+            "telegram_status_media_identity", f"{kind}:{chat_id}:{message_id}"
+        )
+
+    def edit_existing_status_media(
+        self, text: str, caption: str, photo: Path | None
+    ) -> bool:
+        """Safely edit only an existing, format-verified status message."""
+        if (
+            self.legacy_confirmation_pending()
+            or not isinstance(text, str)
+            or not text.strip()
+            or not isinstance(caption, str)
+            or not caption.strip()
+            or len(caption) > 1024
+        ):
+            return False
+        stored = self.storage.get_meta(self.status_message_key())
+        kind = self.status_media_kind()
+        action = plan_graphic_status_action(stored, kind, photo is not None)
+        if action not in {"edit_photo", "edit_caption", "edit_text"}:
+            return False
+        try:
+            message_id = int(stored)
+            chat = self.telegram.status_chat_id
+            if action == "edit_photo":
+                if kind == "text":
+                    key = "telegram_status_media_identity"
+                    self.storage.set_meta(key, f"unknown:{chat}:{message_id}")
+                edit_confirmed = self.telegram.edit_photo(
+                    message_id, photo, caption, chat
+                )
+                if kind == "text" and edit_confirmed is not True:
+                    raise ValueError("text-to-photo conversion is unverified")
+            elif action == "edit_caption":
+                self.telegram.edit_photo_caption(message_id, caption, chat)
+            else:
+                self.telegram.edit(message_id, text, chat_id=chat)
+            new_kind = "text" if action == "edit_text" else "photo"
+            self.record_status_media_kind(message_id, new_kind, chat)
+        except Exception as exc:
+            logger.warning("Graphic status edit: {}", type(exc).__name__)
+            return False
+        return True
+
+    @staticmethod
+    def valid_legacy_status_target(stored: object, target: object) -> bool:
+        """Reject malformed status IDs and missing destination chats."""
+
+        return bool(
+            isinstance(stored, str)
+            and len(stored) <= 20
+            and stored.isascii()
+            and stored.isdecimal()
+            and int(stored) > 0
+            and isinstance(target, str)
+            and target.strip()
+        )
+
+    def confirm_legacy_text_status(
+        self, text: str, owner_approved: bool
+    ) -> bool:
+        """Verify a legacy text post before any owner-approved conversion."""
+
+        if self.legacy_confirmation_pending():
+            return False
+        if (
+            owner_approved is not True
+            or not isinstance(text, str)
+            or not text.strip()
+            or len(text) > 4096
+        ):
+            return False
+        if (
+            self.storage.get_meta("telegram_graphic_publish_pending")
+            is not None
+        ):
+            return False
+        if self.storage.get_meta("telegram_status_media_identity") is not None:
+            return False
+        stored = self.storage.get_meta(self.status_message_key())
+        target = self.telegram.status_chat_id
+        if not self.valid_legacy_status_target(stored, target):
+            return False
+        try:
+            confirmed = self.telegram.verify_existing_text(
+                int(stored), text, target
+            )
+            if confirmed is not True:
+                return False
+            self.record_status_media_kind(int(stored), "text", target)
+        except Exception as exc:
+            logger.warning(
+                "Legacy status verification: {}", type(exc).__name__
+            )
+            return False
+        return True
+
+    def graphic_channel_opted_in(self) -> bool:
+        """Require an explicit channel and two independent deployment gates."""
+
+        return bool(
+            self.cfg.telegram_status_chat_id
+            and os.getenv("TELEGRAM_GRAPHIC_CHANNEL_ENABLED") == "1"
+            and os.getenv("TELEGRAM_GRAPHIC_OWNER_APPROVED") == "1"
+        )
+
+    def graphic_status_media(
+        self, text: str, folder: str
+    ) -> tuple[Path | None, str]:
+        """Build one guarded card with an accessible, bounded caption."""
+
+        caption = text[:1024]
+        image = Path(folder) / "channel-status.png"
+        try:
+            payload = private_graphic_preview_state(self)
+            render_card_png(json.loads(payload), image)
+        except Exception as exc:
+            logger.warning("Graphic render fallback: {}", type(exc).__name__)
+            return None, caption
+        return image, caption
+
+    def send_graphic_candidate(
+        self, text: str, folder: str, notify: bool
+    ) -> tuple[int, str]:
+        """Upload one candidate; never retry a possibly successful send."""
+
+        image, caption = self.graphic_status_media(text, folder)
+        if image is None:
+            result = self.telegram.send(
+                text, notify=notify, chat_id=self.telegram.status_chat_id
+            )
+            return result, "text"
+        result = self.telegram.send_status_photo(
+            image, caption, self.telegram.status_chat_id, notify=notify
+        )
+        return result, "photo"
+
+    def publish_graphic_status(self, text: str, notify: bool = False) -> bool:
+        """Serialize channel mutations and preserve status identity."""
+
+        with self.status_publish_lock:
+            return self._publish_graphic_status_locked(text, notify)
+
+    def _publish_graphic_status_locked(
+        self, text: str, notify: bool = False
+    ) -> bool:
+        """Persist unresolved uploads so retries cannot duplicate posts."""
+
+        if self.legacy_confirmation_pending():
+            return False
+        key = self.status_message_key()
+        old_id = self.storage.get_meta(key)
+        pending_key = "telegram_graphic_publish_pending"
+        if self.storage.get_meta(pending_key) is not None:
+            return False
+        if old_id and self.status_media_kind() not in {"photo", "text"}:
+            return False
+        try:
+            self.storage.set_meta(
+                pending_key,
+                f"{self.telegram.status_chat_id}:{old_id or 'new'}",
+            )
+            with tempfile.TemporaryDirectory(
+                prefix="shelly-status-"
+            ) as folder:
+                new_id, kind = self.send_graphic_candidate(
+                    text, folder, notify
+                )
+            self.storage.set_meta(key, str(new_id))
+            self.record_status_media_kind(
+                new_id, kind, self.telegram.status_chat_id
+            )
+            self.storage.delete_meta(pending_key)
+        except Exception as exc:
+            logger.warning("Graphic publish pending: {}", type(exc).__name__)
+            return False
+        self.delete_previous_voltage_status(old_id, new_id)
+        self.storage.delete_meta("telegram_status_pinned_id")
+        self.ensure_status_pinned(new_id)
+        return True
+
+    def update_graphic_status(self, text: str) -> bool:
+        """Serialize verified edits with any concurrent new publication."""
+
+        with self.status_publish_lock:
+            return self._update_graphic_status_locked(text)
+
+    def _update_graphic_status_locked(self, text: str) -> bool:
+        """Edit only a known post; never race an uncertain publish."""
+
+        if self.legacy_confirmation_pending():
+            return False
+        if (
+            self.storage.get_meta("telegram_graphic_publish_pending")
+            is not None
+        ):
+            return False
+        if not self.storage.get_meta(self.status_message_key()):
+            return self._publish_graphic_status_locked(text, notify=False)
+        with tempfile.TemporaryDirectory(prefix="shelly-status-") as folder:
+            image, caption = self.graphic_status_media(text, folder)
+            return self.edit_existing_status_media(text, caption, image)
+
+    def legacy_media_guard(self, text: str) -> bool | None:
+        """Keep rollback text safe when a photo or uncertain upload exists."""
+
+        if self.legacy_confirmation_pending():
+            return False
+        if not self.cfg.telegram_status_chat_id:
+            return None
+        pending = self.storage.get_meta("telegram_graphic_publish_pending")
+        if pending is not None:
+            return False
+        marker = self.storage.get_meta("telegram_status_media_identity")
+        if not isinstance(marker, str) or not marker:
+            return None
+        kind = self.status_media_kind()
+        if kind == "text":
+            return None
+        if kind != "photo":
+            return False
+        try:
+            current = int(self.storage.get_meta(self.status_message_key()))
+            self.telegram.edit_photo_caption(
+                current, text[:1024], self.telegram.status_chat_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "Photo rollback edit blocked: {}", type(exc).__name__
+            )
+            return False
+        return True
+
     def upsert_status_message(self, text: str, key: str, target: str) -> bool:
-        """Edit the stable status or recreate a missing Telegram message."""
+        """Route status edits to the explicitly selected presentation mode."""
+
+        if self.legacy_confirmation_pending():
+            return False
+        if self.graphic_channel_opted_in():
+            if (
+                key != self.status_message_key()
+                or target != self.telegram.status_chat_id
+            ):
+                return False
+            return self.update_graphic_status(text)
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            return fallback
+        return self.upsert_text_status_message(text, key, target)
+
+    def upsert_text_status_message(
+        self, text: str, key: str, target: str
+    ) -> bool:
+        """Preserve the existing plain-text status lifecycle."""
 
         stored = self.storage.get_meta(key)
         markup = self.status_keyboard()
@@ -2773,6 +3288,8 @@ class Monitor:
     def ensure_status_pinned(self, message_id: int) -> None:
         """Pin a channel status once; failures are non-fatal."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.pin_status or not self.cfg.telegram_status_chat_id:
             return
         stored = self.storage.get_meta("telegram_status_pinned_id")
@@ -2787,6 +3304,8 @@ class Monitor:
     def disable_status_pin(self) -> None:
         """Unpin the current status when pinning is disabled."""
 
+        if self.legacy_confirmation_pending():
+            return
         pinned = self.storage.get_meta("telegram_status_pinned_id")
         if not pinned or not self.cfg.telegram_status_chat_id:
             return
@@ -2810,6 +3329,8 @@ class Monitor:
     def clear_status_controls(self) -> None:
         """Remove legacy inline buttons from the current public status."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.cfg.telegram_status_chat_id:
             return
         current = self.storage.get_meta(self.status_message_key())
@@ -2828,6 +3349,8 @@ class Monitor:
     def rotate_status_after_recovery(self, duration: float) -> None:
         """Keep the old channel status until its replacement is published."""
 
+        if self.legacy_confirmation_pending():
+            return
         if not self.telegram.enabled:
             return
         pending_at = self.storage.get_meta(RECOVERY_ROTATION_PENDING_KEY)
@@ -2837,6 +3360,11 @@ class Monitor:
         )
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
+        if self.graphic_channel_opted_in():
+            self.rotate_graphic_status_after_recovery()
+            return
+        if self.rotate_legacy_photo_after_recovery():
+            return
         try:
             new_id = self.telegram.send(
                 multiphase_status_text(self),
@@ -2858,6 +3386,31 @@ class Monitor:
         self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         self.finish_voltage_status_update()
+
+    def rotate_legacy_photo_after_recovery(self) -> bool:
+        """Keep a rollback photo current without publishing another post."""
+
+        fallback = self.legacy_media_guard(multiphase_status_text(self))
+        if fallback is None:
+            return False
+        if fallback:
+            self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
+            self.finish_voltage_status_update()
+        return True
+
+    def rotate_graphic_status_after_recovery(self) -> None:
+        """Preserve pending recovery on an unverified media publish."""
+
+        if self.publish_graphic_status(multiphase_status_text(self)):
+            self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
+            self.storage.delete_meta("voltage_status_edit_window_started_at")
+            self.finish_voltage_status_update()
+            return
+        self.storage.set_meta(
+            RECOVERY_ROTATION_PENDING_KEY, str(self.last_recovery_at)
+        )
+        self.last_telegram = 0.0
+        self.last_sent_connectivity = None
 
     def maybe_availability_alert(
         self, state: str, duration: float | None = None
@@ -3012,6 +3565,13 @@ class Monitor:
         current = self.storage.get_meta(self.status_message_key())
         if not self.telegram.enabled or not current:
             return
+        text = multiphase_status_text(self)
+        if self.graphic_channel_opted_in():
+            if not self.update_graphic_status(text):
+                logger.warning("Graphic episode summary edit failed")
+            return
+        if self.legacy_media_guard(text) is not None:
+            return
         try:
             self.telegram.edit(
                 int(current),
@@ -3082,6 +3642,17 @@ class Monitor:
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         text = multiphase_status_text(self, include_event_context=False)
+        if self.graphic_channel_opted_in():
+            if self.publish_graphic_status(text, notify=False):
+                self.clear_stable_recovery_context()
+                self.finish_voltage_status_update()
+            return
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            if fallback:
+                self.clear_stable_recovery_context()
+                self.finish_voltage_status_update()
+            return
         try:
             new_id = self.telegram.send(
                 text, notify=False, chat_id=self.telegram.status_chat_id
@@ -3156,6 +3727,17 @@ class Monitor:
     def edit_voltage_status(self, old_id: str) -> bool | None:
         """Return success, failure, or None if the message needs replacing."""
 
+        text = multiphase_status_text(self)
+        if self.graphic_channel_opted_in():
+            if not self.update_graphic_status(text):
+                return False
+            self.finish_voltage_status_update()
+            return True
+        fallback = self.legacy_media_guard(text)
+        if fallback is not None:
+            if fallback:
+                self.finish_voltage_status_update()
+            return fallback
         try:
             self.telegram.edit(
                 int(old_id),
@@ -3171,9 +3753,38 @@ class Monitor:
         self.finish_voltage_status_update()
         return True
 
+    def replace_graphic_voltage_status(
+        self, notify: bool, happened_at: float
+    ) -> bool:
+        """Keep voltage notification semantics with a verified photo status."""
+
+        old_id = self.storage.get_meta(self.status_message_key())
+        if old_id and self.voltage_status_edit_window_active(happened_at):
+            return self.edit_voltage_status(old_id) is True
+        if not self.publish_graphic_status(
+            multiphase_status_text(self), notify=notify
+        ):
+            return False
+        if notify:
+            self.storage.set_meta(
+                "last_voltage_notification_at", str(happened_at)
+            )
+        self.storage.set_meta(
+            "voltage_status_edit_window_started_at", str(happened_at)
+        )
+        self.finish_voltage_status_update()
+        return True
+
     def replace_voltage_status(self, notify: bool, happened_at: float) -> bool:
         """Edit an active episode or safely replace the shared status."""
 
+        if self.graphic_channel_opted_in():
+            return self.replace_graphic_voltage_status(notify, happened_at)
+        fallback = self.legacy_media_guard(multiphase_status_text(self))
+        if fallback is not None:
+            if fallback:
+                self.finish_voltage_status_update()
+            return fallback
         key = self.status_message_key()
         old_id = self.storage.get_meta(key)
         if old_id and self.voltage_status_edit_window_active(happened_at):
@@ -5305,6 +5916,8 @@ class Monitor:
             self.send_compact_preview(sender_id)
         elif command == "/widget_preview":
             self.send_private_widget_preview(sender_id)
+        elif command == "/graphic_preview":
+            self.send_private_graphic_preview(sender_id)
         elif command == "/view":
             self.change_private_preview_layout(sender_id, parts)
         elif command == "/week":
@@ -5436,6 +6049,28 @@ class Monitor:
                 "Private widget preview failed: {}", type(exc).__name__
             )
 
+    def send_private_graphic_preview(self, sender_id: str) -> None:
+        """Send a single private PNG; never edit the public status channel."""
+
+        try:
+            payload = private_graphic_preview_state(self)
+            caption = widget_fallback_text(payload)
+            with tempfile.TemporaryDirectory(prefix="shelly-card-") as folder:
+                image = Path(folder) / "status.png"
+                render_card_png(json.loads(payload), image)
+                self.telegram.send_file(
+                    "sendPhoto", "photo", image, caption, chat_id=sender_id
+                )
+        except Exception as exc:
+            logger.warning(
+                "Private graphic preview failed: {}", type(exc).__name__
+            )
+            self.telegram.send(
+                tr(self.language, "command_error", error="PreviewUnavailable"),
+                notify=False,
+                chat_id=sender_id,
+            )
+
     def handle_update(self, update: dict) -> None:
         """Handle one authorized Telegram command."""
 
@@ -5453,7 +6088,7 @@ class Monitor:
             return
         command = parts[0].split("@")[0].lower()
         sender_id = str((msg.get("from") or {}).get("id", ""))
-        if command in {"/schedule", "/widget_preview"}:
+        if command in {"/schedule", "/widget_preview", "/graphic_preview"}:
             return  # Private admin only; never publish to the channel.
         if command == "/week" and len(parts) != 1:
             return

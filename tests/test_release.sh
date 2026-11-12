@@ -36,6 +36,7 @@ FORBIDDEN="$(
     exit 1
 }
 grep -q '/.env.example$' "$LIST"
+grep -q '/telegram_schedule_periods.py$' "$LIST"
 ! grep -q '/ROADMAP.md.pre-' "$LIST"
 ! grep -q '/ROADMAP.md$' "$LIST"
 ! grep -q '/.work-state/' "$LIST"
@@ -66,7 +67,7 @@ echo "RELEASE_REPRODUCIBILITY PASS"
 FIXTURE="$TMP/private-source"
 mkdir -p "$FIXTURE/scripts" "$FIXTURE/secrets" "$FIXTURE/nested"
 cp "$PROJECT/scripts/release.sh" "$FIXTURE/scripts/release.sh"
-for file in VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_widget_data.py telegram_widget_fallback.py Dockerfile compose.yaml requirements.txt README.md .env.example; do
+for file in VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py telegram_i18n.py notification_features.py dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_schedule_periods.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_uk_bitmap.py telegram_smooth_type.py telegram_smooth_bitmap.py Dockerfile compose.yaml requirements.txt README.md .env.example; do
     cp "$PROJECT/$file" "$FIXTURE/$file"
 done
 printf "%s\n" "SHELLY_HOST=private.invalid" > "$FIXTURE/.env"
@@ -96,6 +97,20 @@ if grep -E '(^|/)(ROADMAP[.]md|[.]roadmap-update[.]lock|[.]telegram-private-acce
     exit 1
 fi
 echo "RELEASE_PRIVATE_ENV_EXCLUSION PASS"
+
+# Reject archives whose required YASNO schedule formatter is absent.
+mv "$FIXTURE/telegram_schedule_periods.py" "$TMP/missing-schedule-module.py"
+if "$FIXTURE/scripts/release.sh" --dry-run \
+    --output-dir "$TMP/missing-schedule-dist" \
+    > "$TMP/missing-schedule.log" 2>&1; then
+    echo "ERROR: release accepted missing schedule formatter" >&2
+    exit 1
+fi
+grep -q "required release file missing: telegram_schedule_periods.py" \
+    "$TMP/missing-schedule.log"
+mv "$TMP/missing-schedule-module.py" "$FIXTURE/telegram_schedule_periods.py"
+echo "RELEASE_MISSING_SCHEDULE_FORMATTER=REJECTED"
+
 
 # The final release must not bundle a link into private runtime files.
 ln -s '.env' "$FIXTURE/linked-env"

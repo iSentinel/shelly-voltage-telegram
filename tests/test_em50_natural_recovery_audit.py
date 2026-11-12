@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import io
 import json
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
+import urllib.error
 import urllib.request
 from pathlib import Path
 from unittest.mock import patch
@@ -96,6 +99,47 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
         AUDIT.read_state(self.db, 60)
         self.assertEqual(self.db.read_bytes(), before)
 
+    def test_concurrent_writer_cannot_split_incident_snapshot(self):
+        """Closing the incident mid-read cannot produce mixed evidence."""
+        database = self.db
+        now = self.now
+        original_connect = sqlite3.connect
+        with contextlib.closing(original_connect(database)) as db:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.commit()
+
+        class Reader(sqlite3.Connection):
+            """Inject a real committed writer before active-count SELECT."""
+
+            def execute(self, sql, *args, **kwargs):
+                if "SELECT COUNT(*) FROM outages WHERE ended_at" in sql:
+                    with contextlib.closing(
+                        original_connect(database)
+                    ) as writer:
+                        writer.execute(
+                            "UPDATE outages SET ended_at=? WHERE id=18",
+                            (now - 45,),
+                        )
+                        writer.commit()
+                return super().execute(sql, *args, **kwargs)
+
+        def monitored_connect(*args, **kwargs):
+            """Use a read-only instrumented SQLite connection."""
+
+            return original_connect(*args, factory=Reader, **kwargs)
+
+        with patch.object(
+            AUDIT.sqlite3, "connect", side_effect=monitored_connect
+        ):
+            observed = AUDIT.read_state(database, 60)
+        with contextlib.closing(original_connect(database)) as db:
+            closed = db.execute(
+                "SELECT ended_at FROM outages WHERE id=18"
+            ).fetchone()[0]
+        self.assertEqual((observed["end"], observed["active"]), (None, 1))
+        self.assertIsNotNone(closed)
+
     def test_open_incident_is_not_a_recovery(self):
         """Active outage cannot pass despite an optimistic /health."""
 
@@ -107,6 +151,206 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
             AUDIT.check_recovery(
                 state, health(self.now), {"ready": True}, self.now, 60
             )
+
+    def test_open_incident_returns_pending_without_http(self):
+        """Natural blackout is pending, never a false recovery or API error."""
+
+        fixture_db = self.db
+        with contextlib.closing(sqlite3.connect(fixture_db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.commit()
+        output = io.StringIO()
+        argv = ["audit", "--db", str(fixture_db), "--json"]
+        with (
+            patch.object(sys, "argv", argv),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 2)
+        answer = json.loads(output.getvalue())
+        self.assertEqual(answer["status"], "PENDING")
+        self.assertEqual(answer["outage_id"], 18)
+        self.assertFalse(answer["mains_restoration_verified"])
+        self.assertFalse(answer["telegram_delivery_verified"])
+        self.assertFalse(answer["release_authorized"])
+        network.assert_not_called()
+
+    def test_stale_historical_voltage_stays_hidden_in_offline_cli(self):
+        """The last good 216.5 V sample must never become a live reading."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 1000, 216.5, 50.0, "L1"),
+            )
+            db.commit()
+        original = self.db.read_bytes()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 2)
+        response = json.loads(output.getvalue())
+        self.assertEqual(response["status"], "PENDING")
+        self.assertEqual(response["reason"], "shelly_connectivity_loss_open")
+        self.assertNotIn("216.5", output.getvalue())
+        self.assertNotIn("current_voltage_v", response)
+        self.assertFalse(response["mains_restoration_verified"])
+        self.assertFalse(response["telegram_delivery_verified"])
+        self.assertEqual(self.db.read_bytes(), original)
+        network.assert_not_called()
+
+    def test_hysteresis_does_not_use_http_503_to_claim_recovery(self):
+        """A fresh sample without a closed outage remains unverified."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.commit()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        response = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(response["status"], "PENDING")
+        self.assertEqual(
+            response["reason"], "open_incident_with_unconfirmed_samples"
+        )
+        self.assertFalse(response["mains_restoration_verified"])
+        self.assertFalse(response["release_authorized"])
+        network.assert_not_called()
+
+    def test_multiday_blackout_remains_pending_and_read_only(self):
+        """A 26-hour blackout cannot silently become an online incident."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "UPDATE outages SET started_at=?,ended_at=NULL",
+                (self.now - 26 * 3600,),
+            )
+            db.execute("DELETE FROM measurements")
+            db.commit()
+        before = self.db.read_bytes()
+        output = io.StringIO()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json") as network,
+            patch.object(AUDIT.time, "time", return_value=self.now),
+            contextlib.redirect_stdout(output),
+        ):
+            code = AUDIT.main()
+        record = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(record["status"], "PENDING")
+        self.assertFalse(record["mains_restoration_verified"])
+        self.assertFalse(record["telegram_delivery_verified"])
+        self.assertFalse(record["release_authorized"])
+        self.assertEqual(self.db.read_bytes(), before)
+        network.assert_not_called()
+
+    def test_closed_incident_http_503_never_claims_recovery(self):
+        """An HTTP 503 is a failure, not proof of power restoration."""
+
+        def offline_ready(url: str, expected: str) -> dict:
+            """Return health, but simulate the real unavailable /ready."""
+            if expected == "/health":
+                return health(self.now)
+            raise urllib.error.HTTPError(
+                url, 503, "Service Unavailable", None, io.BytesIO(b"")
+            )
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        before = self.db.read_bytes()
+        with (
+            patch.object(
+                sys, "argv", ["audit", "--db", str(self.db), "--json"]
+            ),
+            patch.object(AUDIT, "local_json", side_effect=offline_ready),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            code = AUDIT.main()
+        self.assertEqual(code, 1)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("FAIL natural_recovery HTTPError", stderr.getvalue())
+        self.assertEqual(self.db.read_bytes(), before)
+
+    def test_first_samples_stay_pending_until_outage_closes(self):
+        """Recovery hysteresis cannot declare physical restoration early."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 20, 223.0, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        result = AUDIT.pending_record(state, self.now)
+        self.assertEqual(result["status"], "PENDING")
+        self.assertEqual(
+            result["reason"], "open_incident_with_unconfirmed_samples"
+        )
+        self.assertFalse(result["mains_restoration_verified"])
+
+    def test_pending_rejects_synthetic_zero_sample(self):
+        """A forged zero-voltage reading never becomes recovery evidence."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 20, 0.0, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
+
+    def test_pending_rejects_parallel_open_outages(self):
+        """Never accept two overlapping physical connectivity incidents."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute(
+                "INSERT INTO outages VALUES (19,?,?,?)",
+                (self.now - 60, None, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        self.assertEqual(state["active"], 2)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
+
+    def test_pending_rejects_missing_stable_status(self):
+        """An open outage cannot be accepted without saved status metadata."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute("UPDATE outages SET ended_at=NULL")
+            db.execute("DELETE FROM measurements")
+            db.execute("DELETE FROM meta")
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        with self.assertRaisesRegex(ValueError, "inconsistent"):
+            AUDIT.pending_record(state, self.now)
 
     def test_early_measurement_during_offline_fails(self):
         """Reject fabricated or leaking data during an extended blackout."""

@@ -1,3 +1,12 @@
+## 0.5.16-hw - graphics and Telegram migration QA candidate (unreleased)
+
+- New 960x800 Telegram graphic status and DTEK/YASNO 24-hour half-hour schedule, legend and exact time totals, separate from the historical voltage chart.
+- Protect offline voltage against stale and synthetic zero values, Kyiv midnight/DST transitions and photo-caption source identity.
+- Require exact verified Bot API receipts for in-place Telegram text-to-photo conversion and initial legacy text identity; reject no-op, missing fields and uncertain edits.
+- Preserve unrelated pinned channel messages, keep an owner-approved reversible same-message caption fallback, and refuse ambiguous duplicate publication.
+- Owner Approval granted for one guarded deployment; source and SQLite stopped-writer rollback snapshot and recipient-visible confirmation remain mandatory.
+- VERSION=0.5.16-hw, RELEASE_VERSION=0.5.15-hw until formal promotion; production remains 0.5.15-hw.
+
 ## 0.5.15-hw - owner-approved release source
 - Preserve owner-protected YASNO read-only Compose opt-in for normal
   restarts, pinned updater starts and installer builds.

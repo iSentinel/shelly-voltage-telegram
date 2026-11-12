@@ -36,7 +36,7 @@ Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 The private administrator **Updates** menu checks GitHub Releases without
 installing automatically; see [safe updates](docs/UPDATES.md).
-Release source for `v0.5.15-hw` (tag publication requires signed GHCR verification); previously installed EM-50 runtime: `0.5.14-hw`.
+Current installed EM-50 runtime: 0.5.15-hw. New graphical Telegram candidate: 0.5.16-hw (Draft PR #300, without tag/merge/deployment).
 
 ## Overview
 
@@ -53,9 +53,9 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.15-hw**
+- Current software candidate: **0.5.16-hw** (Draft PR #300; not deployed)
 - Current release: **0.5.15-hw**
-- Production field-test runtime: **0.5.14-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- Production field-test runtime: **0.5.15-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.
 - Candidate `0.5.10-hw` extends the read-only recovery acceptance CLI so a natural 15-minute stable-recovery rotation can be verified without controlling Shelly or writing to the live database.

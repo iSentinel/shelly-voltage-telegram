@@ -26,6 +26,7 @@ control chat is distinct from an opt-in scheduled subscription.
 | `/events` | Recent saved voltage transitions and Shelly connectivity changes | Read-only; limited by retained history |
 | `/week` | Seven-day quality report | On demand; no subscription implied |
 | `/preview` | Show the administrator's selected status layout | Silent reply to this admin's private chat only |
+| /graphic_preview | Candidate v2 PNG and YASNO | Admin private photo only; NOT yet deployed |
 | `/view compact` | Choose compact private status | Save per-admin preference; no channel edit |
 | `/view detailed` | Choose full status and settings in private chat | Save per-admin preference; no channel edit |
 | `/week subscribe` | Opt in to a private weekly digest | Save per-admin opt-in; disabled by default |

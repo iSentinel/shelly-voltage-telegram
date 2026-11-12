@@ -101,6 +101,24 @@ class RollbackYasnoComposeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertEqual(calls, [])
 
+    def test_media_checked_again_after_writer_stop_before_restore(self):
+        """Reject an in-flight photo conversion before replacing SQLite."""
+
+        source = (ROOT / "scripts/rollback.sh").read_text()
+        main = source.split("main() {", 1)[1].split('\nmain "$@"', 1)[0]
+        guard = "graphic-rollback-media-guard.py"
+        first = main.index(guard)
+        stop = main.index("stop_service\n")
+        second = main.index(guard, first + len(guard))
+        rescue = main.index("rescue_current_db\n")
+        self.assertLess(first, stop)
+        self.assertLess(stop, second)
+        self.assertLess(second, rescue)
+        on_race = main[second:rescue]
+        self.assertIn("start_service", on_race)
+        self.assertIn("writer remains stopped by operator request", on_race)
+        self.assertIn("exit 6", on_race)
+
     def test_rollback_uses_secure_plan_after_snapshot_validation(self):
         """Inspect the control path, not only the helper itself."""
         script = (ROOT / "scripts/rollback.sh").read_text()

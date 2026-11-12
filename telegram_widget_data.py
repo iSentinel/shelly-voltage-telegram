@@ -14,6 +14,7 @@ KYIV = ZoneInfo("Europe/Kyiv")
 PUBLIC_DATA_LIMIT = 1024
 STATE_VERSION = 1
 MAX_SAMPLE_AGE = 60
+MIN_VISIBLE_VOLTAGE = 0.1  # A 0.0 V display is not a live supply reading.
 MAX_FORECAST_AGE = 2 * 3600
 BARS = frozenset("OX?")
 
@@ -40,7 +41,7 @@ def health_state(health: object, now: float) -> dict:
     ts = numeric(health.get("last_success"), 1, now + 2)
     if ts is None or not 0 <= now - ts <= MAX_SAMPLE_AGE:
         return {"s": "stale"}
-    voltage = numeric(health.get("voltage"), 0, 400)
+    voltage = numeric(health.get("voltage"), MIN_VISIBLE_VOLTAGE, 400)
     if voltage is None:
         return {"s": "unknown"}
     result = {"s": "online", "v": round(voltage, 2), "t": int(ts)}

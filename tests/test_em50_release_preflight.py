@@ -244,11 +244,11 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertIn("measurements_not_equal", result["detail"])
 
-    def test_finalized_marker_does_not_auto_approve_release(self):
-        """Version alignment cannot grant human deployment approval."""
+    def test_candidate_marker_does_not_auto_approve_release(self):
+        """An unsigned version candidate cannot grant deployment approval."""
 
         self.assertIn(
-            "stable_marker_matches=true",
+            "stable_marker_unchanged=true",
             GATE.version_check(ROOT),
         )
         with tempfile.TemporaryDirectory() as tmp:

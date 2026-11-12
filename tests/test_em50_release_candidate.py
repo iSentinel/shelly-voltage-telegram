@@ -6,7 +6,6 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from scripts import image_release_policy as policy
 
@@ -23,37 +22,24 @@ def version(name: str) -> str:
 class Em50ReleaseCandidateTests(unittest.TestCase):
     """Never authorize a stable tag from an unaccepted candidate."""
 
-    def test_finalized_marker_matches_without_changing_live(self):
-        """Final source marker remains separate from installed runtime."""
+    def test_candidate_is_not_the_published_release(self):
+        """Draft graphics source cannot claim a finalized release tag."""
 
-        self.assertEqual(version("VERSION"), "0.5.15-hw")
+        self.assertEqual(version("VERSION"), "0.5.16-hw")
         self.assertEqual(version("RELEASE_VERSION"), "0.5.15-hw")
-        self.assertEqual(version("VERSION"), version("RELEASE_VERSION"))
+        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
-    def test_finalized_tag_requires_exact_source_commit(self):
-        """Tag creation must not permit a different checked-out SHA."""
+    def test_candidate_tag_is_not_yet_authorized(self):
+        """VERSION/RELEASE_VERSION mismatch prevents stable tag pushes."""
 
-        # Final release is aligned; a mismatched marker must still fail.
-        with (
-            patch.object(policy, "version_file", return_value="0.5.14-hw"),
-            self.assertRaisesRegex(ValueError, "release tag differs"),
+        with self.assertRaisesRegex(
+            ValueError, "VERSION differs from RELEASE_VERSION"
         ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.16-hw", "", "", ROOT)
 
-        # A tag pointing to any non-approved source SHA must fail.
-        with (
-            patch.object(policy, "version_file", return_value="0.5.15-hw"),
-            patch.object(policy, "tag_commit", return_value="wrong"),
-            patch.object(policy, "current_commit", return_value="expected"),
-            self.assertRaisesRegex(ValueError, "commit differs"),
-        ):
-            policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
-
-        with (
-            patch.object(policy, "version_file", return_value="0.5.15-hw"),
-            patch.object(policy, "tag_commit", return_value="expected"),
-            patch.object(policy, "current_commit", return_value="expected"),
+        with self.assertRaisesRegex(
+            ValueError, "VERSION differs from RELEASE_VERSION"
         ):
             policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
 

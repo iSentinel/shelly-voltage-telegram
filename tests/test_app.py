@@ -1615,7 +1615,13 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor = self._telegram_monitor()
         monitor.storage.get_meta = Mock(
             side_effect=lambda key: (
-                None if key == APP.RECOVERY_ROTATION_PENDING_KEY else "42"
+                None
+                if key
+                in (
+                    APP.RECOVERY_ROTATION_PENDING_KEY,
+                    "telegram_legacy_text_confirm_pending",
+                )
+                else "42"
             )
         )
         monitor.storage.set_meta = Mock()
@@ -1631,7 +1637,13 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor = self._telegram_monitor()
         monitor.storage.get_meta = Mock(
             side_effect=lambda key: (
-                None if key == APP.RECOVERY_ROTATION_PENDING_KEY else "42"
+                None
+                if key
+                in (
+                    APP.RECOVERY_ROTATION_PENDING_KEY,
+                    "telegram_legacy_text_confirm_pending",
+                )
+                else "42"
             )
         )
         monitor.storage.set_meta = Mock()
@@ -2017,7 +2029,11 @@ class MonitorRegressionTests(unittest.TestCase):
 
     def test_deleted_status_message_is_recreated(self):
         monitor = self._telegram_monitor()
-        monitor.storage.get_meta = Mock(return_value="42")
+        monitor.storage.get_meta = Mock(
+            side_effect=lambda key: (
+                None if key == "telegram_legacy_text_confirm_pending" else "42"
+            )
+        )
         monitor.storage.set_meta = Mock()
         monitor.telegram.edit.side_effect = RuntimeError(
             "message to edit not found"

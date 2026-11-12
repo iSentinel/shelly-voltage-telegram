@@ -74,6 +74,38 @@ class WidgetStateTests(unittest.TestCase):
         self.assertEqual(data["s"], "stale")
         self.assertNotIn("v", data)
 
+    def test_zero_and_tiny_voltage_do_not_claim_live_power(self):
+        """Fresh online flags cannot turn a zero reading into mains proof."""
+
+        for voltage in (0, 0.0, 0.04):
+            with self.subTest(voltage=voltage):
+                data = json.loads(
+                    WIDGET.widget_public_data(
+                        {
+                            "connectivity": "online",
+                            "voltage": voltage,
+                            "frequency": 50.0,
+                            "last_success": NOW - 1,
+                        },
+                        now=NOW,
+                    )
+                )
+                self.assertEqual(data["s"], "unknown")
+                self.assertTrue({"v", "f", "t"}.isdisjoint(data))
+        real = json.loads(
+            WIDGET.widget_public_data(
+                {
+                    "connectivity": "online",
+                    "voltage": 176.2,
+                    "frequency": 50.0,
+                    "last_success": NOW - 1,
+                },
+                now=NOW,
+            )
+        )
+        self.assertEqual(real["s"], "online")
+        self.assertEqual(real["v"], 176.2)
+
     def test_unknown_and_boolean_inputs_fail_closed(self):
         """Do not accept booleans, NaN or missing samples as measurements."""
 

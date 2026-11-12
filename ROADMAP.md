@@ -1,3 +1,207 @@
+## 2026-11-10T18:45:01+02:00 Gateway: 24 hourly YASNO tiles + battery windows
+
+- User requested layout resembling a colored hourly Telegram schedule:
+  24 blocks 6x4, each 00:00..23:00; 08:30 and 17:30 are split
+  green/red hours; show offline/on periods with exact durations.
+- Updated source-only PNG renderer 960x800, red/green hour tiles,
+  green battery for forecast power and red for planned outage.
+- Updated standard Telegram channel YASNO text to include ordered
+  forecast windows with battery emoji and exact durations.
+- Example 10 Nov 2026 group 10.1: off 00:00-04:00 (4h),
+  on 04:00-08:30 (4.5h), off 08:30-16:00 (7.5h),
+  on 16:00-17:30 (1.5h), off 17:30-24:00 (6.5h).
+  Total planned off=18h, planned on=6h.
+- Edge handling: 24:00, 30-minute boundaries, ? uncertain
+  periods, invalid/short inputs blocked, 8 text rows with
+  overflow count for fragmented days.
+- 12/12 PNG tests PASS incl all 24 labels, split hour at 17:30,
+  11/11 schedule-period tests, 14/14 text status tests,
+  offline safety 13/13 and online acceptance 13/13 PASS.
+- Production remains 0.5.15-hw, Docker healthy, Shelly offline
+  (last verified 193.8 V aged ~54 minutes at 18:25);
+  SQLite integrity ok, zero 0-V measurements.
+- One Telegram transport failure observed around 18:05,
+  transient ConnectionError; no source-only changes deployed.
+- Last published Draft PR300 commit 6aa8da37877579f35be50fb23cf3fc9ea35c898b,
+  GitHub CI 42852214234 SUCCESS before this new source-only stage.
+- NEXT: full offline Docker regression, candidate PR300 publish,
+  exact-head GitHub CI, refreshed graphic preview from trusted
+  YASNO cache, then guarded media migration/rollback readiness.
+- Public channel never edited by this stage.
+
+## 2026-11-10T07:12:34+02:00 Gateway: PR300 opt-in graphic lifecycle full regression PASS
+
+- Exact source ancestor: 025592f966faa0b6a78d9f9a8a4ec567a713153f.
+- Full isolated Docker regression (job QA-C): 1446 tests OK
+  (1 skipped), exit code 0. This supersedes a prior QA-B run where
+  3 old private-only text tests failed; guarded channel-only fallback
+  corrected and all 158 baseline test_app scenarios passed.
+- 21/21 lifecycle integration tests, 45/45 graphic media tests PASS.
+- Ruff 0.14.2, 169 format files, source maintainability PASS.
+- Strict dual opt-in plus dedicated status channel; all main status
+  paths coordinated for periodic, voltage transition, offline,
+  recovering and stable recovery.
+- Concurrent refresh serialization: one new message ID; subsequent
+  refresh edits same post. Ambiguous publish markers prevent retries.
+- Text-only/non-channel deployments unchanged by default; verified
+  photo rollback uses caption-only edits. Stale/offline reading guard
+  remains in PNG renderer, not confused with YASNO forecasts.
+- NO production changes: v0.5.15-hw continues to run, no channel API
+  requests, no merge, install or owner approval implied.
+- NEXT: publish Draft PR300 candidate, wait CI on exact commit, inspect
+  release/archive fixtures, capture QA evidence and request separate
+  Owner Approval before any public activation.
+
+## 2026-11-10T07:08:29+02:00 Gateway: graphic lifecycle concurrency and legacy safety QA
+
+- Source-only opt-in lifecycle integrated behind two explicit deployment
+  flags; production v0.5.15-hw remains untouched/healthy.
+- Added per-monitor RLock guarding status ID decisions, publish/edits.
+  Two simulated simultaneous refreshes create only one new channel post.
+- Disabled-graphics fallback updates verified existing photo captions
+  without text/media type confusion, repin or duplicate new posts.
+- Kept old text behavior fully unchanged for deployments lacking a
+  dedicated channel. Original test_app suite 158/158 PASS after fix.
+- Integration networkless suite 21/21 PASS; Telegram media 45/45 PASS.
+- Full QA snapshot before latest race fix: 1445 tests, 3 failures
+  only from legacy private-only fixtures; corrected and rechecked
+  in 158/158 targeted regression. Final complete QA still pending.
+- Ruff 0.14.2, all 169 file format checks and maintainability PASS.
+- NEXT: full offline container regression, GitHub Draft PR + CI, and
+  dry-run proof of offline/recovery/pending state with fresh data.
+- No public Telegram changes, version bump, merge or deployment.
+
+## 2026-11-10T07:02:18+02:00 Gateway: opt-in graphic channel lifecycle integrated (source only)
+
+- Source branch from verified PR300 head 025592f966faa0b6a78d9f9a8a4ec567a713153f,
+  unchanged released runtime v0.5.15-hw, no public Telegram API sends.
+- All principal status paths gated by explicit pair of flags plus separate
+  status destination; without opt-in preserve prior text behavior.
+- Periodic updates, voltage-event edit windows, episode finalization,
+  recovery rotation and stable-recovery cleanup route through coherent
+  text/photo handling with verified channel-bound message identity.
+- Uncertain publish persists fail-closed pending marker before Telegram
+  send; retry and disabled-feature rollback cannot duplicate messages.
+- On graphic mode rollback, verified photo remains available via
+  caption-only edits. Unknown media or pending sends block.
+- Source-only networkless tests: 20/20 integrated lifecycle, 45/45
+  graphic media transport, Ruff 0.14.2 and quality gate PASS.
+- Earlier isolated full integration QA snapshot: 1433 tests OK
+  (1 skipped), including all tests before rollback-specific additions.
+- NEXT: run full fresh regression of final integrated candidate, verify
+  source/SQLite rollback fixtures, prepare Draft PR review and CI.
+- Activation/installation requires separate Owner Approval and visual QA.
+
+## 2026-11-10T04:05:28+02:00 Gateway: legacy text media preflight (source only)
+
+- Added confirm_legacy_text_status to verify an existing unbound text post.
+- Mandatory owner_approved is True; non-boolean/false values reject.
+- Requires exact persisted channel ID, numeric message ID and a valid
+  text; calls editMessageText only to verify already owned text content.
+- Only success persists text:chat_id:message_id; API timeouts never
+  claim verified type and prior ambiguous markers are never overwritten.
+- No live status caller or public Bot API requests were performed.
+- Targeted media tests 45/45 PASS; Ruff/quality gate PASS.
+- Full isolated regression 1425 tests OK (1 skipped), exit code zero.
+- NEXT: integrate complete opt-in status lifecycle across periodic,
+  offline/recovery, voltage transitions and stable recovery, with
+  explicit Owner Approval, fallback, backup and rollback acceptance.
+
+## 2026-11-10T04:00:49+02:00 Gateway: serialize Telegram multipart transport (source only)
+
+- Shared Telegram api_lock now protects send_file/sendPhoto uploads and
+  editMessageMedia multipart uploads, like existing JSON API calls.
+- Lock is released after request exceptions; no long-polling lock added.
+- 39/39 targeted graphic transport tests PASS, including normal and
+  failed uploads; pinned Ruff/quality gate PASS.
+- Full read-only Docker regression 1419 tests OK (1 skipped).
+- NO production deployment or real Telegram API sends from this stage.
+- NEXT: complete coordinated opt-in status routing, rate limits,
+  fallbacks, rollback and separate Owner Approval.
+
+## 2026-11-10T03:54:40+02:00 Gateway: guarded edit-only photo status executor (source only)
+
+- Added edit_existing_status_media for a verified persisted message ID.
+- Applies only edit_photo, edit_photo_caption or editMessageText according
+  to known source message type. Missing/unknown IDs produce no send.
+- Text-to-photo conversion pre-marks the exact status as unknown; failed
+  Telegram edit cannot leave a misleading text marker.
+- No replacement post, pin, delete, status-rotation or production caller.
+- 37/37 targeted tests PASS; pinned Ruff + maintainability PASS.
+- Full isolated regression 1417 tests OK (1 skipped); no public sends.
+- NEXT: coherent opt-in all status paths, frequency caps, transactional
+  migration/recovery, rollback evidence and separate Owner Approval.
+
+## 2026-11-10T03:47:29+02:00 Gateway: photo status transition planner (source only)
+
+- Created fail-closed pure plan_graphic_status_action helper with no API IO.
+- Initial new status chooses photo if validated image exists, else text.
+- Existing known text may edit as text or convert via editMessageMedia.
+- Existing known photo may edit media or caption; never editMessageText.
+- Unknown or invalid persisted message identity returns blocked.
+- 31/31 targeted transport tests PASS; pinned Ruff quality gate PASS.
+- Full isolated regression 1411 tests OK (1 skipped); no live caller.
+- NEXT: unify all status paths behind an explicit owner opt-in, with
+  rate-limits, rollback, channel acceptance and Owner Approval.
+- Do not install or activate until full source/SQLite acceptance.
+
+## 2026-11-10T03:43:43+02:00 Gateway: guarded caption-only transport for photo status
+
+- Added source-only Telegram editMessageCaption for a known photo ID.
+- Fail-closed explicit chat ID and message ID, nonempty 1024-character
+  caption limit, checked returned message and exact channel identity.
+- Identical-caption error is an idempotent success, without any new post.
+- Transport still has no public status-loop callers or enabled toggle.
+- 25/25 media tests PASS, pinned Ruff and maintainability gate PASS.
+- Full isolated Docker regression 1405 tests OK (1 skipped); source-only.
+- NEXT: coherent opt-in photo status lifecycle for online/offline/voltage
+  event/recovery paths with gated rollback and separate Owner Approval.
+
+## 2026-11-10T03:39:00+02:00 Gateway: PR300 media-format identity bound to chat and message ID
+
+- Isolated source-only format binding; no production status callers changed.
+- New SQLite metadata format includes exact chat ID and persisted message ID
+  after successful Telegram response; old/foreign/unbound markers are unknown.
+- Reject mismatched or blank channel, stale/invalid ID and unsupported kind.
+- Targeted media transport + persisted-format suite: 20/20 PASS.
+- Pinned Ruff 0.14.2 and complete quality gate PASS.
+- Full Docker regression 1400 tests OK (1 skipped), exit code zero.
+- NEXT: consistent optional media lifecycle, fail-closed text/photo
+  fallback and all offline/recovery/voltage status paths with Owner Approval.
+- Production remains on 0.5.15-hw; no channel send, restart or rollback.
+
+## 2026-11-10T03:30:29+02:00 Gateway: PR300 explicit channel photo send (source only)
+
+- Stage after exact candidate 9e0b72b: added send_status_photo with
+  required explicit destination, accessible caption and validated PNG.
+- Sound policy uses existing quiet hours; private file exports remain
+  silent by default. No public status caller invokes send_status_photo.
+- Factored guarded media validation shared with editMessageMedia.
+- Telegram media transport regression: 13/13 PASS; private graphic
+  preview: 6/6 PASS; full QA: 1393 tests OK (1 skipped).
+- Pinned Ruff 0.14.2, all 168 file format checks and source quality PASS.
+- Isolated Docker: --network none, --read-only, exec /tmp and test-only
+  Git mount; no production container restart or public Telegram sends.
+- Telegram Bot API officially supports text-to-media editMessageMedia
+  and photo editMessageCaption; photo caption limit is 1024 characters.
+- NEXT: implement consistent opt-in status media kind for ALL update and
+  recovery paths with rollback and Owner Approval. Activation is BLOCKED.
+
+## 2026-11-10T03:16:15+02:00 Gateway: PR300 graphic media transport hardening (source only)
+
+- Created a separate Git source checkout at the exact PR300 commit,
+  without changing the installed 0.5.15-hw runtime or Telegram channel.
+- Hardened editMessageMedia: identical edit is idempotent, explicit channel
+  destination is validated, returned chat identity is checked when supplied.
+- New targeted regression: 9/9 PASS in offline read-only Docker.
+- Ruff 0.14.2 formatting/lint, source check-quality and git diff --check PASS.
+- Full networkless Docker regression is running with executable isolated
+  /tmp fixtures; results must be recorded before any promotion.
+- Lifecycle audit and fail-closed rollout plan:
+  docs/TELEGRAM_GRAPHIC_CHANNEL_ROLLOUT.md
+- NEXT: finish full regression, commit source-only safety stage, then
+  implement coherent opt-in status lifecycle. No public activation or release.
+
 ## 2026-11-08 QA: protected EM-50 predeploy snapshot window
 
 - Real Shelly 0.5.13-hw recovered and is healthy; actual
