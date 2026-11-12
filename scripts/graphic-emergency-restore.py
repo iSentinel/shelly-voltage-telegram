@@ -18,6 +18,10 @@ CONTAINER = "shelly-voltage-bot"
 TIMER = "shelly-graphic-emergency-restore.timer"
 STABLE = Path("/usr/local/sbin/shelly-graphic-emergency-restore")
 SCRIPTS = Path(__file__).resolve().parent
+BOOT_UNIT = "shelly-graphic-emergency-boot.service"
+BOOT_FILE = Path("/etc/systemd/system") / BOOT_UNIT
+STATE_DIR = Path("/var/lib/shelly-graphic-emergency")
+ARMED_MARKER = STATE_DIR / "armed"
 
 
 class RestoreBlocked(Exception):
@@ -136,6 +140,82 @@ def install_stable_copy() -> None:
         staged.unlink(missing_ok=True)
 
 
+def boot_service_content() -> str:
+    """Provide a boot-enabled rescue unit that never reads bot credentials."""
+
+    return (
+        "[Unit]\\n"
+        "Description=Shelly graphic cutover boot emergency restoration\\n"
+        "ConditionPathExists=/var/lib/shelly-graphic-emergency/armed\\n"
+        "Wants=docker.service\\nAfter=docker.service\\n"
+        "StartLimitIntervalSec=0\\n"
+        "[Service]\\nType=oneshot\\n"
+        "ExecStart=/usr/bin/python3 "
+        "/usr/local/sbin/shelly-graphic-emergency-restore "
+        "--restore --execute\\n"
+        "Restart=on-failure\\nRestartSec=60s\\n"
+        "TimeoutStartSec=120s\\n"
+        "[Install]\\nWantedBy=multi-user.target\\n"
+    ).replace("\\n", "\n")
+
+
+def install_boot_service() -> None:
+    """Pin a separate enabled rescue service for LXC restarts."""
+
+    parent = BOOT_FILE.parent
+    meta = parent.stat()
+    if parent.is_symlink() or meta.st_uid != 0 or meta.st_mode & 0o022:
+        raise RestoreBlocked("BOOT_UNIT_DIRECTORY_UNSAFE")
+    content = boot_service_content().encode("utf-8")
+    if BOOT_FILE.exists() or BOOT_FILE.is_symlink():
+        meta = BOOT_FILE.lstat()
+        if (
+            not stat.S_ISREG(meta.st_mode)
+            or meta.st_uid != 0
+            or stat.S_IMODE(meta.st_mode) != 0o644
+            or BOOT_FILE.read_bytes() != content
+        ):
+            raise RestoreBlocked("BOOT_UNIT_CONFLICT")
+        return
+    fd = os.open(BOOT_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def write_arm_marker() -> None:
+    """Create one root-only reboot-persistent cutover marker."""
+
+    if not STATE_DIR.exists():
+        STATE_DIR.mkdir(mode=0o700)
+    info = STATE_DIR.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0:
+        raise RestoreBlocked("MARKER_DIRECTORY_UNSAFE")
+    if stat.S_IMODE(info.st_mode) != 0o700 or ARMED_MARKER.exists():
+        raise RestoreBlocked("MARKER_CONFLICT")
+    fd = os.open(ARMED_MARKER, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        stream.write("owner-approved-cutover\\n".replace("\\n", "\n"))
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def boot_rescue_armed() -> bool:
+    """Confirm the reboot-protection marker and enabled systemd unit."""
+
+    try:
+        info = ARMED_MARKER.lstat()
+        return (
+            stat.S_ISREG(info.st_mode)
+            and info.st_uid == 0
+            and stat.S_IMODE(info.st_mode) == 0o600
+            and state(["systemctl", "is-enabled", BOOT_UNIT]) == "enabled"
+        )
+    except (OSError, RestoreBlocked):
+        return False
+
+
 def arm(minutes: int, owner: Path) -> dict:
     """Schedule independent restoration before any writer stop."""
 
@@ -148,6 +228,12 @@ def arm(minutes: int, owner: Path) -> dict:
     if timer_armed():
         raise RestoreBlocked("WATCHDOG_ALREADY_ACTIVE")
     install_stable_copy()
+    install_boot_service()
+    write_arm_marker()
+    command(["systemctl", "daemon-reload"])
+    command(["systemctl", "enable", BOOT_UNIT])
+    if not boot_rescue_armed():
+        raise RestoreBlocked("BOOT_RESCUE_NOT_ARMED")
     command(
         [
             "systemd-run",
@@ -161,10 +247,11 @@ def arm(minutes: int, owner: Path) -> dict:
             "--execute",
         ]
     )
-    if not timer_armed():
+    if not timer_armed() or not boot_rescue_armed():
         raise RestoreBlocked("WATCHDOG_NOT_ARMED")
     return {
         "status": "ARMED",
+        "boot_rescue_armed": True,
         "minutes": minutes,
         "service_modified": False,
         "writer_stopped": False,
@@ -205,6 +292,9 @@ def disarm() -> dict:
         raise RestoreBlocked("PRODUCTION_NOT_RESTORED")
     if timer_armed():
         command(["systemctl", "stop", TIMER])
+    if boot_rescue_armed():
+        command(["systemctl", "disable", BOOT_UNIT])
+        ARMED_MARKER.unlink()
     return {"status": "DISARMED", "production_healthy": True}
 
 
@@ -235,6 +325,7 @@ def main() -> int:
             result = {
                 "status": "READ_ONLY",
                 "timer_armed": timer_armed(),
+                "boot_rescue_armed": boot_rescue_armed(),
                 "production_running": production_running(),
             }
     except (RestoreBlocked, OSError, ValueError) as error:
