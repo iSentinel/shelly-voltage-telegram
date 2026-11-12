@@ -36,7 +36,7 @@ Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 The private administrator **Updates** menu checks GitHub Releases without
 installing automatically; see [safe updates](docs/UPDATES.md).
-Current installed EM-50 runtime: 0.5.15-hw. New graphical Telegram candidate: 0.5.16-hw (Draft PR #300, without tag/merge/deployment).
+Current installed EM-50 runtime: 0.5.15-hw. Proposed signed graphical release: 0.5.16-hw (release-promotion review only; no tag, signed artifact, merge, or deployment yet).
 
 ## Overview
 
@@ -53,8 +53,8 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current software candidate: **0.5.16-hw** (Draft PR #300; not deployed)
-- Current release: **0.5.15-hw**
+- Current software candidate: **0.5.16-hw** (separate release-promotion review; not deployed)
+- Current release: **0.5.16-hw** (proposed promotion; becomes published only after version-tag workflows succeed)
 - Production field-test runtime: **0.5.15-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.

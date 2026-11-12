@@ -240,6 +240,27 @@ python3 scripts/graphic-offline-acceptance.py \
   --group 10.1 --jsonl
 ```
 
+For an independently verified YASNO forecast, prefer the mutually
+exclusive `--verified-yasno-cache` argument. This uses the same bounded
+cache verifier for online and offline QA, with origin metadata, SHA256
+checksum, actual retrieval freshness, provider publication freshness,
+and the Kyiv calendar day checked before any PNG is written:
+
+~~~bash
+python3 scripts/graphic-offline-acceptance.py \
+  --health-file /run/private-qa/synthetic-offline.json \
+  --verified-yasno-cache /var/lib/shelly-yasno-reader/yasno.json \
+  --output /run/private-qa/graphic-offline-acceptance.png \
+  --group 10.1 --jsonl
+~~~
+
+The health file above is an explicitly **synthetic offline test** while
+production Shelly is online; it must never be described as a real outage.
+The resulting card must hide old voltage even when the verified YASNO
+schedule is visible. A cache checksum is not a cryptographic
+provider signature. Use 0600 private files in a root-only directory and
+delete the disposable PNG after inspection. No Bot API writes occur.
+
 Optional `--forecast-file` is a local JSON object with exactly
 `bars` (48 half-hour slots), `day` (Kyiv date), `updated` (Unix
 timestamp) and `source` (`yasno`). Expired or mismatched forecast
@@ -306,6 +327,29 @@ python3 scripts/graphic-online-acceptance.py \
   --output /var/tmp/graphic-online-acceptance.png \
   --group 10.1 --jsonl
 ~~~
+
+For direct provenance-checked local YASNO input, prefer the mutually
+exclusive `--verified-yasno-cache` instead of manually preparing forecast
+JSON. Use the protected read-only handoff cache (not the raw public payload):
+
+~~~bash
+python3 scripts/graphic-online-acceptance.py \
+  --health-file /run/private-qa/health-snapshot.json \
+  --verified-yasno-cache /var/lib/shelly-yasno-reader/yasno.json \
+  --output /run/private-qa/graphic-online-acceptance.png \
+  --group 10.1 --jsonl
+~~~
+
+This mode verifies the pinned YASNO origin metadata, SHA256 cache integrity,
+retrieval freshness, publication freshness and current Kyiv day before
+rendering; it uses the actual cache **retrieval timestamp** for widget
+freshness. The provider's `updatedOn` timestamp can be older than two hours
+without making a recently revalidated cache stale. Invalid, missing,
+symlinked, expired or checksum-mismatched inputs fail closed without PNG
+output. The SHA256 checksum detects corruption; it is **not** a provider
+digital signature. Prepare a fresh sanitized 0600 health snapshot and use
+a root-only QA directory; do not put bot tokens in the input. Neither mode
+contacts Telegram or writes SQLite, and the PNG must be deleted after QA.
 
 An optional --forecast-file follows the same local 48-slot YASNO format
 as the offline CLI; it must represent the current Kyiv calendar day and

@@ -7,9 +7,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from test_yasno_schedule import response
+
+import yasno_cache as Y
 
 SCRIPT = Path(__file__).resolve().parents[1] / (
     "scripts/graphic-online-acceptance.py"
@@ -28,6 +32,7 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         folder = Path(self.temp.name)
         self.health = folder / "health.json"
         self.forecast = folder / "yasno.json"
+        self.cache = folder / "verified-cache.json"
         self.output = folder / "status.png"
         self.write_health()
 
@@ -56,6 +61,23 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         }
         payload.update(overrides)
         self.forecast.write_text(json.dumps(payload))
+
+    def write_verified(
+        self,
+        retrieved_age: int = 20,
+        published_age_hours: int = 16,
+        corrupt: bool = False,
+    ):
+        """Make an authentic-schema signed-source checksum QA envelope."""
+
+        payload = response(NOW)
+        published = NOW - timedelta(hours=published_age_hours)
+        payload["10.1"]["updatedOn"] = published.isoformat()
+        fetched = NOW - timedelta(seconds=retrieved_age)
+        envelope = Y.build_cache(payload, fetched)
+        if corrupt:
+            envelope["sha256"] = "0" * 64
+        Y.atomic_write(str(self.cache), envelope)
 
     def run_check(self, *extra):
         """Execute the local CLI with deterministic Kyiv timestamp."""
@@ -199,6 +221,49 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("CLOCK_INVALID", result.stdout)
 
+    def test_verified_cache_uses_retrieval_not_old_publication(self):
+        """Accept a fresh checksum-verified cache with an older update."""
+
+        self.write_verified()
+        result = self.run_check("--verified-yasno-cache", str(self.cache))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        data = json.loads(result.stdout)
+        self.assertTrue(data["forecast_visible"])
+        self.assertEqual(data["voltage_v"], 217.7)
+        self.assertFalse(data["telegram_sent"])
+
+    def test_corrupt_verified_cache_is_rejected(self):
+        """A changed checksum cannot generate a fake forecast."""
+
+        self.write_verified(corrupt=True)
+        result = self.run_check("--verified-yasno-cache", str(self.cache))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("FORECAST_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_stale_verified_cache_is_rejected(self):
+        """Published slots do not forgive an expired trusted retrieval."""
+
+        self.write_verified(retrieved_age=7201)
+        result = self.run_check("--verified-yasno-cache", str(self.cache))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("FORECAST_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_verified_cache_and_manual_forecast_are_exclusive(self):
+        """Do not allow a manual fixture to override verified provenance."""
+
+        self.write_verified()
+        self.write_forecast()
+        result = self.run_check(
+            "--verified-yasno-cache",
+            str(self.cache),
+            "--forecast-file",
+            str(self.forecast),
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.output.exists())
+
     def test_help_describes_explicit_inputs(self):
         """Provide -h/--help for operator use and CI."""
 
@@ -212,6 +277,7 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("--health-file", result.stdout)
         self.assertIn("--forecast-file", result.stdout)
+        self.assertIn("--verified-yasno-cache", result.stdout)
 
 
 if __name__ == "__main__":

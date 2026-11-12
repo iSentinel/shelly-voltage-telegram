@@ -244,11 +244,11 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertIn("measurements_not_equal", result["detail"])
 
-    def test_candidate_marker_does_not_auto_approve_release(self):
-        """An unsigned version candidate cannot grant deployment approval."""
+    def test_promoted_marker_does_not_auto_approve_release(self):
+        """Aligned release versions cannot bypass independent approval."""
 
         self.assertIn(
-            "stable_marker_unchanged=true",
+            "stable_marker_matches=true",
             GATE.version_check(ROOT),
         )
         with tempfile.TemporaryDirectory() as tmp:

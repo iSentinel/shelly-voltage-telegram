@@ -33,7 +33,9 @@ def arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--health-file", type=Path, required=True)
-    parser.add_argument("--forecast-file", type=Path)
+    forecast = parser.add_mutually_exclusive_group()
+    forecast.add_argument("--forecast-file", type=Path)
+    forecast.add_argument("--verified-yasno-cache", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--group", default="10.1")
     parser.add_argument("--now", type=float)
@@ -53,7 +55,13 @@ def local_state(args: argparse.Namespace, clock: float, checks) -> dict:
     if health.get("connectivity") != "online":
         raise ValueError("NOT_ONLINE")
     options = {"group": args.group, "now": clock, "language": "uk"}
-    if args.forecast_file:
+    if args.verified_yasno_cache:
+        options.update(
+            checks.verified_forecast(
+                args.verified_yasno_cache, clock, args.group
+            )
+        )
+    elif args.forecast_file:
         forecast = checks.read_fixture(args.forecast_file)
         if set(forecast) != {"bars", "day", "updated", "source"}:
             raise ValueError("FORECAST_INVALID")
