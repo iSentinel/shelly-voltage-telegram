@@ -7,9 +7,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from test_yasno_schedule import response
+
+import yasno_cache as Y
 
 SCRIPT = Path(__file__).resolve().parents[1] / (
     "scripts/graphic-offline-acceptance.py"
@@ -28,6 +32,7 @@ class OfflineAcceptanceCliTests(unittest.TestCase):
         root = Path(self.temp.name)
         self.health = root / "health.json"
         self.forecast = root / "forecast.json"
+        self.verified = root / "verified-yasno.json"
         self.output = root / "card.png"
         self.set_health("offline")
 
@@ -55,6 +60,23 @@ class OfflineAcceptanceCliTests(unittest.TestCase):
                 }
             )
         )
+
+    def set_verified(
+        self,
+        age: int = 20,
+        publication_hours: int = 16,
+        corrupt: bool = False,
+    ):
+        """Construct a local checksum-checked source snapshot for QA."""
+
+        data = response(NOW)
+        data["10.1"]["updatedOn"] = (
+            NOW - timedelta(hours=publication_hours)
+        ).isoformat()
+        envelope = Y.build_cache(data, NOW - timedelta(seconds=age))
+        if corrupt:
+            envelope["sha256"] = "0" * 64
+        Y.atomic_write(str(self.verified), envelope)
 
     def check(self, *extras: str):
         """Run source-only CLI; no Telegram or network endpoints used."""
@@ -230,6 +252,58 @@ class OfflineAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertNotIn("REDACT_ME_DIAGNOSTIC", result.stdout)
 
+    def test_verified_yasno_offline_keeps_old_voltage_hidden(self):
+        """Recent retrieval shows schedule, never last physical voltage."""
+
+        self.set_verified()
+        result = self.check("--verified-yasno-cache", str(self.verified))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        record = json.loads(result.stdout)
+        self.assertTrue(record["forecast_visible"])
+        self.assertFalse(record["live_voltage_visible"])
+        self.assertFalse(record["telegram_sent"])
+
+    def test_invalid_verified_checksum_blocks_image(self):
+        """Forged cache cannot make an offline forecast appear trusted."""
+
+        self.set_verified(corrupt=True)
+        result = self.check("--verified-yasno-cache", str(self.verified))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("FORECAST_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_stale_verified_retrieval_blocks_image(self):
+        """Even a valid old cache must not be shown as a current day."""
+
+        self.set_verified(age=7201)
+        result = self.check("--verified-yasno-cache", str(self.verified))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("FORECAST_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_expired_verified_publication_blocks_image(self):
+        """Fresh download cannot resurrect an expired provider schedule."""
+
+        self.set_verified(publication_hours=37)
+        result = self.check("--verified-yasno-cache", str(self.verified))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("FORECAST_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_verified_yasno_and_manual_forecast_are_exclusive(self):
+        """Refuse ambiguous forecast origins rather than mixing them."""
+
+        self.set_verified()
+        self.set_forecast()
+        result = self.check(
+            "--verified-yasno-cache",
+            str(self.verified),
+            "--forecast-file",
+            str(self.forecast),
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.output.exists())
+
     def test_help_explains_explicit_local_inputs(self):
         """The tool must support noninteractive -h/--help."""
 
@@ -243,6 +317,7 @@ class OfflineAcceptanceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("--health-file", result.stdout)
         self.assertIn("--forecast-file", result.stdout)
+        self.assertIn("--verified-yasno-cache", result.stdout)
 
 
 if __name__ == "__main__":
