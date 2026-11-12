@@ -17,6 +17,7 @@ from telegram_card_png import (
     label,
     render_card_png,
 )
+from telegram_smooth_type import draw_voltage_type
 from telegram_widget_data import widget_public_data
 
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -173,13 +174,20 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         """Fresh voltage/frequency and source labels stay legible."""
 
         state = make_card_state("online", age_seconds=5, bars="O" * 48)
-        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+        with (
+            mock.patch("telegram_card_png.label", wraps=label) as painter,
+            mock.patch(
+                "telegram_card_png.draw_voltage_type",
+                wraps=draw_voltage_type,
+            ) as vector,
+        ):
             result, _ = self.render(state)
         captions = [call.args[1] for call in painter.call_args_list]
         self.assertEqual(result["status"], "online")
         self.assertIn("ОНЛАЙН", captions)
         self.assertIn("НАПРУГА МЕРЕЖІ / L1", captions)
-        self.assertIn("В", captions)
+        vector.assert_called_once()
+        self.assertEqual(vector.call_args.args[2], f"{state['v']:.1f}")
         self.assertIn("ГРАФІК YASNO / ДТЕК", captions)
         self.assertIn("ГРУПА 10.1", captions)
 
