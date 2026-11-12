@@ -48,6 +48,11 @@ def python_files(root: Path) -> list[Path]:
         root / "yasno_handoff.py",
         root / "telegram_channel_yasno.py",
         root / "telegram_schedule_periods.py",
+        root / "telegram_card_png.py",
+        root / "telegram_card_v5.py",
+        root / "telegram_smooth_type.py",
+        root / "telegram_smooth_bitmap.py",
+        root / "telegram_uk_bitmap.py",
         root / "telegram_widget_data.py",
         root / "telegram_widget_fallback.py",
     ]
