@@ -135,6 +135,11 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
                 WATCHDOG, "timer_armed", side_effect=[False, True]
             ),
             mock.patch.object(WATCHDOG, "install_stable_copy") as copy,
+            mock.patch.object(WATCHDOG, "install_boot_service") as boot,
+            mock.patch.object(WATCHDOG, "write_arm_marker") as marker,
+            mock.patch.object(
+                WATCHDOG, "boot_rescue_armed", return_value=True
+            ),
             mock.patch.object(WATCHDOG, "command") as command,
         ):
             result = WATCHDOG.arm(15, self.owner)
@@ -144,7 +149,67 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
         self.assertIn("--on-unit-active=1min", call)
         self.assertEqual(call[-2:], ["--restore", "--execute"])
         self.assertFalse(result["writer_stopped"])
+        self.assertTrue(result["boot_rescue_armed"])
         copy.assert_called_once()
+        boot.assert_called_once()
+        marker.assert_called_once()
+
+    def test_boot_service_is_persistent_and_guarded(self):
+        """A boot replay must require a marker and retry failed restores."""
+
+        config = WATCHDOG.boot_service_content()
+        self.assertIn("ConditionPathExists=", config)
+        self.assertIn("Restart=on-failure", config)
+        self.assertIn("RestartSec=60s", config)
+        self.assertIn("WantedBy=multi-user.target", config)
+        self.assertIn("--restore --execute", config)
+        self.assertNotIn("shelly-voltage-compose.service", config)
+
+    def test_missing_boot_rescue_blocks_timer_creation(self):
+        """No maintenance timer may arm without verified reboot rescue."""
+
+        with (
+            mock.patch.object(WATCHDOG.os, "geteuid", return_value=0),
+            mock.patch.object(WATCHDOG, "approval", return_value=True),
+            mock.patch.object(
+                WATCHDOG, "production_running", return_value=True
+            ),
+            mock.patch.object(WATCHDOG, "timer_armed", return_value=False),
+            mock.patch.object(WATCHDOG, "install_stable_copy"),
+            mock.patch.object(WATCHDOG, "install_boot_service"),
+            mock.patch.object(WATCHDOG, "write_arm_marker"),
+            mock.patch.object(
+                WATCHDOG, "boot_rescue_armed", return_value=False
+            ),
+            mock.patch.object(WATCHDOG, "command") as command,
+            self.assertRaisesRegex(WATCHDOG.RestoreBlocked, "BOOT_RESCUE"),
+        ):
+            WATCHDOG.arm(15, self.owner)
+        self.assertFalse(
+            any(c.args[0][0] == "systemd-run" for c in command.call_args_list)
+        )
+
+    def test_disarm_removes_boot_restore_only_after_health(self):
+        """Restored monitoring may safely disable both safeguards."""
+
+        with (
+            mock.patch.object(WATCHDOG.os, "geteuid", return_value=0),
+            mock.patch.object(
+                WATCHDOG, "production_running", return_value=True
+            ),
+            mock.patch.object(WATCHDOG, "timer_armed", return_value=True),
+            mock.patch.object(
+                WATCHDOG, "boot_rescue_armed", return_value=True
+            ),
+            mock.patch.object(WATCHDOG.Path, "unlink") as removed,
+            mock.patch.object(WATCHDOG, "command") as command,
+        ):
+            result = WATCHDOG.disarm()
+        self.assertEqual(result["status"], "DISARMED")
+        calls = [item.args[0] for item in command.call_args_list]
+        self.assertIn(["systemctl", "stop", WATCHDOG.TIMER], calls)
+        self.assertIn(["systemctl", "disable", WATCHDOG.BOOT_UNIT], calls)
+        removed.assert_called_once()
 
     def test_already_running_restoration_is_safe_noop(self):
         """A late timer may not restart a healthy restored service."""
@@ -228,6 +293,9 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
                 WATCHDOG, "production_running", return_value=True
             ),
             mock.patch.object(WATCHDOG, "timer_armed", return_value=True),
+            mock.patch.object(
+                WATCHDOG, "boot_rescue_armed", return_value=False
+            ),
             mock.patch.object(WATCHDOG, "command") as command,
         ):
             self.assertEqual(WATCHDOG.disarm()["status"], "DISARMED")
