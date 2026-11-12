@@ -142,13 +142,20 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
     def test_offline_main_card_uses_ukrainian_status_and_hint(self):
         """An outage reports likely loss of mains, not a measured zero."""
 
-        with mock.patch("telegram_card_png.label", wraps=label) as painter:
+        with (
+            mock.patch("telegram_card_png.label", wraps=label) as painter,
+            mock.patch(
+                "telegram_card_png.draw_voltage_type",
+                wraps=draw_voltage_type,
+            ) as vector,
+        ):
             result, _ = self.render(make_card_state("offline", bars=None))
         captions = [call.args[1] for call in painter.call_args_list]
         self.assertEqual(result["status"], "offline")
         self.assertIn("ОФЛАЙН", captions)
         self.assertIn("ДАНІ НЕДОСТУПНІ", captions)
-        self.assertIn("--- В", captions)
+        vector.assert_called_once()
+        self.assertEqual(vector.call_args.args[2], "---")
         self.assertIn(OFFLINE_HINT, captions)
         self.assertNotIn("CURRENT VALUE UNKNOWN", captions)
 
