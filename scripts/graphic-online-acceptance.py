@@ -11,6 +11,7 @@ import struct
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -33,12 +34,38 @@ def arguments() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--health-file", type=Path, required=True)
-    parser.add_argument("--forecast-file", type=Path)
+    forecast = parser.add_mutually_exclusive_group()
+    forecast.add_argument("--forecast-file", type=Path)
+    forecast.add_argument("--verified-yasno-cache", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--group", default="10.1")
     parser.add_argument("--now", type=float)
     parser.add_argument("--jsonl", action="store_true")
     return parser.parse_args()
+
+
+def verified_forecast(cache: Path, clock: float, group: str) -> dict:
+    """Accept only checksum-verified, fresh YASNO source and retrieval time."""
+
+    from yasno_cache import read_verified_cache
+    from yasno_schedule import parse_schedule
+
+    try:
+        payload, captured = read_verified_cache(str(cache))
+        parsed = parse_schedule(
+            payload,
+            group,
+            datetime.fromtimestamp(clock, timezone.utc),
+            captured,
+        )
+    except (ValueError, OSError, KeyError, TypeError):
+        raise ValueError("FORECAST_INVALID") from None
+    return {
+        "bars": parsed.bars,
+        "day": parsed.day,
+        "forecast_updated": parsed.retrieved_at,
+        "forecast_source": "yasno",
+    }
 
 
 def local_state(args: argparse.Namespace, clock: float, checks) -> dict:
@@ -53,7 +80,11 @@ def local_state(args: argparse.Namespace, clock: float, checks) -> dict:
     if health.get("connectivity") != "online":
         raise ValueError("NOT_ONLINE")
     options = {"group": args.group, "now": clock, "language": "uk"}
-    if args.forecast_file:
+    if args.verified_yasno_cache:
+        options.update(
+            verified_forecast(args.verified_yasno_cache, clock, args.group)
+        )
+    elif args.forecast_file:
         forecast = checks.read_fixture(args.forecast_file)
         if set(forecast) != {"bars", "day", "updated", "source"}:
             raise ValueError("FORECAST_INVALID")
