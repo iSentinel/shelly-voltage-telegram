@@ -971,3 +971,30 @@ pinned by these offline regressions.
 The verified forecast is not a physical measurement. The actual
 meter source always wins when live and fresh; loss of connectivity
 makes instantaneous voltage unknown even if YASNO indicates OFF.
+
+
+## QA resource isolation and strict physical stability gate
+
+Run the full Python test suite and graphic rendering workloads in
+GitHub CI or an isolated QA runner, rather than competing with the
+live Shelly polling loop in the production LXC. Narrow, read-only
+checks may run on the host; a green source-only test suite does not
+establish physical sample continuity.
+
+Before accepting live recovery or starting a public cutover, invoke
+scripts/em50-recovery-stability.py --json against the current
+read-only SQLite and local health endpoints. The default 15-minute
+window must contain at least 60 valid readings with **no gap above
+30 seconds**, including its window boundaries. Do not increase the
+gap threshold, reduce the window, discard a delayed sample, or
+substitute forecast data to make a failed run pass. FAIL or
+PENDING keeps live release BLOCKED. Re-test only after a fresh
+continuous window has actually elapsed; never label a short
+post-failure interval as equivalent to a 15-minute PASS.
+
+When a QA run and a sample gap overlap, record both timestamps
+without assigning a cause unless independent evidence confirms it.
+A sampling gap does not itself prove a physical power outage, and
+an online Docker healthcheck does not override a failed continuity
+gate. Preserve the exact SQLite timestamps and diagnostics in a
+protected private QA report, without tokens or chat identifiers.
