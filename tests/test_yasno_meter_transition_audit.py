@@ -101,6 +101,46 @@ class MeterTransitionAuditTests(unittest.TestCase):
         )
         reader.assert_not_called()
 
+    def test_concurrent_writer_does_not_split_read_snapshot(self):
+        """Two SELECTs must observe the same SQLite WAL generation."""
+
+        real_connect = sqlite3.connect
+        database = self.db
+        with closing(real_connect(database)) as setup:
+            setup.execute("pragma journal_mode=WAL")
+
+        class InsertingReader(sqlite3.Connection):
+            """Insert an outage between the audited SELECT statements."""
+
+            def execute(self, sql, *args, **kwargs):
+                if sql.startswith("select count(*) from outages"):
+                    with closing(real_connect(database)) as writer:
+                        writer.execute(
+                            "insert into outages values (?, ?)",
+                            (self_edge, self_edge + 10),
+                        )
+                        writer.commit()
+                return super().execute(sql, *args, **kwargs)
+
+        self_edge = self.edge.timestamp()
+
+        def open_reader(*args, **kwargs):
+            """Supply an instrumented read-only connection."""
+            return real_connect(*args, factory=InsertingReader, **kwargs)
+
+        with mock.patch.object(
+            AUDIT.sqlite3, "connect", side_effect=open_reader
+        ):
+            rows, observed = AUDIT.read_samples(
+                database, self_edge - 900, self_edge + 900
+            )
+
+        with closing(real_connect(database)) as db:
+            committed = db.execute("select count(*) from outages").fetchone()[
+                0
+            ]
+        self.assertEqual((len(rows), observed, committed), (180, 0, 1))
+
     def test_missing_samples_fail_closed(self):
         """Insufficient physical samples cannot masquerade as continuity."""
 
