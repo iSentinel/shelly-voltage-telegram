@@ -226,6 +226,46 @@ class VerifiedNov12ScheduleTests(unittest.TestCase):
                     self.assertNotIn("214.1", caption)
                     self.assertIn("Немає зв'язку", caption)
 
+    def test_stale_then_fresh_recovery_with_planned_yasno_x(self):
+        """Only a new physical sample permits voltage after the outage."""
+
+        now = local_time(11, 21, 0)
+        self.assertEqual(VERIFIED_BARS[22], "X")
+        stale = widget_public_data(
+            {
+                "connectivity": "online",
+                "voltage": 214.1,
+                "frequency": 50.0,
+                "last_success": local_time(10, 42, 44),
+            },
+            group="10.1",
+            bars=VERIFIED_BARS,
+            day="2026-11-12",
+            forecast_updated=now - 30,
+            forecast_source="yasno",
+            now=now,
+            language="uk",
+        )
+        fresh = self.widget(now, True, 216.8)
+        for name, state, visible in (
+            ("stale-physical", stale, False),
+            ("fresh-physical", fresh, True),
+        ):
+            with self.subTest(stage=name):
+                data = json.loads(state)
+                output = self.folder / f"recovery-{name}.png"
+                card = render_card_png(data, output, now=now)
+                caption = widget_fallback_text(state, now=now)
+                self.assertTrue(card["forecast_visible"])
+                self.assertEqual(card["live_voltage_visible"], visible)
+                if visible:
+                    self.assertEqual(card["status"], "online")
+                    self.assertIn("216.8", caption)
+                else:
+                    self.assertNotEqual(card["status"], "online")
+                    self.assertTrue({"v", "f", "t"}.isdisjoint(data))
+                    self.assertNotIn("214.1", caption)
+
 
 if __name__ == "__main__":
     unittest.main()
