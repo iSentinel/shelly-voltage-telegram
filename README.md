@@ -180,3 +180,19 @@ Troubleshooting: [Shelly online in the app, but offline in Telegram](docs/SHELLY
 The edit window is configured in administrator `/settings`: 3, 5 or 10 minutes, with 10 minutes as the default (`VOLTAGE_STATUS_EDIT_WINDOW_MIN`). Its deadline starts with the first published voltage event. Low voltage, high voltage, recovery and repeated transitions within that deadline edit the same message, including after recovery. Edits do not extend the deadline. After expiry, the next transition publishes a new post, then unpins and deletes the previous post.
 
 The audible notification cooldown is a separate setting. Editing a message is silent and does not change the last audible notification time. Quiet hours still apply to new posts. SQLite metadata preserves the setting, message ID and original deadline across restarts. Older databases use the configured default and reuse a recent stored voltage event when available; existing history is retained.
+
+
+### Telegram status Design Polish v5 (source-only candidate)
+
+The proposed Docker image installs Debian's Inter and Noto Sans font
+packages and Pillow 11.3.x. It enables TELEGRAM_GRAPHIC_STYLE=v5, a
+FreeType anti-aliased renderer with double-resolution Lanczos downsampling
+to 960x800. No font installation is needed on the production host.
+The dependency-free v4 bitmap renderer remains available through
+TELEGRAM_GRAPHIC_STYLE=v4. Unknown values fail closed.
+
+For offline QA outside Docker, install Pillow into an isolated virtual
+environment and use TELEGRAM_V5_FONT_ROOT to point at a separately
+extracted copy of these licensed fonts. A generated preview is not proof
+of Telegram recipient-visible acceptance and does not authorize public
+status photo conversion or production deployment.
