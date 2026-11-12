@@ -40,6 +40,11 @@ seconds (including window boundaries), positive finite numeric
 voltage/frequency, unique timestamps, and no recorded outage
 overlapping either side. Any violation gives FAIL (exit 2).
 
+Measurements and overlapping outage records are read from one
+consistent SQLite read transaction, even when the production writer
+commits new data concurrently. The audit opens SQLite in read-only
+mode and never holds a write lock or changes stored data.
+
 This report distinguishes a **forecasted change** from what the
 meter measured. It does not assert that YASNO caused an outage or
 a restoration, and it does not authorize a production release.
