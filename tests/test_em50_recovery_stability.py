@@ -93,6 +93,34 @@ class RecoveryStabilityTests(unittest.TestCase):
                     broken, self.now - 900, self.now, 30, 60
                 )
 
+    def test_duplicate_timestamps_cannot_fake_stable_recovery(self):
+        """Two rows at one timestamp do not represent two meter samples."""
+
+        rows = self.rows.copy()
+        rows[24] = (rows[23][0], 213.0, 50.0)
+        with self.assertRaisesRegex(ValueError, "non-increasing"):
+            STABLE.verify_stability(rows, self.now - 900, self.now, 30, 60)
+
+    def test_nonfinite_and_text_timestamps_fail_closed(self):
+        """Reject synthetic invalid timestamp types before gap evaluation."""
+
+        for invalid in (float("nan"), float("inf"), "2000000000", True):
+            with self.subTest(timestamp=repr(invalid)):
+                rows = self.rows.copy()
+                rows[23] = (invalid, 213.0, 50.0)
+                with self.assertRaisesRegex(ValueError, "invalid physical"):
+                    STABLE.verify_stability(
+                        rows, self.now - 900, self.now, 30, 60
+                    )
+
+    def test_out_of_order_timestamps_are_not_continuous(self):
+        """Misordered readings cannot pass even when voltages are normal."""
+
+        rows = self.rows.copy()
+        rows[20], rows[21] = rows[21], rows[20]
+        with self.assertRaisesRegex(ValueError, "non-increasing"):
+            STABLE.verify_stability(rows, self.now - 900, self.now, 30, 60)
+
     def test_false_voltage_and_frequency_rejected(self):
         """Reject impossible, fabricated and nonnumeric values."""
 
