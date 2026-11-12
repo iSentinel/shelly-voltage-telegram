@@ -108,6 +108,52 @@ class VerifiedNov12ScheduleTests(unittest.TestCase):
         self.assertNotIn("219.2", caption)
         self.assertIn("Немає зв'язку", caption)
 
+    def test_0400_planned_off_to_on_keeps_live_voltage(self):
+        """YASNO X-to-O at 04:00 cannot change a live Shelly reading."""
+
+        before = local_time(3, 59, 59)
+        after = local_time(4, 0, 0)
+        self.assertEqual(VERIFIED_BARS[7:9], "XO")
+        for clock, expected_slot in ((before, "X"), (after, "O")):
+            with self.subTest(expected_slot=expected_slot):
+                state = self.widget(clock, True, 223.7)
+                card = render_card_png(
+                    json.loads(state),
+                    self.folder / f"transition-{expected_slot}.png",
+                    now=clock,
+                )
+                caption = widget_fallback_text(state, now=clock)
+                self.assertEqual(card["status"], "online")
+                self.assertTrue(card["live_voltage_visible"])
+                self.assertTrue(card["forecast_visible"])
+                self.assertEqual(
+                    card["forecast_off_slots"], VERIFIED_BARS.count("X")
+                )
+                self.assertIn("223.7", caption)
+                self.assertIn("Прогноз", caption)
+
+    def test_0400_planned_on_cannot_resurrect_offline_voltage(self):
+        """A planned YASNO restoration never revives last known voltage."""
+
+        before = local_time(3, 59, 59)
+        after = local_time(4, 0, 0)
+        for clock, expected_slot in ((before, "X"), (after, "O")):
+            with self.subTest(expected_slot=expected_slot):
+                state = self.widget(clock, False, 213.4)
+                data = json.loads(state)
+                card = render_card_png(
+                    data,
+                    self.folder / f"lost-{expected_slot}.png",
+                    now=clock,
+                )
+                caption = widget_fallback_text(state, now=clock)
+                self.assertEqual(card["status"], "offline")
+                self.assertFalse(card["live_voltage_visible"])
+                self.assertTrue(card["forecast_visible"])
+                self.assertTrue({"v", "f", "t"}.isdisjoint(data))
+                self.assertNotIn("213.4", caption)
+                self.assertIn("Немає зв'язку", caption)
+
 
 if __name__ == "__main__":
     unittest.main()
