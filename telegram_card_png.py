@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import time
 from datetime import datetime
@@ -343,6 +344,13 @@ def render_card_png(
 ) -> dict:
     """Create one 960x800 PNG and return non-sensitive rendering metadata."""
 
+    style = os.getenv("TELEGRAM_GRAPHIC_STYLE", "v4")
+    if style == "v5":
+        from telegram_card_v5 import render_card_v5
+
+        return render_card_v5(state, target, now)
+    if style != "v4":
+        raise ValueError("unsupported graphic style")
     if not isinstance(state, dict) or state.get("schema") != 1:
         raise ValueError("invalid widget state")
     clock = time.time() if now is None else float(now)

@@ -5,6 +5,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# FreeType font families; the runtime image includes all required glyphs.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-inter fonts-noto-core \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV TELEGRAM_GRAPHIC_STYLE=v5
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
