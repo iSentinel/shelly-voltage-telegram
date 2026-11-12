@@ -27,6 +27,61 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
 
         self.owner = Path("/synthetic/owner-approval.json")
 
+    def test_production_requires_healthy_container(self):
+        """An unhealthy writer is never safe to disarm or skip restarting."""
+
+        healthy = ["active", "enabled", "true", "healthy", "unless-stopped"]
+        for status in ("unhealthy", "starting", "<no value>", ""):
+            with (
+                self.subTest(health=status),
+                mock.patch.object(
+                    WATCHDOG,
+                    "state",
+                    side_effect=healthy[:3] + [status],
+                ),
+            ):
+                self.assertFalse(WATCHDOG.production_running())
+        with mock.patch.object(WATCHDOG, "state", side_effect=healthy):
+            self.assertTrue(WATCHDOG.production_running())
+
+    def test_health_probe_failure_does_not_claim_restoration(self):
+        """Docker inspection errors must keep the timer available."""
+
+        for status in (
+            "SERVICE_COMMAND_UNAVAILABLE",
+            "SERVICE_COMMAND_FAILED",
+        ):
+            with (
+                self.subTest(reason=status),
+                mock.patch.object(
+                    WATCHDOG,
+                    "state",
+                    side_effect=[
+                        "active",
+                        "enabled",
+                        "true",
+                        WATCHDOG.RestoreBlocked(status),
+                    ],
+                ),
+            ):
+                self.assertFalse(WATCHDOG.production_running())
+
+    def test_disarm_rejects_unhealthy_container(self):
+        """A running but unhealthy container must not disable the timer."""
+
+        with (
+            mock.patch.object(WATCHDOG.os, "geteuid", return_value=0),
+            mock.patch.object(
+                WATCHDOG,
+                "state",
+                side_effect=["active", "enabled", "true", "unhealthy"],
+            ),
+            mock.patch.object(WATCHDOG, "command") as command,
+            self.assertRaisesRegex(WATCHDOG.RestoreBlocked, "NOT_RESTORED"),
+        ):
+            WATCHDOG.disarm()
+        command.assert_not_called()
+
     def test_arm_requires_root_and_bounded_deadline(self):
         """Unprivileged or too-long maintenance cannot arm a timer."""
 
