@@ -197,6 +197,35 @@ class VerifiedNov12ScheduleTests(unittest.TestCase):
                 self.assertNotIn("222.4", caption)
                 self.assertIn("Немає зв'язку", caption)
 
+    def test_1043_meter_loss_is_independent_of_0830_forecast(self):
+        """Physical monitoring can turn offline long after YASNO becomes X."""
+
+        online_clock = local_time(10, 42, 44)
+        offline_clock = local_time(10, 43, 26)
+        self.assertEqual(VERIFIED_BARS[21], "X")
+        for clock, online in ((online_clock, True), (offline_clock, False)):
+            with self.subTest(meter_online=online):
+                state = self.widget(clock, online, 214.1)
+                data = json.loads(state)
+                file = self.folder / f"late-outage-{online}.png"
+                rendered = render_card_png(data, file, now=clock)
+                caption = widget_fallback_text(state, now=clock)
+                self.assertTrue(rendered["forecast_visible"])
+                self.assertEqual(
+                    rendered["forecast_off_slots"], VERIFIED_BARS.count("X")
+                )
+                self.assertEqual(rendered["live_voltage_visible"], online)
+                self.assertEqual(
+                    rendered["status"], "online" if online else "offline"
+                )
+                if online:
+                    self.assertIn("214.1", caption)
+                    self.assertNotIn("Немає зв'язку", caption)
+                else:
+                    self.assertTrue({"v", "f", "t"}.isdisjoint(data))
+                    self.assertNotIn("214.1", caption)
+                    self.assertIn("Немає зв'язку", caption)
+
 
 if __name__ == "__main__":
     unittest.main()
