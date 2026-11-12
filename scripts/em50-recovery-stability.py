@@ -33,6 +33,19 @@ def read_window(db_path: Path, phase: str, started_at: float, now: float):
         ).fetchall()
 
 
+def verified_times(rows: list) -> list[float]:
+    """Require real, finite and strictly increasing measurement timestamps."""
+
+    values = []
+    for timestamp, _, _ in rows:
+        if type(timestamp) not in {int, float} or not math.isfinite(timestamp):
+            raise ValueError("invalid physical sample timestamp")
+        if values and timestamp <= values[-1]:
+            raise ValueError("non-increasing physical sample timestamp")
+        values.append(float(timestamp))
+    return values
+
+
 def verify_stability(
     rows: list,
     window_start: float,
@@ -46,7 +59,7 @@ def verify_stability(
         raise ValueError("stability thresholds outside allowed bounds")
     if len(rows) < min_samples or len(rows) > 5000:
         raise ValueError("too few or too many samples for stability")
-    times = [float(item[0]) for item in rows]
+    times = verified_times(rows)
     gaps = [
         times[0] - window_start,
         now - times[-1],
