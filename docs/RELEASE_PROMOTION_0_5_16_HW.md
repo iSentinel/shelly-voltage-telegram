@@ -31,6 +31,58 @@ and the established release procedure.
   media-safe rollback. Do not restore a text-only runtime over
   a live photo without reconciling media identity.
 
+## Independent restoration before A/B
+
+The source-only helper scripts/graphic-emergency-restore.py is never
+armed by tests or CI. It must first be reviewed and installed from
+the exact source revision. To inspect the current service state:
+
+~~~bash
+python3 scripts/graphic-emergency-restore.py
+~~~
+
+Only after signed-install preflight PASS, visual confirmation, a
+private recovery rehearsal and an approved maintenance window:
+
+~~~bash
+python3 scripts/graphic-emergency-restore.py --arm --execute   --minutes 15 --owner-approval-file   /opt/shelly-voltage/validation/telegram-graphic-owner-approval-20261110-223420.json
+systemctl is-active shelly-graphic-emergency-restore.timer
+~~~
+
+The watchdog must be **active before any stop**. It pins a root-only
+copy outside the candidate checkout and starts a separate systemd
+timer. After 15 minutes it restores the original service and Docker
+restart policy; if restoration fails, it retries every minute.
+The maintenance process must require a VERIFIED watchdog.
+
+For the writer-stopped window, use a **runtime-only systemd mask**
+rather than permanently disabling the boot-enabled service. This
+allows systemd to start the service again after an LXC reboot.
+Only a reviewed maintenance procedure should then execute:
+
+~~~bash
+docker update --restart=no shelly-voltage-bot
+systemctl mask --runtime --now shelly-voltage-compose.service
+systemctl is-active shelly-voltage-compose.service || true
+systemctl is-enabled shelly-voltage-compose.service || true
+~~~
+
+The A/B and exact Telegram guards must see inactive Docker, inactive
+systemd, runtime mask, and Docker restart=no. Revalidate the
+watchdog between each stage. The watchdog may reactivate the writer;
+in that case, stop, discard staged archives, and require fresh A/B.
+
+After successful restoration and health review, cancel the timer
+using the same copied exact script:
+
+~~~bash
+python3 /usr/local/sbin/shelly-graphic-emergency-restore   --disarm --execute
+~~~
+
+Never disarm before the source, Docker, systemd and Telegram
+state have been independently reconciled. An offline physical Shelly
+does not prove a restored mains supply; readiness must remain honest.
+
 ## Operator dry-run
 
 ~~~bash
