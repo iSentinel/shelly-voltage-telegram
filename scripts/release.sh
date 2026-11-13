@@ -142,7 +142,7 @@ copy_public_tree() {
         --exclude='*.sqlite3' \
         --exclude='*.sqlite3-*' \
         --exclude='*.log' \
-        -cf - . | tar -C "$destination" -xf -
+        -cf - . | tar -C "$destination" --same-permissions -xf -
     cp "$PROJECT/.env.example" "$destination/.env.example"
     # Fix the public template's mode regardless of the caller's umask.
     chmod 0644 "$destination/.env.example"
