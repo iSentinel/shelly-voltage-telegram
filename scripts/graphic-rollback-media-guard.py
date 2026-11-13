@@ -57,7 +57,37 @@ def metadata(path: Path) -> dict[str, str]:
     return dict(rows)
 
 
-def classify_status(meta: dict[str, str]) -> str:
+
+def configured_chat(env_file: Path) -> str:
+    """Read one trusted Telegram chat ID without executing dotenv code."""
+
+    if env_file.is_symlink() or not env_file.is_file():
+        raise ValueError("TELEGRAM_CONFIG_UNAVAILABLE")
+    if env_file.stat().st_nlink != 1:
+        raise ValueError("TELEGRAM_CONFIG_UNSAFE")
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        raise ValueError("TELEGRAM_CONFIG_UNAVAILABLE") from None
+    matches = []
+    for line in lines:
+        if line.lstrip().startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() == "TELEGRAM_STATUS_CHAT_ID":
+            matches.append(value.strip())
+    if len(matches) != 1:
+        raise ValueError("TELEGRAM_CONFIG_AMBIGUOUS")
+    chat = matches[0]
+    if len(chat) >= 2 and chat[0] in ("'", '"') and chat[-1] == chat[0]:
+        chat = chat[1:-1]
+    if not chat or any(character.isspace() for character in chat):
+        raise ValueError("TELEGRAM_CONFIG_INVALID")
+    return chat
+
+def classify_status(
+    meta: dict[str, str], expected_chat: str | None = None
+) -> str:
     """Never permit restoring legacy code across photo or pending media."""
 
     if any(key in meta for key in PENDING):
@@ -75,6 +105,8 @@ def classify_status(meta: dict[str, str]) -> str:
     if (
         kind != "text"
         or not chat
+        or not expected_chat
+        or chat != expected_chat
         or not stored
         or stored != message_id
         or not stored.isascii()
@@ -85,12 +117,18 @@ def classify_status(meta: dict[str, str]) -> str:
     return "confirmed_text"
 
 
-def inspect(path: Path) -> dict:
-    """Return a safe decision without changing source, SQLite or Telegram."""
+def inspect(path: Path, env_file: Path | None = None) -> dict:
+    """Fail closed when bound media references another Telegram channel."""
 
     if not guarded_database(path):
         return {"status": "PASS", "reason": "DATABASE_MISSING"}
-    state = classify_status(metadata(path))
+    meta = metadata(path)
+    expected_chat = None
+    if meta.get("telegram_status_media_identity") is not None:
+        if env_file is None:
+            raise ValueError("TELEGRAM_CONFIG_UNAVAILABLE")
+        expected_chat = configured_chat(env_file)
+    state = classify_status(meta, expected_chat)
     return {"status": "PASS", "reason": state}
 
 
@@ -99,10 +137,11 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, required=True)
+    parser.add_argument("--env-file", type=Path)
     parser.add_argument("--jsonl", action="store_true")
     args = parser.parse_args()
     try:
-        result = inspect(args.database)
+        result = inspect(args.database, args.env_file)
     except (OSError, ValueError):
         result = {"status": "BLOCKED", "reason": "UNSAFE_TELEGRAM_ROLLBACK"}
     if args.jsonl:
