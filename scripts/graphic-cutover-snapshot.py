@@ -350,7 +350,7 @@ def build_archives(
     source_parity(source, options.source)
     manifest = staging / "manifest.env"
     manifest.write_text(
-        f"from_version={version}\nto_version=0.5.16-hw\n"
+        f"from_version={version}\nto_version=0.5.17-hw\n"
         f"cutover_phase={options.phase}\n",
         encoding="ascii",
     )

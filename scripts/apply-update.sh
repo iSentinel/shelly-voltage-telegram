@@ -7,6 +7,7 @@ STATE="${SVT_UPDATE_STATE:-/var/lib/shelly-voltage-updater}"
 DB="${DATABASE_PATH:-/var/lib/shelly-voltage/voltage.sqlite3}"
 IMAGE="ghcr.io/isentinel/shelly-voltage-telegram"
 VERSION=""
+COSIGN_EXECUTABLE=""
 DRY_RUN=false
 SNAPSHOT=""
 CHANGED=false
@@ -45,8 +46,8 @@ parse_args() {
 }
 
 check_cosign_compatibility() {
-    local version major
-    version="$(cosign version 2>/dev/null | awk '/^GitVersion:/ {print $2}')"
+    local version major executable="${1:-cosign}"
+    version="$("$executable" version 2>/dev/null | awk '/^GitVersion:/ {print $2}')"
     if [[ "$version" =~ ^v?([0-9]+)\. ]]; then
         major="${BASH_REMATCH[1]}"
     else
@@ -59,15 +60,34 @@ check_cosign_compatibility() {
     fi
 }
 
+select_cosign() {
+    local candidate
+    local -a choices=("$@")
+    if [[ -n "${SVT_COSIGN_BIN:-}" ]]; then
+        choices=("$SVT_COSIGN_BIN")
+    elif [[ ${#choices[@]} -eq 0 ]]; then
+        choices=(/usr/local/bin/cosign /usr/bin/cosign)
+    fi
+    for candidate in "${choices[@]}"; do
+        if [[ "$candidate" == /* && -f "$candidate" && -x "$candidate" ]] &&
+            check_cosign_compatibility "$candidate" >/dev/null 2>&1; then
+            COSIGN_EXECUTABLE="$candidate"
+            return 0
+        fi
+    done
+    echo "FAIL: no supported Cosign v3 binary in trusted paths" >&2
+    return 1
+}
+
 requirements() {
     [[ $EUID -eq 0 ]] || { echo "FAIL: root required" >&2; exit 2; }
-    for name in python3 cosign docker flock curl tar sha256sum gzip; do
+    for name in python3 docker flock curl tar sha256sum gzip; do
         command -v "$name" >/dev/null || {
             echo "FAIL: missing $name" >&2; exit 2;
         }
     done
     docker compose version >/dev/null
-    check_cosign_compatibility
+    select_cosign
     mkdir -p "$STATE/snapshots"
     chmod 0700 "$STATE" "$STATE/snapshots"
     exec 9>/run/lock/shelly-voltage-updater.lock
@@ -87,7 +107,7 @@ storage_preflight() {
 
 verify_image() {
     local target="$IMAGE@$1"
-    cosign verify \
+    "$COSIGN_EXECUTABLE" verify \
         --certificate-identity "https://github.com/iSentinel/shelly-voltage-telegram/.github/workflows/image.yml@refs/tags/v$VERSION" \
         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
         "$target" >/dev/null

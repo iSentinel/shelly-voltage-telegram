@@ -439,16 +439,24 @@ PY_UNSAFE
     echo "ROLLBACK_UNSAFE_$unsafe_type=REJECTED"
 done
 
+# An absent live DB cannot prove the Telegram status is still editable text.
 MISSING_DB="$DB_DIR/missing.sqlite3"
+set +e
 SVT_ROOT="$TARGET" \
 DATABASE_PATH="$MISSING_DB" \
 SNAPSHOT_ROOT="$SNAP_ROOT" \
 RESCUE_ROOT="$RESCUE" \
     "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --dry-run --no-start \
-    > "$TMP/missing-db-dry-run.log"
-grep -q "ROLLBACK PASS" "$TMP/missing-db-dry-run.log"
+    > "$TMP/missing-db-dry-run.log" 2>&1
+missing_db_rc=$?
+set -e
+test "$missing_db_rc" -eq 6
+grep -q "Telegram media requires separate reconciliation" \
+    "$TMP/missing-db-dry-run.log"
+! grep -q "DRY-RUN: stop Compose service" "$TMP/missing-db-dry-run.log"
 test ! -e "$MISSING_DB"
-echo "ROLLBACK_MISSING_DB_DRY_RUN=PASS"
+test "$(cat "$TARGET/VERSION")" = "0.4.2-hw"
+echo "ROLLBACK_MISSING_DB_DRY_RUN=BLOCKED"
 
 # A real rollback without explicit DB-replacement approval MUST fail
 # before touching the active source, DB or Docker service.

@@ -29,6 +29,8 @@ class DualSnapshotCutoverTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
         self.path = self.folder / "live.sqlite3"
+        self.env_file = self.folder / ".env"
+        self.env_file.write_text("TELEGRAM_STATUS_CHAT_ID=-100123\n")
         self.storage = APP.Storage(self.path, "Europe/Kyiv")
         self.storage.initialize()
         self.storage.add(1000.0, 217.5, 50.0, "L1")
@@ -75,6 +77,8 @@ class DualSnapshotCutoverTests(unittest.TestCase):
                 str(ROLLBACK_GUARD),
                 "--database",
                 str(self.path),
+                "--env-file",
+                str(self.env_file),
                 "--jsonl",
             ],
             capture_output=True,
@@ -96,6 +100,8 @@ class DualSnapshotCutoverTests(unittest.TestCase):
         self.assertEqual(
             self.rollback_media_decision()["reason"], "confirmed_text"
         )
+        self.env_file.write_text("TELEGRAM_STATUS_CHAT_ID=-100999\n")
+        self.assertEqual(self.rollback_media_decision()["exit"], 6)
 
     def test_second_snapshot_is_exact_after_verified_confirmation(self):
         """B contains the verified media marker and full prior history."""
