@@ -68,15 +68,22 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         )
         return proc.returncode, json.loads(proc.stdout)
 
-    def test_unbound_database_and_missing_database_are_safe(self) -> None:
-        """Unmigrated text-only deployments still support rollback."""
+    def test_unbound_existing_database_is_safe(self) -> None:
+        """Legacy text status with an intact database still allows rollback."""
 
         code, report = self.call()
         self.assertEqual(code, 0)
         self.assertEqual(report["reason"], "legacy_unbound")
-        self.assertEqual(
-            GUARD.inspect(self.folder / "missing.sqlite3")["status"], "PASS"
-        )
+
+    def test_missing_database_always_blocks_rollback(self) -> None:
+        """An absent DB cannot prove that public Telegram is still text."""
+
+        self.db.unlink()
+        code, report = self.call()
+        self.assertEqual(code, 6)
+        self.assertEqual(report["status"], "BLOCKED")
+        with self.assertRaisesRegex(ValueError, "DATABASE_MISSING_UNVERIFIED"):
+            GUARD.inspect(self.db)
 
     def test_verified_text_identity_remains_rollback_compatible(self) -> None:
         """A verified text status still supports editMessageText."""
@@ -194,7 +201,8 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         """An absent main file is not proof that SQLite state is empty."""
 
         self.db.unlink()
-        self.assertEqual(GUARD.inspect(self.db)["reason"], "DATABASE_MISSING")
+        with self.assertRaisesRegex(ValueError, "DATABASE_MISSING_UNVERIFIED"):
+            GUARD.inspect(self.db)
         for suffix in ("-wal", "-shm", "-journal"):
             with self.subTest(suffix=suffix):
                 sidecar = Path(str(self.db) + suffix)

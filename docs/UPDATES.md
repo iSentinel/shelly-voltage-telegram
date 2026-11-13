@@ -69,6 +69,21 @@ A malformed gzip or SQLite image fails with exit code 2 before service
 disruption. A successful temporary restore is **not** evidence that a
 real production rollback or a candidate release has been approved.
 
+## Fail closed when live SQLite is missing during a rollback
+
+On an established deployment, the public Telegram status might already
+have been converted from text to photo. The rollback guard must not
+infer an unmigrated text message merely because the live SQLite file
+is absent, even when all SQLite WAL and journal sidecars are absent.
+Both the pre-stop and post-stop checks return BLOCKED until the missing
+database and public media identity are reconciled through a separate
+reviewed recovery procedure.
+
+A complete existing SQLite database with verified text status remains
+eligible for ordinary rollback checks. A new installation must use the
+documented fresh-install path, not treat a missing database as rollback
+approval. Do not fabricate an empty SQLite file or bypass the guard.
+
 ## Validate rollback archives before stopping the monitor
 
 `scripts/rollback.sh` validates the source archive **before**

@@ -122,7 +122,7 @@ def inspect(path: Path, env_file: Path | None = None) -> dict:
     """Fail closed when bound media references another Telegram channel."""
 
     if not guarded_database(path):
-        return {"status": "PASS", "reason": "DATABASE_MISSING"}
+        raise ValueError("DATABASE_MISSING_UNVERIFIED")
     meta = metadata(path)
     expected_chat = None
     if meta.get("telegram_status_media_identity") is not None:
