@@ -1,15 +1,40 @@
 # v0.5.16-hw release-promotion preflight (not deployed)
 
-This isolated branch is a **proposal only**. PR #300 remains Draft.
-It must not be merged or tagged without a reviewed visual acceptance
-and the established release procedure.
+This is a **preflight checklist, not deployment authorization**. The owner
+accepted Design Polish v5.1; PRs #300, #301, #302, #303 and #304 have been
+merged. The physical production bot remains at `0.5.15-hw`. Neither the
+`v0.5.16-hw` Git tag nor signed public release artifacts are available.
+
+The last independently tested candidate before this documentation change
+was `32ae7eeedc912d3a22f2ea46ffadfbec3eabbd9e`. Recompute the exact
+`main` SHA after **every** merge; do not tag the older SHA automatically.
+
+## Current release gates (13 November 2026)
+
+- Combined source-only regression: **1827/1827 PASS** after PR #303/#304;
+  focused 16/16 PASS and quality gate 214 Python files PASS.
+- Exact combined Git-tree was compared against the merge commit: PASS.
+- Source-only archive was built twice with equal bytes and SHA256:
+  `ef9ab67d3aa9ee427239187c1e7a70ee5ea8e9358c5966b27543edd6cb92880c`
+  (846004 bytes). This is a QA artifact, **not** a published signed release.
+- Real Shelly, SQLite integrity, verified YASNO 10.1 and the latest backup
+  checksum passed preflight. Exact backup/live SQLite parity **fails** while
+  the writer continues to append measurements. A hot backup is not a
+  stopped-writer A/B cutover snapshot.
+- Pending: authenticated release tag, GitHub source Release, signed Cosign
+  GHCR image, private recipient-visible Telegram send/edit acceptance,
+  systemd activation review and explicit release-plus-rollback approval.
+- The exact public Telegram status is currently a **text** post. The channel
+  has another pinned message; the status pin audit returns
+  `PINNED_MESSAGE_MISMATCH`. Never change or remove that unrelated pin to
+  force the cutover.
 
 ## Scope
 
-- Review Design Polish v4 private preview (correct В baseline,
-  smooth typography, past/current/future YASNO half-hours, offline
-  privacy) with the owner. Bot API delivery alone does not prove
-  recipient-visible acceptance.
+- Preserve the accepted Design Polish v5.1 (correct В baseline, smooth
+  typography, live voltage, past/current/future YASNO half-hours and
+  offline privacy). Online/offline source-only PNG parity passed.
+  Recipient-visible delivery is a separate, still-pending acceptance.
 - Compare candidate VERSION, proposed RELEASE_VERSION, and public
   README metadata before review. The physical LIVE_VERSION remains
   unchanged and is not used to claim a production deployment.
@@ -26,10 +51,14 @@ and the established release procedure.
   a controlled stopped-writer window before complete source+SQLite
   snapshots A/B. Phase A precedes the owner-approved exact
   editMessageText receipt; phase B follows it.
-- Photo conversion of the same Telegram message ID requires an
-  independent photo receipt, recipient-visible acceptance, and
-  media-safe rollback. Do not restore a text-only runtime over
-  a live photo without reconciling media identity.
+- The official Telegram Bot API `editMessageMedia` supports replacing a
+  text message with media. This capability **does not** establish that the
+  particular public status post was successfully edited. Require the exact
+  message ID, a positive API receipt, independent recipient-visible
+  acceptance and a media-safe rollback. See
+  https://core.telegram.org/bots/api#editmessagemedia.
+- Do not restore a text-only runtime over a live photo or alter the
+  unrelated pinned message. A denied or ambiguous edit is a stop condition.
 
 ## Independent restoration before A/B
 
@@ -45,7 +74,10 @@ Only after signed-install preflight PASS, visual confirmation, a
 private recovery rehearsal and an approved maintenance window:
 
 ~~~bash
-python3 scripts/graphic-emergency-restore.py --arm --execute   --minutes 15 --owner-approval-file   /opt/shelly-voltage/validation/telegram-graphic-owner-approval-20261110-223420.json
+python3 scripts/graphic-emergency-restore.py \
+  --arm --execute --minutes 15 \
+  --owner-approval-file \
+  /opt/shelly-voltage/validation/telegram-graphic-owner-approval-20261110-223420.json
 systemctl is-active shelly-graphic-emergency-restore.timer
 ~~~
 
@@ -84,12 +116,30 @@ After successful restoration and health review, cancel the timer
 using the same copied exact script:
 
 ~~~bash
-python3 /usr/local/sbin/shelly-graphic-emergency-restore   --disarm --execute
+python3 /usr/local/sbin/shelly-graphic-emergency-restore \
+  --disarm --execute
 ~~~
 
 Never disarm before the source, Docker, systemd and Telegram
 state have been independently reconciled. An offline physical Shelly
 does not prove a restored mains supply; readiness must remain honest.
+
+## Resolve the exact source before an authorized tag
+
+~~~bash
+git fetch origin main
+SOURCE_SHA=$(git rev-parse origin/main)
+git status --short
+git ls-remote --tags origin refs/tags/v0.5.16-hw
+~~~
+
+The source SHA in this document is evidence of a previous QA pass, **not**
+an immutable tag target after new merges. Finalize review, rerun tests and
+reproducible archive generation on `SOURCE_SHA`, and obtain release approval.
+Only an authenticated, authorized release operator should publish the
+exact tag and verify both release workflows. Do not substitute a Git
+branch for the tag, an unsigned QA archive for Cosign, or a successful
+dry-run for a production installation.
 
 ## Operator dry-run
 
@@ -99,7 +149,8 @@ does not prove a restored mains supply; readiness must remain honest.
 PATH=/opt/shelly-quality-venv/bin:$PATH ./scripts/quality.sh
 
 # On production, once the signed release exists:
-bash /opt/shelly-voltage/scripts/apply-update.sh   --version 0.5.16-hw --dry-run
+bash /opt/shelly-voltage/scripts/apply-update.sh \
+  --version 0.5.16-hw --dry-run
 ~~~
 
 No stopped-writer snapshots, image tag, Telegram edits, or
