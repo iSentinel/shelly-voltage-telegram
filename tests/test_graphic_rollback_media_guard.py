@@ -30,6 +30,8 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.folder = Path(self.tmp.name)
         self.db = self.folder / "voltage.sqlite3"
+        self.env_file = self.folder / ".env"
+        self.env_file.write_text("TELEGRAM_STATUS_CHAT_ID=-100123\n")
         with closing(sqlite3.connect(self.db)) as conn, conn:
             conn.execute("create table meta(key text primary key,value text)")
             conn.execute(
@@ -56,6 +58,8 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
                 "--database",
                 str(self.db),
                 "--jsonl",
+                "--env-file",
+                str(self.env_file),
             ],
             capture_output=True,
             text=True,
@@ -112,6 +116,7 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
 
         for marker in (
             "text:-100123:102",
+            "text:-100999:101",
             "text::101",
             "text:abc",
             "text:-100123:0",
@@ -120,6 +125,44 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
                 self.set_meta("telegram_status_media_identity", marker)
                 code, _ = self.call()
                 self.assertEqual(code, 6)
+
+    def test_bound_text_rejects_missing_or_ambiguous_channel(self) -> None:
+        """An unverifiable destination may not authorize a rollback."""
+
+        self.set_meta("telegram_status_media_identity", "text:-100123:101")
+        for content in (
+            "",
+            "TELEGRAM_STATUS_CHAT_ID=\n",
+            "TELEGRAM_STATUS_CHAT_ID=-100123\n"
+            "TELEGRAM_STATUS_CHAT_ID=-100123\n",
+            "TELEGRAM_STATUS_CHAT_ID=-100123 other\n",
+            "TELEGRAM_STATUS_CHAT_ID=-100999\n",
+        ):
+            with self.subTest(content=content):
+                self.env_file.write_text(content, encoding="utf-8")
+                code, result = self.call()
+                self.assertEqual(code, 6)
+                self.assertEqual(result["status"], "BLOCKED")
+
+    def test_valid_quoted_channel_still_allows_confirmed_text(self) -> None:
+        """A normal quoted .env channel remains rollback-compatible."""
+
+        self.env_file.write_text(
+            'TELEGRAM_STATUS_CHAT_ID="-100123"\n', encoding="utf-8"
+        )
+        self.set_meta("telegram_status_media_identity", "text:-100123:101")
+        code, result = self.call()
+        self.assertEqual(code, 0)
+        self.assertEqual(result["reason"], "confirmed_text")
+
+    def test_missing_or_symlink_env_fails_closed_for_bound_media(self) -> None:
+        """Never accept bound Telegram media without a trusted config file."""
+
+        self.set_meta("telegram_status_media_identity", "text:-100123:101")
+        self.env_file.unlink()
+        self.assertEqual(self.call()[0], 6)
+        self.env_file.symlink_to(self.folder / "missing-config")
+        self.assertEqual(self.call()[0], 6)
 
     def test_corrupt_database_and_symlink_fail_closed(self) -> None:
         """Do not follow linked databases or accept missing metadata."""
@@ -155,6 +198,7 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         source = (ROOT / "scripts/rollback.sh").read_text()
         main = source.split("main() {", 1)[1].split('\nmain "$@"', 1)[0]
         self.assertIn("graphic-rollback-media-guard.py", main)
+        self.assertEqual(source.count('--env-file "$TARGET/.env"'), 2)
         self.assertLess(
             main.index("graphic-rollback-media-guard.py"),
             main.index("stop_service\n"),
