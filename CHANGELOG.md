@@ -1,11 +1,26 @@
-## 0.5.16-hw - graphics and Telegram migration QA candidate (unreleased)
+## 0.5.17-hw - integrated rollback and Cosign safety release candidate (unreleased)
+
+- Integrate strict Telegram destination/channel matching before and after stopping
+  the SQLite writer during rollback. Refuse conflicting or unresolved media IDs.
+- Fail closed on absent live SQLite during rollback even when WAL/journal files
+  are missing; never interpret missing history as permission to restore.
+- Select a compatible Cosign v3 for verifying signed immutable GHCR images,
+  keeping certificate identity and issuer checks mandatory.
+- Retain rollback guard executable packaging mode and align v0.5.17 version
+  markers with protected graphic-cutover snapshot manifest metadata.
+- Restore test/README/changelog parity and verify release-archive reproducibility.
+- Source candidate ONLY; not tagged, signed, installed or used for Telegram
+  media conversion. The last published signed release is v0.5.16-hw;
+  production stays on 0.5.15-hw pending independent signoff and real A/B.
+
+## 0.5.16-hw - signed graphics release published 2026-11-13 (production upgrade pending)
 
 - New 960x800 Telegram graphic status and DTEK/YASNO 24-hour half-hour schedule, legend and exact time totals, separate from the historical voltage chart.
 - Protect offline voltage against stale and synthetic zero values, Kyiv midnight/DST transitions and photo-caption source identity.
 - Require exact verified Bot API receipts for in-place Telegram text-to-photo conversion and initial legacy text identity; reject no-op, missing fields and uncertain edits.
 - Preserve unrelated pinned channel messages, keep an owner-approved reversible same-message caption fallback, and refuse ambiguous duplicate publication.
 - Owner Approval granted for one guarded deployment; source and SQLite stopped-writer rollback snapshot and recipient-visible confirmation remain mandatory.
-- VERSION=0.5.16-hw, RELEASE_VERSION=0.5.15-hw until formal promotion; production remains 0.5.15-hw.
+- Signed v0.5.16-hw was subsequently published; the production runtime remains 0.5.15-hw while graphic cutover safety gates remain open.
 
 ## 0.5.15-hw - owner-approved release source
 - Preserve owner-protected YASNO read-only Compose opt-in for normal
