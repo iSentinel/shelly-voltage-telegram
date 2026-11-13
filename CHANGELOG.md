@@ -1,3 +1,17 @@
+## 0.5.18-hw - prevent premature startup readiness failure
+
+- Wait for three consecutive HTTP 200 responses from local `/ready`,
+  rather than treating the first `/health` success as a complete
+  Shelly/SQLite startup. Retry for at most 60 probes with two-second
+  pauses, then fail closed and restore the previous image.
+- Add offline regression tests for stale startup, transient 503,
+  flapping readiness, and a permanently unavailable device.
+- Address a real guarded v0.5.17 upgrade attempt: the signed image
+  started, but the updater rolled back on an early HTTP 503.
+  Automatic recovery restored the prior production image and SQLite.
+- Source publication is independent of live rollout and public Telegram
+  graphics activation, which require verified source and SQLite recovery.
+
 ## 0.5.17-hw - rollback and Cosign safety release source
 
 - Integrate strict Telegram destination/channel matching before and after stopping
