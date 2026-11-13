@@ -161,7 +161,7 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         for value in ("abc", "$(id)", "@channelname", "0", "-0", "00123"):
             with self.subTest(value=value):
                 self.env_file.write_text(
-                    f"TELEGRAM_STATUS_CHAT_ID={value}\\n", encoding="utf-8"
+                    f"TELEGRAM_STATUS_CHAT_ID={value}\n", encoding="utf-8"
                 )
                 self.set_meta(
                     "telegram_status_media_identity", f"text:{value}:101"
