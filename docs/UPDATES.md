@@ -14,6 +14,35 @@ before service stop. Never run this option without reviewing the
 snapshot and agreeing to its history/DB schema consequences.
 See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
 
+## Signed-image rollback protection (unreleased candidate)
+
+For installations with a protected signed GHCR deployment, source
+rollback must not silently rebuild a local image. A new independent
+read-only rollback preflight checks the source snapshot's archived
+VERSION and RELEASE_VERSION against the owner-private updater receipt,
+the exact Compose override, and the actual Docker image digest.
+
+An older source snapshot cannot safely be restored while a newer
+signed image remains pinned. The guard rejects that mismatch
+**before service stop or SQLite replacement**. It also blocks missing
+or linked receipts, unresolved updates and digest drift. When the
+snapshot and signed image genuinely match, the restore starts through
+the protected Compose plan with `--no-build`, then checks stable
+`/ready` and local source/image parity. The legacy no-signed-receipt
+restore retains its original build path.
+
+Disposable alternate source/database restore fixtures with
+`--dry-run` or `--no-start` remain isolated from the production
+updater receipt. Never use an old SQLite snapshot to replace current
+history without explicit `--confirm-db-replacement`; the media guard,
+writer fencing, source archive validation and current-DB rescue all
+remain mandatory.
+
+This is an **unreleased QA patch**. Its tests do not install it into
+the LXC110 production source, which currently remains on the older
+installed version. Do not mistake a passing test for authorization to
+perform a live source rollback or public Telegram PHOTO migration.
+
 ## Read-only source/image deployment parity before graphic cutover
 
 Run this audit **before** allowing the existing status message to change
