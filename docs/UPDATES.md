@@ -20,19 +20,20 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
-## v0.5.17-hw candidate (requires independent release signoff)
+## v0.5.17-hw source release and guarded production rollout
 
-This source-only candidate updates the release markers to 0.5.17-hw
-and aligns the protected graphic-cutover snapshot manifest with that
-target. It contains the channel-bound rollback guard, the missing
-SQLite fail-closed guard and the Cosign v3 selector from the separately
-reviewed feature branches.
+Version 0.5.17-hw aligns the protected graphic-cutover manifest and
+includes channel-bound rollback checks, missing SQLite fail-closed
+guard and compatible Cosign v3 selection. The sole owner explicitly
+accepted proceeding without an independent source reviewer; this is
+not represented as an independent code approval.
 
-This candidate is not a signed release, and changing the version
-files does not authorize production installation or Telegram media
-conversion. Merge the security PRs only after independent review,
-repeat source and release QA on the final exact commit, and create
-the immutable v0.5.17-hw tag only after all NO_GO gates are closed.
+The VERSION marker alone is not a signed release. Tag only after
+owner-controlled source QA, exact merged-main CI and reproducible
+archive verification. Independently verify published GitHub source
+SHA256 and GHCR Cosign signature. A signed source release does not
+authorize live installation or public Telegram media conversion:
+real stopped-writer A/B, rollback and recipient acceptance stay mandatory.
 
 ## Select a supported Cosign binary for signed updates
 
@@ -52,7 +53,7 @@ sudo bash /opt/shelly-voltage/scripts/apply-update.sh \
 ```
 
 Only after the owner-approved maintenance and rollback plan, physical
-readiness, independent review, protected snapshots and Telegram media
+readiness, source QA, protected snapshots and Telegram media
 acceptance have passed, run the authorized production installation:
 
 ```bash

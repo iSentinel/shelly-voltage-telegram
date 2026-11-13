@@ -1,4 +1,4 @@
-## 0.5.17-hw - integrated rollback and Cosign safety release candidate (unreleased)
+## 0.5.17-hw - rollback and Cosign safety release source
 
 - Integrate strict Telegram destination/channel matching before and after stopping
   the SQLite writer during rollback. Refuse conflicting or unresolved media IDs.
@@ -9,9 +9,9 @@
 - Retain rollback guard executable packaging mode and align v0.5.17 version
   markers with protected graphic-cutover snapshot manifest metadata.
 - Restore test/README/changelog parity and verify release-archive reproducibility.
-- Source candidate ONLY; not tagged, signed, installed or used for Telegram
-  media conversion. The last published signed release is v0.5.16-hw;
-  production stays on 0.5.15-hw pending independent signoff and real A/B.
+- Release source and a verified signed GHCR artifact are distinct from
+  physical installation and public Telegram media migration. The sole
+  owner accepted an independent-review exception; operational A/B and rollback gates remain.
 
 ## 0.5.16-hw - signed graphics release published 2026-11-13 (production upgrade pending)
 
