@@ -346,7 +346,7 @@ main() {
     require_db_replacement_approval
     preflight_backup_paths
     python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
-        --database "$DB"
+        --database "$DB" --env-file "$TARGET/.env"
     if [[ "$NO_START" == false ]]; then
         # Load secure layer checks BEFORE restore_source replaces scripts.
         # Keep the functions in memory for starting the restored version.
@@ -357,7 +357,7 @@ main() {
     # A Telegram callback may change status media while Docker is stopping.
     # No source or SQLite restore is permitted after an identity race.
     if ! python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
-        --database "$DB"; then
+        --database "$DB" --env-file "$TARGET/.env"; then
         echo "ERROR: Telegram status changed during writer stop; rollback blocked." >&2
         if [[ "$NO_START" == false && "$DRY_RUN" == false ]]; then
             echo "NOTICE: restoring the still-installed service, not old SQLite." >&2
