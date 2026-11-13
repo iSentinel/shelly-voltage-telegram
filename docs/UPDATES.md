@@ -20,6 +20,36 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
+## Select a supported Cosign binary for signed updates
+
+The root-only signed updater checks both the certificate identity and
+the GHCR image digest with Cosign v3 or newer. It prefers the compatible
+binary in `/usr/local/bin/cosign`, then `/usr/bin/cosign`. An older or
+development build is not accepted merely because it is first in `PATH`.
+To use another reviewed binary, set `SVT_COSIGN_BIN` to its absolute
+path; an invalid explicit override fails closed.
+
+On the production host, inspect the signature and release metadata
+without changing Docker or Telegram:
+
+```bash
+sudo bash /opt/shelly-voltage/scripts/apply-update.sh \
+  --version 0.5.16-hw --dry-run
+```
+
+Only after the owner-approved maintenance and rollback plan, physical
+readiness, independent review, protected snapshots and Telegram media
+acceptance have passed, run the authorized production installation:
+
+```bash
+sudo bash /opt/shelly-voltage/scripts/apply-update.sh \
+  --version 0.5.16-hw
+```
+
+Do not replace a failed signature check with an unsigned image, disable
+certificate checks or edit a public Telegram message as part of dry-run.
+A successful dry-run does **not** approve production deployment.
+
 ## Protect credentials in pre-upgrade snapshots
 
 When `scripts/install.sh` upgrades an existing deployment from a separate
@@ -68,6 +98,21 @@ the recovery host even without the bot's application dependencies.
 A malformed gzip or SQLite image fails with exit code 2 before service
 disruption. A successful temporary restore is **not** evidence that a
 real production rollback or a candidate release has been approved.
+
+## Fail closed when live SQLite is missing during a rollback
+
+On an established deployment, the public Telegram status might already
+have been converted from text to photo. The rollback guard must not
+infer an unmigrated text message merely because the live SQLite file
+is absent, even when all SQLite WAL and journal sidecars are absent.
+Both the pre-stop and post-stop checks return BLOCKED until the missing
+database and public media identity are reconciled through a separate
+reviewed recovery procedure.
+
+A complete existing SQLite database with verified text status remains
+eligible for ordinary rollback checks. A new installation must use the
+documented fresh-install path, not treat a missing database as rollback
+approval. Do not fabricate an empty SQLite file or bypass the guard.
 
 ## Validate rollback archives before stopping the monitor
 
