@@ -14,6 +14,30 @@ before service stop. Never run this option without reviewing the
 snapshot and agreeing to its history/DB schema consequences.
 See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
 
+## Read-only source/image deployment parity before graphic cutover
+
+Run this audit **before** allowing the existing status message to change
+from text to photo or considering a source-only rollback:
+
+    python3 scripts/deployment-state-audit.py --jsonl
+
+The audit compares the locally installed `VERSION` and
+`RELEASE_VERSION` with the protected updater `deployed.json` and
+Compose image override, then uses read-only `docker inspect` to confirm
+the exact pinned GHCR digest, Docker health and restart policy. It
+returns exit code `2` and `SOURCE_IMAGE_VERSION_MISMATCH` if the
+signed container is newer than the installed server scripts. The
+default `0.5.18-hw` deployment may exhibit this mismatch after an
+image-only upgrade while `/opt/shelly-voltage` still carries
+`0.5.15-hw`.
+
+`PASS` establishes only **local component parity**. This audit does
+not verify the Cosign signature, authorize Telegram media conversion,
+replace A/B snapshots, or perform a source update. A BLOCKED result
+requires reconciliation of the verified release source with the
+running signed image before a public graphic cutover. Do not edit
+VERSION markers manually to silence the check.
+
 # Secure GitHub update checks and manual container upgrades
 
 This feature checks GitHub Releases every **24 hours**. Automatic installation
