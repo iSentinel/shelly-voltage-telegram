@@ -20,6 +20,36 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
+## Select a supported Cosign binary for signed updates
+
+The root-only signed updater checks both the certificate identity and
+the GHCR image digest with Cosign v3 or newer. It prefers the compatible
+binary in `/usr/local/bin/cosign`, then `/usr/bin/cosign`. An older or
+development build is not accepted merely because it is first in `PATH`.
+To use another reviewed binary, set `SVT_COSIGN_BIN` to its absolute
+path; an invalid explicit override fails closed.
+
+On the production host, inspect the signature and release metadata
+without changing Docker or Telegram:
+
+```bash
+sudo bash /opt/shelly-voltage/scripts/apply-update.sh \
+  --version 0.5.16-hw --dry-run
+```
+
+Only after the owner-approved maintenance and rollback plan, physical
+readiness, independent review, protected snapshots and Telegram media
+acceptance have passed, run the authorized production installation:
+
+```bash
+sudo bash /opt/shelly-voltage/scripts/apply-update.sh \
+  --version 0.5.16-hw
+```
+
+Do not replace a failed signature check with an unsigned image, disable
+certificate checks or edit a public Telegram message as part of dry-run.
+A successful dry-run does **not** approve production deployment.
+
 ## Protect credentials in pre-upgrade snapshots
 
 When `scripts/install.sh` upgrades an existing deployment from a separate
