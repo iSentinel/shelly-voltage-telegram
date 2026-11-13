@@ -44,6 +44,30 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
+## v0.5.19-hw protected signed-image source reconciliation
+
+When an image-only update has already pinned an immutable GHCR image,
+source installation must **not** rebuild a local container. The
+installer first checks owner-private updater receipt/override, exact
+signed release version, stopped and restart-fenced writer, and Docker
+image identity. A mismatch fails before the source or SQLite snapshot
+or any installation write. An existing signed image with missing
+protected receipt also blocks local fallback.
+
+After the protected old-source and full SQLite snapshot, deployment
+uses the pinned override without `--build`, restores Docker
+`unless-stopped` restart policy, waits for stable local `/ready`,
+and checks read-only source/image parity. No media migration occurs
+in this stage. For an existing signed deployment, install the new
+signed image **first**, then reconcile the matching official signed
+release source in a planned, watchdog-protected maintenance window.
+
+A source marker alone is not signature verification or proof of
+successful physical deployment. Do not manually edit VERSION to
+suppress a parity mismatch. Public Telegram PHOTO cutover still
+requires a fresh real stopped-writer A/B source+SQLite backup,
+owner approval, rollback readiness and unrelated pinned-message audit.
+
 ## v0.5.18-hw startup readiness stabilization
 
 The signed updater waits for **three consecutive** HTTP 200 probes at

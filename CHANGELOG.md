@@ -1,3 +1,22 @@
+## 0.5.19-hw - preserve immutable signed image on source upgrades
+
+- Protect the exact signed GHCR image through a source installer update.
+  A protected deployed receipt and private override now require matching
+  release markers, immutable digest, real Docker image, and a stopped,
+  restart-fenced writer **before any source or SQLite replacement**.
+- Never fall back to a local `docker compose build` while a signed
+  deployment marker exists. Use the pinned override with `--no-build`,
+  restore the expected Docker restart policy and require consecutive
+  healthy local `/ready` responses plus source/image parity after start.
+- Continue to build locally only for genuine clean installations with
+  no signed image or protected updater state.
+- Test wrong digest, missing/linked/unsafe protected state, running
+  writers, interrupted updates, non-build deploy behavior and bootstrap.
+- The signed source release does not itself reconcile existing
+  `0.5.15-hw` server files or authorize public Telegram PHOTO rollout.
+  Physical maintenance and a new protected source+SQLite backup remain
+  separate explicitly gated operations.
+
 ## 0.5.18-hw - prevent premature startup readiness failure
 
 - Wait for three consecutive HTTP 200 responses from local `/ready`,

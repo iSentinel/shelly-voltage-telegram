@@ -5,6 +5,7 @@ SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${SVT_ROOT:-/opt/shelly-voltage}"
 DRY_RUN=false
 NON_INTERACTIVE=false
+SIGNED_DEPLOYMENT=false
 
 usage() {
     cat <<'EOF'
@@ -183,6 +184,36 @@ require_quiesced_upgrade() {
         echo "ERROR: Shelly writer is running; quiescence required." >&2
         exit 5
     fi
+}
+
+signed_image_preflight() {
+    local state=/var/lib/shelly-voltage-updater
+    local receipt="$state/deployed.json" override="$state/override.yaml"
+    # Isolated alternate-target dry runs never alter the shared live host.
+    if [[ "$DRY_RUN" == true && "$TARGET" != /opt/shelly-voltage ]]; then
+        echo "DRY-RUN: skip live signed-state check for alternate target."
+        return 0
+    fi
+    if [[ ! -e "$receipt" && ! -L "$receipt" &&
+          ! -e "$override" && ! -L "$override" ]]; then
+        local actual
+        actual="$(docker inspect --format '{{.Config.Image}}' \
+            shelly-voltage-bot 2>/dev/null || true)"
+        if [[ "$actual" == ghcr.io/isentinel/shelly-voltage-telegram@sha256:* ]]; then
+            echo "ERROR: signed Docker image exists without protected receipt." >&2
+            exit 5
+        fi
+        return 0
+    fi
+    # Never fall back to local Docker builds with a signed marker.
+    if [[ "$DRY_RUN" == true ]]; then
+        python3 "$SOURCE/scripts/installer-signed-image-guard.py" \
+            --source "$SOURCE" --state "$state" --dry-run
+    else
+        python3 "$SOURCE/scripts/installer-signed-image-guard.py" \
+            --source "$SOURCE" --state "$state"
+    fi
+    SIGNED_DEPLOYMENT=true
 }
 
 install_docker() {
@@ -372,15 +403,50 @@ install_units() {
     run systemctl enable shelly-voltage-compose.service shelly-voltage-backup.timer shelly-voltage-update-check.timer
 }
 
+await_signed_ready() {
+    local code consecutive=0
+    # Never accept a merely responsive HTTP server as a ready meter.
+    for _ in $(seq 1 60); do
+        code="$(curl -sS --max-time 3 -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8080/ready 2>/dev/null || true)"
+        if [[ "$code" == 200 ]]; then
+            (( consecutive += 1 ))
+        else
+            consecutive=0
+        fi
+        if [[ "$consecutive" -ge 3 ]]; then
+            python3 "$TARGET/scripts/deployment-state-audit.py" \
+                --root "$TARGET"
+            return
+        fi
+        sleep 2
+    done
+    echo "ERROR: signed image did not achieve stable Shelly readiness." >&2
+    return 1
+}
+
 deploy() {
     if [[ "$DRY_RUN" == true ]]; then
-        echo "DRY-RUN: docker compose build/start and health verification"
+        if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
+            echo "DRY-RUN: preserve exact signed image without Docker build"
+        else
+            echo "DRY-RUN: docker compose build/start and health verification"
+        fi
         return
     fi
     cd "$TARGET"
-    # Reuse the protected overlay plan used for systemd restarts.
-    bash "$TARGET/scripts/start-compose.sh" --build
+    # Never rebuild or silently replace an immutable signed GHCR image.
+    if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
+        bash "$TARGET/scripts/start-compose.sh"
+    else
+        bash "$TARGET/scripts/start-compose.sh" --build
+    fi
     systemctl start shelly-voltage-compose.service shelly-voltage-backup.timer
+    if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
+        docker update --restart=unless-stopped shelly-voltage-bot >/dev/null
+        await_signed_ready
+        return
+    fi
     for _ in $(seq 1 20); do
         if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
             local ready_code
@@ -420,6 +486,7 @@ main() {
     require_valid_install_marker
     require_safe_fresh_database_state
     require_quiesced_upgrade
+    signed_image_preflight
     snapshot_upgrade
     install_docker
     copy_source

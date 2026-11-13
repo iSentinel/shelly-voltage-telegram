@@ -34,7 +34,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Версия исходников релиза: `0.5.18-hw`. Подписанные артефакты проверяйте в [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); последняя проверенная production-версия: `0.5.15-hw`. Публикация не означает установку.
+Версия исходников релиза: `0.5.19-hw`. Подписанные артефакты проверяйте в [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); последняя проверенная production-версия: `0.5.15-hw`. Публикация не означает установку.
 
 ## Что делает проект
 
@@ -55,7 +55,7 @@ See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 
 ## Статус проекта
 
-- Текущая версия исходников релиза: **`0.5.18-hw`** (установка отдельно).
+- Текущая версия исходников релиза: **`0.5.19-hw`** (установка отдельно).
 - Подписанный релиз: проверяйте [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases) и неизменяемую подпись Cosign.
 - Тестовая production-установка использует **`0.5.15-hw`** с физическим Shelly Pro EM-50; последним полностью аппаратно подтверждённым checkpoint остаётся `0.5.6-hw`.
 - Аппаратно подтверждённый live checkpoint: **`0.5.6-hw`**.

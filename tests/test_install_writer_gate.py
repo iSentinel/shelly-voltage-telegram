@@ -81,8 +81,8 @@ class InstallWriterGateTests(unittest.TestCase):
         source = (ROOT / "scripts/install.sh").read_text()
         main = source.split("main() {", 1)[1].split("\n}", 1)[0]
         self.assertIn(
-            "require_quiesced_upgrade\n    snapshot_upgrade"
-            "\n    install_docker",
+            "require_quiesced_upgrade\n    signed_image_preflight"
+            "\n    snapshot_upgrade\n    install_docker",
             main,
         )
 
