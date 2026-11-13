@@ -12,7 +12,7 @@ STAGES = (
     "parse_args require_root require_safe_install_target "
     "require_safe_install_files require_valid_install_marker "
     "require_safe_fresh_database_state require_quiesced_upgrade "
-    "snapshot_upgrade install_docker "
+    "signed_image_preflight snapshot_upgrade install_docker "
     "copy_source prepare_state configure_project install_units deploy summary"
 )
 
