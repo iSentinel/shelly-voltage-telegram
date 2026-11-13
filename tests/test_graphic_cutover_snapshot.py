@@ -216,7 +216,12 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         self.assertEqual(
             gate.version_issues(path, self.source / "VERSION"), []
         )
-        self.assertIn("cutover_phase=A", (path / "manifest.env").read_text())
+        manifest = (path / "manifest.env").read_text()
+        self.assertIn("cutover_phase=A", manifest)
+        self.assertIn(
+            f"to_version={(ROOT / 'RELEASE_VERSION').read_text().strip()}",
+            manifest,
+        )
         with tarfile.open(path / "source.tar.gz", "r:gz") as tar:
             members = tar.getnames()
         self.assertFalse(any("secrets" in name for name in members))
