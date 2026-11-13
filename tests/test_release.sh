@@ -10,14 +10,23 @@ EXTRACT="$TMP/extract"
 EPOCH=1793440000
 NAME="shelly-voltage-telegram-$(tr -d '\r\n' < "$PROJECT/VERSION")"
 
-"$PROJECT/scripts/release.sh" \
-    --output-dir "$A" --source-date-epoch "$EPOCH"
-"$PROJECT/scripts/release.sh" \
-    --output-dir "$B" --source-date-epoch "$EPOCH"
+(
+    umask 077
+    "$PROJECT/scripts/release.sh" \
+        --output-dir "$A" --source-date-epoch "$EPOCH"
+)
+(
+    umask 022
+    "$PROJECT/scripts/release.sh" \
+        --output-dir "$B" --source-date-epoch "$EPOCH"
+)
 
 ARCHIVE_A="$A/$NAME.tar.gz"
 ARCHIVE_B="$B/$NAME.tar.gz"
 cmp -s "$ARCHIVE_A" "$ARCHIVE_B"
+TEMPLATE_MODE="$(tar -tvzf "$ARCHIVE_A" | awk '$NF ~ /\/\.env\.example$/ {print $1}')"
+test "$TEMPLATE_MODE" = "-rw-r--r--"
+echo "RELEASE_UMASK_INDEPENDENCE PASS"
 (
     cd "$A"
     sha256sum -c SHA256SUMS
