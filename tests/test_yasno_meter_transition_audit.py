@@ -48,11 +48,11 @@ class MeterTransitionAuditTests(unittest.TestCase):
             expect="X:O",
             minutes=15,
         )
+        ddl = (
+            "create table measurements (ts real, voltage real, frequency real)"
+        )
         with closing(sqlite3.connect(self.db)) as db, db:
-            db.execute(
-                "create table measurements ("
-                "ts real, voltage real, frequency real)"
-            )
+            db.execute(ddl)
             db.execute("create table outages (started_at real, ended_at real)")
             points = [
                 (self.edge.timestamp() - 900 + index * 10, 223.5, 50.0)
@@ -85,6 +85,27 @@ class MeterTransitionAuditTests(unittest.TestCase):
         self.assertEqual(result["forecast_after"], "O")
         self.assertFalse(result["telegram_mutated"])
         self.assertFalse(result["writes_performed"])
+        self.assertEqual(result["meter_voltage_continuity"], "CONFIRMED")
+        self.assertEqual(
+            result["forecast_vs_meter"],
+            "PLANNED_RESTORATION_NOT_OBSERVED",
+        )
+
+    def test_planned_cut_does_not_override_real_voltage(self):
+        """Scheduled X cannot claim a real outage amid valid meter data."""
+
+        self.args.expect = "O:X"
+        self.plan.bars = "O" * 8 + "X" + "O" * 39
+        result = self.inspect(self.edge + timedelta(minutes=20))
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["meter_voltage_continuity"], "CONFIRMED")
+        self.assertEqual(
+            result["forecast_vs_meter"], "PLANNED_CUT_NOT_OBSERVED"
+        )
+        self.assertFalse(result["physical_outage_inferred_from_forecast"])
+        self.assertEqual(
+            (result["before_samples"], result["after_samples"]), (90, 90)
+        )
 
     def test_future_window_is_pending_without_sqlite_read(self):
         """The forecast cannot substitute for future physical evidence."""
@@ -95,6 +116,8 @@ class MeterTransitionAuditTests(unittest.TestCase):
         with mock.patch.object(AUDIT, "read_samples") as reader:
             result = self.inspect(clock(4, 45))
         self.assertEqual(result["status"], "PENDING")
+        self.assertEqual(result["meter_voltage_continuity"], "UNVERIFIED")
+        self.assertEqual(result["forecast_vs_meter"], "WINDOW_NOT_COMPLETE")
         self.assertEqual(
             result["observation_complete_kyiv"],
             clock(8, 45).isoformat(),
@@ -152,6 +175,8 @@ class MeterTransitionAuditTests(unittest.TestCase):
         result = self.inspect(self.edge + timedelta(minutes=20))
         self.assertEqual(result["status"], "FAIL")
         self.assertIn("INSUFFICIENT_SAMPLES", result["reasons"])
+        self.assertEqual(result["meter_voltage_continuity"], "UNVERIFIED")
+        self.assertEqual(result["forecast_vs_meter"], "NOT_DETERMINED")
 
     def test_large_sample_gap_fails_strict_30_second_gate(self):
         """A physical sample gap greater than 30 seconds rejects PASS."""

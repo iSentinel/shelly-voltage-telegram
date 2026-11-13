@@ -151,6 +151,47 @@ def physical_result(
     }
 
 
+def classify_edge(physical: dict, expected: str) -> dict:
+    """Separate measured continuity from the forecast's planned switch."""
+
+    if physical["status"] != "PASS":
+        return {
+            "meter_voltage_continuity": "UNVERIFIED",
+            "forecast_vs_meter": "NOT_DETERMINED",
+        }
+    return {
+        "meter_voltage_continuity": "CONFIRMED",
+        "forecast_vs_meter": (
+            "PLANNED_CUT_NOT_OBSERVED"
+            if expected == "O:X"
+            else "PLANNED_RESTORATION_NOT_OBSERVED"
+        ),
+    }
+
+
+def completed_window(
+    args: argparse.Namespace,
+    summary: dict,
+    start: datetime,
+    boundary: datetime,
+    end: datetime,
+) -> dict:
+    """Summarize measured voltage independently from the outage plan."""
+
+    rows, outages = read_samples(
+        args.database, start.timestamp(), end.timestamp()
+    )
+    physical = physical_result(
+        rows,
+        outages,
+        start.timestamp(),
+        boundary.timestamp(),
+        end.timestamp(),
+        args.minutes,
+    )
+    return {**summary, **physical, **classify_edge(physical, args.expect)}
+
+
 def inspect(args: argparse.Namespace, now: datetime) -> dict:
     """Return PENDING until a complete real post-boundary window exists."""
 
@@ -174,22 +215,11 @@ def inspect(args: argparse.Namespace, now: datetime) -> dict:
             **summary,
             "status": "PENDING",
             "reason": "WINDOW_NOT_COMPLETE",
+            "meter_voltage_continuity": "UNVERIFIED",
+            "forecast_vs_meter": "WINDOW_NOT_COMPLETE",
         }
     start = boundary - timedelta(minutes=args.minutes)
-    rows, outages = read_samples(
-        args.database, start.timestamp(), end.timestamp()
-    )
-    return {
-        **summary,
-        **physical_result(
-            rows,
-            outages,
-            start.timestamp(),
-            boundary.timestamp(),
-            end.timestamp(),
-            args.minutes,
-        ),
-    }
+    return completed_window(args, summary, start, boundary, end)
 
 
 def main() -> int:
