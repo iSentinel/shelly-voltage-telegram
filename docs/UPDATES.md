@@ -20,6 +20,16 @@ This feature checks GitHub Releases every **24 hours**. Automatic installation
 is **disabled**. The monitor never receives access to the Docker socket, host
 systemd, SSH credentials, or root privileges.
 
+## v0.5.18-hw startup readiness stabilization
+
+The signed updater waits for **three consecutive** HTTP 200 probes at
+local `/ready` before committing a deployment. A merely listening
+HTTP server (`/health`=200) does not prove that Shelly has produced
+fresh, safe voltage measurements. The bounded two-minute retry
+window rejects persistent or flapping 503 responses and retains
+automatic recovery to the previous verified image. Offline tests
+simulate the observed 503-after-restart failure without editing Telegram.
+
 ## v0.5.17-hw source release and guarded production rollout
 
 Version 0.5.17-hw aligns the protected graphic-cutover manifest and

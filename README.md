@@ -36,7 +36,7 @@ Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 The private administrator **Updates** menu checks GitHub Releases without
 installing automatically; see [safe updates](docs/UPDATES.md).
-Source release version: `0.5.17-hw`. Verify published assets and signatures at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases). Last verified physical production runtime: `0.5.15-hw`; source publication is not installation.
+Source release version: `0.5.18-hw`. Verify published assets and signatures at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases). Last verified physical production runtime: `0.5.15-hw`; source publication is not installation.
 
 ## Overview
 
@@ -53,8 +53,8 @@ The project is intentionally **monitor-only**: it does not switch relays, change
 
 ## Status
 
-- Current source release version: **`0.5.17-hw`** (deployment is separately verified).
-- Current release: **0.5.17-hw** (source version marker only; signed artifact publication must be verified at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases) with source SHA256 and immutable Cosign identity).
+- Current source release version: **`0.5.18-hw`** (deployment is separately verified).
+- Current release: **0.5.18-hw** (source version marker only; signed artifact publication must be verified at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases) with source SHA256 and immutable Cosign identity).
 - Production field-test runtime: **0.5.15-hw**, installed on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - Hardware-accepted live checkpoint: **0.5.6-hw**
 - Release `0.5.9-hw` adds the 15-minute stable-recovery status rotation on top of the event summaries, RU/UA/EN UI, diagnostics, and unstable-grid indication from `0.5.8-hw`.

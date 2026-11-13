@@ -144,13 +144,21 @@ snapshot() {
 }
 
 wait_healthy() {
-    local code
-    for _ in $(seq 1 25); do
+    local code consecutive=0
+    # A healthy HTTP server may still have stale Shelly data at startup.
+    # Demand three consecutive /ready successes before marking update safe.
+    for _ in $(seq 1 60); do
         code="$(curl -sS --max-time 3 -o /dev/null -w '%{http_code}' \
-            http://127.0.0.1:8080/health || true)"
-        [[ "$code" == 200 ]] && return 0
+            http://127.0.0.1:8080/ready 2>/dev/null || true)"
+        if [[ "$code" == 200 ]]; then
+            (( consecutive += 1 ))
+            [[ "$consecutive" -ge 3 ]] && return 0
+        else
+            consecutive=0
+        fi
         sleep 2
     done
+    echo "FAIL: Shelly /ready was not stable after the startup window" >&2
     return 1
 }
 
