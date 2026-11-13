@@ -57,17 +57,29 @@ class RollbackYasnoComposeTests(unittest.TestCase):
         )
         return fixture, helper, env
 
-    def run_rollback_start(self, enable: bool, unsafe: bool = False):
+    def run_rollback_start(
+        self, enable: bool, unsafe: bool = False, signed: bool = False
+    ):
         """Start restored Compose with helper already loaded in memory."""
         fixture, helper, env = self.render(enable, unsafe)
         shell = (
             'source "$1"; source "$2"; compose_prepare true; '
+            'SIGNED_ROLLBACK="$3"; '
+            "await_signed_rollback_ready() { :; }; "
             'rm -f -- "$2"; '
             "cp() { :; }; systemctl() { :; }; curl() { :; }; "
             "start_service"
         )
         result = subprocess.run(
-            ["bash", "-c", shell, "bash", str(fixture), str(helper)],
+            [
+                "bash",
+                "-c",
+                shell,
+                "bash",
+                str(fixture),
+                str(helper),
+                "true" if signed else "false",
+            ],
             env=env,
             capture_output=True,
             text=True,
@@ -86,6 +98,15 @@ class RollbackYasnoComposeTests(unittest.TestCase):
         self.assertIn(str(self.overlay), calls[1])
         self.assertEqual(calls[0][-2:], ["config", "-q"])
         self.assertEqual(calls[1][-3:], ["up", "-d", "--build"])
+
+    def test_signed_rollback_preserves_immutable_image(self):
+        """Pinned rollback uses --no-build with retained safe overlays."""
+        result, calls = self.run_rollback_start(True, signed=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls), 2)
+        self.assertIn(str(self.overlay), calls[0])
+        self.assertIn(str(self.overlay), calls[1])
+        self.assertEqual(calls[1][-3:], ["up", "-d", "--no-build"])
 
     def test_rollback_default_does_not_enable_yasno(self):
         """Missing owner opt-in remains a base-only Compose start."""
@@ -118,6 +139,16 @@ class RollbackYasnoComposeTests(unittest.TestCase):
         self.assertIn("start_service", on_race)
         self.assertIn("writer remains stopped by operator request", on_race)
         self.assertIn("exit 6", on_race)
+
+    def test_signed_rollback_guard_precedes_writer_stop(self):
+        """Reject an incompatible signed snapshot before stopping Docker."""
+        source = (ROOT / "scripts/rollback.sh").read_text()
+        main = source.split("main() {", 1)[1].split('\nmain "$@"', 1)[0]
+        self.assertLess(
+            main.index("signed_rollback_preflight\n"),
+            main.index("stop_service\n"),
+        )
+        self.assertIn("compose_cmd up -d --no-build", source)
 
     def test_rollback_uses_secure_plan_after_snapshot_validation(self):
         """Inspect the control path, not only the helper itself."""

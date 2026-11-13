@@ -9,6 +9,7 @@ SNAPSHOT=""
 DRY_RUN=false
 NO_START=false
 CONFIRM_DB_REPLACEMENT=false
+SIGNED_ROLLBACK=false
 WRITER_REQUIRED=false
 RESTORE_TMP=""
 
@@ -318,15 +319,70 @@ PY
     RESTORE_TMP=""
 }
 
+signed_rollback_preflight() {
+    local mode
+    # Disposable alternate source+database restores do not use the live
+    # updater receipt; they never start a service or write production DB.
+    if [[ "$TARGET" != /opt/shelly-voltage &&
+          "$DB" != /var/lib/shelly-voltage/voltage.sqlite3 &&
+          ( "$DRY_RUN" == true || "$NO_START" == true ) ]]; then
+        SIGNED_ROLLBACK=false
+        return
+    fi
+    mode="$(python3 "$(dirname -- "$0")/rollback-signed-image-guard.py" \
+        --snapshot "$SNAPSHOT" \
+        --state "$(printenv SVT_UPDATE_STATE || printf /var/lib/shelly-voltage-updater)")"
+    case "$mode" in
+        SIGNED) SIGNED_ROLLBACK=true ;;
+        LEGACY) SIGNED_ROLLBACK=false ;;
+        *) echo "ERROR: unexpected rollback image mode." >&2; exit 3 ;;
+    esac
+}
+
+await_signed_rollback_ready() {
+    local code health consecutive=0
+    for _ in $(seq 1 60); do
+        code="$(curl -sS --max-time 3 -o /dev/null -w '%{http_code}' \
+            http://127.0.0.1:8080/ready 2>/dev/null || true)"
+        health="$(docker inspect --format '{{.State.Health.Status}}' \
+            shelly-voltage-bot 2>/dev/null || true)"
+        if [[ "$code" == 200 && "$health" == healthy ]]; then
+            (( consecutive += 1 ))
+            if [[ "$consecutive" -ge 3 ]]; then
+                python3 "$TARGET/scripts/deployment-state-audit.py" \
+                    --root "$TARGET"
+                return
+            fi
+        else
+            consecutive=0
+        fi
+        sleep 2
+    done
+    echo "ERROR: signed rollback did not reach stable readiness." >&2
+    return 1
+}
+
 start_service() {
     [[ "$NO_START" == true ]] && return
-    [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: rebuild/start and wait for /health"; return; }
+    if [[ "$DRY_RUN" == true ]]; then
+        if [[ "$SIGNED_ROLLBACK" == true ]]; then
+            echo "DRY-RUN: start pinned signed image without Docker build"
+        else
+            echo "DRY-RUN: rebuild/start and wait for /health"
+        fi
+        return
+    fi
     cp "$TARGET/systemd/"*.service /etc/systemd/system/
     cp "$TARGET/systemd/"*.timer /etc/systemd/system/ 2>/dev/null || true
     systemctl daemon-reload
     # Use the validated plan saved before restoring the old source.
     # This preserves a separately approved, read-only YASNO overlay.
     compose_cmd config -q
+    if [[ "$SIGNED_ROLLBACK" == true ]]; then
+        compose_cmd up -d --no-build
+        await_signed_rollback_ready
+        return
+    fi
     compose_cmd up -d --build
     for _ in $(seq 1 20); do
         curl -fsS http://127.0.0.1:8080/health >/dev/null && return
@@ -345,6 +401,7 @@ main() {
     echo "Rollback snapshot: $SNAPSHOT"
     require_db_replacement_approval
     preflight_backup_paths
+    signed_rollback_preflight
     python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
         --database "$DB" --env-file "$TARGET/.env"
     if [[ "$NO_START" == false ]]; then
