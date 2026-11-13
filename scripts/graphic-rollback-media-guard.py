@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import stat
 from contextlib import closing
@@ -80,7 +81,7 @@ def configured_chat(env_file: Path) -> str:
     chat = matches[0]
     if len(chat) >= 2 and chat[0] in ("'", '"') and chat[-1] == chat[0]:
         chat = chat[1:-1]
-    if not chat or any(character.isspace() for character in chat):
+    if not re.fullmatch(r"-?[1-9][0-9]{0,19}", chat):
         raise ValueError("TELEGRAM_CONFIG_INVALID")
     return chat
 

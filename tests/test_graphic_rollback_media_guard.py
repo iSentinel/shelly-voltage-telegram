@@ -155,6 +155,21 @@ class GraphicRollbackMediaGuardTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["reason"], "confirmed_text")
 
+    def test_matching_but_malformed_chat_ids_fail_closed(self) -> None:
+        """Equal untrusted strings are not verified numeric chat IDs."""
+
+        for value in ("abc", "$(id)", "@channelname", "0", "-0", "00123"):
+            with self.subTest(value=value):
+                self.env_file.write_text(
+                    f"TELEGRAM_STATUS_CHAT_ID={value}\\n", encoding="utf-8"
+                )
+                self.set_meta(
+                    "telegram_status_media_identity", f"text:{value}:101"
+                )
+                code, result = self.call()
+                self.assertEqual(code, 6)
+                self.assertEqual(result["status"], "BLOCKED")
+
     def test_missing_or_symlink_env_fails_closed_for_bound_media(self) -> None:
         """Never accept bound Telegram media without a trusted config file."""
 
