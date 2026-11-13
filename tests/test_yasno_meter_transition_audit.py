@@ -22,6 +22,7 @@ AUDIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AUDIT)
 KYIV = ZoneInfo("Europe/Kyiv")
 BARS = "XXXXXXXXOOOOOOOOOXXXXXXXXXXXXOOOOXXXXXXXXXXXOOOO"
+INSERT_OUTAGE = "insert into outages(started_at,ended_at) values(?,?)"
 
 
 def clock(hour: int, minute: int = 0) -> datetime:
@@ -45,20 +46,29 @@ class MeterTransitionAuditTests(unittest.TestCase):
             yasno_cache=Path(folder.name) / "trusted.json",
             boundary=self.edge.isoformat(),
             group="10.1",
+            phase="L1",
             expect="X:O",
             minutes=15,
         )
         ddl = (
-            "create table measurements (ts real, voltage real, frequency real)"
+            "create table measurements ("
+            "ts real, voltage real, frequency real, "
+            "phase text not null default 'L1')"
         )
         with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(ddl)
-            db.execute("create table outages (started_at real, ended_at real)")
+            db.execute(
+                "create table outages (started_at real, ended_at real, "
+                "phase text not null default 'L1')"
+            )
             points = [
                 (self.edge.timestamp() - 900 + index * 10, 223.5, 50.0)
                 for index in range(180)
             ]
-            db.executemany("insert into measurements values (?, ?, ?)", points)
+            db.executemany(
+                "insert into measurements(ts,voltage,frequency) values(?,?,?)",
+                points,
+            )
         self.plan = SimpleNamespace(
             bars=BARS, day="2026-11-12", group="10.1", source="yasno-kyiv-dtek"
         )
@@ -107,6 +117,82 @@ class MeterTransitionAuditTests(unittest.TestCase):
             (result["before_samples"], result["after_samples"]), (90, 90)
         )
 
+    def test_other_phases_do_not_create_fake_l1_failures(self):
+        """Overlapping L2/L3 readings and incidents cannot pollute L1."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            for phase in ("L2", "L3"):
+                db.execute(
+                    "insert into measurements "
+                    "(ts,voltage,frequency,phase) values (?,?,?,?)",
+                    (self.edge.timestamp(), 0.0, 50.0, phase),
+                )
+                db.execute(
+                    "insert into outages "
+                    "(started_at,ended_at,phase) values (?,?,?)",
+                    (self.edge.timestamp(), self.edge.timestamp() + 40, phase),
+                )
+        result = self.inspect(self.edge + timedelta(minutes=20))
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["phase"], "L1")
+        self.assertEqual(result["outages_overlap_window"], 0)
+        self.assertEqual(
+            (result["before_samples"], result["after_samples"]), (90, 90)
+        )
+
+    def test_selected_l2_uses_only_l2_data(self):
+        """An explicit phase is read independently from L1 and L3."""
+
+        self.args.phase = "L2"
+        with closing(sqlite3.connect(self.db)) as db, db:
+            points = [
+                (self.edge.timestamp() - 900 + n * 10, 225.0, 50.0, "L2")
+                for n in range(180)
+            ]
+            db.executemany(
+                "insert into measurements "
+                "(ts,voltage,frequency,phase) values (?,?,?,?)",
+                points,
+            )
+        result = self.inspect(self.edge + timedelta(minutes=20))
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["phase"], "L2")
+        self.assertEqual(
+            (result["before_samples"], result["after_samples"]), (90, 90)
+        )
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "insert into outages "
+                "(started_at,ended_at,phase) values (?,?,?)",
+                (self.edge.timestamp(), self.edge.timestamp() + 20, "L2"),
+            )
+        failed = self.inspect(self.edge + timedelta(minutes=20))
+        self.assertEqual(failed["status"], "FAIL")
+        self.assertEqual(failed["outages_overlap_window"], 1)
+        self.assertEqual(failed["meter_voltage_continuity"], "UNVERIFIED")
+
+    def test_other_phase_samples_cannot_fill_missing_l1_window(self):
+        """A full L2 after-window never substitutes for missing L1."""
+
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "delete from measurements where phase='L1' and ts>=?",
+                (self.edge.timestamp(),),
+            )
+            points = [
+                (self.edge.timestamp() + n * 10, 225.0, 50.0, "L2")
+                for n in range(90)
+            ]
+            db.executemany(
+                "insert into measurements "
+                "(ts,voltage,frequency,phase) values (?,?,?,?)",
+                points,
+            )
+        result = self.inspect(self.edge + timedelta(minutes=20))
+        self.assertEqual(result["status"], "FAIL")
+        self.assertIn("INSUFFICIENT_SAMPLES", result["reasons"])
+        self.assertEqual(result["after_samples"], 0)
+
     def test_future_window_is_pending_without_sqlite_read(self):
         """The forecast cannot substitute for future physical evidence."""
 
@@ -139,7 +225,7 @@ class MeterTransitionAuditTests(unittest.TestCase):
                 if sql.startswith("select count(*) from outages"):
                     with closing(real_connect(database)) as writer:
                         writer.execute(
-                            "insert into outages values (?, ?)",
+                            INSERT_OUTAGE,
                             (self_edge, self_edge + 10),
                         )
                         writer.commit()
@@ -230,7 +316,7 @@ class MeterTransitionAuditTests(unittest.TestCase):
 
         with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
-                "insert into outages values (?, ?)",
+                INSERT_OUTAGE,
                 (self.edge.timestamp(), self.edge.timestamp() + 20),
             )
         result = self.inspect(self.edge + timedelta(minutes=20))
@@ -243,7 +329,7 @@ class MeterTransitionAuditTests(unittest.TestCase):
         start = self.edge.timestamp() - 901
         with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
-                "insert into outages values (?, ?)",
+                INSERT_OUTAGE,
                 (start, start + 20),
             )
         result = self.inspect(self.edge + timedelta(minutes=20))
@@ -256,7 +342,7 @@ class MeterTransitionAuditTests(unittest.TestCase):
 
         with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
-                "insert into measurements values (?, ?, ?)",
+                "insert into measurements(ts,voltage,frequency) values(?,?,?)",
                 (self.edge.timestamp(), 223.5, 50.0),
             )
         result = self.inspect(self.edge + timedelta(minutes=20))
