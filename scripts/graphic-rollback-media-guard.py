@@ -57,7 +57,6 @@ def metadata(path: Path) -> dict[str, str]:
     return dict(rows)
 
 
-
 def configured_chat(env_file: Path) -> str:
     """Read one trusted Telegram chat ID without executing dotenv code."""
 
@@ -84,6 +83,7 @@ def configured_chat(env_file: Path) -> str:
     if not chat or any(character.isspace() for character in chat):
         raise ValueError("TELEGRAM_CONFIG_INVALID")
     return chat
+
 
 def classify_status(
     meta: dict[str, str], expected_chat: str | None = None
