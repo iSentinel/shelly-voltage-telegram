@@ -34,6 +34,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--yasno-cache", type=Path, required=True)
     parser.add_argument("--boundary", required=True)
     parser.add_argument("--group", default="10.1")
+    parser.add_argument("--phase", choices=("L1", "L2", "L3"), default="L1")
     parser.add_argument("--expect", choices=("X:O", "O:X"), required=True)
     parser.add_argument("--minutes", type=int, default=15)
     parser.add_argument("--json", action="store_true")
@@ -77,7 +78,9 @@ def expected_forecast(day, boundary: datetime, expected: str) -> dict:
     }
 
 
-def read_samples(database: Path, start: float, end: float) -> tuple:
+def read_samples(
+    database: Path, start: float, end: float, phase: str = "L1"
+) -> tuple:
     """Read unchanged SQLite history without creating or writing files."""
 
     info = database.lstat()
@@ -89,13 +92,13 @@ def read_samples(database: Path, start: float, end: float) -> tuple:
         db.execute("BEGIN")
         rows = db.execute(
             "select ts,voltage,frequency from measurements "
-            "where ts >= ? and ts < ? order by ts",
-            (start, end),
+            "where phase = ? and ts >= ? and ts < ? order by ts",
+            (phase, start, end),
         ).fetchall()
         outages = db.execute(
-            "select count(*) from outages where started_at < ? "
-            "and (ended_at is null or ended_at > ?)",
-            (end, start),
+            "select count(*) from outages where phase = ? "
+            "and started_at < ? and (ended_at is null or ended_at > ?)",
+            (phase, end, start),
         ).fetchone()[0]
         db.rollback()
     return rows, outages
@@ -179,7 +182,7 @@ def completed_window(
     """Summarize measured voltage independently from the outage plan."""
 
     rows, outages = read_samples(
-        args.database, start.timestamp(), end.timestamp()
+        args.database, start.timestamp(), end.timestamp(), args.phase
     )
     physical = physical_result(
         rows,
@@ -205,6 +208,7 @@ def inspect(args: argparse.Namespace, now: datetime) -> dict:
     summary = {
         **details,
         "boundary_kyiv": boundary.isoformat(),
+        "phase": args.phase,
         "window_minutes_each_side": args.minutes,
         "observation_complete_kyiv": end.isoformat(),
         "writes_performed": False,
