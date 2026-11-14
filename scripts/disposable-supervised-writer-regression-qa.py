@@ -431,7 +431,13 @@ def execute() -> None:
             prepare_fixture(root)
             create_writer(name, original[3], root)
             supervise(name, root, units)
-        except (QAError, OSError, sqlite3.Error) as exc:
+        except (
+            QAError,
+            OSError,
+            sqlite3.Error,
+            tarfile.TarError,
+            EOFError,
+        ) as exc:
             failed = QAError(str(exc))
         finally:
             cleanup(name, units)
