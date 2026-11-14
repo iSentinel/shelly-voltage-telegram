@@ -224,6 +224,39 @@ class MultiOwnerFenceTests(unittest.TestCase):
         self.assertEqual(self.run_cli("--recover-disposable"), 0)
         self.assert_owners_restored()
 
+    def test_changed_source_identity_blocks_recovery(self) -> None:
+        """Do not conceal source version drift during interrupted upgrade."""
+        self.run_cli("--simulate-disposable", "--fail-after", "capture_a")
+        state = self.read()
+        state["source_version"] = "0.5.15-hw"
+        QA.write_private(self.root, QA.STATE, state)
+        self.assertEqual(self.run_cli("--recover-disposable"), 3)
+        self.assertEqual(self.read()["source_version"], "0.5.15-hw")
+
+    def test_changed_image_identity_blocks_recovery(self) -> None:
+        """A surprise signed-image change makes the journal insufficient."""
+        self.run_cli("--simulate-disposable", "--fail-after", "capture_a")
+        state = self.read()
+        state["image_version"] = "0.5.22-hw"
+        QA.write_private(self.root, QA.STATE, state)
+        self.assertEqual(self.run_cli("--recover-disposable"), 3)
+
+    def test_updater_started_during_failure_blocks_recovery(self) -> None:
+        """A previously inactive updater must stay inactive in recovery."""
+        self.run_cli("--simulate-disposable", "--fail-after", "capture_a")
+        state = self.read()
+        state["updater_active"] = True
+        QA.write_private(self.root, QA.STATE, state)
+        self.assertEqual(self.run_cli("--recover-disposable"), 3)
+
+    def test_boot_recovery_hook_changed_blocks_recovery(self) -> None:
+        """Unexpected boot-hook configuration needs independent review."""
+        self.run_cli("--simulate-disposable", "--fail-after", "capture_a")
+        state = self.read()
+        state["boot_recovery_hook"] = False
+        QA.write_private(self.root, QA.STATE, state)
+        self.assertEqual(self.run_cli("--recover-disposable"), 3)
+
     def test_changed_sqlite_blocks_recovery(self) -> None:
         """Never restore old synthetic owner state over changed history."""
         self.run_cli("--simulate-disposable", "--fail-after", "capture_a")
