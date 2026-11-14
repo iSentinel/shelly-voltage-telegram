@@ -8,6 +8,7 @@ import io
 import sqlite3
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import closing
@@ -163,6 +164,50 @@ class SupervisedWriterRegressionTests(unittest.TestCase):
             self.assertRaises(QA.QAError),
         ):
             QA.verify_copy(self.root, "kill", "B")
+
+    def test_malformed_tar_archive_is_rejected(self) -> None:
+        """Corrupt source bytes may never be accepted as valid QA."""
+        QA.capture_one(self.root, "kill", "A")
+        archive = self.root / "snapshots/kill/A/source.tar.gz"
+        archive.write_bytes(b"corrupt tar data")
+        with self.assertRaises(tarfile.TarError):
+            QA.verify_copy(self.root, "kill", "A")
+
+    def test_tar_archive_failure_still_cleans(self) -> None:
+        """A failed tar read must not leave generated QA resources."""
+        with (
+            patch.object(QA, "prerequisites"),
+            patch.object(QA, "production_identity", return_value=PRODUCTION),
+            patch.object(QA, "create_writer"),
+            patch.object(
+                QA,
+                "supervise",
+                side_effect=tarfile.ReadError("CORRUPT_QA_ARCHIVE"),
+            ),
+            patch.object(QA, "cleanup") as cleanup,
+            patch.object(QA, "ensure_no_orphans"),
+            self.assertRaises(QA.QAError),
+        ):
+            QA.execute()
+        cleanup.assert_called_once()
+
+    def test_truncated_gzip_failure_still_cleans(self) -> None:
+        """A truncated gzip must be a controlled QA failure."""
+        with (
+            patch.object(QA, "prerequisites"),
+            patch.object(QA, "production_identity", return_value=PRODUCTION),
+            patch.object(QA, "create_writer"),
+            patch.object(
+                QA,
+                "supervise",
+                side_effect=EOFError("TRUNCATED_QA_GZIP"),
+            ),
+            patch.object(QA, "cleanup") as cleanup,
+            patch.object(QA, "ensure_no_orphans"),
+            self.assertRaises(QA.QAError),
+        ):
+            QA.execute()
+        cleanup.assert_called_once()
 
     def test_logical_data_drift_changes_digest(self) -> None:
         """Any synthetic measurement change invalidates parity."""
