@@ -6,7 +6,6 @@ import contextlib
 import hashlib
 import importlib.util
 import io
-import os
 import sqlite3
 import sys
 import tarfile
@@ -16,8 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts/source-only-recovery-qa.py"
+    Path(__file__).resolve().parents[1] / "scripts/source-only-recovery-qa.py"
 )
 SPEC = importlib.util.spec_from_file_location("source_only_qa", SCRIPT)
 RECOVERY = importlib.util.module_from_spec(SPEC)
@@ -36,9 +34,7 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.target = self.root / "target"
         self.target.mkdir(mode=0o700)
-        (self.target / ".source-only-qa").write_text(
-            RECOVERY.MARKER_VALUE
-        )
+        (self.target / ".source-only-qa").write_text(RECOVERY.MARKER_VALUE)
         (self.target / "VERSION").write_text("0.5.15-hw\n")
         (self.target / "partial.py").write_text("broken install\n")
         (self.target / ".env").write_text("local settings preserved\n")
@@ -84,14 +80,19 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
     def invoke(self, apply: bool = False, database: Path | None = None) -> int:
         """Call only the disposable QA CLI."""
         args = [
-            str(SCRIPT), "--archive", str(self.archive),
-            "--target", str(self.target),
-            "--database", str(database or self.database),
+            str(SCRIPT),
+            "--archive",
+            str(self.archive),
+            "--target",
+            str(self.target),
+            "--database",
+            str(database or self.database),
         ]
         if apply:
             args.append("--apply-disposable")
-        with patch.object(sys, "argv", args), contextlib.redirect_stdout(
-            io.StringIO()
+        with (
+            patch.object(sys, "argv", args),
+            contextlib.redirect_stdout(io.StringIO()),
         ):
             return RECOVERY.main()
 
@@ -116,12 +117,15 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         self.assertEqual(self.invoke(apply=True), 0)
         self.assertEqual((self.target / "VERSION").read_text(), "0.5.21-hw\n")
         self.assertFalse((self.target / "partial.py").exists())
-        self.assertEqual((self.target / ".env").read_text(),
-                         "local settings preserved\n")
-        self.assertEqual((self.target / "ROADMAP.md").read_text(),
-                         "private checkpoint\n")
-        self.assertEqual((self.target / "secrets/key").read_text(),
-                         "unchanged\n")
+        self.assertEqual(
+            (self.target / ".env").read_text(), "local settings preserved\n"
+        )
+        self.assertEqual(
+            (self.target / "ROADMAP.md").read_text(), "private checkpoint\n"
+        )
+        self.assertEqual(
+            (self.target / "secrets/key").read_text(), "unchanged\n"
+        )
         self.assertTrue((self.target / ".env.example").exists())
         self.assert_database_unchanged()
 
@@ -142,8 +146,9 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         """A release archive must never overwrite local credentials."""
         self.write_archive({".env": "attack\n"})
         self.assertEqual(self.invoke(apply=True), 3)
-        self.assertEqual((self.target / ".env").read_text(),
-                         "local settings preserved\n")
+        self.assertEqual(
+            (self.target / ".env").read_text(), "local settings preserved\n"
+        )
         self.assert_database_unchanged()
 
     def test_missing_marker_fails_closed(self) -> None:
