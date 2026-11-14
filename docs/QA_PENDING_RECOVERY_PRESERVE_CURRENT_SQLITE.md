@@ -64,6 +64,11 @@ that a stale archive blocks recovery before start_stack. The
 pending marker and current SQLite remain intact; no old Compose
 image is started in that failure path (Docker is mocked).
 
+Two additional fault-injection tests verify that a failed deletion
+of pending-update cannot falsely report success, and that mutation
+of the original archive between the first and final checks returns
+BLOCKED while retaining the current database and pending marker.
+
 No production Docker, systemd, SQLite or Telegram operation occurs
 during these tests.
 
