@@ -157,15 +157,16 @@ def check_target() -> dict:
 def evaluate() -> dict:
     """Classify one candidate without granting permission elsewhere."""
     target = check_target()
-    samples = check_sqlite()
     pending = ROOT / "state/pending-update"
     if pending.is_symlink():
         raise Blocked("QA_PENDING_SYMLINK")
     if pending.exists():
-        return {"status": "SKIP_PENDING", "samples": samples}
+        if target["running"]:
+            raise Blocked("PENDING_BUT_QA_WRITER_RUNNING")
+        return {"status": "SKIP_PENDING"}
     if target["running"]:
-        return {"status": "SKIP_ALREADY_RUNNING", "samples": samples}
-    return {"status": "QA_RESTART_CANDIDATE", "samples": samples}
+        return {"status": "SKIP_ALREADY_RUNNING"}
+    return {"status": "QA_RESTART_CANDIDATE", "samples": check_sqlite()}
 
 
 def restart_if_safe() -> dict:
