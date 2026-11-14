@@ -12,6 +12,29 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "scripts/install.sh"
 
 
+def isolated_dry_run(root: Path, target: Path, backups: Path):
+    """Exercise all dry-run stages without requiring production root."""
+    functions = root / "install-functions.sh"
+    source = INSTALLER.read_text()
+    assert source.rstrip().endswith('main "$@"')
+    functions.write_text(source.rsplit('main "$@"', 1)[0])
+    harness = (
+        'source "$1"; require_root() { :; }; main --dry-run --non-interactive'
+    )
+    env = os.environ | {
+        "SVT_ROOT": str(target),
+        "UPGRADE_SNAPSHOT_ROOT": str(backups),
+    }
+    return subprocess.run(
+        ["bash", "-c", harness, "bash", str(functions)],
+        capture_output=True,
+        text=True,
+        timeout=20,
+        env=env,
+        check=False,
+    )
+
+
 class UpgradeSnapshotRetentionTests(unittest.TestCase):
     """Ensure installer does not silently remove old verified snapshots."""
 
@@ -55,18 +78,7 @@ class UpgradeSnapshotRetentionTests(unittest.TestCase):
                 marker = archive / "retained.txt"
                 marker.write_text(f"evidence-{n}\n")
                 old_paths.append(marker)
-            env = os.environ | {
-                "SVT_ROOT": str(target),
-                "UPGRADE_SNAPSHOT_ROOT": str(backups),
-            }
-            result = subprocess.run(
-                ["bash", str(INSTALLER), "--dry-run", "--non-interactive"],
-                capture_output=True,
-                text=True,
-                timeout=20,
-                env=env,
-                check=False,
-            )
+            result = isolated_dry_run(root, target, backups)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("DRY-RUN PASS", result.stdout)
             for n, marker in enumerate(old_paths):
