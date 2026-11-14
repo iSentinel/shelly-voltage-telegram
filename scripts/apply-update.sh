@@ -198,59 +198,35 @@ recover_pending() {
     [[ -d "$SNAPSHOT" ]] || return 1
     echo "RECOVERY: interrupted update $token" >&2
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
+    # Before changing image metadata, refuse rollback of newer SQLite history.
+    restore_snapshot_database || return 1
     if [[ -f "$SNAPSHOT/override.yaml" ]]; then
-        cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
+        cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml" || return 1
     else
-        rm -f "$STATE/override.yaml"
+        rm -f "$STATE/override.yaml" || return 1
     fi
     if [[ -f "$SNAPSHOT/deployed.json" ]]; then
-        cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json"
+        cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json" || return 1
     else
-        rm -f "$STATE/deployed.json"
+        rm -f "$STATE/deployed.json" || return 1
     fi
-    restore_snapshot_database
-    sync_public_version
-    rm -f "$PENDING_FILE"
+    sync_public_version || return 1
+    # A competing writer may have changed the DB during metadata recovery.
+    restore_snapshot_database || return 1
+    rm -f "$PENDING_FILE" || return 1
 }
 
 restore_snapshot_database() {
-    local backup rescue temp
+    local backup
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
-    [[ -n "$backup" ]] || return 1
-    sha256sum -c "$backup.sha256" || return 1
-    docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
-    if [[ -f "$DB" && ! -e "$rescue" ]]; then
-        python3 - "$DB" "$rescue" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-source = "file:" + sys.argv[1] + "?mode=ro"
-with closing(sqlite3.connect(source, uri=True)) as original:
-    with closing(sqlite3.connect(sys.argv[2])) as destination:
-        original.backup(destination)
-PY
-        chmod 0600 "$rescue"
-    fi
-    temp="$(mktemp "${DB}.recovery.XXXXXXXX")"
-    if ! gzip -dc "$backup" > "$temp"; then
-        rm -f "$temp"
+    [[ -n "$backup" && -f "$DB" ]] || {
+        echo "FAIL: missing current database or signed rollback archive" >&2
         return 1
-    fi
-    python3 - "$temp" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-with closing(sqlite3.connect(sys.argv[1])) as db:
-    if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-        raise SystemExit("invalid rollback database")
-PY
-    chown --reference="$DB" "$temp"
-    chmod --reference="$DB" "$temp"
-    rm -f "$DB-wal" "$DB-shm"
-    mv -f "$temp" "$DB"
+    }
+    sha256sum -c "$backup.sha256" || return 1
+    # Read-only parity: do not overwrite current SQLite or discard WAL/SHM.
+    python3 "$ROOT/scripts/pending-recovery-history-guard.py" \
+        --database "$DB" --archive "$backup" || return 1
 }
 
 rollback() {
