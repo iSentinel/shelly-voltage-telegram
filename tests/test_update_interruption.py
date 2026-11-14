@@ -286,6 +286,30 @@ class InterruptedUpdateTests(unittest.TestCase):
             (self.state / "override.yaml").read_text(), "image: new\n"
         )
 
+    def test_pending_marker_removal_failure_remains_pending(self):
+        """A failed final journal deletion must not report recovery done."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        result = self.recover("rm() { return 21; }")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.sample(), 42)
+        self.assertTrue((self.state / "pending-update").exists())
+
+    def test_snapshot_mutation_during_metadata_copy_is_blocked(self):
+        """A changed archived file cannot survive the final digest check."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        injected = (
+            'cp() { command cp "$@" || return; '
+            'printf corrupted > "$SNAPSHOT/voltage-test.sqlite3.gz"; }'
+        )
+        result = self.recover(injected)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(self.sample(), 42)
+
     def test_invalid_checksum_keeps_pending_marker(self):
         """Block startup and preserve the journal when restoration fails."""
 
