@@ -44,7 +44,7 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
 
 ## Executed validation, 2026-11-14
 
-- test_source_only_recovery_qa.py: 16 / 16 PASS.
+- test_source_only_recovery_qa.py: 22 / 22 PASS.
 - Existing test_source_reconcile_recovery_preflight.py: 11 / 11 PASS.
 - Actual 0.5.21-hw staged source/archive validator: PASS.
 - Real-source disposable dry-run + apply: PASS, source became 0.5.21-hw.
@@ -53,9 +53,27 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
   path traversal, absent QA marker and production target refusal: PASS.
 - Fault-injected interrupted stage rename restores the old QA source;
   simultaneous recovery attempts are rejected by a private QA lock.
+- A private fsync'd JSON journal persists the candidate and previous
+  directory names across an interruption of the source rename sequence.
+- The --recover-disposable operation reopens only private paths and
+  restores the original source if the destination is missing and the
+  previous source is structurally verified. Ambiguous post-promotion
+  states remain blocked for manual review instead of erasing evidence.
+- Invalid, exposed and malicious journal files, missing original source
+  and mixed source states are tested to fail closed.
 - Full Ruff 0.14.2 quality gate PASS; SQLite connections explicitly close.
 - Production preflight during outage #30: BLOCKED with OPEN_OUTAGE,
   SHELLY_OFFLINE_OR_STALE and SHELLY_NOT_READY. No live writes.
+
+## Explicit disposable crash-recovery only
+
+The optional --recover-disposable action validates a private journal
+and safely restores a previous *test* source when the QA swap was
+interrupted. It does not read production updater receipts, stop the
+writer or authorize a source change on LXC110. It does not guarantee
+atomicity over actual sudden power loss or prove post-reboot parity.
+Tests inject exceptions that model transaction interruptions, and
+source state can remain BLOCKED when the evidence is ambiguous.
 
 ## Remaining release gates
 
