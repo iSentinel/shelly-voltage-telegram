@@ -1,0 +1,17 @@
+[Unit]
+Description=DISPOSABLE networkless LXC114 signed Storage QA watchdog
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/var/lib/svt-qa-docker114/guarded-restart.py
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /var/lib/svt-qa-docker114/guarded-restart.py --run-disposable --confirm DISPOSABLE_QA114_GUARDED_RESTART_ONLY
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+TimeoutStartSec=30
