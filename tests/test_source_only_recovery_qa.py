@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import importlib.util
 import io
+import json
 import os
 import sqlite3
 import sys
@@ -80,7 +81,12 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
                 record.mode = 0o644
                 archive.addfile(record, io.BytesIO(payload))
 
-    def invoke(self, apply: bool = False, database: Path | None = None) -> int:
+    def invoke(
+        self,
+        apply: bool = False,
+        database: Path | None = None,
+        recover: bool = False,
+    ) -> int:
         """Call only the disposable QA CLI."""
         args = [
             str(SCRIPT),
@@ -93,6 +99,8 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         ]
         if apply:
             args.append("--apply-disposable")
+        if recover:
+            args.append("--recover-disposable")
         with (
             patch.object(sys, "argv", args),
             contextlib.redirect_stdout(io.StringIO()),
@@ -232,8 +240,110 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
             Path, "rename", autospec=True, side_effect=interrupt
         ):
             self.assertEqual(self.invoke(apply=True), 3)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.invoke(recover=True), 0)
         self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
         self.assertTrue((self.target / "partial.py").exists())
+        self.assert_database_unchanged()
+
+    def test_hard_crash_mid_swap_can_recover(self) -> None:
+        """Survive KeyboardInterrupt between source directory renames."""
+        original = Path.rename
+
+        def kill_after_first(stage: Path, destination: Path) -> Path:
+            if stage.name.startswith(".source-stage-"):
+                raise KeyboardInterrupt("simulated process death")
+            return original(stage, destination)
+
+        with (
+            patch.object(
+                Path, "rename", autospec=True, side_effect=kill_after_first
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.invoke(apply=True)
+        self.assertFalse(self.target.exists())
+        self.assert_database_unchanged()
+        self.assertEqual(self.invoke(recover=True), 0)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assertEqual(
+            (self.target / "secrets/key").read_text(), "unchanged\n"
+        )
+        self.assert_database_unchanged()
+
+    def test_crash_after_promote_requires_review(self) -> None:
+        """Never silently delete old source after an ambiguous crash."""
+        original = RECOVERY.cleanup_stage
+
+        def crash_before_cleanup(path: Path) -> None:
+            if path.name.startswith(".source-old-"):
+                raise KeyboardInterrupt("simulated post-promote crash")
+            original(path)
+
+        with (
+            patch.object(
+                RECOVERY, "cleanup_stage", side_effect=crash_before_cleanup
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.invoke(apply=True)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.21-hw\n")
+        self.assertEqual(self.invoke(recover=True), 3)
+        self.assert_database_unchanged()
+
+    def test_malicious_journal_path_is_rejected(self) -> None:
+        """Refuse path traversal in untrusted transaction metadata."""
+        path = RECOVERY.journal_path(self.target)
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": "../../etc",
+                    "old": ".source-old-fake1234",
+                }
+            )
+        )
+        path.chmod(0o600)
+        self.assertEqual(self.invoke(recover=True), 3)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assert_database_unchanged()
+
+    def test_corrupt_journal_json_fails_closed(self) -> None:
+        """Invalid crash metadata cannot influence restored paths."""
+        journal = RECOVERY.journal_path(self.target)
+        journal.write_text("{not json")
+        journal.chmod(0o600)
+        self.assertEqual(self.invoke(recover=True), 3)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assert_database_unchanged()
+
+    def test_wrong_mode_journal_fails_closed(self) -> None:
+        """An exposed journal must not be trusted as a recovery record."""
+        journal = RECOVERY.journal_path(self.target)
+        journal.write_text("{}")
+        journal.chmod(0o644)
+        self.assertEqual(self.invoke(recover=True), 3)
+        self.assert_database_unchanged()
+
+    def test_missing_old_backup_fails_closed(self) -> None:
+        """An incomplete crash journal must never wipe a valid target."""
+        journal = RECOVERY.journal_path(self.target)
+        journal.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "stage": ".source-stage-abc12345",
+                    "old": ".source-old-abc12345",
+                }
+            )
+        )
+        journal.chmod(0o600)
+        self.target.rename(self.root / "target-held")
+        self.assertEqual(self.invoke(recover=True), 3)
+        self.assertEqual(
+            (self.root / "target-held" / "VERSION").read_text(),
+            "0.5.15-hw\n",
+        )
         self.assert_database_unchanged()
 
     def test_corrupted_archive_fails_closed(self) -> None:
