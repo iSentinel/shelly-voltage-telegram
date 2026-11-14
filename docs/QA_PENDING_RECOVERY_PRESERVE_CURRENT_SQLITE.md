@@ -50,7 +50,14 @@ recovery of the previous image metadata without replacing SQLite.
 
 Failures of configuration copy, version publication and a simulated
 new measurement between the first and final checks leave the
-pending marker and current data intact.
+pending marker and current data intact. A separate subprocess is
+SIGKILLed during a mocked config copy: the pending marker remains,
+SQLite is unchanged, and a subsequent isolated recovery retries
+successfully. Missing live SQLite also fails closed.
+
+The guard begins a SQLite read transaction so quick_check, the full
+logical dump and header flags are read in one consistent snapshot;
+it checks parity again immediately before pending-marker removal.
 
 No production Docker, systemd, SQLite or Telegram operation occurs
 during these tests.
