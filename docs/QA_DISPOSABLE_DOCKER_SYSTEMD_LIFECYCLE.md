@@ -70,6 +70,37 @@ This smoke does NOT make the sleeper a SQLite writer. It proves the
 isolated lifecycle and archive stages can be used together, but not
 that the full production writer fence prevents all competing writes.
 
+## Additional actual systemd-supervised SQLite writer drill
+
+A separate manually run and automatically cleaned experiment used
+an isolated temporary systemd service whose ExecStart invoked Docker
+start --attach on a disposable Python/SQLite writer. Its ExecStop
+called Docker stop only for that generated QA container. The
+container had no network, no ports or production mounts. Its only
+writable bind mount was a private temporary QA directory. The
+writer had all capabilities dropped and no-new-privileges set.
+
+The first trial failed safely because the image's default user
+could not access the private fixture. Logs showed SQLite unable
+to open its database; the test unit and container were removed.
+The repeated trial specified QA-only user 0:0 within the
+capability-free sandbox. The combined test PASSed:
+
+- the systemd-supervised test writer wrote to disposable SQLite;
+- real systemctl stop executed the private Docker ExecStop hook;
+- SQLite history stopped changing at 139 records;
+- PR #329 produced two independent private source+SQLite A/B
+  archives, and each restored 139 records with full parity;
+- a new transient systemd unit resumed the same test writer
+  with restart policy still neutralized; history advanced to 140;
+- production Docker identity, restart count, image and Compose
+  service state were unchanged; QA resources were cleaned.
+
+This is a successful manual cross-PR lifecycle acceptance, not
+yet a packaged automated regression test. The QA writer and its
+SQLite are synthetic; power-failure persistence and production
+whole-stack restart fencing are NOT proven.
+
 ## Boundaries and mandatory future work
 
 The temporary systemd service and Docker container are exercised
