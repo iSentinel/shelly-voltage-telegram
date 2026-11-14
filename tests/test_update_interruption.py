@@ -249,6 +249,43 @@ class InterruptedUpdateTests(unittest.TestCase):
             (self.state / "override.yaml").read_text(), "image: new\n"
         )
 
+    def test_rollback_error_does_not_restart_stack_on_stale_data(self):
+        """A failed history guard may never start the old Compose image."""
+
+        attempted = self.directory / "unexpected-restart.marker"
+        command = (
+            'source "$1"; STATE="$2"; DB="$3"; ROOT="$4"; '
+            'PUBLIC_STATE="$5"; PENDING_FILE="$STATE/pending-update"; '
+            "CHANGED=true; "
+            "docker() { return 0; }; "
+            'start_stack() { echo unexpected > "$6"; }; '
+            "rollback"
+        )
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                command,
+                "bash",
+                str(ROOT / "scripts/apply-update.sh"),
+                str(self.state),
+                str(self.database),
+                str(self.project),
+                str(self.public),
+                str(attempted),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(attempted.exists())
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(self.sample(), 99)
+        self.assertEqual(
+            (self.state / "override.yaml").read_text(), "image: new\n"
+        )
+
     def test_invalid_checksum_keeps_pending_marker(self):
         """Block startup and preserve the journal when restoration fails."""
 
