@@ -64,7 +64,14 @@ directory. No existing pair is overwritten.
 - Negative fixtures: active cooperative writer, missing/linked/exposed
   fence, missing authorization marker, symlink destinations, mismatched
   source versions, source mutation and SQLite mutation: fail closed.
+- A separate subprocess holds the cooperative writer lock: capture
+  fails before making an A/B archive; after that process exits the
+  disposable snapshot succeeds.
+- Fault-injected failure during the second backup and missing source
+  essentials never publish an incomplete snapshot pair.
 - WAL-backed data appears in both A/B restored fixtures.
+- 18 dedicated unit tests PASS with ResourceWarnings treated as errors;
+  full Ruff 0.14.2 project quality PASS.
 - No live SQLite, Docker, image, credentials or Telegram posts changed.
 
 ## Remaining production gates
