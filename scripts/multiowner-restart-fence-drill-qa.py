@@ -279,8 +279,15 @@ def recover(root: Path) -> dict:
     validate_state(current)
     if current["sqlite_digest"] != original["sqlite_digest"]:
         raise Blocked("QA_LIVE_HISTORY_DIVERGED")
-    if current["pending_update"] != original["pending_update"]:
-        raise Blocked("QA_PENDING_UPDATE_CHANGED")
+    immutable = (
+        "source_version",
+        "image_version",
+        "pending_update",
+        "updater_active",
+        "boot_recovery_hook",
+    )
+    if any(current[key] != original[key] for key in immutable):
+        raise Blocked("QA_RECOVERY_IDENTITY_CHANGED")
     for key in OWNER_FIELDS:
         current[key] = original[key]
     current["snapshot_a"] = False
