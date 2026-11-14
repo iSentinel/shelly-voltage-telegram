@@ -101,6 +101,23 @@ yet a packaged automated regression test. The QA writer and its
 SQLite are synthetic; power-failure persistence and production
 whole-stack restart fencing are NOT proven.
 
+## Additional abrupt test-writer termination rehearsal
+
+A further isolated manual test ran the disposable SQLite writer
+under a transient systemd unit. With its Docker restart policy
+temporarily set to no, only the test container received SIGKILL.
+No host reboot or production process was involved. Immediately
+after kill, test SQLite quick_check returned ok. The row count
+stabilized at 124; two actual source+SQLite QA archives each
+restored 124 records with full logical parity. A new transient
+systemd unit resumed the test writer, and history advanced to
+126 records. Test objects were removed and live production
+Docker/service state remained unchanged.
+
+This proves recoverability of a disposable process-crash case,
+NOT physical power-loss durability, fsync guarantees for all
+storage layers, or production-ready source/SQLite rollback.
+
 ## Boundaries and mandatory future work
 
 The temporary systemd service and Docker container are exercised
