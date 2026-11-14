@@ -26,6 +26,10 @@ perform a maintenance operation or inspect secret updater receipts.
 - Result: BLOCKED with separate reasons for active Compose, enabled
   startup, running Docker writer, restart-policy review, enabled
   update timer and unavailable meter readiness.
+- Fail-closed regression cases cover on-failure Docker restarts,
+  unexpected systemd service type, static unit auto-start ambiguity,
+  missing timer and linked updater timer states.
+- 18 dedicated tests PASS and full Ruff 0.14.2 quality PASS.
 - Production source v0.5.15-hw remains mismatched with signed image
   v0.5.21-hw; PHOTO remains NO_GO.
 
