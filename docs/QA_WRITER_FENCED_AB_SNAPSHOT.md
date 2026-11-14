@@ -69,8 +69,10 @@ directory. No existing pair is overwritten.
   disposable snapshot succeeds.
 - Fault-injected failure during the second backup and missing source
   essentials never publish an incomplete snapshot pair.
+- Bounded gzip extraction (256 MiB) prevents oversized disposable
+  SQLite backups from claiming an unverified A/B restore.
 - WAL-backed data appears in both A/B restored fixtures.
-- 18 dedicated unit tests PASS with ResourceWarnings treated as errors;
+- 19 dedicated unit tests PASS with ResourceWarnings treated as errors;
   full Ruff 0.14.2 project quality PASS.
 - No live SQLite, Docker, image, credentials or Telegram posts changed.
 
