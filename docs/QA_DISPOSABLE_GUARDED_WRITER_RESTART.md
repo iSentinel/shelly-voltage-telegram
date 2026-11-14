@@ -63,8 +63,14 @@ Before any restart it verifies:
 9. No active pending-update marker. A second pending check
    occurs immediately before delegating restart to systemd,
    and the systemd ExecStartPre checks again.
-10. If writer is already running, it returns SKIP_ALREADY_RUNNING.
-    The only permitted restart action is a bounded systemctl
+10. If writer is already running without pending, it returns
+    SKIP_ALREADY_RUNNING without opening the actively written SQLite
+    (a sandboxed read may fail on WAL sidecars). If pending exists
+    while the writer is running, it returns an explicit BLOCKED
+    PENDING_BUT_QA_WRITER_RUNNING error. A stopped writer with pending
+    returns SKIP_PENDING without opening SQLite. Only an otherwise
+    eligible stopped writer has its SQLite integrity checked.
+11. The only permitted restart action is a bounded systemctl
     restart of the fixed synthetic QA unit.
 
 No user input can select a production container or service.
@@ -143,3 +149,19 @@ until independent design review, fresh consistent whole-current
 SQLite+source A/B backups, explicit owner approval and a
 controlled maintenance/rollback plan. Boot continuation and
 Telegram TEXT-to-PHOTO remain NO-GO.
+
+## Real recurring systemd timer follow-up
+
+A separate only-in-LXC114 QA systemd timer/service repeatedly invoked
+the explicit guarded script. Its first service sandbox required
+AF_NETLINK in RestrictAddressFamilies because the guard inspects
+the current network namespace. After adding it, pending produced
+SKIP_PENDING across repeated timer ticks, and the timer restarted the
+stopped writer once after removing only the fake pending marker.
+A subsequent tick against a healthy, running WAL writer failed with
+a read-only SQLite sidecar error under ProtectSystem=strict. This
+revision now short-circuits healthy running writers and stopped
+pending writers before opening SQLite, while explicitly detecting
+the illegal running+pending state. Repeatable timer acceptance must
+pass before this is accepted as a usable recurring QA supervisor.
+No timer is installed or enabled by this PR.
