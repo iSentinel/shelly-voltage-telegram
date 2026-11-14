@@ -7,6 +7,7 @@ import argparse
 import fcntl
 import hashlib
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -176,10 +177,123 @@ def preserve_local(target: Path, stage: Path) -> None:
             raise Blocked("INVALID_LOCAL_STATE")
 
 
+def private_parent(target: Path) -> None:
+    """Require a private scratch parent for journal and source backups."""
+    safe_path(target.parent)
+    info = target.parent.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.geteuid()
+        or info.st_mode & 0o077
+    ):
+        raise Blocked("QA_PARENT_NOT_PRIVATE")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,64}", target.name):
+        raise Blocked("QA_TARGET_NAME_INVALID")
+
+
+def journal_path(target: Path) -> Path:
+    """Name one transaction journal per disposable source directory."""
+    private_parent(target)
+    return target.parent / f".source-recovery-{target.name}.json"
+
+
+def journal_write(target: Path, stage: Path, old: Path) -> None:
+    """Persist source swap paths before moving any installed source."""
+    path = journal_path(target)
+    data = {"version": 1, "stage": stage.name, "old": old.name}
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    with os.fdopen(descriptor, "w") as stream:
+        json.dump(data, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    sync_parent(target)
+
+
+def sync_parent(target: Path) -> None:
+    """Synchronize the private directory's operation metadata."""
+    descriptor = os.open(
+        target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    )
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def journal_read(target: Path) -> tuple[Path, Path]:
+    """Validate a local journal without trusting arbitrary paths."""
+    path = journal_path(target)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    descriptor = os.open(path, flags)
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or info.st_uid != os.geteuid()
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or info.st_size > 512
+        ):
+            raise Blocked("QA_JOURNAL_UNSAFE")
+        with os.fdopen(descriptor, "r") as stream:
+            descriptor = -1
+            try:
+                record = json.load(stream)
+            except (ValueError, UnicodeError) as exc:
+                raise Blocked("QA_JOURNAL_INVALID") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    if not isinstance(record, dict) or record.get("version") != 1:
+        raise Blocked("QA_JOURNAL_UNSAFE")
+    names = (record.get("stage"), record.get("old"))
+    for name, prefix in zip(names, (".source-stage-", ".source-old-")):
+        if not isinstance(name, str) or not re.fullmatch(
+            re.escape(prefix) + r"[A-Za-z0-9_-]{8,32}", name
+        ):
+            raise Blocked("QA_JOURNAL_UNSAFE")
+    return (target.parent / names[0], target.parent / names[1])
+
+
+def cleanup_stage(stage: Path) -> None:
+    """Only remove a private scratch directory, never an external path."""
+    info = stage.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.geteuid()
+        or info.st_mode & 0o077
+    ):
+        raise Blocked("QA_STAGE_UNSAFE")
+    shutil.rmtree(stage)
+
+
+def recover_disposable(target: Path) -> None:
+    """Restore original source after a crash between directory renames."""
+    stage, old = journal_read(target)
+    if target.exists() and old.exists():
+        raise Blocked("QA_RECOVERY_REQUIRES_REVIEW")
+    if not target.exists():
+        if not old.is_dir() or old.is_symlink():
+            raise Blocked("QA_OLD_SOURCE_MISSING")
+        validate_target(old)
+        old.rename(target)
+        sync_parent(target)
+    else:
+        validate_target(target)
+    if stage.exists() or stage.is_symlink():
+        cleanup_stage(stage)
+    journal_path(target).unlink()
+    sync_parent(target)
+
+
 def install_sandbox(archive_path: Path, target: Path) -> None:
-    """Stage complete source, then atomically swap only disposable files."""
+    """Record an atomic rename sequence for explicit crash recovery."""
+    private_parent(target)
+    if journal_path(target).exists():
+        raise Blocked("QA_RECOVERY_REQUIRED")
     stage = Path(tempfile.mkdtemp(prefix=".source-stage-", dir=target.parent))
-    old = None
+    journal_created = False
     try:
         with tarfile.open(archive_path, "r:gz") as archive:
             archive.extractall(stage, filter="data")
@@ -188,17 +302,18 @@ def install_sandbox(archive_path: Path, target: Path) -> None:
             raise Blocked("STAGE_MARKER_MISSING")
         old = Path(tempfile.mkdtemp(prefix=".source-old-", dir=target.parent))
         old.rmdir()
+        journal_write(target, stage, old)
+        journal_created = True
         target.rename(old)
-        try:
-            stage.rename(target)
-        except OSError:
-            old.rename(target)
-            raise
+        sync_parent(target)
+        stage.rename(target)
+        sync_parent(target)
+        cleanup_stage(old)
+        journal_path(target).unlink()
+        sync_parent(target)
     finally:
-        if stage.exists():
-            shutil.rmtree(stage)
-    if old is not None and old.exists():
-        shutil.rmtree(old)
+        if not journal_created and stage.exists():
+            cleanup_stage(stage)
 
 
 @contextmanager
@@ -225,20 +340,29 @@ def qa_lock(target: Path) -> Iterator[None]:
 
 
 def run_check(args: argparse.Namespace) -> str:
-    """Hold QA lock during an entire disposable source swap."""
-    validate_target(args.target)
+    """Run under QA lock and preserve external SQLite bytes."""
+    safe_path(args.target)
+    private_parent(args.target)
     safe_path(args.database)
     if args.database.is_relative_to(args.target):
         raise Blocked("DATABASE_INSIDE_TARGET")
     if args.archive.is_relative_to(args.target):
         raise Blocked("ARCHIVE_INSIDE_TARGET")
-    lock = qa_lock(args.target) if args.apply_disposable else nullcontext()
+    lock = (
+        qa_lock(args.target)
+        if args.apply_disposable or args.recover_disposable
+        else nullcontext()
+    )
     with lock:
-        validate_target(args.target)
         before = sha256(args.database)
-        version = validate_archive(args.archive)
-        if args.apply_disposable:
-            install_sandbox(args.archive, args.target)
+        if args.recover_disposable:
+            recover_disposable(args.target)
+            version = (args.target / "VERSION").read_text().strip()
+        else:
+            validate_target(args.target)
+            version = validate_archive(args.archive)
+            if args.apply_disposable:
+                install_sandbox(args.archive, args.target)
         if before != sha256(args.database):
             raise Blocked("DATABASE_CHANGED")
         if (
@@ -255,7 +379,9 @@ def main() -> int:
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--target", required=True, type=Path)
     parser.add_argument("--database", required=True, type=Path)
-    parser.add_argument("--apply-disposable", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--apply-disposable", action="store_true")
+    mode.add_argument("--recover-disposable", action="store_true")
     args = parser.parse_args()
     try:
         version = run_check(args)
