@@ -374,6 +374,52 @@ class DisposableGuardedWriterRestartTests(unittest.TestCase):
                 QA.restart_if_safe()["status"], "SKIP_ALREADY_RUNNING"
             )
 
+    def test_pending_skip_does_not_open_sqlite(self) -> None:
+        """A stopped writer with pending needs no SQLite sidecar access."""
+        (self.root / "state/pending-update").write_text("synthetic\n")
+        with (
+            patch.object(QA, "check_target", return_value={"running": False}),
+            patch.object(QA, "check_sqlite", side_effect=AssertionError),
+        ):
+            self.assertEqual(QA.evaluate()["status"], "SKIP_PENDING")
+
+    def test_healthy_writer_skip_does_not_open_sqlite(self) -> None:
+        """Recurring watchdog ticks must not open live WAL while running."""
+        with (
+            patch.object(QA, "check_target", return_value={"running": True}),
+            patch.object(QA, "check_sqlite", side_effect=AssertionError),
+        ):
+            self.assertEqual(QA.evaluate()["status"], "SKIP_ALREADY_RUNNING")
+
+    def test_pending_with_running_writer_is_explicit_blocker(self) -> None:
+        """Do not hide the competing-start owner race behind SKIP_PENDING."""
+        (self.root / "state/pending-update").write_text("synthetic\n")
+        with (
+            patch.object(QA, "check_target", return_value={"running": True}),
+            patch.object(QA, "check_sqlite", side_effect=AssertionError),
+            self.assertRaisesRegex(
+                QA.Blocked,
+                "PENDING_BUT_QA_WRITER_RUNNING",
+            ),
+        ):
+            QA.evaluate()
+
+    def test_stopped_without_pending_checks_sqlite_before_start(self) -> None:
+        """Only a valid stopped-writer database may be restarted."""
+        with (
+            patch.object(QA, "check_target", return_value={"running": False}),
+            patch.object(QA, "check_sqlite", return_value=12) as check,
+        ):
+            result = QA.evaluate()
+        check.assert_called_once_with()
+        self.assertEqual(
+            result,
+            {
+                "status": "QA_RESTART_CANDIDATE",
+                "samples": 12,
+            },
+        )
+
     def test_pending_race_recheck_blocks(self) -> None:
         """A marker appearing after the first check blocks restart."""
         with patch.object(
