@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 SCRIPT = (
     Path(__file__).resolve().parents[1]
@@ -145,6 +145,22 @@ class DisposableTwoLockTests(unittest.TestCase):
         result = QA.circular_wait(self.root, self.maintenance, self.updater)
         self.assertEqual(result["first_process"], "SECOND_BLOCKED")
         self.assertEqual(result["second_process"], "SECOND_BLOCKED")
+
+    def test_second_child_spawn_failure_cleans_first(self) -> None:
+        """A failed second launch must kill the existing first holder."""
+        first = MagicMock()
+        first.poll.return_value = None
+        with (
+            patch.object(
+                QA,
+                "launch_cycle_holder",
+                side_effect=[first, OSError("QA_SECOND_SPAWN_FAILURE")],
+            ),
+            self.assertRaisesRegex(OSError, "QA_SECOND_SPAWN_FAILURE"),
+        ):
+            QA.circular_wait(self.root, self.maintenance, self.updater)
+        first.kill.assert_called_once_with()
+        first.wait.assert_called_once_with(timeout=5)
 
     def test_full_private_runner_denies_all_production_actions(self) -> None:
         """True process QA explicitly grants no live authority."""
