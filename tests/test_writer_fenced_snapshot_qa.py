@@ -286,6 +286,19 @@ class WriterFencedSnapshotTests(unittest.TestCase):
         self.assertFalse((self.root / "snapshots").exists())
         self.assertEqual(QA.db_digest(self.db), self.digest)
 
+    def test_sqlite_restore_expansion_is_bounded(self) -> None:
+        """Refuse oversized compressed SQLite fixtures before parity claim."""
+        archive = self.root / "oversize.sqlite3.gz"
+        with gzip.open(archive, "wb") as stream:
+            stream.write(b"x" * 4096)
+        restored = self.root / "oversize-restored.sqlite3"
+        with (
+            patch.object(QA, "MAX_SQLITE_EXPANDED", 1024),
+            self.assertRaises(QA.Blocked),
+        ):
+            QA.restore_bounded(archive, restored)
+        self.assertFalse((self.root / "snapshots").exists())
+
     def test_db_wal_contents_included(self) -> None:
         """WAL-backed measurements must appear in both restored copies."""
         with contextlib.closing(sqlite3.connect(self.db)) as conn:
