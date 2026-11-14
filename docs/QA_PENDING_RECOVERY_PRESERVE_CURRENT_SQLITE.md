@@ -17,10 +17,13 @@ logical SQL dump, user_version and application_id, including
 committed WAL entries. It verifies quick_check on both databases,
 rejects missing or linked input and caps gzip expansion at 512 MiB.
 
-The candidate recover_pending stops the configured Compose service,
-then checks parity **before** changing image/deployment metadata.
-It checks again after metadata and public-version operations,
-immediately before clearing the pending marker.
+The candidate recover_pending first checks current/archive history
+**before any Docker stop**. A stale, corrupt or missing rollback input
+now returns BLOCKED while the already-running writer is untouched.
+Only after that initial guard passes does recovery stop Compose;
+it checks parity again immediately after that stop to catch any
+last WAL sample, and once more after deployment metadata/public-version
+operations before clearing the pending marker.
 
 If history differs, it fails closed and preserves current SQLite and
 the pending marker. A config copy or version publication failure also
@@ -69,11 +72,25 @@ of pending-update cannot falsely report success, and that mutation
 of the original archive between the first and final checks returns
 BLOCKED while retaining the current database and pending marker.
 
+A separate independent review added the online availability guard:
+on a stale archive, invalid checksum or missing current SQLite,
+a mocked Docker stop must **not** be called. A positive exact-parity
+control must call Docker stop exactly once. New WAL activity during
+the simulated Compose stop makes the post-stop check return BLOCKED.
+
 No production Docker, systemd, SQLite or Telegram operation occurs
 during these tests.
 
 ## Outstanding production gates
 
+- **Boot-time availability is still unresolved.** When a pending
+  marker exists and preflight sees newer live SQLite, the candidate
+  correctly returns a nonzero status before Docker stop, but the
+  production ExecStartPre=apply-update.sh --recover hook can still
+  prevent shelly-voltage-compose.service from starting after a boot.
+  A reviewed, signed-image-safe continuation policy and independent
+  boot acceptance are required; do not turn fail-closed into an
+  automatic unapproved rollback or silent pending-marker deletion.
 - **All real restart and writer owners are not yet fenced.** Docker
   unless-stopped, active Compose, boot recovery and updater timer
   require separately verified quiescence during approved maintenance.
