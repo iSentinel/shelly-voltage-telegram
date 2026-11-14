@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
+import os
 import socket
 import sqlite3
+import stat
 import subprocess
 import time
 from contextlib import closing
@@ -19,6 +22,7 @@ IMAGE = (
     "sha256:59d8b7c6d7c672958893392dcf09c40da96d664e1b26d6364551e69bcf3a883b"
 )
 CONFIRM = "DISPOSABLE_QA114_GUARDED_RESTART_ONLY"
+QA_ROOT_OWNER_UID = 0
 
 
 class Blocked(Exception):
@@ -169,8 +173,39 @@ def evaluate() -> dict:
     return {"status": "QA_RESTART_CANDIDATE", "samples": check_sqlite()}
 
 
-def restart_if_safe() -> dict:
-    """Delegate a checked writer restart to its one systemd owner."""
+def acquire_shared_maintenance_lock() -> int | None:
+    """Hold a nonblocking read-only fence against a QA updater."""
+    path = ROOT / "state/maintenance-owner.lock"
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise Blocked("QA_MAINTENANCE_LOCK_UNAVAILABLE") from exc
+    try:
+        metadata = os.fstat(fd)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != QA_ROOT_OWNER_UID
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise Blocked("QA_MAINTENANCE_LOCK_UNTRUSTED")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            return None
+    except Blocked:
+        os.close(fd)
+        raise
+    except OSError as exc:
+        os.close(fd)
+        raise Blocked("QA_MAINTENANCE_LOCK_UNAVAILABLE") from exc
+    return fd
+
+
+def delegated_restart() -> dict:
+    """Run the guarded synthetic QA systemd restart while fenced."""
     state = evaluate()
     if state["status"] != "QA_RESTART_CANDIDATE":
         return state
@@ -182,6 +217,17 @@ def restart_if_safe() -> dict:
             return {"status": "QA_SYSTEMD_RESTARTED"}
         time.sleep(0.2)
     raise Blocked("QA_RESTART_DID_NOT_RUN")
+
+
+def restart_if_safe() -> dict:
+    """Keep a private shared lock throughout the QA systemd start."""
+    descriptor = acquire_shared_maintenance_lock()
+    if descriptor is None:
+        return {"status": "SKIP_MAINTENANCE_LOCKED"}
+    try:
+        return delegated_restart()
+    finally:
+        os.close(descriptor)
 
 
 def main() -> int:
