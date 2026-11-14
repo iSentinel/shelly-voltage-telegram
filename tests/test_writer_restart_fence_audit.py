@@ -31,6 +31,10 @@ class WriterRestartAuditTests(unittest.TestCase):
             "ActiveState": "active",
             "UnitFileState": "enabled",
             "Type": "oneshot",
+            "ExecStartPre": (
+                "/bin/bash /opt/shelly-voltage/scripts/"
+                "apply-update.sh --recover"
+            ),
         }
         self.timer = {
             "LoadState": "loaded",
@@ -53,9 +57,10 @@ class WriterRestartAuditTests(unittest.TestCase):
         """Healthy running container is not a stopped writer."""
         report = self.decision()
         self.assertEqual(report["status"], "BLOCKED")
-        self.assertEqual(len(report["reasons"]), 6)
+        self.assertEqual(len(report["reasons"]), 7)
         self.assertIn("DOCKER_WRITER_NOT_STOPPED", report["reasons"])
         self.assertIn("UPDATER_TIMER_ENABLED", report["reasons"])
+        self.assertIn("BOOT_RECOVERY_HOOK_REQUIRES_REVIEW", report["reasons"])
         self.assertFalse(report["writer_fenced"])
 
     def test_stopped_service_alone_is_not_enough(self) -> None:
@@ -119,11 +124,26 @@ class WriterRestartAuditTests(unittest.TestCase):
         reply = (
             "LoadState=loaded\nActiveState=active\n"
             "UnitFileState=enabled\nType=oneshot\n"
+            "ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/"
+            "apply-update.sh --recover\n"
         )
         with patch.object(AUDIT, "command_output", return_value=reply) as call:
             values = AUDIT.inspect_unit(AUDIT.COMPOSE_UNIT)
         self.assertEqual(values, self.compose)
         self.assertIn("--property=Type", call.call_args.args[0])
+
+    def test_boot_recovery_hook_is_reviewer_visible(self) -> None:
+        """The boot recovery hook is a separate startup/recovery owner."""
+        report = self.decision(ready=200)
+        self.assertIn("BOOT_RECOVERY_HOOK_REQUIRES_REVIEW", report["reasons"])
+
+    def test_missing_boot_hook_does_not_invent_a_recovery(self) -> None:
+        """Never claim a recovery process exists without evidence."""
+        self.compose["ExecStartPre"] = ""
+        self.assertNotIn(
+            "BOOT_RECOVERY_HOOK_REQUIRES_REVIEW",
+            self.decision(ready=200)["reasons"],
+        )
 
     def test_on_failure_docker_policy_requires_review(self) -> None:
         """Also reject restart policies that fire after process failures."""
