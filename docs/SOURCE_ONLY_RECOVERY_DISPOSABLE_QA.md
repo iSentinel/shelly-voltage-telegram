@@ -44,7 +44,7 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
 
 ## Executed validation, 2026-11-14
 
-- test_source_only_recovery_qa.py: 22 / 22 PASS.
+- test_source_only_recovery_qa.py: 23 / 23 PASS.
 - Existing test_source_reconcile_recovery_preflight.py: 11 / 11 PASS.
 - Actual 0.5.21-hw staged source/archive validator: PASS.
 - Real-source disposable dry-run + apply: PASS, source became 0.5.21-hw.
@@ -61,6 +61,9 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
   states remain blocked for manual review instead of erasing evidence.
 - Invalid, exposed and malicious journal files, missing original source
   and mixed source states are tested to fail closed.
+- A subprocess calls os._exit(77) after the first directory rename;
+  a separate recovery invocation reads the journal, restores the
+  earlier source and leaves test SQLite/secret fixtures unchanged.
 - Full Ruff 0.14.2 quality gate PASS; SQLite connections explicitly close.
 - Production preflight during outage #30: BLOCKED with OPEN_OUTAGE,
   SHELLY_OFFLINE_OR_STALE and SHELLY_NOT_READY. No live writes.
@@ -72,8 +75,9 @@ and safely restores a previous *test* source when the QA swap was
 interrupted. It does not read production updater receipts, stop the
 writer or authorize a source change on LXC110. It does not guarantee
 atomicity over actual sudden power loss or prove post-reboot parity.
-Tests inject exceptions that model transaction interruptions, and
-source state can remain BLOCKED when the evidence is ambiguous.
+Tests inject exceptions and hard subprocess termination that model
+transaction interruptions, but do not inject actual power loss.
+Source state remains BLOCKED when the evidence is ambiguous.
 
 ## Remaining release gates
 
