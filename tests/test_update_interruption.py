@@ -222,6 +222,33 @@ class InterruptedUpdateTests(unittest.TestCase):
         self.assertEqual(self.sample(), 777)
         self.assertTrue((self.state / "pending-update").exists())
 
+    def test_sigkill_during_metadata_restore_retains_latest_history(self):
+        """A crash may not clear pending or rewind committed telemetry."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        injected = 'cp() { command cp "$@" || return; kill -KILL "$BASHPID"; }'
+        failed = self.recover(injected)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(self.sample(), 42)
+        retried = self.recover()
+        self.assertEqual(retried.returncode, 0, retried.stderr)
+        self.assertFalse((self.state / "pending-update").exists())
+        self.assertEqual(self.sample(), 42)
+
+    def test_missing_live_database_does_not_restore_archive(self):
+        """A missing established SQLite must require owner review."""
+
+        self.database.unlink()
+        failed = self.recover()
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse(self.database.exists())
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(
+            (self.state / "override.yaml").read_text(), "image: new\n"
+        )
+
     def test_invalid_checksum_keeps_pending_marker(self):
         """Block startup and preserve the journal when restoration fails."""
 
