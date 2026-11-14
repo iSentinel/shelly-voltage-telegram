@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import importlib.util
 import os
@@ -12,6 +13,8 @@ import shutil
 import stat
 import tarfile
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 MARKER = ".source-only-qa"
@@ -198,21 +201,40 @@ def install_sandbox(archive_path: Path, target: Path) -> None:
         shutil.rmtree(old)
 
 
-def main() -> int:
-    """Validate or perform an explicitly disposable recovery rehearsal."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--archive", required=True, type=Path)
-    parser.add_argument("--target", required=True, type=Path)
-    parser.add_argument("--database", required=True, type=Path)
-    parser.add_argument("--apply-disposable", action="store_true")
-    args = parser.parse_args()
+@contextmanager
+def qa_lock(target: Path) -> Iterator[None]:
+    """Serialize sandbox changes without any production-level lock."""
+    lock_path = safe_path(target.parent / ".source-only-qa.lock")
+    flags = os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
+    descriptor = os.open(lock_path, flags, 0o600)
     try:
+        info = os.fstat(descriptor)
+        if (
+            info.st_uid != os.geteuid()
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o600
+        ):
+            raise Blocked("QA_LOCK_UNSAFE")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Blocked("QA_LOCK_BUSY") from exc
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def run_check(args: argparse.Namespace) -> str:
+    """Hold QA lock during an entire disposable source swap."""
+    validate_target(args.target)
+    safe_path(args.database)
+    if args.database.is_relative_to(args.target):
+        raise Blocked("DATABASE_INSIDE_TARGET")
+    if args.archive.is_relative_to(args.target):
+        raise Blocked("ARCHIVE_INSIDE_TARGET")
+    lock = qa_lock(args.target) if args.apply_disposable else nullcontext()
+    with lock:
         validate_target(args.target)
-        safe_path(args.database)
-        if args.database.is_relative_to(args.target):
-            raise Blocked("DATABASE_INSIDE_TARGET")
-        if args.archive.is_relative_to(args.target):
-            raise Blocked("ARCHIVE_INSIDE_TARGET")
         before = sha256(args.database)
         version = validate_archive(args.archive)
         if args.apply_disposable:
@@ -224,6 +246,19 @@ def main() -> int:
             and (args.target / "VERSION").read_text().strip() != version
         ):
             raise Blocked("SOURCE_VERSION_INCORRECT")
+    return version
+
+
+def main() -> int:
+    """Validate or perform an explicitly disposable recovery rehearsal."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--archive", required=True, type=Path)
+    parser.add_argument("--target", required=True, type=Path)
+    parser.add_argument("--database", required=True, type=Path)
+    parser.add_argument("--apply-disposable", action="store_true")
+    args = parser.parse_args()
+    try:
+        version = run_check(args)
     except (Blocked, OSError) as exc:
         print(f"SOURCE-ONLY QA FAIL: {exc}")
         return 3
