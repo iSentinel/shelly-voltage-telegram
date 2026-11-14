@@ -71,13 +71,14 @@ or restart-owner fence. REVIEW_REQUIRED or BLOCKED returns exit 2.
 
 ## Isolated QA acceptance
 
-- 27/27 synthetic unit tests, full Ruff quality and filtered source
+- 30/30 synthetic unit tests, full Ruff quality and filtered source
   archive validation PASS.
 - An exactly matching running image is observed without conferring
   any cryptographic signature or boot permission.
 - Missing, writable, symlinked, malformed or unpinned deployment
-  state fails closed.
-- Corrupt or missing SQLite fails closed.
+  state fails closed. All blocked reports explicitly deny boot, build,
+source installation and Telegram PHOTO, including missing fixtures.
+- Corrupt, missing, relative-path or parent-symlinked SQLite fails closed.
 - Pending marker, source-version mismatch, stopped or unhealthy
   writer, current open outage and image mismatch demand review.
 - Fixture mode never invokes live Docker; default mode reads no
