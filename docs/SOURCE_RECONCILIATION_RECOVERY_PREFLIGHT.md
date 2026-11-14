@@ -42,3 +42,20 @@ This document and audit do not implement a production recovery action,
 authorize a source install, or remove the requirement for a tested
 stopped-writer recovery procedure. A historical backup containing old
 SQLite is forensic evidence, not the latest live database.
+
+## Isolated partial-copy recovery rehearsal (QA-only)
+
+The isolated unittest SourceForwardReapplyTests extracts filtered candidate
+files into a disposable partial-source directory, then repeats the same
+copy step. It verifies the old encrypted/private config, token fixture,
+roadmap, backup evidence and exact SQLite bytes survive both a partial
+write and repeat application. It also refuses a hard-linked source inode
+before source copy. No production container or Telegram endpoint is used.
+
+    python -m unittest -q tests.test_source_forward_reapply_drill
+
+This is a **limited source-copy simulation**, not a validated production
+maintenance or boot recovery executor. An actual source install requires
+the existing signed digest guard, stopped writer, exact writer-fenced
+source+SQLite backup, stable meter connectivity and separate approval.
+Never restore the older source version against the newer signed OCI image.
