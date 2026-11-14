@@ -135,9 +135,12 @@ def launch_cycle_holder(
 
 def circular_wait(root: Path, maintenance: Path, updater: Path) -> dict:
     """Prove a cross-lock cycle with two independent child holders."""
-    a = launch_cycle_holder(updater, maintenance, "ex", root, "a")
-    b = launch_cycle_holder(maintenance, updater, "sh", root, "b")
+    processes = []
     try:
+        a = launch_cycle_holder(updater, maintenance, "ex", root, "a")
+        processes.append(a)
+        b = launch_cycle_holder(maintenance, updater, "sh", root, "b")
+        processes.append(b)
         first = a.communicate(timeout=8)
         second = b.communicate(timeout=8)
         require(
@@ -149,7 +152,7 @@ def circular_wait(root: Path, maintenance: Path, updater: Path) -> dict:
             ),
         )
     finally:
-        for process in (a, b):
+        for process in processes:
             if process.poll() is None:
                 process.kill()
             process.wait(timeout=5)
