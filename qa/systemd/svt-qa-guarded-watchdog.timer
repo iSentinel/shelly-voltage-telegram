@@ -1,0 +1,14 @@
+[Unit]
+Description=DISPOSABLE LXC114 guarded synthetic Storage restart checks
+ConditionPathExists=/var/lib/svt-qa-docker114/guarded-restart.py
+
+[Timer]
+OnActiveSec=4s
+OnUnitActiveSec=6s
+AccuracySec=1s
+RandomizedDelaySec=0
+Persistent=false
+Unit=svt-qa-guarded-watchdog.service
+
+[Install]
+WantedBy=timers.target
