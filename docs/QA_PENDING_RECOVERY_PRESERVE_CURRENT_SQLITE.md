@@ -59,6 +59,11 @@ The guard begins a SQLite read transaction so quick_check, the full
 logical dump and header flags are read in one consistent snapshot;
 it checks parity again immediately before pending-marker removal.
 
+An isolated test of the real Bash rollback error handler verifies
+that a stale archive blocks recovery before start_stack. The
+pending marker and current SQLite remain intact; no old Compose
+image is started in that failure path (Docker is mocked).
+
 No production Docker, systemd, SQLite or Telegram operation occurs
 during these tests.
 
