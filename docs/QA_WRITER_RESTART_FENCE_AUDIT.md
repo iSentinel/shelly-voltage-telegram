@@ -25,11 +25,11 @@ perform a maintenance operation or inspect secret updater receipts.
 - Shelly physical meter offline, localhost /ready HTTP 503.
 - Result: BLOCKED with separate reasons for active Compose, enabled
   startup, running Docker writer, restart-policy review, enabled
-  update timer and unavailable meter readiness.
+  update timer, boot-recovery hook and unavailable meter readiness.
 - Fail-closed regression cases cover on-failure Docker restarts,
   unexpected systemd service type, static unit auto-start ambiguity,
   missing timer and linked updater timer states.
-- 18 dedicated tests PASS and full Ruff 0.14.2 quality PASS.
+- 20 dedicated tests PASS and full Ruff 0.14.2 quality PASS.
 - Production source v0.5.15-hw remains mismatched with signed image
   v0.5.21-hw; PHOTO remains NO_GO.
 
@@ -39,7 +39,9 @@ Before any independently authorized production reconciliation:
 1. Require stable natural Shelly recovery and owner approval.
 2. Confirm the immutable signed image and protected updater receipt.
 3. Design a bounded restart fence covering Docker, systemd, updater
-   timers, watchdogs and boot. Suppress restart sources safely, and
+   timers, watchdogs and boot. The Compose ExecStartPre hook invokes
+   apply-update.sh --recover on service start; it is an additional
+   recovery path to review. Suppress restart sources safely, and
    independently verify writer quiescence and rollback.
 4. Capture fresh exact stopped-writer A/B source + whole SQLite, verify
    full restore parity and preserve the latest live outage history.
