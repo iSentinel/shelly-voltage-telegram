@@ -64,8 +64,10 @@ database paths or mount overrides. Root is required for real QA.
 
 SQLite archive decompression is bounded to 16 MiB for this fixture.
 This cap is **only for synthetic QA**, not the production database.
-Failures of external commands or corruption of either archive fail
-closed. No historical production data is restored.
+Failures of external commands, corrupt tar members, truncated gzip
+streams or invalid archive contents fail closed. A failed archive
+read is handled as a controlled QA error, and cleanup still runs.
+No historical production data is restored.
 
 ## Evidence, validation and limitations
 
@@ -76,7 +78,7 @@ On LXC110, 2026-11-14, full QA-only integration PASS:
 - controlled systemd-supervised resume advanced to 145 samples;
 - all QA Docker and transient systemd objects cleaned;
 - production container Healthy, restart count zero, /ready HTTP 200.
-- 25/25 targeted unit tests, ResourceWarnings as errors, and full
+- 28/28 targeted unit tests, ResourceWarnings as errors, and full
   Ruff project quality gate PASS.
 
 These results demonstrate process-level stopping, SQLite WAL recovery,
