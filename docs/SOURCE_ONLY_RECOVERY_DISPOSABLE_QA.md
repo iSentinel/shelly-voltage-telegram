@@ -44,13 +44,16 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
 
 ## Executed validation, 2026-11-14
 
-- test_source_only_recovery_qa.py: 14 / 14 PASS.
+- test_source_only_recovery_qa.py: 16 / 16 PASS.
 - Existing test_source_reconcile_recovery_preflight.py: 11 / 11 PASS.
 - Actual 0.5.21-hw staged source/archive validator: PASS.
 - Real-source disposable dry-run + apply: PASS, source became 0.5.21-hw.
 - Test .env, secrets/secret and SQLite sample ID 30 retained.
 - Archive corruption, mismatched release markers, linked/local state,
   path traversal, absent QA marker and production target refusal: PASS.
+- Fault-injected interrupted stage rename restores the old QA source;
+  simultaneous recovery attempts are rejected by a private QA lock.
+- Full Ruff 0.14.2 quality gate PASS; SQLite connections explicitly close.
 - Production preflight during outage #30: BLOCKED with OPEN_OUTAGE,
   SHELLY_OFFLINE_OR_STALE and SHELLY_NOT_READY. No live writes.
 
@@ -58,8 +61,8 @@ Docker, call Telegram, modify a real SQLite, or authorize production.
 
 1. Review and approve the production failure-recovery executor and its
    writer fencing, checksums, owner approval and postfailure semantics.
-2. Add failure injection for interrupted source copy, rollback of partially
-   swapped directories, and concurrent recovery attempts.
+2. Extend the QA interruption/concurrency tests to a separately approved
+   **production** recovery design, including process crash and power loss.
 3. Independently verify immutable signed image identity and the newest
    live SQLite before and after permitted maintenance.
 4. Only when Shelly is online, close the outage naturally and require
