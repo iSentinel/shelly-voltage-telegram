@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import hashlib
 import importlib.util
 import io
+import os
 import sqlite3
 import sys
 import tarfile
@@ -203,6 +205,35 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         internal.write_bytes(self.archive.read_bytes())
         self.archive = internal
         self.assertEqual(self.invoke(apply=True), 3)
+        self.assert_database_unchanged()
+
+    def test_concurrent_apply_is_rejected(self) -> None:
+        """An already active QA lock blocks a competing recovery."""
+        lock_path = self.root / ".source-only-qa.lock"
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.assertEqual(self.invoke(apply=True), 3)
+        finally:
+            os.close(descriptor)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assert_database_unchanged()
+
+    def test_staging_failure_restores_old_source(self) -> None:
+        """A failed stage rename leaves original source and SQLite intact."""
+        original = Path.rename
+
+        def interrupt(stage: Path, destination: Path) -> Path:
+            if stage.name.startswith(".source-stage-"):
+                raise OSError("simulated interrupted stage promotion")
+            return original(stage, destination)
+
+        with patch.object(
+            Path, "rename", autospec=True, side_effect=interrupt
+        ):
+            self.assertEqual(self.invoke(apply=True), 3)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assertTrue((self.target / "partial.py").exists())
         self.assert_database_unchanged()
 
     def test_corrupted_archive_fails_closed(self) -> None:
