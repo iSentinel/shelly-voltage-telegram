@@ -42,6 +42,8 @@ def sqlite_fingerprint(path: Path) -> str:
             timeout=2,
         )
     ) as db:
+        # Keep table and metadata reads in one consistent SQLite snapshot.
+        db.execute("BEGIN")
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise GuardFailure("SQLITE_INTEGRITY_FAILED")
         for line in db.iterdump():
