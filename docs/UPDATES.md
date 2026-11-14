@@ -14,6 +14,22 @@ before service stop. Never run this option without reviewing the
 snapshot and agreeing to its history/DB schema consequences.
 See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
 
+## Source upgrade backups are retained by default (next release)
+
+Creating a verified source+SQLite upgrade snapshot must never delete
+previous verified snapshots automatically. Older archives may contain
+unique rollback evidence, stopped-writer A/B records or data required
+for incident forensics. Even checksum-valid old archives are not
+equivalent to current SQLite state. Automatic rotation has been removed
+from the installer.
+
+During an authorized maintenance operation, the installer creates
+and checks a new private source and SQLite archive before copying
+new source files; it does not prune earlier snapshots. Disk usage
+must be checked separately before the operation, and an operator must
+explicitly approve any later archival cleanup. This patch does not
+authorize source installation or replacement of the live SQLite DB.
+
 ## v0.5.20-hw signed-image rollback protection
 
 For installations with a protected signed GHCR deployment, source
