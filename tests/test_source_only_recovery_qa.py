@@ -42,9 +42,10 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         (self.target / "secrets").mkdir(mode=0o700)
         (self.target / "secrets/key").write_text("unchanged\n")
         self.database = self.root / "voltage.sqlite3"
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db:
             db.execute("CREATE TABLE measurements (id INTEGER)")
             db.execute("INSERT INTO measurements VALUES (42)")
+            db.commit()
         self.archive = self.root / "source.tar.gz"
         self.write_archive()
         self.database_digest = self.digest(self.database)
@@ -99,7 +100,7 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
     def assert_database_unchanged(self) -> None:
         """Verify data, not only a file checksum."""
         self.assertEqual(self.database_digest, self.digest(self.database))
-        with sqlite3.connect(self.database) as db:
+        with contextlib.closing(sqlite3.connect(self.database)) as db:
             count = db.execute(
                 "SELECT count(*) FROM measurements WHERE id=42"
             ).fetchone()[0]
