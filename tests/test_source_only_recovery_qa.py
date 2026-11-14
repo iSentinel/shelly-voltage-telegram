@@ -10,6 +10,7 @@ import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -23,6 +24,37 @@ SCRIPT = (
 SPEC = importlib.util.spec_from_file_location("source_only_qa", SCRIPT)
 RECOVERY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(RECOVERY)
+
+
+def abrupt_child_code() -> str:
+    """Return the QA-only Python subprocess crash harness."""
+    return """
+import importlib.util
+import os
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+script, archive, target, database = map(Path, sys.argv[1:5])
+spec = importlib.util.spec_from_file_location("crash_qa", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+original = Path.rename
+
+def crash_once(source, destination):
+    result = original(source, destination)
+    if source == target:
+        os._exit(77)
+    return result
+
+with patch.object(Path, "rename", crash_once):
+    sys.argv = [
+        str(script), "--archive", str(archive),
+        "--target", str(target), "--database", str(database),
+        "--apply-disposable",
+    ]
+    module.main()
+"""
 
 
 class SourceOnlyRecoveryTests(unittest.TestCase):
@@ -306,6 +338,33 @@ class SourceOnlyRecoveryTests(unittest.TestCase):
         path.chmod(0o600)
         self.assertEqual(self.invoke(recover=True), 3)
         self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assert_database_unchanged()
+
+    def test_child_process_hard_exit_recovery(self) -> None:
+        """A real subprocess exit after the first rename retains source."""
+        code = abrupt_child_code()
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                code,
+                str(SCRIPT),
+                str(self.archive),
+                str(self.target),
+                str(self.database),
+            ],
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 77, result.stderr)
+        self.assertFalse(self.target.exists())
+        self.assertTrue(RECOVERY.journal_path(self.target).exists())
+        self.assertEqual(self.invoke(recover=True), 0)
+        self.assertEqual((self.target / "VERSION").read_text(), "0.5.15-hw\n")
+        self.assertEqual(
+            (self.target / "secrets/key").read_text(), "unchanged\n"
+        )
         self.assert_database_unchanged()
 
     def test_corrupt_journal_json_fails_closed(self) -> None:
