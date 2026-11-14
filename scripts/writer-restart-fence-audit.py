@@ -84,16 +84,26 @@ def restart_hazards(
     reasons: list[str] = []
     if service.get("LoadState") != "loaded":
         reasons.append("COMPOSE_SERVICE_UNVERIFIED")
+    if service.get("Type") != "oneshot":
+        reasons.append("COMPOSE_SERVICE_TYPE_UNVERIFIED")
     if service.get("ActiveState") == "active":
         reasons.append("COMPOSE_SERVICE_ACTIVE")
-    if service.get("UnitFileState") == "enabled":
+    startup = service.get("UnitFileState")
+    if startup == "enabled":
         reasons.append("COMPOSE_STARTUP_ENABLED")
+    elif startup not in ("disabled", "masked"):
+        reasons.append("COMPOSE_STARTUP_STATE_UNVERIFIED")
     if container.get("running") != "false":
         reasons.append("DOCKER_WRITER_NOT_STOPPED")
-    if container.get("restart") in ("always", "unless-stopped"):
+    if container.get("restart") != "no":
         reasons.append("DOCKER_RESTART_POLICY_REQUIRES_REVIEW")
-    if timer.get("UnitFileState") == "enabled":
+    if timer.get("LoadState") != "loaded":
+        reasons.append("UPDATER_TIMER_UNVERIFIED")
+    timer_startup = timer.get("UnitFileState")
+    if timer_startup == "enabled":
         reasons.append("UPDATER_TIMER_ENABLED")
+    elif timer_startup not in ("disabled", "masked"):
+        reasons.append("UPDATER_TIMER_STARTUP_UNVERIFIED")
     if timer.get("ActiveState") == "active":
         reasons.append("UPDATER_TIMER_ACTIVE")
     if ready != 200:
