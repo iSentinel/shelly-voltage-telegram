@@ -35,7 +35,9 @@ def command_output(argv: list[str]) -> str:
 
 def inspect_unit(name: str) -> dict[str, str]:
     """Read only service availability, startup and activity attributes."""
-    keys = FIELDS + (("Type",) if name == COMPOSE_UNIT else ())
+    keys = (
+        FIELDS + ("Type", "ExecStartPre") if name == COMPOSE_UNIT else FIELDS
+    )
     cmd = ["systemctl", "show", name, "--no-pager"]
     cmd.extend(f"--property={key}" for key in keys)
     fields = {}
@@ -86,6 +88,10 @@ def restart_hazards(
         reasons.append("COMPOSE_SERVICE_UNVERIFIED")
     if service.get("Type") != "oneshot":
         reasons.append("COMPOSE_SERVICE_TYPE_UNVERIFIED")
+    if "--recover" in service.get("ExecStartPre", "") and service.get(
+        "UnitFileState"
+    ) not in ("disabled", "masked"):
+        reasons.append("BOOT_RECOVERY_HOOK_REQUIRES_REVIEW")
     if service.get("ActiveState") == "active":
         reasons.append("COMPOSE_SERVICE_ACTIVE")
     startup = service.get("UnitFileState")
@@ -108,10 +114,6 @@ def restart_hazards(
         reasons.append("UPDATER_TIMER_ACTIVE")
     if ready != 200:
         reasons.append("SHELLY_NOT_READY")
-    if not container.get("image", "").startswith(
-        "ghcr.io/isentinel/shelly-voltage-telegram@sha256:"
-    ):
-        reasons.append("SIGNED_IMAGE_IDENTITY_UNVERIFIED")
     return reasons
 
 
@@ -123,6 +125,10 @@ def decide(
 ) -> dict:
     """Describe restart hazards without authorizing any live maintenance."""
     reasons = restart_hazards(service, timer, container, ready)
+    if not container.get("image", "").startswith(
+        "ghcr.io/isentinel/shelly-voltage-telegram@sha256:"
+    ):
+        reasons.append("SIGNED_IMAGE_IDENTITY_UNVERIFIED")
     return {
         "status": "BLOCKED" if reasons else "READ_ONLY_PREFLIGHT_PASS",
         "reasons": reasons,
