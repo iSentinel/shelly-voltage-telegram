@@ -57,6 +57,19 @@ Both the first manual exercise and the repeatable script completed
 PASS on LXC110, 2026-11-14. The 15 dedicated unit tests and
 project-wide Ruff quality check also passed locally.
 
+An additional cross-PR manual integration exercise also PASSed:
+an actual isolated QA Docker sleeper was stopped with restart=no;
+while it stayed stopped, PR #329 created source/SQLite A/B archives
+using the official staged v0.5.21-hw source and a new 120-measurement
+disposable SQLite. Both archives restored with whole-history parity,
+the SQLite file hash was unchanged and the sleeper was deliberately
+resumed under restart=no before policy restoration. Production
+container ID, image and restart count were unchanged.
+
+This smoke does NOT make the sleeper a SQLite writer. It proves the
+isolated lifecycle and archive stages can be used together, but not
+that the full production writer fence prevents all competing writes.
+
 ## Boundaries and mandatory future work
 
 The temporary systemd service and Docker container are exercised
@@ -81,3 +94,4 @@ fresh fully quiesced source/SQLite A/B backups; reboot/power-loss
 recovery rehearsal; explicit owner approval; matching signed image
 and source identity; stable Shelly telemetry; independent Telegram
 status and pinned-message continuity audit.
+
