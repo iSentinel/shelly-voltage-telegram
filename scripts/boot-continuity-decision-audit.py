@@ -36,7 +36,11 @@ def audit_module():
 
 def state_directory(path: Path) -> None:
     """Require owner-private 0700 state without symlink redirection."""
-    if path.is_symlink() or any(p.is_symlink() for p in path.parents):
+    if (
+        not path.is_absolute()
+        or path.is_symlink()
+        or any(p.is_symlink() for p in path.parents)
+    ):
         raise Blocked("STATE_PATH_LINKED")
     try:
         info = path.stat()
@@ -88,7 +92,12 @@ def source_and_receipt(root: Path, state: Path) -> dict:
 
 def database_state(database: Path) -> dict:
     """Verify current SQLite without making a copy or changing its WAL."""
-    if database.is_symlink() or not database.is_file():
+    if (
+        not database.is_absolute()
+        or database.is_symlink()
+        or any(path.is_symlink() for path in database.parents)
+        or not database.is_file()
+    ):
         raise Blocked("CURRENT_DATABASE_UNSAFE")
     if database.stat().st_nlink != 1:
         raise Blocked("CURRENT_DATABASE_LINKED")
@@ -209,6 +218,22 @@ def decision(receipt: dict, database: dict, runtime: dict) -> dict:
     }
 
 
+def denied_report(reason: str) -> dict:
+    """Keep prohibitions explicit in every blocked outcome."""
+    return {
+        "status": "BLOCKED",
+        "reasons": [reason],
+        "signature_verified_here": False,
+        "signed_digest_verification_required": True,
+        "all_restart_owners_fenced": False,
+        "boot_start_authorized": False,
+        "docker_build_allowed": False,
+        "source_install_authorized": False,
+        "telegram_photo_authorized": False,
+        "production_modified": False,
+    }
+
+
 def evaluate(root: Path, state: Path, database: Path, runtime: dict) -> dict:
     """Read private evidence once and deny implicit recovery permissions."""
     try:
@@ -216,18 +241,9 @@ def evaluate(root: Path, state: Path, database: Path, runtime: dict) -> dict:
         receipt = source_and_receipt(root, state)
         db = database_state(database)
         return decision(receipt, db, validate_runtime(runtime))
-    except (Blocked, OSError) as exc:
+    except (Blocked, OSError, ValueError) as exc:
         reason = str(exc) if isinstance(exc, Blocked) else "STATE_UNAVAILABLE"
-        return {
-            "status": "BLOCKED",
-            "reasons": [reason],
-            "signature_verified_here": False,
-            "boot_start_authorized": False,
-            "docker_build_allowed": False,
-            "source_install_authorized": False,
-            "telegram_photo_authorized": False,
-            "production_modified": False,
-        }
+        return denied_report(reason)
 
 
 def show_report(report: dict, jsonl: bool) -> None:
@@ -272,12 +288,7 @@ def main() -> int:
         )
         report = evaluate(args.root, args.state, args.database, runtime)
     except Blocked as exc:
-        report = {
-            "status": "BLOCKED",
-            "reasons": [str(exc)],
-            "boot_start_authorized": False,
-            "production_modified": False,
-        }
+        report = denied_report(str(exc))
     show_report(report, args.jsonl)
     return 0 if report["status"] == "OBSERVED_RUNNING_PINNED" else 2
 
