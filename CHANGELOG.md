@@ -1,3 +1,21 @@
+## 0.5.20-hw - fail-closed signed image rollback
+
+- Prevent protected-source rollback from pairing an older source
+  snapshot with a newer signed GHCR container; check actual Docker
+  image digest, owner-private updater state and both archived version
+  markers **before stopping the writer or replacing SQLite**.
+- Require a matching pinned immutable image for signed restores and
+  use Compose `--no-build`; verify stable Docker Healthy and local
+  `/ready` plus source/runtime parity after restoration.
+- Keep legacy unsigned bootstrap rollback available and preserve
+  disposable alternate-path QA while keeping real source and SQLite
+  protected; unresolved updater state and unsafe symlinks fail closed.
+- Extend safe rollback acceptance and document that older B snapshots
+  are historical recovery evidence, not current-data parity backups.
+- Public Telegram PHOTO cutover and LXC110 source reconciliation remain
+  separately gated maintenance actions. This signed source release
+  alone is not a production install authorization.
+
 ## 0.5.19-hw - preserve immutable signed image on source upgrades
 
 - Protect the exact signed GHCR image through a source installer update.

@@ -14,7 +14,7 @@ before service stop. Never run this option without reviewing the
 snapshot and agreeing to its history/DB schema consequences.
 See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
 
-## Signed-image rollback protection (unreleased candidate)
+## v0.5.20-hw signed-image rollback protection
 
 For installations with a protected signed GHCR deployment, source
 rollback must not silently rebuild a local image. A new independent
@@ -38,7 +38,7 @@ history without explicit `--confirm-db-replacement`; the media guard,
 writer fencing, source archive validation and current-DB rescue all
 remain mandatory.
 
-This is an **unreleased QA patch**. Its tests do not install it into
+The signed source release does not itself install the fix into
 the LXC110 production source, which currently remains on the older
 installed version. Do not mistake a passing test for authorization to
 perform a live source rollback or public Telegram PHOTO migration.
