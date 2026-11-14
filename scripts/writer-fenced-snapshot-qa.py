@@ -22,6 +22,7 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
 
+MAX_SQLITE_EXPANDED = 256 * 1024 * 1024
 MARKER = ".writer-fence-qa"
 MAGIC = "DISPOSABLE_WRITER_FENCE_SNAPSHOT_QA\n"
 SOURCE_ARCHIVER = Path(__file__).with_name("source-tar.sh")
@@ -198,6 +199,17 @@ def copy_sqlite(source: Path, destination: Path) -> None:
     sync_file(destination)
 
 
+def restore_bounded(archive: Path, destination: Path) -> None:
+    """Bound SQLite backup expansion before comparing complete A/B state."""
+    total = 0
+    with gzip.open(archive, "rb") as src, destination.open("xb") as output:
+        for block in iter(lambda: src.read(1024 * 1024), b""):
+            total += len(block)
+            if total > MAX_SQLITE_EXPANDED:
+                raise Blocked("QA_SQLITE_EXPANSION_LIMIT")
+            output.write(block)
+
+
 def copy_pair(root: Path, stage: Path, version: str) -> None:
     """Capture identical source and database state twice under one fence."""
     source = root / "source"
@@ -218,8 +230,7 @@ def copy_pair(root: Path, stage: Path, version: str) -> None:
         sync_directory(dest)
         with tempfile.TemporaryDirectory(dir=dest) as scratch:
             restored = Path(scratch) / "history.sqlite3"
-            with gzip.open(backup, "rb") as src:
-                restored.write_bytes(src.read())
+            restore_bounded(backup, restored)
             db_hashes.append(db_digest(restored))
     if (
         source_hashes[0] != source_hashes[1]
