@@ -135,6 +135,97 @@ class InterruptedUpdateTests(unittest.TestCase):
             (self.snapshot / "failed-upgrade-database.sqlite3").exists()
         )
 
+    def test_stale_archive_does_not_stop_online_writer(self):
+        """Reject stale pending recovery before any Docker stop command."""
+
+        marker = self.directory / "unexpected-docker-stop"
+        injected = 'docker() { printf "stop" > "$6"; return 0; }'
+        command = (
+            'source "$1"; STATE="$2"; DB="$3"; ROOT="$4"; '
+            'PUBLIC_STATE="$5"; PENDING_FILE="$STATE/pending-update"; '
+            + injected
+            + "; recover_pending"
+        )
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                command,
+                "bash",
+                str(ROOT / "scripts/apply-update.sh"),
+                str(self.state),
+                str(self.database),
+                str(self.project),
+                str(self.public),
+                str(marker),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.sample(), 99)
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(
+            (self.state / "override.yaml").read_text(), "image: new\n"
+        )
+
+    def test_new_wal_row_during_compose_stop_fails_final_guard(self):
+        """A fresh commit during stop must not be replaced or ignored."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        injected = (
+            'docker() { python3 -c "import sqlite3,sys; '
+            "db=sqlite3.connect(sys.argv[1]); "
+            "db.execute('UPDATE samples SET id=777'); "
+            'db.commit(); db.close()" "$DB"; return 0; }'
+        )
+        failed = self.recover(injected)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual(self.sample(), 777)
+        self.assertTrue((self.state / "pending-update").exists())
+        self.assertEqual(
+            (self.state / "override.yaml").read_text(), "image: new\n"
+        )
+
+    def test_invalid_backup_checksum_does_not_stop_writer(self):
+        """A tampered archive checksum is rejected before Docker stop."""
+
+        checksum = self.snapshot / "voltage-test.sqlite3.gz.sha256"
+        checksum.write_text("0" * 64 + "  invalid.gz\\n")
+        self.assert_not_stopped_when_recovery_blocked()
+
+    def test_missing_live_database_does_not_stop_writer(self):
+        """A missing established SQLite is checked before Docker stop."""
+
+        self.database.unlink()
+        self.assert_not_stopped_when_recovery_blocked()
+
+    def test_equal_history_still_stops_test_writer_once(self):
+        """Exact parity may proceed to one controlled Compose stop."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        result = self.recover(
+            'docker() { echo stopped >> "$STATE/docker.called"; return 0; }'
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = (self.state / "docker.called").read_text().splitlines()
+        self.assertEqual(calls, ["stopped"])
+        self.assertEqual(self.sample(), 42)
+
+    def assert_not_stopped_when_recovery_blocked(self):
+        """Shared stub ensures history failures never reach Docker stop."""
+
+        result = self.recover(
+            'docker() { echo stopped >> "$STATE/docker.called"; return 0; }'
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.state / "docker.called").exists())
+        self.assertTrue((self.state / "pending-update").exists())
+
     def test_exact_match_rolls_back_image_but_preserves_database(self):
         """Identical archive and current history need no SQLite replacement."""
 
