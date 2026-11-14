@@ -217,6 +217,43 @@ class BootContinuityDecisionTests(unittest.TestCase):
         self.db.unlink()
         self.assertEqual(self.report()["status"], "BLOCKED")
 
+    def test_linked_database_parent_is_blocked(self) -> None:
+        """A linked parent must not redirect the read-only SQLite input."""
+        alternate = self.directory / "linked-sqlite"
+        alternate.symlink_to(self.directory, target_is_directory=True)
+        result = QA.evaluate(
+            self.root, self.state, alternate / self.db.name, RUNNING
+        )
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertFalse(result["boot_start_authorized"])
+
+    def test_relative_database_is_blocked(self) -> None:
+        """Do not resolve SQLite relative to an unexpected working dir."""
+        plan = QA.evaluate(
+            self.root, self.state, Path("history.sqlite3"), RUNNING
+        )
+        self.assertEqual(plan["status"], "BLOCKED")
+
+    def test_all_rejection_fields_are_invariant(self) -> None:
+        """Even an unreadable fixture must explicitly deny every action."""
+        code, data = self.invoke(
+            "--runtime-fixture",
+            str(self.directory / "missing.json"),
+            "--jsonl",
+        )
+        self.assertEqual(code, 2)
+        record = json.loads(data)
+        for key in (
+            "boot_start_authorized",
+            "docker_build_allowed",
+            "source_install_authorized",
+            "telegram_photo_authorized",
+            "signature_verified_here",
+            "all_restart_owners_fenced",
+            "production_modified",
+        ):
+            self.assertIs(record[key], False)
+
     def test_corrupt_database_is_blocked(self) -> None:
         """Malformed history is not grounds for a blind stale restore."""
         self.db.write_bytes(b"corrupt")
