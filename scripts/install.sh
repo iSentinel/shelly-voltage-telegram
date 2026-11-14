@@ -263,52 +263,6 @@ prepare_upgrade_root() {
     chmod 0700 -- "$root"
 }
 
-snapshot_artifact_verified() {
-    local file="$1" manifest="$1.sha256" digest
-    [[ -f "$file" && -f "$manifest" &&
-       ! -L "$file" && ! -L "$manifest" ]] || return 1
-    [[ "$(stat -c %h -- "$file")" == 1 &&
-       "$(stat -c %h -- "$manifest")" == 1 ]] || return 1
-    digest="$(sha256sum -- "$file")" || return 1
-    [[ "$(cat -- "$manifest")" == "$digest" ]] || return 1
-    gzip -t -- "$file" >/dev/null 2>&1
-}
-
-prune_upgrade_snapshots() {
-    local root="$1" index path name record
-    local -a ordered=() snapshots=() sqlite_archives=()
-    mapfile -d '' -t ordered < <(
-        find "$root" -mindepth 1 -maxdepth 1 -type d \
-            -printf '%T@ %p\0' | sort -zrn
-    )
-    for record in "${ordered[@]}"; do
-        path="${record#* }"
-        [[ "$path" == "$root/"* ]] || {
-            echo "ERROR: unsafe upgrade snapshot rotation path." >&2
-            exit 3
-        }
-        name="${path##*/}"
-        [[ "$name" =~ ^[0-9]{8}-[0-9]{6}-[A-Za-z0-9][A-Za-z0-9._-]{0,63}-[A-Za-z0-9]{8}$ ]] || continue
-        [[ -f "$path/source.tar.gz" && -f "$path/source.tar.gz.sha256" && -f "$path/manifest.env" ]] || continue
-        mapfile -d '' -t sqlite_archives < <(
-            find "$path" -maxdepth 1 -type f \
-                -name 'voltage-*.sqlite3.gz' -print0
-        )
-        [[ ${#sqlite_archives[@]} -eq 1 ]] || continue
-        snapshot_artifact_verified "$path/source.tar.gz" || continue
-        snapshot_artifact_verified "${sqlite_archives[0]}" || continue
-        python3 "$SOURCE/scripts/validate-source-archive.py" \
-            "$path/source.tar.gz" >/dev/null 2>&1 || continue
-        python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
-            --archive "${sqlite_archives[0]}" >/dev/null 2>&1 || continue
-        snapshots+=("$path")
-    done
-    for index in "${!snapshots[@]}"; do
-        (( index >= 5 )) || continue
-        rm -rf -- "${snapshots[index]}"
-    done
-}
-
 snapshot_upgrade() {
     [[ -d "$TARGET" && -f "$TARGET/VERSION" ]] || return 0
     # Even an in-place reinstall may rebuild the image and replace state.
@@ -349,7 +303,9 @@ snapshot_upgrade() {
     # Compare every table and persistent header before source replacement.
     python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
         --archive "$sqlite_archive" --compare-db "$sqlite_db"
-    prune_upgrade_snapshots "$root"
+    # Historical upgrade snapshots are rollback evidence. Never silently
+    # remove them during a live install; cleanup requires a separate,
+    # explicitly reviewed retention action.
     echo "Upgrade snapshot: $snapshot"
 }
 

@@ -260,7 +260,7 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                 invoke_snapshot(installer, installed, clock)
             self.assertFalse(upgrades.exists())
 
-    def test_rotation_preserves_unknown_recovery_directories(self) -> None:
+    def test_retention_preserves_unknown_recovery_directories(self) -> None:
         """Never delete unrelated or incomplete snapshot directories."""
 
         with tempfile.TemporaryDirectory() as name:
@@ -279,7 +279,7 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             self.assertTrue((unrelated / "marker.txt").is_file())
             self.assertTrue((incomplete / "source.tar.gz").is_file())
             archive_count = len(list(upgrades.glob("*/voltage-*.sqlite3.gz")))
-            self.assertEqual(archive_count, 5)
+            self.assertEqual(archive_count, 6)
 
     def test_corrupt_snapshot_preserves_valid_backups(self) -> None:
         """A corrupt-looking recovery folder must not displace good copies."""
@@ -311,7 +311,7 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                 if path.parent != corrupt
             ]
             self.assertTrue((corrupt / "source.tar.gz").exists())
-            self.assertEqual(len(valid), 5)
+            self.assertEqual(len(valid), 6)
 
     def test_valid_gzip_incomplete_source_cannot_displace_backup(self):
         """A VERSION-only archive is not a restorable backup."""
@@ -347,10 +347,10 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
                 if item.parent != unsafe
             ]
             self.assertTrue(source.exists())
-            self.assertEqual(len(healthy), 5)
+            self.assertEqual(len(healthy), 6)
 
-    def test_rotation_handles_spaces_without_overwriting(self) -> None:
-        """Prune to five snapshot pairs even when path contains spaces."""
+    def test_retention_handles_spaces_without_overwriting(self) -> None:
+        """Retain all six snapshot pairs even when paths contain spaces."""
 
         with tempfile.TemporaryDirectory() as name:
             root = Path(name) / "upgrade workspace with spaces"
@@ -358,8 +358,10 @@ class UpgradeSnapshotUniquenessTests(unittest.TestCase):
             for value in range(1, 7):
                 set_history(db, value)
                 invoke_snapshot(installer, installed, clock)
-            self.assertEqual(len(list(upgrades.glob("*/source.tar.gz"))), 5)
-            self.assertEqual(set(recovered_values(upgrades)), {2, 3, 4, 5, 6})
+            self.assertEqual(len(list(upgrades.glob("*/source.tar.gz"))), 6)
+            self.assertEqual(
+                set(recovered_values(upgrades)), {1, 2, 3, 4, 5, 6}
+            )
 
 
 if __name__ == "__main__":
