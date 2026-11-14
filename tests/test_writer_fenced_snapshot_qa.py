@@ -10,6 +10,7 @@ import io
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -230,6 +231,59 @@ class WriterFencedSnapshotTests(unittest.TestCase):
             self.source, target_is_directory=True
         )
         self.assertEqual(self.invoke(capture=True), 3)
+        self.assertEqual(QA.db_digest(self.db), self.digest)
+
+    def test_other_process_holding_fence_blocks_capture(self) -> None:
+        """Exercise cooperative lock contention across real processes."""
+        child_code = (
+            "import fcntl,os,sys;"
+            "fd=os.open(sys.argv[1],os.O_RDWR);"
+            "fcntl.flock(fd,fcntl.LOCK_EX);"
+            "print('LOCKED',flush=True);"
+            "sys.stdin.read(1);os.close(fd)"
+        )
+        child = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                child_code,
+                str(self.root / ".writer.lock"),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            self.assertEqual(child.stdout.readline().strip(), "LOCKED")
+            self.assertEqual(self.invoke(capture=True), 3)
+            self.assertFalse((self.root / "snapshots").exists())
+        finally:
+            child.communicate(input="x", timeout=6)
+        self.assertEqual(child.returncode, 0)
+        self.assertEqual(self.invoke(capture=True), 0)
+        self.assertEqual(QA.db_digest(self.db), self.digest)
+
+    def test_interrupted_second_snapshot_never_publishes(self) -> None:
+        """A failed B copy cannot publish an incomplete A/B pair."""
+        original = QA.copy_sqlite
+        calls = [0]
+
+        def interrupt(source: Path, destination: Path) -> None:
+            calls[0] += 1
+            if calls[0] == 2:
+                raise OSError("injected second-copy failure")
+            original(source, destination)
+
+        with patch.object(QA, "copy_sqlite", side_effect=interrupt):
+            self.assertEqual(self.invoke(capture=True), 3)
+        self.assertFalse((self.root / "snapshots").exists())
+        self.assertEqual(QA.db_digest(self.db), self.digest)
+
+    def test_incomplete_source_archive_cannot_publish(self) -> None:
+        """Never snapshot source lacking an essential runtime component."""
+        (self.source / "app.py").unlink()
+        self.assertEqual(self.invoke(capture=True), 3)
+        self.assertFalse((self.root / "snapshots").exists())
         self.assertEqual(QA.db_digest(self.db), self.digest)
 
     def test_db_wal_contents_included(self) -> None:
