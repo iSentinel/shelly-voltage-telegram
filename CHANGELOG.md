@@ -1,3 +1,19 @@
+## 0.5.21-hw - preserve historical upgrade recovery snapshots
+
+- Stop pruning old verified source+SQLite upgrade snapshots as an
+  implicit side effect of an installation. Each guarded maintenance
+  step adds its own verified rollback archive while retaining all
+  earlier A/B, forensic and manually curated evidence.
+- Keep archive integrity, exact SQLite comparison, owner-private
+  snapshot permissions and signed GHCR image preflight requirements.
+- Add isolated tests proving preservation of six independently
+  recoverable snapshots, 12 pre-existing recovery folders and
+  malformed/unknown directories; keep GitHub CI tests compatible
+  with non-root runners without weakening production root checks.
+- Retention cleanup requires separately reviewed maintenance. No
+  change to the public Telegram message, and no implicit approval
+  for live source reconciliation or PHOTO migration.
+
 ## 0.5.20-hw - fail-closed signed image rollback
 
 - Prevent protected-source rollback from pairing an older source

@@ -14,7 +14,7 @@ before service stop. Never run this option without reviewing the
 snapshot and agreeing to its history/DB schema consequences.
 See docs/ROLLBACK_HISTORY_GUARD_QA.md for QA evidence.
 
-## Source upgrade backups are retained by default (next release)
+## v0.5.21-hw source upgrade backups retained by default
 
 Creating a verified source+SQLite upgrade snapshot must never delete
 previous verified snapshots automatically. Older archives may contain
