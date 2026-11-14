@@ -50,15 +50,17 @@ The private journal is written before state transitions and synced
 after each step. --fail-after models interruptions and
 --inject-restart-after models a surprise writer restart. A separate
 --recover-disposable command restores only synthetic owner flags.
-Recovery refuses changed SQLite digest or a new pending update, and
-cannot overwrite or restore any real production database.
+Recovery refuses changed SQLite digest, a new pending update,
+changed source/image versions, newly active updater or changed
+boot-recovery hook. It cannot overwrite or restore any real
+production database.
 
 ## Evidence and limits
 
-24 unit tests PASS, including a failed child process plus separate
+28 unit tests PASS, including a failed child process plus separate
 recovery, surprise restart before/after A/B, source/image mismatch,
-pending update, corrupt journal, linked paths, concurrent peer lock
-and safe restart policy order. Full Ruff quality gate passes.
+pending update, corrupt journal, linked paths, concurrent peer lock,
+safe restart policy order and changed release identity during recovery. Full Ruff quality gate passes.
 
 This is NOT an actual Docker/systemd integration test. Its A/B flags
 are NOT SQLite/source archives. Independent PR #329 tests the
