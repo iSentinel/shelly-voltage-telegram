@@ -165,3 +165,20 @@ pending writers before opening SQLite, while explicitly detecting
 the illegal running+pending state. Repeatable timer acceptance must
 pass before this is accepted as a usable recurring QA supervisor.
 No timer is installed or enabled by this PR.
+
+## Additional QA-only maintenance lock limitation
+
+A later isolated LXC114 timer race proved that pending-only
+checks could relaunch the synthetic writer during a pre-pending
+exclusive maintenance lock. PR #350 adds a separate private
+root-owned 0600 read-only shared-lock guard to this QA-only
+supervisor. It keeps a shared lock across the delegated start;
+exclusive simulated updater ownership returns SKIP_MAINTENANCE_LOCKED.
+This requires precreating the private QA lock file in LXC114.
+
+The actual production updater lock and real boot recovery must
+NOT be changed based on this isolated test. Using the **same**
+lock inode for a shared-lock supervisor held through systemctl
+restart and an exclusive-lock ExecStartPre can DEADLOCK.
+The production lock topology needs independent owner/security
+review before ANY production watchdog, source install or PHOTO.

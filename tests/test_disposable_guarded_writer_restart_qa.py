@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import importlib.util
 import io
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -48,6 +50,9 @@ class DisposableGuardedWriterRestartTests(unittest.TestCase):
         self.root = Path(directory.name)
         (self.root / "data").mkdir()
         (self.root / "state").mkdir()
+        lock = self.root / "state/maintenance-owner.lock"
+        lock.write_text("QA_ONLY\n")
+        lock.chmod(0o600)
         with (
             closing(sqlite3.connect(self.root / "data/history.sqlite3")) as db,
             db,
@@ -59,6 +64,9 @@ class DisposableGuardedWriterRestartTests(unittest.TestCase):
         patcher = patch.object(QA, "ROOT", self.root)
         patcher.start()
         self.addCleanup(patcher.stop)
+        owner = patch.object(QA, "QA_ROOT_OWNER_UID", os.getuid())
+        owner.start()
+        self.addCleanup(owner.stop)
 
     def cli(self, *args: str) -> tuple[int, str]:
         """Capture only the local QA CLI result."""
@@ -355,7 +363,105 @@ class DisposableGuardedWriterRestartTests(unittest.TestCase):
         with self.assertRaises(QA.Blocked):
             QA.check_sqlite()
 
-    def test_pending_blocks_delegate(self) -> None:
+    def test_maintenance_lock_missing_blocks(self) -> None:
+        """Do not create or guess missing coordination locks."""
+        (self.root / "state/maintenance-owner.lock").unlink()
+        with self.assertRaisesRegex(
+            QA.Blocked, "QA_MAINTENANCE_LOCK_UNAVAILABLE"
+        ):
+            QA.acquire_shared_maintenance_lock()
+
+    def test_maintenance_lock_symlink_blocks(self) -> None:
+        """Do not follow a lock redirected to an unrelated path."""
+        path = self.root / "state/maintenance-owner.lock"
+        alias = self.root / "alias.lock"
+        path.rename(alias)
+        path.symlink_to(alias)
+        with self.assertRaisesRegex(
+            QA.Blocked, "QA_MAINTENANCE_LOCK_UNAVAILABLE"
+        ):
+            QA.acquire_shared_maintenance_lock()
+
+    def test_maintenance_lock_hardlink_blocks(self) -> None:
+        """Reject shared inodes with untrusted additional names."""
+        path = self.root / "state/maintenance-owner.lock"
+        os.link(path, self.root / "hardlink.lock")
+        with self.assertRaisesRegex(
+            QA.Blocked, "QA_MAINTENANCE_LOCK_UNTRUSTED"
+        ):
+            QA.acquire_shared_maintenance_lock()
+
+    def test_unexpected_lock_owner_blocks(self) -> None:
+        """The deployed helper requires root-owned private lock inode."""
+        with (
+            patch.object(QA, "QA_ROOT_OWNER_UID", os.getuid() + 1),
+            self.assertRaisesRegex(
+                QA.Blocked, "QA_MAINTENANCE_LOCK_UNTRUSTED"
+            ),
+        ):
+            QA.acquire_shared_maintenance_lock()
+
+        """Require exact private root-owned 0600 mode."""
+        path = self.root / "state/maintenance-owner.lock"
+        path.chmod(0o644)
+        with self.assertRaisesRegex(
+            QA.Blocked, "QA_MAINTENANCE_LOCK_UNTRUSTED"
+        ):
+            QA.acquire_shared_maintenance_lock()
+
+    def test_exclusive_updater_lock_skips_without_evaluate(self) -> None:
+        """Never start a writer while fake updater holds exclusive lock."""
+        path = self.root / "state/maintenance-owner.lock"
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch.object(
+                QA, "delegated_restart", side_effect=AssertionError
+            ):
+                result = QA.restart_if_safe()
+            self.assertEqual(result, {"status": "SKIP_MAINTENANCE_LOCKED"})
+        finally:
+            os.close(fd)
+
+    def test_shared_fence_held_until_systemd_restart_returns(self) -> None:
+        """A writer launch holds the reader lock against updater EX."""
+        path = self.root / "state/maintenance-owner.lock"
+
+        def checked_command(args: list[str]) -> str:
+            self.assertEqual(args, ["systemctl", "restart", QA.UNIT])
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(fd)
+            return ""
+
+        with (
+            patch.object(
+                QA,
+                "evaluate",
+                return_value={"status": "QA_RESTART_CANDIDATE"},
+            ),
+            patch.object(QA, "command", side_effect=checked_command),
+            patch.object(QA, "inspect", return_value="true"),
+        ):
+            state = QA.restart_if_safe()
+        self.assertEqual(state["status"], "QA_SYSTEMD_RESTARTED")
+        with os.fdopen(os.open(path, os.O_RDONLY), "rb") as stream:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def test_shared_lock_released_when_delegate_fails(self) -> None:
+        """No leaked QA lock after a failed systemd start."""
+        path = self.root / "state/maintenance-owner.lock"
+        with (
+            patch.object(QA, "delegated_restart", side_effect=QA.Blocked),
+            self.assertRaises(QA.Blocked),
+        ):
+            QA.restart_if_safe()
+        with os.fdopen(os.open(path, os.O_RDONLY), "rb") as stream:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
         """A fake pending marker prevents even a single QA restart."""
         (self.root / "state/pending-update").write_text("synthetic\n")
         with (
