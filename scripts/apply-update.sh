@@ -197,8 +197,10 @@ recover_pending() {
     SNAPSHOT="$STATE/snapshots/$token"
     [[ -d "$SNAPSHOT" ]] || return 1
     echo "RECOVERY: interrupted update $token" >&2
+    # Refuse a stale archive BEFORE stopping a currently healthy writer.
+    restore_snapshot_database || return 1
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    # Before changing image metadata, refuse rollback of newer SQLite history.
+    # Recheck: a writer can commit a WAL row during the stop interval.
     restore_snapshot_database || return 1
     if [[ -f "$SNAPSHOT/override.yaml" ]]; then
         cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml" || return 1
