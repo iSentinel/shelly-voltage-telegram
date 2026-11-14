@@ -125,6 +125,46 @@ class WriterRestartAuditTests(unittest.TestCase):
         self.assertEqual(values, self.compose)
         self.assertIn("--property=Type", call.call_args.args[0])
 
+    def test_on_failure_docker_policy_requires_review(self) -> None:
+        """Also reject restart policies that fire after process failures."""
+        self.docker["restart"] = "on-failure"
+        self.assertIn(
+            "DOCKER_RESTART_POLICY_REQUIRES_REVIEW",
+            self.decision(ready=200)["reasons"],
+        )
+
+    def test_unknown_compose_unit_type_fails_closed(self) -> None:
+        """A changed unit type requires new maintenance review."""
+        self.compose["Type"] = "simple"
+        self.assertIn(
+            "COMPOSE_SERVICE_TYPE_UNVERIFIED",
+            self.decision(ready=200)["reasons"],
+        )
+
+    def test_missing_timer_fails_closed(self) -> None:
+        """An unavailable timer is not proof updates are prevented."""
+        self.timer["LoadState"] = "not-found"
+        self.assertIn(
+            "UPDATER_TIMER_UNVERIFIED",
+            self.decision(ready=200)["reasons"],
+        )
+
+    def test_linked_timer_startup_fails_closed(self) -> None:
+        """A linked timer must not be considered a disabled updater."""
+        self.timer["UnitFileState"] = "linked"
+        self.assertIn(
+            "UPDATER_TIMER_STARTUP_UNVERIFIED",
+            self.decision(ready=200)["reasons"],
+        )
+
+    def test_static_compose_startup_requires_review(self) -> None:
+        """Static units can still be started through other dependencies."""
+        self.compose["UnitFileState"] = "static"
+        self.assertIn(
+            "COMPOSE_STARTUP_STATE_UNVERIFIED",
+            self.decision(ready=200)["reasons"],
+        )
+
     def test_docker_parses_only_safe_fields(self) -> None:
         """Query only safe named container metadata, not credentials."""
         response = "true|unless-stopped|" + self.docker["image"]
