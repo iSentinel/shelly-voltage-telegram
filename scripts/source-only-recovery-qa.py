@@ -123,14 +123,19 @@ def validate_archive(path: Path) -> str:
         validator.check_compressed_bytes(path)
         with tarfile.open(path, "r:gz") as archive:
             for entry in archive:
-                if any(protected_name(part) for part in Path(
-                    entry.name
-                ).parts):
+                if any(
+                    protected_name(part) for part in Path(entry.name).parts
+                ):
                     raise Blocked("ARCHIVE_CONTAINS_PRIVATE_STATE")
         with tarfile.open(path, "r:gz") as archive:
             return archive_versions(archive)
-    except (OSError, EOFError, ValueError, UnicodeError,
-            tarfile.TarError) as exc:
+    except (
+        OSError,
+        EOFError,
+        ValueError,
+        UnicodeError,
+        tarfile.TarError,
+    ) as exc:
         raise Blocked("ARCHIVE_VALIDATION_FAILED") from exc
 
 
@@ -178,9 +183,7 @@ def install_sandbox(archive_path: Path, target: Path) -> None:
         preserve_local(target, stage)
         if not (stage / MARKER).is_file():
             raise Blocked("STAGE_MARKER_MISSING")
-        old = Path(tempfile.mkdtemp(
-            prefix=".source-old-", dir=target.parent
-        ))
+        old = Path(tempfile.mkdtemp(prefix=".source-old-", dir=target.parent))
         old.rmdir()
         target.rename(old)
         try:
@@ -216,9 +219,10 @@ def main() -> int:
             install_sandbox(args.archive, args.target)
         if before != sha256(args.database):
             raise Blocked("DATABASE_CHANGED")
-        if args.apply_disposable and (
-            args.target / "VERSION"
-        ).read_text().strip() != version:
+        if (
+            args.apply_disposable
+            and (args.target / "VERSION").read_text().strip() != version
+        ):
             raise Blocked("SOURCE_VERSION_INCORRECT")
     except (Blocked, OSError) as exc:
         print(f"SOURCE-ONLY QA FAIL: {exc}")
