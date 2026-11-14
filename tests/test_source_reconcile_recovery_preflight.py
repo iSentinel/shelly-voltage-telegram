@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parents[1]
 FILE = ROOT / "scripts/source-reconcile-recovery-preflight.py"
@@ -78,7 +81,7 @@ class SourceRecoveryPreflightTests(unittest.TestCase):
         """Probe a disposable SQLite DB and preserve its exact content."""
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "test.sqlite3"
-            with sqlite3.connect(path) as db:
+            with closing(sqlite3.connect(path)) as db:
                 db.executescript(
                     "CREATE TABLE measurements(voltage REAL);"
                     "INSERT INTO measurements VALUES(222.5);"
@@ -90,6 +93,21 @@ class SourceRecoveryPreflightTests(unittest.TestCase):
                 state, {"integrity": "ok", "samples": 1, "open_outages": 0}
             )
             self.assertEqual(path.read_bytes(), before)
+
+    def test_offline_ready_response_is_closed(self) -> None:
+        """HTTP 503 must close its response before returning BLOCKED."""
+        health = io.BytesIO(
+            b'{"connectivity":"offline","sample_is_stale":true}'
+        )
+        health.status = 200
+        stream = io.BytesIO(b"unavailable")
+        offline = HTTPError(MODULE.READY, 503, "offline", None, stream)
+        with patch.object(MODULE, "urlopen", side_effect=[health, offline]):
+            report = MODULE.live_state()
+        self.assertFalse(report["ready"])
+        self.assertEqual(report["connectivity"], "offline")
+        self.assertTrue(health.closed)
+        self.assertTrue(stream.closed)
 
     def test_linked_database_is_rejected(self) -> None:
         """Never follow a symlink to source SQLite."""

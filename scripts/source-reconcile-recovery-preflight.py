@@ -8,6 +8,7 @@ import importlib.util
 import json
 import sqlite3
 import stat
+from contextlib import closing
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
@@ -59,8 +60,10 @@ def database_state(path: Path) -> dict:
         info = path.lstat()
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise Blocked("SQLITE_PATH_UNSAFE")
-        with sqlite3.connect(
-            f"file:{path.as_posix()}?mode=ro", uri=True, timeout=3
+        with closing(
+            sqlite3.connect(
+                f"file:{path.as_posix()}?mode=ro", uri=True, timeout=3
+            )
         ) as db:
             db.execute("PRAGMA query_only=ON")
             integrity = db.execute("PRAGMA quick_check").fetchone()[0]
@@ -91,7 +94,9 @@ def live_state() -> dict:
             with urlopen(READY, timeout=4) as response:
                 ready = response.status == 200
         except HTTPError as exc:
-            if exc.code != 503:
+            code = exc.code
+            exc.close()
+            if code != 503:
                 raise Blocked("READY_UNKNOWN") from exc
             ready = False
     except (OSError, URLError, ValueError, TypeError) as exc:
