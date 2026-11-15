@@ -116,13 +116,13 @@ refuse_unapproved_update() {
 }
 
 preflight() {
-    python3 "$ROOT/scripts/github_update.py" preflight --database "$DB"
+    /usr/bin/python3 -I "$ROOT/scripts/github_update.py" preflight --database "$DB"
 }
 
 storage_preflight() {
     local docker_root
     docker_root="$(docker info --format '{{.DockerRootDir}}')"
-    python3 "$ROOT/scripts/github_update.py" storage \
+    /usr/bin/python3 -I "$ROOT/scripts/github_update.py" storage \
         --database "$DB" --state "$STATE" --docker-root "$docker_root"
 }
 
@@ -242,7 +242,7 @@ restore_snapshot_database() {
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
     if [[ -f "$DB" && ! -e "$rescue" ]]; then
-        python3 - "$DB" "$rescue" <<'PY'
+        /usr/bin/python3 -I - "$DB" "$rescue" <<'PY'
 import sqlite3
 import sys
 from contextlib import closing
@@ -259,7 +259,7 @@ PY
         rm -f "$temp"
         return 1
     fi
-    python3 - "$temp" <<'PY'
+    /usr/bin/python3 -I - "$temp" <<'PY'
 import sqlite3
 import sys
 from contextlib import closing
@@ -301,7 +301,7 @@ activate() {
     start_stack
     wait_healthy
     preflight
-    python3 - "$STATE/deployed.json" "$VERSION" "$digest" <<'PY'
+    /usr/bin/python3 -I - "$STATE/deployed.json" "$VERSION" "$digest" <<'PY'
 import json
 import os
 import sys
@@ -338,10 +338,10 @@ main() {
     fi
     requirements
     preflight
-    python3 "$ROOT/scripts/github_update.py" guard \
+    /usr/bin/python3 -I "$ROOT/scripts/github_update.py" guard \
         --root "$ROOT" --state "$STATE" --version "$VERSION"
     local digest
-    digest="$(python3 "$ROOT/scripts/github_update.py" digest \
+    digest="$(/usr/bin/python3 -I "$ROOT/scripts/github_update.py" digest \
         --version "$VERSION")"
     verify_image "$digest"
     UPDATE_WORKSPACE="$(mktemp -d)"

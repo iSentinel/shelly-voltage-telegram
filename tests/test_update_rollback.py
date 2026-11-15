@@ -97,11 +97,27 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((public / "deployed.json").exists())
 
+    def create_updater_guard_stub(self):
+        """Provide inert isolated-Python guard/digest CLI fixture."""
+        stub = self.root / "scripts" / "github_update.py"
+        stub.parent.mkdir()
+        stub.write_text(
+            "import sys\n"
+            "if sys.argv[1] == 'guard':\n"
+            "    print('TARGET PASS')\n"
+            "elif sys.argv[1] == 'digest':\n"
+            "    print('sha256:test')\n"
+            "else:\n"
+            "    raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
+
     def test_dry_run_cleans_workspace_and_exits_successfully(self):
         """A successful dry-run must not fail in its EXIT trap."""
 
         capture = self.root / "workspace_path"
         script = ROOT / "scripts" / "apply-update.sh"
+        self.create_updater_guard_stub()
         shell = "\n".join(
             (
                 'source "$1"',
@@ -109,11 +125,14 @@ class OfflineRollbackTests(unittest.TestCase):
                 "preflight() { :; }",
                 "verify_image() { :; }",
                 'verify_source_archive() { echo "$1" > "$CAPTURE"; }',
-                'python3() { [[ "$2" != digest ]] || echo sha256:test; }',
                 "main --version 0.5.12-hw --dry-run",
             )
         )
-        env = {**os.environ, "CAPTURE": str(capture)}
+        env = {
+            **os.environ,
+            "CAPTURE": str(capture),
+            "SVT_ROOT": str(self.root),
+        }
         result = subprocess.run(
             ["bash", "-c", shell, "bash", str(script)],
             capture_output=True,
