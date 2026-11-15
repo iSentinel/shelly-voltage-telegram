@@ -32,9 +32,7 @@ class UpdaterPrivilegedHandoffTests(unittest.TestCase):
         child.chmod(0o700)
         self.marker = self.root / "unsafe-shell-sourced"
         poison = self.root / "injected-startup"
-        poison.write_text(
-            'printf "injected" > "$QA_UPDATER_POISON_MARKER"\n'
-        )
+        poison.write_text('printf "injected" > "$QA_UPDATER_POISON_MARKER"\n')
         self.env = {
             **os.environ,
             "SVT_ROOT": str(self.root),
@@ -45,8 +43,12 @@ class UpdaterPrivilegedHandoffTests(unittest.TestCase):
     def invoke(self, args: list[str]) -> subprocess.CompletedProcess:
         """Run only inert help or private synthetic handoff."""
         return subprocess.run(
-            args, env=self.env, check=False,
-            capture_output=True, text=True, timeout=8,
+            args,
+            env=self.env,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=8,
         )
 
     def test_systemd_updater_uses_privileged_shell(self) -> None:
