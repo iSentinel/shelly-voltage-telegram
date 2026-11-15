@@ -76,7 +76,9 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
 
     def trace_lines(self) -> list[str]:
         """Read mock invocation history without touching real Docker."""
-        return self.trace.read_text().splitlines() if self.trace.exists() else []
+        if self.trace.exists():
+            return self.trace.read_text().splitlines()
+        return []
 
     def test_shell_syntax(self) -> None:
         """Bash candidate must parse in CI before any runtime use."""
