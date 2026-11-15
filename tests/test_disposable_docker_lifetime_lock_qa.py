@@ -137,9 +137,11 @@ class LifetimeGapContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "LEASE_TERMINATED"):
             QA.require_lease(self.root, lease)
 
-    def test_lease_finish_noop_if_reaped(self) -> None:
-        """A reaped synthetic child must not be signalled again."""
-        lease = SimpleNamespace(poll=lambda: 0)
+    def test_reaped_lease_pipes_are_closed(self) -> None:
+        """Always communicate to release reaped child pipe descriptors."""
+        lease = SimpleNamespace(
+            communicate=lambda timeout: ("", ""),
+        )
         QA.finish_lease(lease)
 
     def test_exact_root_mode_only_in_fixture(self) -> None:
