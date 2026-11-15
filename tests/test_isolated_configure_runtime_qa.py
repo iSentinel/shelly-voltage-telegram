@@ -65,7 +65,10 @@ class IsolatedConfigureTests(unittest.TestCase):
 
     def test_direct_help_ignores_bash_env(self) -> None:
         """The direct executable opts into privileged Bash startup."""
-        self.assertEqual(CONFIGURE.read_text().splitlines()[0], "#!/bin/bash -p")
+        self.assertEqual(
+            CONFIGURE.read_text().splitlines()[0],
+            "#!/bin/bash -p",
+        )
         result = self.invoke([str(CONFIGURE), "--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.bash_marker.exists())
