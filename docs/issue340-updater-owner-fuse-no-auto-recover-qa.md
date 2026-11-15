@@ -38,11 +38,14 @@ there were no real Docker, systemd, Shelly, Telegram or live SQLite calls.
 
 - `bash -n`: PASS.
 - `python3 -m unittest discover -s tests -p
-  'test_legacy_updater_owner_fuse_qa.py' -v`: 11/11 PASS as root
+  'test_legacy_updater_owner_fuse_qa.py' -v`: 12/12 PASS as root
   (1 correct nonroot-only skip).
-- The same 11 tests PASS as UID65534/nobody (6 correct root-only skips).
+- The same 12 tests PASS as UID65534/nobody (7 correct root-only skips).
 - Real Linux `flock` G EX + mocked inactive/masked systemd and stopped
   `restart=no` Docker still returned NO_GO.
+- A real synthetic 27-row SQLite WAL database remained byte-for-byte
+  unchanged (WAL sidecar and row count) after pending `--recover` with
+  inherited G EX; `PRAGMA quick_check=ok`, pending marker retained.
 - Active legacy systemd, missing G, pending marker symlink and nonroot
   recovery attempts all fail closed. No QA scratch remains.
 
