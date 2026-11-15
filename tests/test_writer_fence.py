@@ -15,7 +15,6 @@ from unittest.mock import patch
 SCRIPT = Path(__file__).resolve().parents[1] / "writer_fence.py"
 SPEC = importlib.util.spec_from_file_location("candidate_writer_fence", SCRIPT)
 FENCE = importlib.util.module_from_spec(SPEC)
-
 sys.modules[SPEC.name] = FENCE
 SPEC.loader.exec_module(FENCE)
 
@@ -34,12 +33,12 @@ class WriterFenceCandidateTests(unittest.TestCase):
         self.addCleanup(owner_patch.stop)
         self.root = Path(temp.name)
         self.folder = self.root / "owner"
-        self.folder.mkdir(mode=0o750)
-        os.chmod(self.folder, 0o750)
+        self.folder.mkdir(mode=488)
+        os.chmod(self.folder, 488)
         for name in ("B", "W"):
             lock = self.folder / name
-            lock.touch(mode=0o640)
-            os.chmod(lock, 0o640)
+            lock.touch(mode=416)
+            os.chmod(lock, 416)
         self.assertEqual(FENCE._ACTIVE, None)
 
     def test_empty_mode_is_inert(self) -> None:
@@ -54,23 +53,29 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_unknown_mode_fails_closed(self) -> None:
         """Typos must never silently bypass a requested fence."""
-        with self.assertRaisesRegex(FENCE.WriterFenceError, "invalid_mode"):
-            with FENCE.writer_fence("yes", self.folder):
-                pass
+        with (
+            self.assertRaisesRegex(FENCE.WriterFenceError, "invalid_mode"),
+            FENCE.writer_fence("yes", self.folder),
+        ):
+            pass
 
     def test_missing_lock_directory_denied(self) -> None:
         """Required mode never creates any lock files or paths."""
-        with self.assertRaises(OSError):
-            with FENCE.writer_fence("required", self.root / "absent"):
-                pass
+        with (
+            self.assertRaises(OSError),
+            FENCE.writer_fence("required", self.root / "absent"),
+        ):
+            pass
         self.assertFalse((self.root / "absent").exists())
 
     def test_missing_W_file_denied(self) -> None:
         """An incomplete B/W mount fails before app startup."""
         (self.folder / "W").unlink()
-        with self.assertRaises(OSError):
-            with FENCE.writer_fence("required", self.folder):
-                pass
+        with (
+            self.assertRaises(OSError),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            pass
         self.assertFalse((self.folder / "W").exists())
 
     def test_required_lease_is_active(self) -> None:
@@ -83,17 +88,21 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_sqlite_gate_requires_active_scope(self) -> None:
         """Required mode without startup lease blocks SQLite immediately."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with self.assertRaisesRegex(
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            self.assertRaisesRegex(
                 FENCE.WriterFenceError, "missing_at_database_open"
-            ):
-                FENCE.assert_sqlite_writer_fenced()
+            ),
+        ):
+            FENCE.assert_sqlite_writer_fenced()
 
     def test_sqlite_gate_validates_active_scope(self) -> None:
         """A valid lease authorizes SQLite connection before each open."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            FENCE.assert_sqlite_writer_fenced()
 
     def test_sqlite_gate_default_legacy_inert(self) -> None:
         """Existing diagnostics are unchanged if no feature is enabled."""
@@ -102,11 +111,11 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_sqlite_gate_bad_mode_denied(self) -> None:
         """Runtime mode tampering cannot bypass the required state."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "maybe"}):
-            with self.assertRaisesRegex(
-                FENCE.WriterFenceError, "invalid_mode"
-            ):
-                FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "maybe"}),
+            self.assertRaisesRegex(FENCE.WriterFenceError, "invalid_mode"),
+        ):
+            FENCE.assert_sqlite_writer_fenced()
 
     def test_B_exclusive_conflict_denied(self) -> None:
         """Maintenance EX lock prevents the writer's shared B lock."""
@@ -132,9 +141,11 @@ class WriterFenceCandidateTests(unittest.TestCase):
         """Failed W acquisition must not leave a stranded B reader."""
         with (self.folder / "W").open("rb") as owner:
             fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            with self.assertRaises(FENCE.WriterFenceError):
-                with FENCE.writer_fence("required", self.folder):
-                    pass
+            with (
+                self.assertRaises(FENCE.WriterFenceError),
+                FENCE.writer_fence("required", self.folder),
+            ):
+                pass
             result = subprocess.run(
                 [
                     "/usr/bin/flock",
@@ -166,17 +177,17 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_another_writer_scope_denied(self) -> None:
         """Two nested writer entrypoints cannot share one active state."""
-        with FENCE.writer_fence("required", self.folder):
-            with self.assertRaisesRegex(
-                FENCE.WriterFenceError, "duplicate_scope"
-            ):
-                with FENCE.writer_fence("required", self.folder):
-                    pass
+        with (
+            FENCE.writer_fence("required", self.folder),
+            self.assertRaisesRegex(FENCE.WriterFenceError, "duplicate_scope"),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            pass
 
     def test_lock_fds_close_on_scope_exit(self) -> None:
         """No in-process writer lock survives normal application exit."""
         with FENCE.writer_fence("required", self.folder) as lease:
-            bfd, wfd = lease.b_fd, lease.w_fd
+            bfd, wfd = (lease.b_fd, lease.w_fd)
         for fd in (bfd, wfd):
             with self.assertRaises(OSError):
                 os.fstat(fd)
@@ -193,21 +204,22 @@ class WriterFenceCandidateTests(unittest.TestCase):
         path = self.folder / "B"
         path.unlink()
         path.symlink_to(self.root / "fake")
-        with self.assertRaises(OSError):
-            with FENCE.writer_fence("required", self.folder):
-                pass
+        with (
+            self.assertRaises(OSError),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            pass
 
     def test_symlinked_directory_denied(self) -> None:
         """Never follow a symlink for the mount directory itself."""
         link = self.root / "linked-owner"
         link.symlink_to(self.folder, target_is_directory=True)
-        with self.assertRaises(OSError):
-            with FENCE.writer_fence("required", link):
-                pass
+        with self.assertRaises(OSError), FENCE.writer_fence("required", link):
+            pass
 
     def test_group_writable_lock_denied(self) -> None:
         """Any group write permission on a lock inode fails closed."""
-        os.chmod(self.folder / "B", 0o660)
+        os.chmod(self.folder / "B", 432)
         with (
             self.assertRaisesRegex(
                 FENCE.WriterFenceError, "unsafe_permissions"
@@ -218,7 +230,7 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_group_writable_directory_denied(self) -> None:
         """Any group-write permission on the lock directory is unsafe."""
-        os.chmod(self.folder, 0o770)
+        os.chmod(self.folder, 504)
         with (
             self.assertRaisesRegex(
                 FENCE.WriterFenceError, "unsafe_permissions"
@@ -229,14 +241,14 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_foreign_owner_denied(self) -> None:
         """Require the configured trusted UID on all lock inodes."""
-        with patch.object(FENCE, "_TRUSTED_UID", os.geteuid() + 1):
-            with (
-                self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "wrong_owner_or_group"
-                ),
-                FENCE.writer_fence("required", self.folder),
-            ):
-                pass
+        with (
+            patch.object(FENCE, "_TRUSTED_UID", os.geteuid() + 1),
+            self.assertRaisesRegex(
+                FENCE.WriterFenceError, "wrong_owner_or_group"
+            ),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            pass
 
     def test_hardlinked_lock_denied(self) -> None:
         """A lock inode with extra hardlinks is never trusted."""
@@ -255,8 +267,8 @@ class WriterFenceCandidateTests(unittest.TestCase):
         with FENCE.writer_fence("required", self.folder) as lease:
             saved = self.root / "owner-old"
             self.folder.rename(saved)
-            self.folder.mkdir(mode=0o750)
-            os.chmod(self.folder, 0o750)
+            self.folder.mkdir(mode=488)
+            os.chmod(self.folder, 488)
             with self.assertRaisesRegex(
                 FENCE.WriterFenceError, "inode_replaced"
             ):
@@ -264,68 +276,78 @@ class WriterFenceCandidateTests(unittest.TestCase):
 
     def test_lock_inode_replacement_detected(self) -> None:
         """A new B inode invalidates SQLite gate despite old held fd."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                next_lock = self.folder / "B.new"
-                next_lock.touch(mode=0o640)
-                os.chmod(next_lock, 0o640)
-                os.replace(next_lock, self.folder / "B")
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "inode_replaced"
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            next_lock = self.folder / "B.new"
+            next_lock.touch(mode=416)
+            os.chmod(next_lock, 416)
+            os.replace(next_lock, self.folder / "B")
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "inode_replaced"
+            ):
+                FENCE.assert_sqlite_writer_fenced()
 
     def test_mode_downgrade_during_active_lease_denied(self) -> None:
         """Changing required to off cannot bypass an already active lease."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                os.environ["SHELLY_WRITER_FENCE"] = "off"
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "mode_changed_while_active"
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            os.environ["SHELLY_WRITER_FENCE"] = "off"
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "mode_changed_while_active"
+            ):
+                FENCE.assert_sqlite_writer_fenced()
 
     def test_held_lock_chmod_must_fail_before_sqlite(self) -> None:
         """Writable B permissions are rechecked on every SQLite open."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                os.chmod(self.folder / "B", 0o660)
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "unsafe_permissions"
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            os.chmod(self.folder / "B", 432)
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "unsafe_permissions"
+            ):
+                FENCE.assert_sqlite_writer_fenced()
 
     def test_held_lock_owner_change_blocks_sqlite(self) -> None:
         """A trusted owner mismatch must fail at the next SQLite gate."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                with (
-                    patch.object(FENCE, "_TRUSTED_UID", os.geteuid() + 1),
-                    self.assertRaisesRegex(
-                        FENCE.WriterFenceError, "wrong_owner_or_group"
-                    ),
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+            patch.object(FENCE, "_TRUSTED_UID", os.geteuid() + 1),
+            self.assertRaisesRegex(
+                FENCE.WriterFenceError, "wrong_owner_or_group"
+            ),
+        ):
+            FENCE.assert_sqlite_writer_fenced()
 
     def test_held_directory_permission_change_denied(self) -> None:
         """Parent mode changes are revalidated before writer opens SQLite."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                os.chmod(self.folder, 0o770)
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "unsafe_permissions"
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            os.chmod(self.folder, 504)
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "unsafe_permissions"
+            ):
+                FENCE.assert_sqlite_writer_fenced()
 
     def test_held_lock_hardlink_change_denied(self) -> None:
         """Adding an alias to a live B inode triggers validation failure."""
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                os.link(self.folder / "B", self.folder / "B.link")
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "link_count_not_one"
-                ):
-                    FENCE.assert_sqlite_writer_fenced()
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            os.link(self.folder / "B", self.folder / "B.link")
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "link_count_not_one"
+            ):
+                FENCE.assert_sqlite_writer_fenced()
 
 
 if __name__ == "__main__":
