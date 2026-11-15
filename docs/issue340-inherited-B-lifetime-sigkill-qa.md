@@ -42,13 +42,13 @@ exists inside either synthetic role.
 | Writer running, supervisor SIGKILLed | B EX **allowed (unsafe gap)** | B EX **denied** |
 | Writer exited | B EX allowed | B EX allowed |
 
-Actual isolated LXC114 results: **2/2 subprocess scenarios PASS**
+Actual isolated LXC114 results: **3/3 supervisor SIGKILL scenarios PASS**
 and repeat PASS. All private scratch directories removed.
 Original signed QA writer remains stopped with restart=no and original
 QA units disabled. LXC114 has only `lo`; no network interface is
 usable by the experiment.
 
-**31/31** combined (19 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
+**36/36** combined (24 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
 Ruff 0.14.2/PEP8 PASS, all functions <=40 lines and Python code
 lines <=79. Negative tests check exact user consent, root/hostname,
 lo-only NIC, original QA writer and systemd unit state, invalid
@@ -150,7 +150,7 @@ python3 scripts/disposable-single-writer-admission-qa.py \
 ```
 
 The new **12/12 default-inert unit tests PASS**, combined with
-the inherited-B package for **31/31 strict unit tests PASS**
+the inherited-B package for **36/36 strict unit tests PASS**
 on LXC114. Ruff 0.14.2, PEP8, <=40-line functions and <=79-char
 source lines pass. All scratch directories cleaned.
 
@@ -164,3 +164,36 @@ and systemd start owners, noncircular ordering, daemon
 restart, concurrent login, stale-writer recovery and physical
 power-loss have NOT been validated. W is not installed in
 production. This is **NO-GO** for automatic deployment.
+
+## Combined B SH and W EX survival across SIGKILL
+
+The earlier inherited B model and the single-writer admission model
+were subsequently **combined in one actual orphaned-child test**.
+The synthetic supervisor acquires B SH and W EX **before** launching
+the writer, and both underlying file descriptors are included in
+the same `pass_fds` tuple. After independently proving both
+inodes are held, the supervisor receives real `SIGKILL`.
+
+While the synthetic Unix writer remains running, a separate
+maintenance B EX probe and a second writer W EX probe both fail.
+After it exits, both B EX and W EX become available.
+
+| SIGKILL scenario | B EX during live child | W EX during live child |
+| --- | --- | --- |
+| Parent-only B SH | ALLOWED_GAP | Not applicable |
+| Inherited B SH | BLOCKED | Not applicable |
+| **Inherited B SH + W EX** | **BLOCKED** | **BLOCKED** |
+
+**3/3 actual subprocess SIGKILL scenarios PASS**, plus the
+two concurrent-writer admission cases **2/2 PASS**.
+The added five W lifetime regression tests bring the combined
+default-inert suite to **36/36 ResourceWarning-strict unit tests
+PASS**, Ruff0.14.2/PEP8 and <=40-line functions PASS on isolated
+LXC114. Every private test directory is cleaned.
+
+**Limits remain unchanged:** these are Unix processes and a fixed
+sleeping synthetic child. No Docker OCI container can be assumed to
+inherit B/W host descriptors. There is no real systemd supervisor,
+SQLite WAL writer, signed source, daemon reboot or physical power
+loss here. The tests establish an acceptance property for a future
+design, **not** a deployment-ready implementation or Owner Approval.
