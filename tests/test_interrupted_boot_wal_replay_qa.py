@@ -96,9 +96,7 @@ class InterruptedBootReplayTests(unittest.TestCase):
             timeout=10,
         )
 
-    def verify_current(
-        self, wal_before: bytes, inspect: bool = False
-    ) -> None:
+    def verify_current(self, wal_before: bytes, inspect: bool = False) -> None:
         """Assert that pending recovery never changed committed WAL history."""
         wal = Path(str(self.db_path) + "-wal")
         self.assertEqual(wal.read_bytes(), wal_before)
