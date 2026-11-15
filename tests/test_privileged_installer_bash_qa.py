@@ -47,7 +47,10 @@ class InstallerPrivilegedBashTests(unittest.TestCase):
 
     def test_direct_installer_help_ignores_bash_env(self) -> None:
         """Kernel shebang uses privileged Bash before argument parsing."""
-        self.assertEqual(INSTALLER.read_text().splitlines()[0], "#!/bin/bash -p")
+        self.assertEqual(
+            INSTALLER.read_text().splitlines()[0],
+            "#!/bin/bash -p",
+        )
         result = self.invoke([str(INSTALLER), "--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Usage: install.sh", result.stdout)
@@ -57,7 +60,10 @@ class InstallerPrivilegedBashTests(unittest.TestCase):
         """Both snapshot and source copy must fence Bash startup imports."""
         code = INSTALLER.read_text()
         for target in ("TARGET", "SOURCE"):
-            expected = f'/bin/bash -p "$SOURCE/scripts/source-tar.sh" "${target}" |'
+            expected = (
+                '/bin/bash -p "$SOURCE/scripts/source-tar.sh" '
+                f'"${target}" |'
+            )
             self.assertIn(expected, code)
 
     def test_compose_calls_use_protected_bash(self) -> None:
@@ -68,7 +74,10 @@ class InstallerPrivilegedBashTests(unittest.TestCase):
             '/bin/bash -p "$TARGET/scripts/start-compose.sh" --build',
             code,
         )
-        self.assertNotRegex(code, r'(?m)^\s+bash "\$TARGET/scripts/start-compose.sh"')
+        self.assertNotRegex(
+            code,
+            r'(?m)^\s+bash "\$TARGET/scripts/start-compose.sh"',
+        )
 
     def test_source_archive_helper_is_safe_when_called(self) -> None:
         """The existing helper is safe with the installer's interpreter."""
@@ -91,13 +100,13 @@ class InstallerPrivilegedBashTests(unittest.TestCase):
             command.write_text("#!/bin/sh\nexit 0\n")
             command.chmod(0o755)
         shell = (
-            "set -euo pipefail\n" + match.group(0)
+            "set -euo pipefail\n"
+            + match.group(0)
             + '\nDRY_RUN=false\nSIGNED_DEPLOYMENT=false\nTARGET="$1"\n'
             + "deploy\n"
         )
-        result = self.invoke(
-            ["/bin/bash", "-p", "-c", shell, "qa", str(self.root)]
-        )
+        command = ["/bin/bash", "-p", "-c", shell, "qa", str(self.root)]
+        result = self.invoke(command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("FAKE_COMPOSE_OK", result.stdout)
         self.assertFalse(self.marker.exists())
