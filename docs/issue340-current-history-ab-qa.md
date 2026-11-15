@@ -184,3 +184,27 @@ physical machine; verify that A and B live on distinct failure
 domains and can be independently restored with source+SQLite
 parity. This is an infrastructure requirement, not an instruction
 to change any existing Proxmox storage or create a backup job.
+
+## Full historical backup archive integrity sweep
+
+At 2026-11-15 around 12:05 Kyiv, a separate *read-only* LXC110
+audit checked **all 14 current historical SQLite backups**, not
+just the newest. Every archive passed its SHA-256 sidecar, gzip
+decompression and SQLite `quick_check=ok` from a bounded
+in-memory-only clone; **14/14 PASS, 0 corrupt**. No archive or
+working SQLite file was modified.
+
+Recorded backup row counts range from **51,094** (oldest) to
+**67,266** (newest). The actual retained archive timestamps span
+**2026-11-12 19:48 UTC** to **2026-11-15 01:22 UTC**. The
+`backup.sh` variable `BACKUP_KEEP` defaults to `14`, which
+means **14 individual files**, not 14 calendar days. Additional
+predeployment or manual archives may therefore compress the
+actual retention coverage; the real timestamps should determine
+retention adequacy, not the configured count alone.
+
+While all historical backups are healthy, the newest remains
+behind the live database and all are stored on one physical
+NVMe. This is evidence for better backup-policy design and
+separate failure domains, not approval to overwrite current
+history or alter retention settings without owner review.
