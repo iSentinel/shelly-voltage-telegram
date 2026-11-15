@@ -85,8 +85,8 @@ Each case spawns a **real child process** and forcibly ends it with
 | pending unlinked and directory fsynced | RECONCILE_REQUIRED | COMMITTED |
 | committed journal persisted | COMMITTED | COMMITTED |
 
-**7/7 real SIGKILL cut points PASS.** Independent **25/25 Python
-unit tests PASS** with strict ResourceWarning, Ruff 0.14.2
+**7/7 real SIGKILL cut points PASS.** Independent **35/35 combined Python
+unit tests PASS** (25 journal + 10 systemd prestart) with strict ResourceWarning, Ruff 0.14.2
 format/lint PASS, all functions at most 40 source lines,
 all Python source lines at most 79 chars.
 
@@ -118,3 +118,43 @@ Successful reconciliation is idempotent.
 
 **Release decision: NO-GO.** Review this as a test contract only.
 Refs #340, #356, #357, #358 and #336.
+
+## Real transient systemd ExecStartPre follow-up (LXC114)
+
+An additional default-inert `scripts/disposable-status-journal-systemd-qa.py`
+uses the same guarded, mock-trusted journal fixture but creates a **real
+transient systemd oneshot unit** with `ExecStartPre` and an isolated,
+invented start marker. It runs with `PrivateNetwork=yes`,
+`ProtectSystem=strict`, a private `ReadWritePaths` scratch directory,
+`--wait --pipe --collect`; no existing QA or production service is
+restarted, stopped, enabled or altered.
+
+Default and exact-consent-only offline LXC114 reproduction:
+
+```bash
+python3 scripts/disposable-status-journal-systemd-qa.py --help
+python3 scripts/disposable-status-journal-systemd-qa.py
+
+python3 scripts/disposable-status-journal-systemd-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_JOURNAL_SYSTEMD_PRESTART_QA_ONLY
+```
+
+| Synthetic journal at prestart | Real systemd result | Start marker |
+| --- | --- | --- |
+| published, pending present | prestart DENIED | No |
+| published, pending missing | prestart DENIED | No |
+| committed, matching metadata | prestart PASS | Yes |
+| committed, corrupt public JSON | prestart DENIED | No |
+
+All **4/4 real transient systemd scenarios PASS**, with **10/10
+additional default-inert unit tests** and combined **35/35 strict
+tests PASS**. Temporary units are transient and auto-collected, and
+private fixture directories are removed. Journal signature trust and
+running OCI identity remain MOCKED. This is a **fail-closed boot
+prestart contract**, *not* a validated production boot-availability
+policy: refusing uncommitted state could prevent healthy monitoring
+from restarting unless the actual whole-writer B/A recovery pathway
+has been independently proven. Real signed-source, Docker, SQLite
+history, physical power loss and owner-approved production boot
+remain separate NO-GO gates.
