@@ -29,11 +29,8 @@ class BashEntrypointSafetyTests(unittest.TestCase):
         self.fake_marker = self.root / "fake-bash-used"
         self.poison.write_text('printf "injected" > "$QA_BASH_ENV_MARKER"\n')
         fake = self.bin / "bash"
-        fake_source = (
-            '#!/bin/sh\nprintf "fake" > "$QA_BASH_PATH_MARKER"\n'
-            "exit 49\n"
-        )
-        fake.write_text(fake_source)
+        fake_line = 'printf "fake" > "$QA_BASH_PATH_MARKER"\n'
+        fake.write_text("#!/bin/sh\n" + fake_line + "exit 49\n")
         fake.chmod(0o700)
         self.env = {
             **os.environ,
