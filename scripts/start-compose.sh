@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 # Preserve approved YASNO read-only opt-in across start/update modes.
 set -euo pipefail
 
