@@ -48,7 +48,7 @@ Original signed QA writer remains stopped with restart=no and original
 QA units disabled. LXC114 has only `lo`; no network interface is
 usable by the experiment.
 
-**19/19** independent `ResourceWarning`-strict unit tests PASS,
+**31/31** combined (19 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
 Ruff 0.14.2/PEP8 PASS, all functions <=40 lines and Python code
 lines <=79. Negative tests check exact user consent, root/hostname,
 lo-only NIC, original QA writer and systemd unit state, invalid
@@ -112,3 +112,55 @@ python3 scripts/disposable-inherited-b-lifetime-qa.py \
 
 Related: #335, #336, #340, #353, #354, #355, #358, #359,
 #360 and #361.
+
+## Additional single-writer admission evidence — 2026-11-15
+
+A **second actual offline Unix flock experiment** in the same
+networkless LXC114 addresses another logical issue in a naive
+B SH-based design. B SH is a **shared** lock: any number of
+cooperating writer launchers could simultaneously acquire it,
+even though it blocks maintenance B EX.
+
+Two independent root-private synthetic lock inodes were created:
+**B (maintenance)** and **W (single-writer)**, both mode0600.
+Synthetic writers are only fixed `sleep 3` commands using
+`/usr/bin/flock --no-fork` so lock ownership remains with
+the exact sleeping process. There is no Docker, SQLite,
+Shelly or Telegram call in these experiments.
+
+| Real isolated case | Actual result |
+| --- | --- |
+| Two processes each acquire B SH alone | Both run simultaneously; **single-writer violation** |
+| First process acquires B SH then W EX | Second B SH + W EX admission fails immediately |
+| Maintenance B EX while B SH / W EX writer runs | Denied |
+| Synthetic worker exits | Lock file descriptors close and locks release |
+
+**2/2 actual subprocess admission cases PASS.** The companion
+`scripts/disposable-single-writer-admission-qa.py` is inert by
+default and requires exact offline LXC114 confirmation:
+
+```bash
+python3 scripts/disposable-single-writer-admission-qa.py --help
+python3 scripts/disposable-single-writer-admission-qa.py
+
+# EXACT OFFLINE LXC114 only, writer stopped, no external interfaces:
+python3 scripts/disposable-single-writer-admission-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_SINGLE_WRITER_ADMISSION_QA_ONLY
+```
+
+The new **12/12 default-inert unit tests PASS**, combined with
+the inherited-B package for **31/31 strict unit tests PASS**
+on LXC114. Ruff 0.14.2, PEP8, <=40-line functions and <=79-char
+source lines pass. All scratch directories cleaned.
+
+**Design implication:** a production protocol must separately
+ensure *writer exclusivity* and *maintenance exclusion*, not
+mistake shared B for a single-writer election. A synthetic
+lock order **B SH -> W EX** for a writer and **B EX ->
+maintenance A EX** for updater is an illustrative candidate
+only; the actual writer-supervisor lifecycle, all Docker
+and systemd start owners, noncircular ordering, daemon
+restart, concurrent login, stale-writer recovery and physical
+power-loss have NOT been validated. W is not installed in
+production. This is **NO-GO** for automatic deployment.
