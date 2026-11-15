@@ -93,7 +93,7 @@ start_compose_main() {
         echo "FAIL: exact pinned OCI override is required" >&2
         return 3
     fi
-    python3 "$ROOT/scripts/legacy-compose-start-gate.py" --check \
+    /usr/bin/python3 -I "$ROOT/scripts/legacy-compose-start-gate.py" --check \
         --gate-dir "${SVT_OWNER_GATE_DIR:-/run/shelly-owner}" \
         --pinned-override "$OVERRIDE" || return 3
     compose_cmd config -q
