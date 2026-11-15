@@ -207,10 +207,10 @@ signed_image_preflight() {
     fi
     # Never fall back to local Docker builds with a signed marker.
     if [[ "$DRY_RUN" == true ]]; then
-        python3 "$SOURCE/scripts/installer-signed-image-guard.py" \
+        /usr/bin/python3 -I "$SOURCE/scripts/installer-signed-image-guard.py" \
             --source "$SOURCE" --state "$state" --dry-run
     else
-        python3 "$SOURCE/scripts/installer-signed-image-guard.py" \
+        /usr/bin/python3 -I "$SOURCE/scripts/installer-signed-image-guard.py" \
             --source "$SOURCE" --state "$state"
     fi
     SIGNED_DEPLOYMENT=true
@@ -285,7 +285,7 @@ snapshot_upgrade() {
     /bin/bash -p "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
     # Do not change Docker packages without a restorable source image.
-    python3 "$SOURCE/scripts/validate-source-archive.py" \
+    /usr/bin/python3 -I "$SOURCE/scripts/validate-source-archive.py" \
         "$snapshot/source.tar.gz"
     DATABASE_PATH="$sqlite_db" BACKUP_DIR="$snapshot" BACKUP_KEEP=1 \
         "$SOURCE/scripts/backup.sh" > "$snapshot/backup.log"
@@ -301,7 +301,7 @@ snapshot_upgrade() {
     }
     # A valid SQLite archive may still contain older measurements.
     # Compare every table and persistent header before source replacement.
-    python3 "$SOURCE/scripts/validate-sqlite-archive.py" \
+    /usr/bin/python3 -I "$SOURCE/scripts/validate-sqlite-archive.py" \
         --archive "$sqlite_archive" --compare-db "$sqlite_db"
     # Historical upgrade snapshots are rollback evidence. Never silently
     # remove them during a live install; cleanup requires a separate,
@@ -371,7 +371,7 @@ await_signed_ready() {
             consecutive=0
         fi
         if [[ "$consecutive" -ge 3 ]]; then
-            python3 "$TARGET/scripts/deployment-state-audit.py" \
+            /usr/bin/python3 -I "$TARGET/scripts/deployment-state-audit.py" \
                 --root "$TARGET"
             return
         fi
