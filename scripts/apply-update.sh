@@ -107,7 +107,7 @@ refuse_unapproved_update() {
         echo "FAIL: frozen-owner preflight missing or linked" >&2
         return 5
     fi
-    python3 "$guard" --check \
+    /usr/bin/python3 -I "$guard" --check \
         --gate-dir "${SVT_OWNER_GATE_DIR:-/run/shelly-owner}" \
         --inherited-g-fd "$fd" || return 5
     # No global all-owner G/B/W/A cutover proof exists yet.
