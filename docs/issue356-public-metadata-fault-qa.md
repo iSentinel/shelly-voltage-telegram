@@ -71,3 +71,21 @@ identity. It also does not guarantee real hardware crash durability.
 
 This PR deliberately does NOT change `scripts/apply-update.sh`, systemd,
 Docker restart policy, public Telegram pins or production metadata.
+
+## Production file-mode compatibility gate (read-only finding)
+
+The installed `sync_public_version` uses `install -m 0644` for
+`/var/lib/shelly-voltage-update-check/deployed.json`, while this
+**synthetic QA model deliberately writes 0600** in its own private
+scratch directory. The actual release-check systemd unit has
+`DynamicUser=yes` and `StateDirectory=shelly-voltage-update-check`.
+The on-host directory permissions and systemd state-directory
+ownership mapping can differ across host and unit namespaces.
+
+Before adopting any public publisher in production, an independent
+review must establish the exact effective reader identity and file
+ownership/mode contract under this unit, verify read access after
+atomic replacement and unit restart, and ensure parent directory
+ownership is preserved. Do not blindly copy this QA tool's 0600
+mode into the live public status path. This finding requires no
+changes to the current service or file permissions.
