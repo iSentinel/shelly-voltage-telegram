@@ -83,15 +83,22 @@ start_compose_main() {
     fi
     [[ $# -le 1 ]] || { usage >&2; return 2; }
 
-    compose_prepare "$build"
-    compose_cmd config -q
+    # A legacy image can bypass advisory G/B locks. Deny ungated starts.
     if [[ "$build" == true ]]; then
-        compose_cmd up -d --build
-    elif [[ "$pinned" == true ]]; then
-        compose_cmd up -d --no-build
-    else
-        compose_cmd up -d
+        echo "FAIL: unsigned Docker build is forbidden in gated mode" >&2
+        return 3
     fi
+    compose_prepare "$build"
+    if [[ "$pinned" != true ]]; then
+        echo "FAIL: exact pinned OCI override is required" >&2
+        return 3
+    fi
+    python3 "$ROOT/scripts/legacy-compose-start-gate.py" --check \
+        --gate-dir "${SVT_OWNER_GATE_DIR:-/run/shelly-owner}" \
+        --pinned-override "$OVERRIDE" || return 3
+    compose_cmd config -q
+    # Never fall back to an unpinned local legacy build.
+    compose_cmd up -d --no-build
 }
 
 # When rollback sources this file, retain the checked Compose plan
