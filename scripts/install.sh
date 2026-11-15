@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -282,7 +282,7 @@ snapshot_upgrade() {
     fi
     prepare_upgrade_root "$root"
     snapshot="$(mktemp -d -- "$root/${stamp}-${old_version}-XXXXXXXX")"
-    bash "$SOURCE/scripts/source-tar.sh" "$TARGET" |
+    /bin/bash -p "$SOURCE/scripts/source-tar.sh" "$TARGET" |
         gzip -c > "$snapshot/source.tar.gz"
     # Do not change Docker packages without a restorable source image.
     python3 "$SOURCE/scripts/validate-source-archive.py" \
@@ -316,7 +316,7 @@ copy_source() {
         echo "DRY-RUN: copy project files $SOURCE -> $TARGET, preserving .env/secrets"
         return
     fi
-    bash "$SOURCE/scripts/source-tar.sh" "$SOURCE" |
+    /bin/bash -p "$SOURCE/scripts/source-tar.sh" "$SOURCE" |
         tar -C "$TARGET" -xf -
 }
 
@@ -393,9 +393,9 @@ deploy() {
     cd "$TARGET"
     # Never rebuild or silently replace an immutable signed GHCR image.
     if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
-        bash "$TARGET/scripts/start-compose.sh"
+        /bin/bash -p "$TARGET/scripts/start-compose.sh"
     else
-        bash "$TARGET/scripts/start-compose.sh" --build
+        /bin/bash -p "$TARGET/scripts/start-compose.sh" --build
     fi
     systemctl start shelly-voltage-compose.service shelly-voltage-backup.timer
     if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
