@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 REPO="${REPO:-OWNER/shelly-voltage-telegram}"
@@ -22,7 +22,7 @@ Environment:
 
 Future example:
   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/scripts/install-release.sh \
-    | sudo REPO=OWNER/REPO VERSION=0.4.2-hw TAG=v0.4.2-hw bash -s -- --non-interactive
+    | sudo REPO=OWNER/REPO VERSION=0.4.2-hw TAG=v0.4.2-hw /bin/bash -p -s -- --non-interactive
 EOF
 }
 
