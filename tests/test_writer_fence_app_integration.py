@@ -56,12 +56,12 @@ class AppFenceIntegrationTests(unittest.TestCase):
         self.addCleanup(owner_patch.stop)
         self.root = Path(temp.name)
         self.folder = self.root / "owner"
-        self.folder.mkdir(mode=0o750)
-        os.chmod(self.folder, 0o750)
+        self.folder.mkdir(mode=488)
+        os.chmod(self.folder, 488)
         for name in ("B", "W"):
             item = self.folder / name
-            item.touch(mode=0o640)
-            os.chmod(item, 0o640)
+            item.touch(mode=416)
+            os.chmod(item, 416)
         self.tree = ast.parse(SOURCE.read_text())
 
     def storage_connect(self) -> object:
@@ -152,25 +152,27 @@ class AppFenceIntegrationTests(unittest.TestCase):
         """The real Storage.connect function cannot open unfenced SQLite."""
         connect = self.storage_connect()
         path = self.root / "no-write.sqlite3"
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with self.assertRaisesRegex(
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            self.assertRaisesRegex(
                 FENCE.WriterFenceError, "missing_at_database_open"
-            ):
-                connect(SimpleNamespace(path=path))
+            ),
+        ):
+            connect(SimpleNamespace(path=path))
         self.assertFalse(path.exists())
 
     def test_required_lease_permits_synthetic_sqlite(self) -> None:
         """The actual extracted method opens SQLite only under B/W."""
         connect = self.storage_connect()
         path = self.root / "allowed.sqlite3"
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                with contextlib.closing(
-                    connect(SimpleNamespace(path=path))
-                ) as db:
-                    self.assertEqual(
-                        db.execute("PRAGMA journal_mode").fetchone()[0], "wal"
-                    )
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+            contextlib.closing(connect(SimpleNamespace(path=path))) as db,
+        ):
+            self.assertEqual(
+                db.execute("PRAGMA journal_mode").fetchone()[0], "wal"
+            )
         self.assertTrue(path.is_file())
 
     def test_B_maintenance_exclusion_blocks_SQLite(self) -> None:
@@ -179,26 +181,30 @@ class AppFenceIntegrationTests(unittest.TestCase):
         path = self.root / "blocked.sqlite3"
         with (self.folder / "B").open("rb") as holder:
             fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-                with self.assertRaises(FENCE.WriterFenceError):
-                    with FENCE.writer_fence("required", self.folder):
-                        connect(SimpleNamespace(path=path))
+            with (
+                patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+                self.assertRaises(FENCE.WriterFenceError),
+                FENCE.writer_fence("required", self.folder),
+            ):
+                connect(SimpleNamespace(path=path))
         self.assertFalse(path.exists())
 
     def test_inode_swap_blocks_future_SQLite(self) -> None:
         """After B path replacement a new SQLite file must not be created."""
         connect = self.storage_connect()
         path = self.root / "not-created.sqlite3"
-        with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-            with FENCE.writer_fence("required", self.folder):
-                replacement = self.folder / "B.new"
-                replacement.touch(mode=0o640)
-                os.chmod(replacement, 0o640)
-                os.replace(replacement, self.folder / "B")
-                with self.assertRaisesRegex(
-                    FENCE.WriterFenceError, "inode_replaced"
-                ):
-                    connect(SimpleNamespace(path=path))
+        with (
+            patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+            FENCE.writer_fence("required", self.folder),
+        ):
+            replacement = self.folder / "B.new"
+            replacement.touch(mode=416)
+            os.chmod(replacement, 416)
+            os.replace(replacement, self.folder / "B")
+            with self.assertRaisesRegex(
+                FENCE.WriterFenceError, "inode_replaced"
+            ):
+                connect(SimpleNamespace(path=path))
         self.assertFalse(path.exists())
 
     def test_main_run_acquires_fence_before_monitor(self) -> None:
@@ -223,9 +229,11 @@ class AppFenceIntegrationTests(unittest.TestCase):
         entrypoint = self.main_entrypoint("required", events)
         with (self.folder / "B").open("rb") as holder:
             fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            with patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}):
-                with self.assertRaises(FENCE.WriterFenceError):
-                    entrypoint()
+            with (
+                patch.dict(os.environ, {"SHELLY_WRITER_FENCE": "required"}),
+                self.assertRaises(FENCE.WriterFenceError),
+            ):
+                entrypoint()
         self.assertEqual(events, ["fence_enter"])
 
     def test_main_default_off_preserves_legacy_start(self) -> None:
