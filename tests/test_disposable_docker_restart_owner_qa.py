@@ -147,6 +147,38 @@ class DockerRestartOwnerTests(unittest.TestCase):
         self.assertEqual(report["classification"], "BYPASS_CONFIRMED")
         self.assertEqual(report["attempts_under_B_EX"], 3)
 
+    def test_no_restart_policy_is_explicit(self) -> None:
+        """The control container must use Docker restart=no only."""
+        args = QA.container_args(self.root, "svt-qa-owner-none", "no")
+        self.assertEqual(args[args.index("--restart") + 1], "no")
+        self.assertIn("--network", args)
+        self.assertIn("none", args)
+
+    def test_no_restart_control_classifies_once(self) -> None:
+        """A crashed container with no restart stays stopped."""
+        (self.root / "restarts.log").write_text("attempt\n")
+        with (
+            patch.object(QA, "command", return_value=response(0, "created")),
+            patch.object(QA, "get_state", return_value=(0, "exited")),
+            patch.object(QA.time, "sleep"),
+        ):
+            report = QA.prove_no_autorestart(self.root, "svt-qa-owner-none")
+        self.assertEqual(report["restart_count"], 0)
+        self.assertEqual(report["attempts_under_B_EX"], 1)
+        self.assertEqual(report["classification"], "AUTORESTART_DISABLED")
+
+    def test_docker_policy_mismatch_fails_closed(self) -> None:
+        """Inspector must reject an unexpected restart policy."""
+        with (
+            patch.object(
+                QA,
+                "command",
+                return_value=response(0, "0|exited|unless-stopped"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "RESTART_POLICY_CHANGED"),
+        ):
+            QA.get_state("qa-container", "no")
+
     def test_cleanup_rejects_unknown_owner(self) -> None:
         """A foreign-labelled container must never be removed or altered."""
         calls = []
