@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import re
@@ -133,30 +132,36 @@ def status(private: object, public: object, **overrides: object) -> str:
     return classify(private, public, **args)
 
 
+def require_injected_failure(path: Path, data: dict, point: str) -> None:
+    """Fail QA if a requested fault injection did not actually fire."""
+    try:
+        atomic_publish(path, data, point)
+    except InjectedFailure:
+        return
+    raise AssertionError("FAULT_NOT_TRIGGERED: " + point)
+
+
 def fault_checks(folder: Path, cases: list[str]) -> None:
     """Verify all file fsync/replace interruption boundaries."""
     old, current, _, _ = baseline()
     path = folder / "deployed.json"
     original = (json.dumps(old, sort_keys=True) + "\n").encode()
     path.write_bytes(original)
-    with contextlib.suppress(InjectedFailure):
-        atomic_publish(path, current, "after_file_fsync")
+    require_injected_failure(path, current, "after_file_fsync")
     check("pre_replace_keeps_old_bytes", path.read_bytes() == original, cases)
     check(
         "pre_replace_cleans_temp",
         not list(folder.glob(".deployed-*")),
         cases,
     )
-    with contextlib.suppress(InjectedFailure):
-        atomic_publish(path, current, "after_replace")
+    require_injected_failure(path, current, "after_replace")
     check("post_replace_complete_json", read_public(path) == current, cases)
     check(
         "post_replace_is_not_success",
         status(current, read_public(path)) == "CONSISTENT",
         cases,
     )
-    with contextlib.suppress(InjectedFailure):
-        atomic_publish(path, current, "after_dir_fsync")
+    require_injected_failure(path, current, "after_dir_fsync")
     check("post_dir_fsync_complete", read_public(path) == current, cases)
     check("no_orphan_temp", not list(folder.glob(".deployed-*")), cases)
     check(
