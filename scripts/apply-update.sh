@@ -184,7 +184,7 @@ wait_healthy() {
 }
 
 start_stack() {
-    /bin/bash "$ROOT/scripts/start-compose.sh"
+    /bin/bash -p "$ROOT/scripts/start-compose.sh"
 }
 
 sync_public_version() {
