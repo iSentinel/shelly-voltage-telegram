@@ -28,6 +28,9 @@ Usage: rollback.sh [--snapshot DIR] [--dry-run] [--no-start] [--confirm-db-repla
 
 Restore source and SQLite from a pre-upgrade snapshot.
 By default the newest snapshot under /var/backups/shelly-voltage/upgrades is used.
+Real restore requires --no-start and externally inherited maintenance G EX,
+stable stopped Docker restart=no and masked/inactive known systemd owners.
+This script does NOT authorize automated return to the old legacy image.
 
 Options:
   --snapshot DIR  Restore this snapshot instead of the newest one.
@@ -54,6 +57,27 @@ parse_args() {
 
 require_root() {
     [[ ${EUID} -eq 0 ]] || { echo "ERROR: run as root." >&2; exit 2; }
+}
+
+require_frozen_rollback_owner() {
+    # Dry-run stays inert and may inspect the plan without shutting down.
+    [[ "$DRY_RUN" == true ]] && return 0
+
+    # A source replacement must never automatically restart old OCI.
+    if [[ "$NO_START" != true ]]; then
+        echo "ERROR: rollback requires --no-start under G EX." >&2
+        return 5
+    fi
+    local inherited="${SVT_MAINTENANCE_G_FD:-}"
+    if [[ ! "$inherited" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: inherited maintenance G EX FD required." >&2
+        return 5
+    fi
+    local gate="${SVT_OWNER_GATE_DIR:-/run/shelly-owner}"
+    local guard
+    guard="$(dirname -- "${BASH_SOURCE[0]}")/legacy-rollback-frozen-owner-preflight.py"
+    python3 "$guard" --check --gate-dir "$gate" \
+        --inherited-g-fd "$inherited" || return 5
 }
 
 assert_unlinked_snapshot_path() {
@@ -395,6 +419,8 @@ start_service() {
 main() {
     parse_args "$@"
     require_root
+    # Check BEFORE backup/source validation, stop, rescue or SQLite mutation.
+    require_frozen_rollback_owner
     preflight_source_target
     select_snapshot
     validate_snapshot
