@@ -48,7 +48,7 @@ Original signed QA writer remains stopped with restart=no and original
 QA units disabled. LXC114 has only `lo`; no network interface is
 usable by the experiment.
 
-**52/52** combined (24 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
+**63/63** combined (24 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
 Ruff 0.14.2/PEP8 PASS, all functions <=40 lines and Python code
 lines <=79. Negative tests check exact user consent, root/hostname,
 lo-only NIC, original QA writer and systemd unit state, invalid
@@ -150,7 +150,7 @@ python3 scripts/disposable-single-writer-admission-qa.py \
 ```
 
 The new **12/12 default-inert unit tests PASS**, combined with
-the inherited-B package for **52/52 strict unit tests PASS**
+the inherited-B package for **63/63 strict unit tests PASS**
 on LXC114. Ruff 0.14.2, PEP8, <=40-line functions and <=79-char
 source lines pass. All scratch directories cleaned.
 
@@ -247,7 +247,7 @@ python3 scripts/disposable-container-host-bw-flock-qa.py \
 ```
 
 The new **16/16 default-inert unit tests PASS**, bringing this
-PR to **52/52 strict unit tests PASS** on LXC114.
+PR to **63/63 strict unit tests PASS** on LXC114.
 Ruff0.14.2, PEP8, function size <=40 and source line width <=79 PASS.
 Cleanup requires an exact `org.svt.qa.lockowner` label and disables
 restart before removing only the disposable container.
@@ -270,3 +270,61 @@ admission and noncircular B EX/A EX maintenance, signed
 source/current database A/B on independent physical storage,
 actual power loss and explicit Owner Approval. Until then
 **production and public Telegram TEXT-to-PHOTO remain NO-GO**.
+
+## Held-lock inode replacement split-brain — root-only QA
+
+A separate real kernel/file-system test on isolated LXC114 shows
+a subtle release hazard **even when B SH and W EX are correctly
+held**. A root-owned synthetic supervisor opens the B and W
+inodes, retains B SH and W EX, and checks that a separate
+`/usr/bin/flock --exclusive --nonblock` process cannot
+acquire either. The test then **replaces only the private
+synthetic lock path inode** using `os.replace`, without
+closing either original locked descriptor.
+
+The old B SH/W EX locks remain held on the **old inodes**,
+but new independent processes opening the new files successfully
+acquire **B EX and W EX**. This is a split-brain lock identity
+failure, not an expected release.
+
+| Lock status after root replaces pathname inode | Actual result |
+| --- | --- |
+| Old open FD still holds B SH | Yes |
+| Old open FD still holds W EX | Yes |
+| New inode B EX attempt | ALLOWED_GAP |
+| New inode W EX attempt | ALLOWED_GAP |
+
+**Real private QA inode-swap PASS** (unsafe bypass reproduced).
+The script is default-inert and exact-consent-only on
+networkless LXC114, using only temporary root-only mode0600
+files. It does not read or change production lock paths,
+source tree, SQLite or Docker.
+
+```bash
+python3 scripts/disposable-bw-inode-swap-qa.py --help
+python3 scripts/disposable-bw-inode-swap-qa.py
+
+# EXACT ISOLATED LXC114 ONLY:
+python3 scripts/disposable-bw-inode-swap-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_BW_INODE_REPLACEMENT_QA_ONLY
+```
+
+**11/11 additional strict unit tests PASS**, combined
+**63/63 ResourceWarning-strict unit tests PASS** on LXC114.
+Ruff0.14.2/PEP8, function <=40 lines and source lines
+<=79 characters all PASS. All test directories removed.
+
+**Additional production release gate:** lock inodes must be
+root-owned, stable, and held outside updater/installer/rollback
+replace/delete trees. Neither a release restore nor a
+cleanup task may unlink, rename or recreate a live lock
+pathname. A signed release must independently test inode
+stability across upgrades, rollback, systemd restarts,
+Docker restarts and host reboot; file-lock behavior alone
+does not prove durable ownership after power loss.
+
+The same **production NO-GO** applies until all launch paths
+and physical independent CURRENT SQLite A/B recovery,
+real source signature, reviewer signoff and explicit
+Owner Approval are satisfied.
