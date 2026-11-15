@@ -65,7 +65,7 @@ class InterruptedBootReplayTests(unittest.TestCase):
             path.write_text(
                 "#!/bin/sh\n"
                 f'printf "{name} %s\n" "$*" >> "$QA_TRACE"\n'
-                f"printf '%s\\n' {response!r}\n"
+                f"printf '%b\\n' {response!r}\n"
             )
             path.chmod(0o700)
 
