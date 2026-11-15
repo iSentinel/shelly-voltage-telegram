@@ -25,7 +25,7 @@ class UpdaterIsolatedPythonTests(unittest.TestCase):
         self.root = Path(temp.name)
         module = self.root / "argparse.py"
         module.write_text(
-            'import os\nfrom pathlib import Path\n'
+            "import os\nfrom pathlib import Path\n"
             'Path(os.environ["QA_PYTHON_POISON"]).write_text("bad")\n'
         )
         self.marker = self.root / "imported"
