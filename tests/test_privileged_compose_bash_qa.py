@@ -26,9 +26,7 @@ class ComposePrivilegedBashTests(unittest.TestCase):
         self.marker = self.root / "sourced-startup"
         self.fake_marker = self.root / "fake-command-executed"
         poison = self.root / "startup"
-        poison.write_text(
-            'printf injected > "$QA_COMPOSE_ENV_MARKER"\n'
-        )
+        poison.write_text('printf injected > "$QA_COMPOSE_ENV_MARKER"\n')
         fake = self.bin / "bash"
         fake_line = 'printf intercepted > "$QA_COMPOSE_FAKE_MARKER"\n'
         fake.write_text("#!/bin/sh\n" + fake_line + "exit 71\n")
@@ -81,10 +79,8 @@ class ComposePrivilegedBashTests(unittest.TestCase):
     def test_systemd_start_and_reload_use_privileged_bash(self) -> None:
         """Never call the protected shebang with unsafe explicit Bash."""
         for action in ("ExecStart", "ExecReload"):
-            expected = (
-                f"{action}=/bin/bash -p "
-                "/opt/shelly-voltage/scripts/start-compose.sh"
-            )
+            path = "/opt/shelly-voltage/scripts/start-compose.sh"
+            expected = f"{action}=/bin/bash -p {path}"
             self.assertIn(expected, UNIT.read_text())
         shell = (ROOT / "scripts/start-compose.sh").read_text()
         self.assertTrue(shell.startswith("#!/bin/bash -p\n"))
