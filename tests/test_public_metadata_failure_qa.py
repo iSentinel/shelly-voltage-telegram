@@ -9,6 +9,7 @@ import json
 import stat
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -138,6 +139,41 @@ class PublicMetadataFaultTests(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "OFFLINE_QA"),
         ):
             QA.guest_guard()
+
+    def test_concurrent_reader_atomicity(self) -> None:
+        """Repeated atomic replacement never exposes partial public JSON."""
+        QA.atomic_publish(self.target, self.old)
+        failures: list[str] = []
+        stop = threading.Event()
+        expected = (self.old, self.current)
+        entered = threading.Event()
+
+        def reader() -> None:
+            """Observe the same file while replacements are committed."""
+            entered.set()
+            while not stop.is_set():
+                try:
+                    actual = json.loads(self.target.read_text())
+                    if actual not in expected:
+                        failures.append("UNKNOWN_PUBLIC_VERSION")
+                except (OSError, json.JSONDecodeError):
+                    failures.append("PARTIAL_OR_MISSING_JSON")
+                if failures:
+                    return
+
+        worker = threading.Thread(target=reader, daemon=True)
+        worker.start()
+        self.assertTrue(entered.wait(3))
+        try:
+            for _ in range(150):
+                QA.atomic_publish(self.target, self.current)
+                QA.atomic_publish(self.target, self.old)
+        finally:
+            stop.set()
+            worker.join(5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(failures, [])
+        self.assertEqual(QA.read_public(self.target), self.old)
 
     def test_all_synthetic_scenarios(self) -> None:
         """The complete test matrix remains explicit and reproducible."""
