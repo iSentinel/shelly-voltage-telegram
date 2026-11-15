@@ -72,7 +72,9 @@ def guest_guard() -> None:
             raise RuntimeError("ORIGINAL_QA_OWNER_ENABLED")
 
 
-def container_args(directory: Path, name: str) -> list[str]:
+def container_args(
+    directory: Path, name: str, policy: str = "unless-stopped"
+) -> list[str]:
     """Use only a local signed-image copy and private counter mount."""
     return [
         "docker",
@@ -85,7 +87,7 @@ def container_args(directory: Path, name: str) -> list[str]:
         "--network",
         "none",
         "--restart",
-        "unless-stopped",
+        policy,
         "--label",
         "org.svt.qa.owner=" + name,
         "--read-only",
@@ -111,7 +113,9 @@ def container_args(directory: Path, name: str) -> list[str]:
     ]
 
 
-def get_state(name: str) -> tuple[int, str]:
+def get_state(
+    name: str, policy_expected: str = "unless-stopped"
+) -> tuple[int, str]:
     """Read Docker restart count and current runtime state."""
     result = command(
         [
@@ -126,7 +130,7 @@ def get_state(name: str) -> tuple[int, str]:
     if result.returncode:
         raise RuntimeError("QA_CONTAINER_INSPECT_FAILED")
     count, state, policy = result.stdout.strip().split("|")
-    if policy != "unless-stopped":
+    if policy != policy_expected:
         raise RuntimeError("RESTART_POLICY_CHANGED")
     return int(count), state
 
@@ -156,6 +160,33 @@ def prove_bypass(directory: Path, name: str) -> dict:
     raise RuntimeError("RESTART_BYPASS_NOT_OBSERVED")
 
 
+def prove_no_autorestart(directory: Path, name: str) -> dict:
+    """A crashed synthetic container cannot auto-restart with policy=no."""
+    started = command(container_args(directory, name, "no"), timeout=25)
+    if started.returncode:
+        raise RuntimeError("NO_RESTART_RUN_FAILED")
+    deadline = time.monotonic() + 12
+    while time.monotonic() < deadline:
+        count, state = get_state(name, "no")
+        events = directory / "restarts.log"
+        attempts = (
+            len(events.read_text().splitlines()) if events.exists() else 0
+        )
+        if count == 0 and state == "exited" and attempts == 1:
+            time.sleep(1.0)
+            again, final = get_state(name, "no")
+            if again != 0 or final != "exited":
+                raise RuntimeError("UNEXPECTED_AUTORESTART_WITH_POLICY_NO")
+            return {
+                "restart_policy": "no",
+                "restart_count": again,
+                "attempts_under_B_EX": attempts,
+                "classification": "AUTORESTART_DISABLED",
+            }
+        time.sleep(0.25)
+    raise RuntimeError("NO_RESTART_CONTROL_NOT_OBSERVED")
+
+
 def cleanup_container(name: str) -> None:
     """Remove only the exact disposable container owned by this test."""
     result = command(
@@ -174,7 +205,7 @@ def cleanup_container(name: str) -> None:
         raise RuntimeError("QA_CONTAINER_NOT_REMOVED")
 
 
-def run_disposable() -> dict:
+def run_disposable(mode: str) -> dict:
     """Create two private lock/counter paths, then delete everything."""
     with tempfile.TemporaryDirectory(
         prefix="svt-docker-owner-qa-", dir="/var/tmp"
@@ -190,7 +221,11 @@ def run_disposable() -> dict:
         with maintenance.open("rb") as handle:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             try:
-                return prove_bypass(events, name)
+                if mode == "bypass":
+                    return prove_bypass(events, name)
+                if mode == "no_restart":
+                    return prove_no_autorestart(events, name)
+                raise RuntimeError("INVALID_QA_MODE")
             finally:
                 cleanup_container(name)
 
@@ -209,7 +244,10 @@ def main() -> int:
         return 2
     try:
         guest_guard()
-        proof = run_disposable()
+        proof = {
+            "autorestart": run_disposable("bypass"),
+            "restart_disabled": run_disposable("no_restart"),
+        }
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print("QA_BLOCKED", type(error).__name__, str(error)[:400])
         return 3
