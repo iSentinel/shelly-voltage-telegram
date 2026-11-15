@@ -185,7 +185,8 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
                 db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0],
                 27,
             )
-            self.assertEqual(db.execute("PRAGMA quick_check").fetchone()[0], "ok")
+            integrity = db.execute("PRAGMA quick_check").fetchone()[0]
+            self.assertEqual(integrity, "ok")
             self.assertTrue((self.state / "pending-update").exists())
         finally:
             db.close()
