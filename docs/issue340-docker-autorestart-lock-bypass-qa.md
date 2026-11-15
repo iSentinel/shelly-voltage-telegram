@@ -57,7 +57,7 @@ It was removed with the same owner-labelled cleanup.
 | unless-stopped | 2 | 3 |
 | no | 0 | 1 |
 
-Both observations repeated successfully; **25/25 combined unit
+Both observations repeated successfully; **38/38 combined unit
 tests PASS**. This control proves only the difference in autonomous
 restart behavior. It does **not** prove a complete maintenance fence:
 even with restart=no, an explicit initial Docker run still starts
@@ -97,7 +97,7 @@ restart policy and removes only its own container. The private
 scratch directory is deleted. Initial and repeat real QA runs
 both passed with two automatic Docker restarts.
 
-**25/25 combined unit tests PASS**, strict ResourceWarning,
+**38/38 combined unit tests PASS**, strict ResourceWarning,
 Ruff 0.14.2 quality PASS, PEP8, functions <=40 lines and
 source width <=79 columns PASS.
 
@@ -165,7 +165,7 @@ python3 scripts/disposable-systemd-docker-owner-gate-qa.py \
 ```
 
 Additional **9/9 unit tests PASS**. Combined QA in this PR now
-contains **25/25 ResourceWarning-strict tests**, Ruff 0.14.2,
+contains **38/38 ResourceWarning-strict tests**, Ruff 0.14.2,
 source width <=79 columns and functions <=40 lines. The real
 transient tests are not executed in GitHub CI; they require the
 isolated QA guest and exact explicit consent.
@@ -178,3 +178,56 @@ are coordinated. A B SH-held parent cannot request a B EX recovery
 inside its own prestart; noncircular recovery must be a separate
 bounded phase. No production restart-policy changes are authorized.
 
+
+## Detached startup lifetime-lock gap: critical follow-up (2026-11-15)
+
+A **second independent real Docker/systemd fault reproduction** on the
+networkless isolated LXC114 demonstrates that even a cooperating
+`systemd-run --wait --collect` oneshot, using
+`flock --shared --nonblock B docker run -d`, can release the B SH
+advisory lock **before the detached container exits**.
+
+- The actual systemd command completed successfully; the disposable
+  synthetic Docker container was still RUNNING with restart=no.
+- A separate maintenance actor immediately acquired B EX while that
+  container remained RUNNING. **Lock ownership gap confirmed.**
+- As a *separate diagnostic control*, `flock B SH docker wait <id>`
+  was attached after the start. It held B SH while the container ran,
+  correctly blocking B EX. After explicitly stopping the inert
+  container and waiting for the `docker wait` process to end, B EX
+  again became available.
+- That two-step wait lease is **not a production fix**: the initial
+  time between detached start and wait attachment is unprotected.
+  The lifecycle lock must be established **before** a writer starts
+  and remain held, without a gap, until its exit and confirmed safe
+  maintenance handoff. A full foreground systemd Docker integration
+  has **not** been completed.
+- No live Docker/SQLite/Telegram/source changes. The synthetic worker
+  ran with no network, restart=no, nonroot, bounded resources, a
+  private label and explicit QA cleanup. Scratch and transient systemd
+  units were verified absent afterward.
+
+The extra script is default-inert, and only executes on the already
+verified offline LXC114 with an exact confirmation token:
+
+```bash
+python3 scripts/disposable-docker-lifetime-lock-qa.py --help
+python3 scripts/disposable-docker-lifetime-lock-qa.py
+
+# LXC114 ONLY: original QA writer stopped, no external network
+python3 scripts/disposable-docker-lifetime-lock-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_DOCKER_LIFETIME_LOCK_GAP_QA_ONLY
+```
+
+Added **13 independent unit tests**, yielding **38/38 combined
+ResourceWarning-strict tests PASS** on LXC114. Ruff 0.14.2, PEP8,
+function limit <=40 lines and line width <=79 all PASS.
+
+**Updated production gate:** `restart=no` plus B SH across
+`docker run -d` is **not sufficient**. Need a reviewed,
+noncircular lifetime owner lease and maintenance stop/restore
+protocol that cannot release B SH while a writer remains active;
+verify every alternate launch route and actual daemon/host
+restarts, whole-current SQLite+signed-source A/B and physical
+power loss. **Production release remains NO-GO.**
