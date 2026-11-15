@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import time
@@ -57,11 +58,48 @@ def require_inherited_exclusive(lock: Path, inherited_fd: int) -> None:
         raise FrozenOwnerRequired("INHERITED_G_EX_NOT_HELD")
 
 
+def require_private_executable_path(path: Path) -> None:
+    """Reject executable paths writable or replaceable by other users."""
+    if not path.is_absolute() or path.resolve() != path:
+        raise FrozenOwnerRequired("OWNER_COMMAND_PATH_UNTRUSTED")
+    for parent in (path.parent, *path.parent.parents):
+        info = parent.lstat()
+        mode = stat.S_IMODE(info.st_mode)
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0:
+            raise FrozenOwnerRequired("OWNER_COMMAND_PARENT_UNTRUSTED")
+        sticky_tmp = parent in (Path("/tmp"), Path("/var/tmp"))
+        if mode & 0o022 and not (sticky_tmp and mode & 0o1000):
+            raise FrozenOwnerRequired("OWNER_COMMAND_PARENT_WRITABLE")
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+        raise FrozenOwnerRequired("OWNER_COMMAND_INODE_UNTRUSTED")
+    mode = stat.S_IMODE(info.st_mode)
+    if mode & 0o022 or not mode & 0o111 or info.st_nlink != 1:
+        raise FrozenOwnerRequired("OWNER_COMMAND_INODE_UNSAFE")
+
+
+def trusted_command(name: str) -> Path:
+    """Resolve Docker/systemd to a trusted absolute root-controlled path."""
+    if name not in ("docker", "systemctl"):
+        raise FrozenOwnerRequired("OWNER_COMMAND_NOT_ALLOWED")
+    selected = shutil.which(name)
+    if not selected:
+        raise FrozenOwnerRequired("OWNER_COMMAND_MISSING")
+    candidate = Path(selected)
+    require_private_executable_path(candidate)
+    return candidate
+
+
 def readonly_command(argv: list[str]) -> str:
     """Execute only one fixed nonmutating system status operation."""
     try:
+        program = trusted_command(argv[0])
         done = subprocess.run(
-            argv, capture_output=True, text=True, check=False, timeout=8
+            [str(program), *argv[1:]],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=8,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise FrozenOwnerRequired("OWNER_INSPECTION_FAILED") from exc
