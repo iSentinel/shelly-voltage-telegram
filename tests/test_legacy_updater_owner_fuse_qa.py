@@ -30,13 +30,15 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.bin.mkdir(mode=0o700)
         self.trace = self.root / "mock.log"
         self.env = dict(os.environ)
-        self.env.update({
-            "SVT_ROOT": str(self.root / "missing-app"),
-            "SVT_UPDATE_STATE": str(self.state),
-            "SVT_OWNER_GATE_DIR": str(self.gate),
-            "PATH": str(self.bin) + ":" + os.environ["PATH"],
-            "MOCK_TRACE": str(self.trace),
-        })
+        self.env.update(
+            {
+                "SVT_ROOT": str(self.root / "missing-app"),
+                "SVT_UPDATE_STATE": str(self.state),
+                "SVT_OWNER_GATE_DIR": str(self.gate),
+                "PATH": str(self.bin) + ":" + os.environ["PATH"],
+                "MOCK_TRACE": str(self.trace),
+            }
+        )
         self.write_mocks()
 
     def write_mocks(self, systemd: str = "inactive") -> None:
@@ -66,12 +68,20 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         command = ["bash", str(UPDATER), *args]
         if function:
             command = [
-                "bash", "-c", 'source "$1"; refuse_unapproved_update',
-                "qa", str(UPDATER),
+                "bash",
+                "-c",
+                'source "$1"; refuse_unapproved_update',
+                "qa",
+                str(UPDATER),
             ]
         return subprocess.run(
-            command, env=env, pass_fds=fds, capture_output=True,
-            text=True, check=False, timeout=12,
+            command,
+            env=env,
+            pass_fds=fds,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=12,
         )
 
     def trace_lines(self) -> list[str]:
@@ -84,7 +94,10 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         """Bash candidate must parse in CI before any runtime use."""
         result = subprocess.run(
             ["bash", "-n", str(UPDATER)],
-            capture_output=True, text=True, check=False, timeout=5,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -158,9 +171,8 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
             body.index("\n    requirements"),
         )
         self.assertIn('[[ "$DRY_RUN" != true ]]', body)
-        self.assertIn(
-            "complete owner gate and approval pending", UPDATER.read_text()
-        )
+        source = UPDATER.read_text()
+        self.assertIn("complete owner gate and approval pending", source)
 
     @unittest.skipUnless(os.geteuid() == 0, "root-only kernel G QA")
     def test_inherited_g_narrow_pass_is_still_no_go(self) -> None:
