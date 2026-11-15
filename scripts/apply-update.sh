@@ -24,8 +24,8 @@ cleanup_workspace() {
 usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
-       apply-update.sh --recover  (systemd boot recovery only)
-Root-only, explicitly approved update of a published, signed GHCR image.
+       apply-update.sh --recover  (inert if no pending marker)
+Real update/recovery is NO_GO until an all-owner freeze is reviewed.
 Never runs automatically; refuse when Shelly is offline or an outage is open.
 Requires cosign, docker compose, Python 3 and flock.
 EOF
@@ -92,6 +92,27 @@ requirements() {
     chmod 0700 "$STATE" "$STATE/snapshots"
     exec 9>/run/lock/shelly-voltage-updater.lock
     flock -n 9 || { echo "FAIL: update already running" >&2; exit 3; }
+}
+
+refuse_unapproved_update() {
+    # Narrow G EX evidence is necessary but never enough for promotion.
+    local fd="${SVT_MAINTENANCE_G_FD:-}" guard
+    if [[ ! "$fd" =~ ^[0-9]+$ ]]; then
+        echo "FAIL: inherited maintenance G EX FD required" >&2
+        return 5
+    fi
+    guard="$(dirname -- "${BASH_SOURCE[0]}")/"
+    guard+="legacy-rollback-frozen-owner-preflight.py"
+    if [[ ! -f "$guard" || -L "$guard" ]]; then
+        echo "FAIL: frozen-owner preflight missing or linked" >&2
+        return 5
+    fi
+    python3 "$guard" --check \
+        --gate-dir "${SVT_OWNER_GATE_DIR:-/run/shelly-owner}" \
+        --inherited-g-fd "$fd" || return 5
+    # No global all-owner G/B/W/A cutover proof exists yet.
+    echo "FAIL: complete owner gate and approval pending; NO_GO" >&2
+    return 5
 }
 
 preflight() {
@@ -301,13 +322,20 @@ PY
 main() {
     if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
         [[ $EUID -eq 0 ]] || return 2
-        mkdir -p "$STATE"
-        exec 9>/run/lock/shelly-voltage-updater.lock
-        flock -w 120 9 || return 3
-        recover_pending
-        return
+        if [[ -L "$STATE" || -L "$PENDING_FILE" ]]; then
+            echo "FAIL: linked updater state/pending marker" >&2
+            return 5
+        fi
+        # A boot with no pending marker is an inert no-op.
+        [[ -e "$PENDING_FILE" ]] || return 0
+        refuse_unapproved_update
+        return 5
     fi
     parse_args "$@"
+    if [[ "$DRY_RUN" != true ]]; then
+        refuse_unapproved_update
+        return 5
+    fi
     requirements
     preflight
     python3 "$ROOT/scripts/github_update.py" guard \
