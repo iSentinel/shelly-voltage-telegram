@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +27,7 @@ class BackupProtectedRuntimeTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.db = self.root / "fixture.sqlite3"
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("CREATE TABLE sample (value TEXT)")
             connection.execute("INSERT INTO sample VALUES ('fixture')")
         self.dest = self.root / "backups"
@@ -99,7 +100,7 @@ class BackupProtectedRuntimeTests(unittest.TestCase):
         self.assertEqual(checksum.read_text().split()[0], digest)
         restored = self.root / "restored.sqlite3"
         restored.write_bytes(gzip.decompress(archive.read_bytes()))
-        with sqlite3.connect(restored) as connection:
+        with closing(sqlite3.connect(restored)) as connection, connection:
             self.assertEqual(
                 connection.execute("PRAGMA quick_check").fetchone()[0],
                 "ok",
