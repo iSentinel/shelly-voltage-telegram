@@ -5729,7 +5729,10 @@ class Monitor:
                 if command_thread is not None:
                     command_thread.join()
             except BaseException:
-                if os.getenv("SHELLY_WRITER_FENCE") == "required":
+                if os.getenv("SHELLY_WRITER_FENCE") in {
+                    "required",
+                    "required-g",
+                }:
                     try:
                         logger.critical("Unsafe shutdown; force process exit")
                     finally:
