@@ -2419,6 +2419,7 @@ class Monitor:
     def __init__(self, cfg: Config) -> None:
         """Create storage, meter clients, Telegram, and runtime state."""
         self.cfg = cfg
+        self.health_server: ThreadingHTTPServer | None = None
         self.config_lock = threading.RLock()
         self.status_publish_lock = threading.RLock()
         self.storage = Storage(cfg.database_path, cfg.timezone)
@@ -2708,7 +2709,7 @@ class Monitor:
                 latest[1],
                 latest[2],
             )
-        start_health_server(self)
+        self.health_server = start_health_server(self)
         stored_maintenance = self.storage.get_meta("maintenance_until")
         self.maintenance_until = float(stored_maintenance or 0)
         mode = "enabled" if self.telegram.enabled else "disabled"
@@ -5699,23 +5700,41 @@ class Monitor:
         self.update_setting(action, user_id)
 
     def run(self) -> None:
-        """Run monitoring until SIGINT/SIGTERM."""
+        """Run monitoring and join all service workers before lock release."""
 
-        self.initialize()
-        if self.telegram.enabled:
-            threading.Thread(
-                target=self.command_loop,
-                name="telegram-commands",
-                daemon=True,
-            ).start()
-        while not STOP.is_set():
-            self.last_loop_tick = time.monotonic()
-            self.poll_cycle()
-            self.maybe_finalize_voltage_episode()
-            self.maybe_rotate_stable_recovery_status()
-            self.update_status()
-            self.run_periodic_tasks()
-            STOP.wait(self.cfg.poll_interval)
+        command_thread: threading.Thread | None = None
+        try:
+            self.initialize()
+            if self.telegram.enabled:
+                command_thread = threading.Thread(
+                    target=self.command_loop,
+                    name="telegram-commands",
+                    daemon=False,
+                )
+                command_thread.start()
+            while not STOP.is_set():
+                self.last_loop_tick = time.monotonic()
+                self.poll_cycle()
+                self.maybe_finalize_voltage_episode()
+                self.maybe_rotate_stable_recovery_status()
+                self.update_status()
+                self.run_periodic_tasks()
+                STOP.wait(self.cfg.poll_interval)
+        finally:
+            STOP.set()
+            try:
+                if self.health_server is not None:
+                    self.health_server.shutdown()
+                    self.health_server.server_close()
+                if command_thread is not None:
+                    command_thread.join()
+            except BaseException:
+                if os.getenv("SHELLY_WRITER_FENCE") == "required":
+                    try:
+                        logger.critical("Unsafe shutdown; force process exit")
+                    finally:
+                        os._exit(70)
+                raise
 
     def run_periodic_tasks(self) -> None:
         """Run independent jobs despite one Telegram or SQLite failure."""
@@ -6709,6 +6728,8 @@ def start_health_server(monitor: Monitor) -> ThreadingHTTPServer:
         (monitor.cfg.health_host, monitor.cfg.health_port),
         health_handler(monitor),
     )
+    server.daemon_threads = False
+    server.block_on_close = True
     threading.Thread(
         target=server.serve_forever,
         name="health-server",
