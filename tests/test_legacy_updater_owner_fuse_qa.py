@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import sqlite3
 import subprocess
 import tempfile
 import unittest
@@ -154,6 +155,40 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.state.exists())
         self.assertEqual(self.trace_lines(), [])
+
+    @unittest.skipUnless(os.geteuid() == 0, "root-only WAL recovery QA")
+    def test_pending_wal_preserved_even_with_narrow_g(self) -> None:
+        """The held G proof never authorizes a stale WAL replacement."""
+        path = self.root / "synthetic-current.sqlite3"
+        db = sqlite3.connect(path)
+        try:
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("CREATE TABLE measurements (id INTEGER PRIMARY KEY)")
+            db.executemany(
+                "INSERT INTO measurements VALUES (?)",
+                [(index,) for index in range(1, 28)],
+            )
+            db.commit()
+            wal = Path(str(path) + "-wal")
+            before = wal.read_bytes()
+            self.assertGreater(len(before), 0)
+            self.state.mkdir()
+            (self.state / "pending-update").write_text("old-backup")
+            self.env["DATABASE_PATH"] = str(path)
+            with self.lock.open("rb") as held:
+                fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = self.execute("--recover", fd=held.fileno())
+            self.assertEqual(result.returncode, 5, result.stderr)
+            self.assertIn("complete owner gate", result.stderr)
+            self.assertEqual(wal.read_bytes(), before)
+            self.assertEqual(
+                db.execute("SELECT COUNT(*) FROM measurements").fetchone()[0],
+                27,
+            )
+            self.assertEqual(db.execute("PRAGMA quick_check").fetchone()[0], "ok")
+            self.assertTrue((self.state / "pending-update").exists())
+        finally:
+            db.close()
 
     def test_real_version_without_g_refused_before_requirements(self) -> None:
         """No update may create state or invoke Docker without owner G."""
