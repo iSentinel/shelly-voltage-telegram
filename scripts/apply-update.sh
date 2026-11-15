@@ -160,7 +160,7 @@ snapshot() {
         cp -a "$STATE/deployed.json" "$SNAPSHOT/deployed.json"
     fi
     DATABASE_PATH="$DB" BACKUP_DIR="$SNAPSHOT" BACKUP_KEEP=1 \
-        /bin/bash "$ROOT/scripts/backup.sh" >"$SNAPSHOT/backup.log"
+        /bin/bash -p "$ROOT/scripts/backup.sh" >"$SNAPSHOT/backup.log"
     echo "SNAPSHOT: $SNAPSHOT"
 }
 
