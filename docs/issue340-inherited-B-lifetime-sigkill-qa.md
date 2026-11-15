@@ -48,7 +48,7 @@ Original signed QA writer remains stopped with restart=no and original
 QA units disabled. LXC114 has only `lo`; no network interface is
 usable by the experiment.
 
-**36/36** combined (24 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
+**52/52** combined (24 inherited-B + 12 writer-admission) `ResourceWarning`-strict unit tests PASS,
 Ruff 0.14.2/PEP8 PASS, all functions <=40 lines and Python code
 lines <=79. Negative tests check exact user consent, root/hostname,
 lo-only NIC, original QA writer and systemd unit state, invalid
@@ -150,7 +150,7 @@ python3 scripts/disposable-single-writer-admission-qa.py \
 ```
 
 The new **12/12 default-inert unit tests PASS**, combined with
-the inherited-B package for **36/36 strict unit tests PASS**
+the inherited-B package for **52/52 strict unit tests PASS**
 on LXC114. Ruff 0.14.2, PEP8, <=40-line functions and <=79-char
 source lines pass. All scratch directories cleaned.
 
@@ -197,3 +197,76 @@ inherit B/W host descriptors. There is no real systemd supervisor,
 SQLite WAL writer, signed source, daemon reboot or physical power
 loss here. The tests establish an acceptance property for a future
 design, **not** a deployment-ready implementation or Owner Approval.
+
+## Actual isolated Docker in-container B/W flock acceptance
+
+This follow-up goes beyond inherited Unix-process file descriptors.
+An **actual disposable Docker container** running the exact cached
+LXC114 QA image executes Python `fcntl.flock` **inside** the
+container on two host-owned bind-mounted lock inodes. This is
+*not* the production Shelly image or application code.
+
+The test is restricted to exact LXC114
+`shelly-docker-reboot-qa`, only `lo` network interface,
+original signed QA writer stopped with restart=no, original
+QA systemd owners disabled, and exact local cached immutable
+image **ID**. No pull, external network, secrets, source install,
+production database or Telegram calls occur.
+
+The disposable container has `--network none`,
+`--restart no`, `--read-only`, no Linux capabilities,
+`no-new-privileges`, nonroot UID:GID `10001:10001`,
+bounded CPU/memory/PIDs, an exact owner label and only two
+private QA mounts: root-owned group-accessible B/W lock files
+as readonly bind mount, plus synthetic event markers in a
+private writeable directory. QA lock files are mode 0640 with
+group 10001; the mount directory is mode 0750. The container
+opens the lock files **O_RDONLY**; Linux `flock` operates
+on the underlying open file description across the bind mount.
+
+| Actual isolated Docker scenario | Result |
+| --- | --- |
+| Host holds B EX before launch | Container cannot acquire B SH; marker `DENIED_B` |
+| Host releases B; first container acquires B SH and W EX | Both host B EX and host W EX denied |
+| Second container tries B SH then W EX | `DENIED_W` while first writer stays active |
+| First disposable container receives SIGKILL | Host can reacquire both B EX and W EX |
+| Sandbox ownership and cleanup | All disposable containers and scratch removed |
+
+**All four actual Docker lock checks PASS**, repeated successfully.
+The script is inert by default and requires the exact confirmation
+token on isolated LXC114:
+
+```bash
+python3 scripts/disposable-container-host-bw-flock-qa.py --help
+python3 scripts/disposable-container-host-bw-flock-qa.py
+
+# EXACT OFFLINE LXC114 ONLY:
+python3 scripts/disposable-container-host-bw-flock-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_CONTAINER_HOST_BW_LOCK_QA_ONLY
+```
+
+The new **16/16 default-inert unit tests PASS**, bringing this
+PR to **52/52 strict unit tests PASS** on LXC114.
+Ruff0.14.2, PEP8, function size <=40 and source line width <=79 PASS.
+Cleanup requires an exact `org.svt.qa.lockowner` label and disables
+restart before removing only the disposable container.
+
+**Critical release distinction:** the experiment proves actual
+host/container `flock` interoperability when the *in-container
+writer process itself* participates in B SH and W EX.
+It does **not** prove that the installed production Shelly
+writer implements this lease, that an arbitrary Compose
+or rollback path cannot bypass it, that one physical LXC
+host crash preserves SQLite current history, that the
+root/group permission model is approved for production,
+or that a Docker daemon/host reboot cannot introduce a
+new racing writer during an interrupted update.
+
+Production design must bind the owner contract to the real
+application before any SQLite handle opens; verify all
+updater/installer/recovery/rollback entry points, durable
+admission and noncircular B EX/A EX maintenance, signed
+source/current database A/B on independent physical storage,
+actual power loss and explicit Owner Approval. Until then
+**production and public Telegram TEXT-to-PHOTO remain NO-GO**.
