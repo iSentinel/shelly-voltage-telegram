@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 ROOT="${SVT_ROOT:-/opt/shelly-voltage}"
@@ -71,7 +71,7 @@ host="${host:-$current_host}"
 meter_type="${meter_type:-$current_meter}"
 status_chat_id="${status_chat_id:-$current_status_chat}"
 admin_ids="${admin_ids:-$current_admins}"
-python3 - "$ENV_FILE" "$host" "$meter_type" "$status_chat_id" "$admin_ids" <<'PY'
+/usr/bin/python3 -I - "$ENV_FILE" "$host" "$meter_type" "$status_chat_id" "$admin_ids" <<'PY'
 from pathlib import Path
 import sys
 
