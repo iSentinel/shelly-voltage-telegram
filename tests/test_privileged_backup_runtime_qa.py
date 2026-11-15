@@ -66,7 +66,8 @@ class BackupProtectedRuntimeTests(unittest.TestCase):
     def test_backup_and_unit_use_protected_shebang(self) -> None:
         """The systemd direct executable must suppress BASH_ENV."""
         self.assertEqual(BACKUP.read_text().splitlines()[0], "#!/bin/bash -p")
-        self.assertIn("ExecStart=/opt/shelly-voltage/scripts/backup.sh", UNIT.read_text())
+        unit = UNIT.read_text()
+        self.assertIn("ExecStart=/opt/shelly-voltage/scripts/backup.sh", unit)
         result = self.invoke([str(BACKUP), "--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.bash_marker.exists())
