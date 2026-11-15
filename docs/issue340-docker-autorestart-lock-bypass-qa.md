@@ -57,7 +57,7 @@ It was removed with the same owner-labelled cleanup.
 | unless-stopped | 2 | 3 |
 | no | 0 | 1 |
 
-Both observations repeated successfully; **16/16 independent unit
+Both observations repeated successfully; **25/25 combined unit
 tests PASS**. This control proves only the difference in autonomous
 restart behavior. It does **not** prove a complete maintenance fence:
 even with restart=no, an explicit initial Docker run still starts
@@ -97,7 +97,7 @@ restart policy and removes only its own container. The private
 scratch directory is deleted. Initial and repeat real QA runs
 both passed with two automatic Docker restarts.
 
-**16/16 independent unit tests PASS**, strict ResourceWarning,
+**25/25 combined unit tests PASS**, strict ResourceWarning,
 Ruff 0.14.2 quality PASS, PEP8, functions <=40 lines and
 source width <=79 columns PASS.
 
@@ -133,3 +133,48 @@ Pinned public Telegram TEXT-to-PHOTO is another separate NO-GO.
 
 **Do not change live Docker `restart`, Compose, or application
 metadata on the basis of this QA proof alone.**
+
+## Real transient systemd + Docker owner-gate positive control
+
+A separate LXC114 integration script validates a **real transient
+systemd oneshot**, with `PrivateNetwork=yes`, `ProtectSystem=strict`
+and a private `ReadWritePaths` path. Its sole `ExecStart` wraps
+the actual disposable Docker run (restart=no, network=none) in a
+`flock --shared --nonblock` against the private QA B inode. The
+shared lock is held across the entire Docker start operation.
+
+Two independent real systemd calls on LXC114 PASS:
+
+1. While a separate owner holds B EX, the guarded systemd command
+   fails before starting Docker. Container absent, no counter write.
+2. After B EX is released, a fresh guarded transient systemd command
+   starts exactly one inert synthetic Docker process. Docker
+   `RestartCount=0`, attempts=1 and final state exited. Both the
+   container and transient units were removed automatically.
+
+Run inert by default or with exact QA consent:
+
+```bash
+python3 scripts/disposable-systemd-docker-owner-gate-qa.py --help
+python3 scripts/disposable-systemd-docker-owner-gate-qa.py
+
+# Only on networkless isolated LXC114, with stopped original QA writer:
+python3 scripts/disposable-systemd-docker-owner-gate-qa.py \
+  --run-disposable \
+  --confirm OFFLINE_SYSTEMD_DOCKER_B_GUARD_QA_ONLY
+```
+
+Additional **9/9 unit tests PASS**. Combined QA in this PR now
+contains **25/25 ResourceWarning-strict tests**, Ruff 0.14.2,
+source width <=79 columns and functions <=40 lines. The real
+transient tests are not executed in GitHub CI; they require the
+isolated QA guest and exact explicit consent.
+
+This proves one **cooperating** systemd startup route and directly
+contrasts with the unguarded `restart=unless-stopped` bypass. It
+does **not** prove that the actual production Compose, manual
+updater, installer, rollback, emergency restore or Docker daemon
+are coordinated. A B SH-held parent cannot request a B EX recovery
+inside its own prestart; noncircular recovery must be a separate
+bounded phase. No production restart-policy changes are authorized.
+
