@@ -6,7 +6,6 @@ import contextlib
 import importlib.util
 import io
 import json
-import os
 import stat
 import sys
 import tempfile
@@ -79,9 +78,7 @@ class PublicMetadataFaultTests(unittest.TestCase):
         original = json.dumps(self.old).encode()
         self.target.write_bytes(original)
         with self.assertRaises(QA.InjectedFailure):
-            QA.atomic_publish(
-                self.target, self.current, "after_file_fsync"
-            )
+            QA.atomic_publish(self.target, self.current, "after_file_fsync")
         self.assertEqual(self.target.read_bytes(), original)
         self.assertFalse(list(self.folder.glob(".deployed-*")))
 
@@ -136,9 +133,11 @@ class PublicMetadataFaultTests(unittest.TestCase):
 
     def test_non_qa_host_rejected(self) -> None:
         """Never perform even fixture execution on production."""
-        with patch.object(QA.os, "geteuid", return_value=1000):
-            with self.assertRaisesRegex(RuntimeError, "OFFLINE_QA"):
-                QA.guest_guard()
+        with (
+            patch.object(QA.os, "geteuid", return_value=1000),
+            self.assertRaisesRegex(RuntimeError, "OFFLINE_QA"),
+        ):
+            QA.guest_guard()
 
     def test_all_synthetic_scenarios(self) -> None:
         """The complete test matrix remains explicit and reproducible."""
