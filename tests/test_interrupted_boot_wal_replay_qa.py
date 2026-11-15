@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 
 UPDATER = Path(__file__).resolve().parents[1] / "scripts/apply-update.sh"
+Completed = subprocess.CompletedProcess
 PENDING = "20261115T220000Z-0.5.21-hw"
 
 
@@ -27,9 +28,8 @@ class InterruptedBootReplayTests(unittest.TestCase):
         self.database = sqlite3.connect(self.db_path)
         self.addCleanup(self.database.close)
         self.database.execute("PRAGMA journal_mode=WAL")
-        self.database.execute(
-            "CREATE TABLE measurements (id INTEGER PRIMARY KEY)"
-        )
+        schema = "CREATE TABLE measurements (id INTEGER PRIMARY KEY)"
+        self.database.execute(schema)
         self.database.executemany(
             "INSERT INTO measurements VALUES (?)",
             [(number,) for number in range(1, 31)],
@@ -79,9 +79,7 @@ class InterruptedBootReplayTests(unittest.TestCase):
             gzip.compress(b"not-a-current-valid-sqlite-database")
         )
 
-    def run_recover(
-        self, fd: int | None = None
-    ) -> subprocess.CompletedProcess:
+    def run_recover(self, fd: int | None = None) -> Completed:
         """Run the candidate only against synthetic state and fake tools."""
         env = dict(self.env)
         descriptors: tuple[int, ...] = ()
@@ -99,21 +97,18 @@ class InterruptedBootReplayTests(unittest.TestCase):
         )
 
     def verify_current(
-        self, wal_before: bytes, allow_inspection: bool = False
+        self, wal_before: bytes, inspect: bool = False
     ) -> None:
         """Assert that pending recovery never changed committed WAL history."""
         wal = Path(str(self.db_path) + "-wal")
         self.assertEqual(wal.read_bytes(), wal_before)
-        self.assertEqual(
-            self.database.execute("SELECT COUNT(*) FROM measurements")
-            .fetchone()[0],
-            30,
-        )
+        count = self.database.execute("SELECT COUNT(*) FROM measurements")
+        self.assertEqual(count.fetchone()[0], 30)
         self.assertEqual(
             self.database.execute("PRAGMA quick_check").fetchone()[0],
             "ok",
         )
-        if allow_inspection:
+        if inspect:
             self.assertTrue(self.trace.exists())
             calls = self.trace.read_text().splitlines()
             self.assertTrue(
@@ -153,9 +148,8 @@ class InterruptedBootReplayTests(unittest.TestCase):
         wal_before = Path(str(self.db_path) + "-wal").read_bytes()
         self.assertEqual(self.run_recover().returncode, 5)
         self.verify_current(wal_before)
-        self.assertEqual(
-            (self.state / "pending-update").read_text(), "invalid-marker"
-        )
+        marker = (self.state / "pending-update").read_text()
+        self.assertEqual(marker, "invalid-marker")
 
     @unittest.skipUnless(os.geteuid() == 0, "root-only boot prestart")
     def test_linked_pending_refused_before_inspection(self) -> None:
@@ -178,7 +172,7 @@ class InterruptedBootReplayTests(unittest.TestCase):
             result = self.run_recover(fd=held.fileno())
         self.assertEqual(result.returncode, 5)
         self.assertIn("complete owner gate", result.stderr)
-        self.verify_current(wal_before, allow_inspection=True)
+        self.verify_current(wal_before, inspect=True)
         self.assertTrue((self.state / "pending-update").exists())
 
     @unittest.skipIf(os.geteuid() == 0, "nonroot boot prestart")
