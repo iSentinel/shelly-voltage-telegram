@@ -36,6 +36,14 @@ The synthetic SQLite connection remains in WAL mode while tests run;
 WAL bytes, count of 30 and `PRAGMA quick_check=ok` are checked afterward.
 Temporary QA state is cleaned.
 
+A related security fix, **Draft #386**, is a sibling stacked branch on
+#384, not an ancestor of this Draft. It validates trusted absolute
+Docker/systemd executable paths before owner inspections. The
+PATH-driven fake commands in this harness are deliberately synthetic:
+they cannot prove production command-path authenticity. Integrate
+and re-run #386's hardening before treating any inherited-G owner
+preflight as trusted, and retain final release NO_GO in either case.
+
 This acceptance is intentionally narrower than a real Proxmox
 power-loss or production systemd reboot test. GitHub CI, release
 signature and final current backup acceptance must be validated
