@@ -43,6 +43,27 @@ maintenance. Production was only inspected read-only; its actual
 RestartCount was zero. The evidence instead proves a *potential*
 release/restore race if the same policy is retained.
 
+## Independent restart-policy control (same isolated guest)
+
+A second real disposable Docker container with the exact same inert
+counter worker was started under the same private maintenance B EX
+lock, but with explicit **Docker restart=no**. The first attempted
+worker exited nonzero, and a later reinspection confirmed the
+container remained exited, with **RestartCount=0 and one attempt**.
+It was removed with the same owner-labelled cleanup.
+
+| Isolated Docker policy | RestartCount | Synthetic attempts under B EX |
+| --- | ---: | ---: |
+| unless-stopped | 2 | 3 |
+| no | 0 | 1 |
+
+Both observations repeated successfully; **16/16 independent unit
+tests PASS**. This control proves only the difference in autonomous
+restart behavior. It does **not** prove a complete maintenance fence:
+even with restart=no, an explicit initial Docker run still starts
+under B EX if that caller ignores the advisory lock. Every launch
+actor still requires the reviewed coordinated owner gate.
+
 ## Reproduce on the exact isolated guest
 
 The CLI is inert by default and supports `-h`/`--help`:
@@ -76,7 +97,7 @@ restart policy and removes only its own container. The private
 scratch directory is deleted. Initial and repeat real QA runs
 both passed with two automatic Docker restarts.
 
-**13/13 independent unit tests PASS**, strict ResourceWarning,
+**16/16 independent unit tests PASS**, strict ResourceWarning,
 Ruff 0.14.2 quality PASS, PEP8, functions <=40 lines and
 source width <=79 columns PASS.
 
