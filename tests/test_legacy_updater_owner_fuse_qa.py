@@ -95,6 +95,7 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assertEqual(self.trace_lines(), [])
 
+    @unittest.skipUnless(os.geteuid() == 0, "root-only recovery QA")
     def test_boot_without_pending_is_inert(self) -> None:
         """No pending marker must not launch an old recovery writer."""
         result = self.execute("--recover")
@@ -102,6 +103,7 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.assertFalse(self.state.exists())
         self.assertEqual(self.trace_lines(), [])
 
+    @unittest.skipUnless(os.geteuid() == 0, "root-only recovery QA")
     def test_pending_recovery_without_g_refused(self) -> None:
         """Old pending archives cannot replace current WAL on boot."""
         self.state.mkdir()
@@ -112,6 +114,7 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.assertEqual(self.trace_lines(), [])
         self.assertTrue((self.state / "pending-update").exists())
 
+    @unittest.skipUnless(os.geteuid() == 0, "root-only recovery QA")
     def test_pending_marker_symlink_refused(self) -> None:
         """Never follow a symlinked pending marker into recovery."""
         self.state.mkdir()
@@ -121,6 +124,7 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.assertIn("linked updater", result.stderr)
         self.assertEqual(self.trace_lines(), [])
 
+    @unittest.skipUnless(os.geteuid() == 0, "root-only recovery QA")
     def test_state_directory_symlink_refused(self) -> None:
         """A redirected updater state is not an approved path."""
         alternate = self.root / "alternate"
@@ -128,6 +132,14 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
         self.state.symlink_to(alternate, target_is_directory=True)
         result = self.execute("--recover")
         self.assertEqual(result.returncode, 5)
+        self.assertEqual(self.trace_lines(), [])
+
+    @unittest.skipIf(os.geteuid() == 0, "nonroot recovery QA")
+    def test_nonroot_boot_recovery_is_denied(self) -> None:
+        """Unprivileged boot attempts fail before filesystem inspection."""
+        result = self.execute("--recover")
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.state.exists())
         self.assertEqual(self.trace_lines(), [])
 
     def test_real_version_without_g_refused_before_requirements(self) -> None:
