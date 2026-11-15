@@ -167,11 +167,40 @@ start_stack() {
 }
 
 sync_public_version() {
-    mkdir -p "$PUBLIC_STATE"
+    local tmp=""
+    mkdir -p "$PUBLIC_STATE" || return 1
     if [[ -f "$STATE/deployed.json" ]]; then
-        install -m 0644 "$STATE/deployed.json" "$PUBLIC_STATE/deployed.json"
+        tmp="$(mktemp "$PUBLIC_STATE/.deployed.XXXXXXXX")" || return 1
+        if ! install -m 0644 "$STATE/deployed.json" "$tmp"; then
+            rm -f "$tmp"
+            return 1
+        fi
+        if ! sync -f "$tmp"; then
+            rm -f "$tmp"
+            return 1
+        fi
+        if ! mv -f "$tmp" "$PUBLIC_STATE/deployed.json"; then
+            rm -f "$tmp"
+            return 1
+        fi
     else
-        rm -f "$PUBLIC_STATE/deployed.json"
+        rm -f "$PUBLIC_STATE/deployed.json" || return 1
+    fi
+    sync -f "$PUBLIC_STATE" || return 1
+}
+
+complete_public_status() {
+    if ! sync_public_version; then
+        echo "FAIL: public status not committed; pending retained" >&2
+        return 71
+    fi
+    if ! rm -f "$PENDING_FILE"; then
+        echo "FAIL: pending update marker was not removed" >&2
+        return 72
+    fi
+    if ! sync -f "$STATE"; then
+        echo "FAIL: pending marker clearance is not durable" >&2
+        return 73
     fi
 }
 
@@ -308,9 +337,8 @@ main() {
     snapshot
     trap rollback ERR INT TERM
     activate "$digest"
-    rm -f "$PENDING_FILE"
     trap - ERR INT TERM
-    sync_public_version || echo "WARN: version status update failed" >&2
+    complete_public_status || return $?
     echo "UPDATE PASS: $VERSION"
 }
 
