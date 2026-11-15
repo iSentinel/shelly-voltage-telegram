@@ -27,14 +27,13 @@ class BashEntrypointSafetyTests(unittest.TestCase):
         self.poison = self.root / "startup"
         self.marker = self.root / "startup-was-sourced"
         self.fake_marker = self.root / "fake-bash-used"
-        self.poison.write_text(
-            'printf "injected" > "$QA_BASH_ENV_MARKER"\n'
-        )
+        self.poison.write_text('printf "injected" > "$QA_BASH_ENV_MARKER"\n')
         fake = self.bin / "bash"
-        fake.write_text(
+        fake_source = (
             '#!/bin/sh\nprintf "fake" > "$QA_BASH_PATH_MARKER"\n'
             "exit 49\n"
         )
+        fake.write_text(fake_source)
         fake.chmod(0o700)
         self.env = {
             **os.environ,
@@ -75,18 +74,16 @@ class BashEntrypointSafetyTests(unittest.TestCase):
 
     def test_direct_updater_help_ignores_injection(self) -> None:
         """Kernel shebang must ignore both BASH_ENV and fake PATH bash."""
-        result = self.invoke(
-            [str(self.copy_entrypoint("apply-update.sh")), "--help"]
-        )
+        argv = [str(self.copy_entrypoint("apply-update.sh")), "--help"]
+        result = self.invoke(argv)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Usage:", result.stdout)
         self.assert_no_poison()
 
     def test_direct_rollback_help_ignores_injection(self) -> None:
         """Even the legacy rollback help remains inert with poisoned env."""
-        result = self.invoke(
-            [str(self.copy_entrypoint("rollback.sh")), "--help"]
-        )
+        argv = [str(self.copy_entrypoint("rollback.sh")), "--help"]
+        result = self.invoke(argv)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Usage:", result.stdout)
         self.assert_no_poison()
