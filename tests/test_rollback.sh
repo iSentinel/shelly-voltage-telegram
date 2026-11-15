@@ -491,7 +491,7 @@ echo "ROLLBACK_MISSING_DB_DRY_RUN=BLOCKED"
 
 # A real rollback without explicit DB-replacement approval MUST fail
 # before touching the active source, DB or Docker service.
-if SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
+if PATH="$TMP/rollback-mock-bin:$PATH" SVT_ROOT="$TARGET" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
     SNAPSHOT_ROOT="$SNAP_ROOT" RESCUE_ROOT="$RESCUE" \
     "$PROJECT/scripts/rollback.sh" --snapshot "$SNAP" --no-start \
         > "$TMP/unapproved-rollback.log" 2>&1; then
