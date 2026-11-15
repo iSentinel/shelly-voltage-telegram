@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 REPO="${REPO:-iSentinel/shelly-voltage-telegram}"
@@ -15,7 +15,7 @@ Environment:
   REF=main               Branch/tag archive reference (default: main)
 
 Example after publication:
-  curl -fsSL https://raw.githubusercontent.com/iSentinel/shelly-voltage-telegram/main/scripts/bootstrap.sh | sudo bash
+  curl -fsSL https://raw.githubusercontent.com/iSentinel/shelly-voltage-telegram/main/scripts/bootstrap.sh | sudo /bin/bash -p -s -- --non-interactive
 EOF
 }
 
