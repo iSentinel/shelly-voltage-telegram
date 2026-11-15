@@ -13,7 +13,7 @@ a writer, restore SQLite, contact Shelly or touch Telegram.
   `shelly-docker-reboot-qa` with loopback as its sole network interface.
 - Every written file is invented and lives in a fresh mode-0700
   `/var/tmp/svt-public-metadata-qa-*` directory on offline LXC114.
-- The tested publisher uses mode 0600, file fsync, atomic os.replace,
+- The tested publisher uses public mode 0644, file fsync and atomic os.replace,
   directory fsync and cleanup of a leftover private temporary file.
 - No live metadata, token, SQLite database or container is accessed.
 
@@ -35,7 +35,7 @@ selected synthetic checks passed, 2 means wrong confirmation,
 
 ## Isolated acceptance (2026-11-15)
 
-17/17 scenario assertions PASS and 14/14 separate Python unit tests
+17/17 scenario assertions PASS and 16/16 separate Python unit tests
 PASS on networkless LXC114. Source and tests compile. All Python
 functions are at most 40 lines and source lines are at most 79 chars.
 
@@ -48,7 +48,7 @@ Injected failures after temp-file fsync, after os.replace, and after
 directory fsync produce either the exact previous JSON or the exact
 complete new JSON. In all cases an injected failure raises, rather
 than claiming that the operation succeeded. Temporary files are
-removed, and successful publication has mode 0600.
+removed, and successful public publication has mode 0644.
 
 The comparison uses **invented** v0.5.20/v0.5.21 metadata and fake image
 SHA values. The `verified` input is a test-model flag. It does NOT
@@ -72,20 +72,30 @@ identity. It also does not guarantee real hardware crash durability.
 This PR deliberately does NOT change `scripts/apply-update.sh`, systemd,
 Docker restart policy, public Telegram pins or production metadata.
 
-## Production file-mode compatibility gate (read-only finding)
+## Production file-mode compatibility gate (real isolated QA)
 
 The installed `sync_public_version` uses `install -m 0644` for
-`/var/lib/shelly-voltage-update-check/deployed.json`, while this
-**synthetic QA model deliberately writes 0600** in its own private
-scratch directory. The actual release-check systemd unit has
-`DynamicUser=yes` and `StateDirectory=shelly-voltage-update-check`.
-The on-host directory permissions and systemd state-directory
-ownership mapping can differ across host and unit namespaces.
+`/var/lib/shelly-voltage-update-check/deployed.json`. Its reader
+is a systemd oneshot with `DynamicUser=yes` and
+`StateDirectory=shelly-voltage-update-check`.
 
-Before adopting any public publisher in production, an independent
-review must establish the exact effective reader identity and file
-ownership/mode contract under this unit, verify read access after
-atomic replacement and unit restart, and ensure parent directory
-ownership is preserved. Do not blindly copy this QA tool's 0600
-mode into the live public status path. This finding requires no
-changes to the current service or file permissions.
+On networkless **LXC114** (systemd 257), two real transient units
+using `DynamicUser=yes`, `StateDirectory=svt-qa-public-mode-357`
+and `StateDirectoryMode=0750` were executed against invented
+root-owned JSON. Mode **0644: PASS**; mode **0600:
+PermissionError**. After fixing the scratch atomic publisher to
+0644, a real transient DynamicUser unit successfully read its
+atomically published JSON (same version/digest), too.
+
+The QA code was updated from its initial 0600 model to **0644**.
+The unit tests assert that a successful publication uses 0644,
+an interrupted pre-replace publication preserves old content and
+mode, and 300 replacements do not expose partial JSON to a
+concurrent reader. This QA observation is **not** proof of the
+exact production StateDirectory ownership mapping across versions.
+
+Before installing a future publisher, independently validate
+read access by the actual production update-check service, its
+ownership and directory mount/namespace behavior, and the
+pending/public/private reconciliation policy. Neither the real
+service nor production metadata was changed in this test.
