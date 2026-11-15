@@ -102,6 +102,18 @@ class OfflineRollbackTests(unittest.TestCase):
 
         capture = self.root / "workspace_path"
         script = ROOT / "scripts" / "apply-update.sh"
+        stub = self.root / "scripts" / "github_update.py"
+        stub.parent.mkdir()
+        stub.write_text(
+            "import sys\n"
+            "if sys.argv[1] == 'guard':\n"
+            "    print('TARGET PASS')\n"
+            "elif sys.argv[1] == 'digest':\n"
+            "    print('sha256:test')\n"
+            "else:\n"
+            "    raise SystemExit(2)\n",
+            encoding="utf-8",
+        )
         shell = "\n".join(
             (
                 'source "$1"',
@@ -109,11 +121,14 @@ class OfflineRollbackTests(unittest.TestCase):
                 "preflight() { :; }",
                 "verify_image() { :; }",
                 'verify_source_archive() { echo "$1" > "$CAPTURE"; }',
-                'python3() { [[ "$2" != digest ]] || echo sha256:test; }',
                 "main --version 0.5.12-hw --dry-run",
             )
         )
-        env = {**os.environ, "CAPTURE": str(capture)}
+        env = {
+            **os.environ,
+            "CAPTURE": str(capture),
+            "SVT_ROOT": str(self.root),
+        }
         result = subprocess.run(
             ["bash", "-c", shell, "bash", str(script)],
             capture_output=True,
