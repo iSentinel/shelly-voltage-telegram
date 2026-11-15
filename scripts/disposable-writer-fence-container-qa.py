@@ -109,9 +109,23 @@ def prepare(root: Path) -> None:
     os.chmod(target, 0o640)
 
 
-def arguments(root: Path, name: str, role: str) -> list[str]:
-    """Run only synthetic Python with no network, restart or capabilities."""
-    args = [
+def sandbox_mounts(root: Path) -> list[str]:
+    """Mount only synthetic lock files, code, markers and invented SQLite."""
+    result: list[str] = []
+    for dirname, target, readonly in (
+        ("locks", "/locks", True),
+        ("code", "/qa-code", True),
+        ("events", "/events", False),
+        ("synthetic", "/synthetic", False),
+    ):
+        mount = "type=bind,src=" + str(root / dirname) + ",dst=" + target
+        result.extend(["--mount", mount + (",readonly" if readonly else "")])
+    return result
+
+
+def base_flags(name: str) -> list[str]:
+    """Return restricted disposable Docker flags."""
+    flags = [
         "docker",
         "run",
         "-d",
@@ -139,15 +153,12 @@ def arguments(root: Path, name: str, role: str) -> list[str]:
         "--label",
         "org.svt.qa.fence=" + name,
     ]
-    for dirname, target, readonly in (
-        ("locks", "/locks", True),
-        ("code", "/qa-code", True),
-        ("events", "/events", False),
-        ("synthetic", "/synthetic", False),
-    ):
-        mount = "type=bind,src=" + str(root / dirname) + ",dst=" + target
-        args.extend(["--mount", mount + (",readonly" if readonly else "")])
-    return args + [
+    return flags
+
+
+def arguments(root: Path, name: str, role: str) -> list[str]:
+    """Build a constrained no-network Docker invocation."""
+    tail = [
         "--env",
         "SHELLY_WRITER_FENCE=required",
         "--entrypoint",
@@ -157,6 +168,7 @@ def arguments(root: Path, name: str, role: str) -> list[str]:
         WORKER,
         role,
     ]
+    return base_flags(name) + sandbox_mounts(root) + tail
 
 
 def start(root: Path, name: str, role: str) -> None:
