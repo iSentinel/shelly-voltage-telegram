@@ -239,6 +239,36 @@ class InheritedBUnitTests(unittest.TestCase):
             evidence["maintenance_B_EX_while_writer_running"], "ALLOWED_GAP"
         )
 
+    def test_combined_writer_W_lock_available_after_exit(self) -> None:
+        """An unlocked synthetic W inode is available to a new owner."""
+        (self.root / "writer.lock").touch(mode=0o600)
+        QA.check_writer_W(self.root, "inherited_bw", True)
+
+    def test_combined_writer_W_lock_blocked_during_run(self) -> None:
+        """An existing exclusive W owner prevents another EX holder."""
+        lock = self.root / "writer.lock"
+        lock.touch(mode=0o600)
+        with lock.open("rb") as holder:
+            fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            QA.check_writer_W(self.root, "inherited_bw", False)
+
+    def test_combined_writer_W_mismatched_lifetime_fails(self) -> None:
+        """An unexpectedly free W during runtime fails closed."""
+        (self.root / "writer.lock").touch(mode=0o600)
+        with self.assertRaisesRegex(RuntimeError, "W_LOCK_LIFETIME"):
+            QA.check_writer_W(self.root, "inherited_bw", False)
+
+    def test_B_only_does_not_require_W_inode(self) -> None:
+        """An inherited B-only role must not invent writer W state."""
+        QA.check_writer_W(self.root, "inherited", False)
+        QA.check_writer_W(self.root, "parent_only", True)
+
+    def test_combined_role_passes_both_descriptors(self) -> None:
+        """The synthetic supervisor must inherit both B SH and W EX."""
+        self.assertIn('mode == "inherited_bw"', QA.SUPERVISOR_CODE)
+        self.assertIn("pass_fds = (fd, W)", QA.SUPERVISOR_CODE)
+        self.assertIn("LOCK_EX", QA.SUPERVISOR_CODE)
+
 
 if __name__ == "__main__":
     unittest.main()
