@@ -144,7 +144,9 @@ class LegacyUpdaterOwnerFuseTests(unittest.TestCase):
             body.index("\n    requirements"),
         )
         self.assertIn('[[ "$DRY_RUN" != true ]]', body)
-        self.assertIn("complete owner gate and approval pending", UPDATER.read_text())
+        self.assertIn(
+            "complete owner gate and approval pending", UPDATER.read_text()
+        )
 
     @unittest.skipUnless(os.geteuid() == 0, "root-only kernel G QA")
     def test_inherited_g_narrow_pass_is_still_no_go(self) -> None:
