@@ -38,7 +38,7 @@ class BackupProtectedRuntimeTests(unittest.TestCase):
         python_dir = self.root / "python-poison"
         python_dir.mkdir()
         (python_dir / "sqlite3.py").write_text(
-            'import os\nfrom pathlib import Path\n'
+            "import os\nfrom pathlib import Path\n"
             'Path(os.environ["QA_PYTHON_MARKER"]).write_text("bad")\n'
         )
         self.env = {
@@ -117,9 +117,8 @@ class BackupProtectedRuntimeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(self.python_marker.exists())
         self.python_marker.unlink()
-        result = self.invoke(
-            ["/usr/bin/python3", "-I", "-c", "import sqlite3"]
-        )
+        command = ["/usr/bin/python3", "-I", "-c", "import sqlite3"]
+        result = self.invoke(command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.python_marker.exists())
 
