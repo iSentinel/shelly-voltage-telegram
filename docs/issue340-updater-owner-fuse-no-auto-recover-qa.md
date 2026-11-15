@@ -61,3 +61,24 @@ explicit Owner Approval including total data-loss risk from a single NVMe.
 
 **Production LXC110, Telegram, Docker restart policy and SQLite are unchanged.
 Public pinned PHOTO migration remains separately NO_GO.**
+
+## Real transient systemd boot prestart acceptance (LXC114)
+
+2026-11-15 Gateway execution in the offline loopback-only QA guest:
+two distinct `systemd-run --wait --collect` transient Type=oneshot
+services each ran the **candidate** `apply-update.sh --recover` via an
+actual `ExecStartPre`; each `ExecStart` only touched a private QA marker.
+
+- **No pending-update:** prestart SUCCESS (unit result success,
+  main exited 0). The synthetic main marker exists: PASS.
+- **Pending-update present:** prestart failed (unit job exit 1),
+  synthetic main marker absent, pending marker still exists: PASS
+  fail-closed and **confirmed boot-availability risk**.
+- Both units were collected, transient failures reset, private scratch
+  removed. No real image, Docker daemon, SQLite, Telegram or service
+  settings were modified. This was not a physical reboot.
+
+Do **not** infer that the production Compose service can start after
+this candidate is deployed: the separate gated-only Compose entrypoint
+and any approved current signed OCI safe fallback still need full review.
+
