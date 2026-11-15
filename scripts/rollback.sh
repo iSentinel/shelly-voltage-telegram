@@ -76,7 +76,7 @@ require_frozen_rollback_owner() {
     local gate="${SVT_OWNER_GATE_DIR:-/run/shelly-owner}"
     local guard
     guard="$(dirname -- "${BASH_SOURCE[0]}")/legacy-rollback-frozen-owner-preflight.py"
-    python3 "$guard" --check --gate-dir "$gate" \
+    /usr/bin/python3 -I "$guard" --check --gate-dir "$gate" \
         --inherited-g-fd "$inherited" || return 5
 }
 
