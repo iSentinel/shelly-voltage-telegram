@@ -97,11 +97,20 @@ class PublicMetadataFaultTests(unittest.TestCase):
         self.assertEqual(QA.read_public(self.target), self.current)
 
     def test_atomic_success_and_permissions(self) -> None:
-        """Successful publish is mode 0600 with no temporary siblings."""
+        """Successful publish is mode 0644 with no temporary siblings."""
         QA.atomic_publish(self.target, self.current)
         self.assertEqual(QA.read_public(self.target), self.current)
-        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o644)
         self.assertFalse(list(self.folder.glob(".deployed-*")))
+
+    def test_failed_replace_preserves_existing_public_mode(self) -> None:
+        """A failed publication keeps public JSON and mode unchanged."""
+        self.target.write_text(json.dumps(self.old))
+        self.target.chmod(0o644)
+        with self.assertRaises(QA.InjectedFailure):
+            QA.atomic_publish(self.target, self.current, "after_file_fsync")
+        self.assertEqual(QA.read_public(self.target), self.old)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o644)
 
     def test_read_public_missing_and_corrupt(self) -> None:
         """Missing means reconciliation, malformed JSON is an error."""
