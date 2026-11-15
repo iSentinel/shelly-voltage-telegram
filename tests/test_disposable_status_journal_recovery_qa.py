@@ -7,6 +7,7 @@ import fcntl
 import importlib.util
 import io
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -162,6 +163,39 @@ class JournalTests(unittest.TestCase):
             with self.assertRaisesRegex(QA.Blocked, "LOCK_BUSY_updater"):
                 QA.reconcile(self.root, *self.trust)
         self.assertEqual(self.status(), "RECONCILE_REQUIRED")
+
+    def assert_child_lock_blocks(self, name: str) -> None:
+        """A separate process holding the same inode must block B/A."""
+        self.published()
+        command = (
+            "import fcntl,sys,time;"
+            "f=open(sys.argv[1], 'rb');"
+            "fcntl.flock(f, fcntl.LOCK_EX);"
+            "print('HELD',flush=True);"
+            "time.sleep(10)"
+        )
+        with subprocess.Popen(
+            [sys.executable, "-c", command, str(self.root / name)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        ) as child:
+            try:
+                self.assertEqual(child.stdout.readline().strip(), "HELD")
+                with self.assertRaisesRegex(QA.Blocked, "LOCK_BUSY_" + name):
+                    QA.reconcile(self.root, *self.trust)
+            finally:
+                child.terminate()
+                child.wait(timeout=3)
+        self.assertEqual(self.status(), "RECONCILE_REQUIRED")
+
+    def test_child_process_holds_maintenance_B(self) -> None:
+        """Independent B EX owner blocks the journal reconciliation."""
+        self.assert_child_lock_blocks("maintenance.lock")
+
+    def test_child_process_holds_updater_A(self) -> None:
+        """Independent A EX owner blocks the journal reconciliation."""
+        self.assert_child_lock_blocks("updater.lock")
 
     def test_committed_with_pending_blocked(self) -> None:
         """Contradictory record and marker are never considered safe."""
