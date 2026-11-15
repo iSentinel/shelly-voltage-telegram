@@ -79,7 +79,9 @@ class InterruptedBootReplayTests(unittest.TestCase):
             gzip.compress(b"not-a-current-valid-sqlite-database")
         )
 
-    def run_recover(self, fd: int | None = None) -> subprocess.CompletedProcess:
+    def run_recover(
+        self, fd: int | None = None
+    ) -> subprocess.CompletedProcess:
         """Run the candidate only against synthetic state and fake tools."""
         env = dict(self.env)
         descriptors: tuple[int, ...] = ()
