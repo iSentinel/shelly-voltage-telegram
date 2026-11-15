@@ -85,14 +85,14 @@ Each case spawns a **real child process** and forcibly ends it with
 | pending unlinked and directory fsynced | RECONCILE_REQUIRED | COMMITTED |
 | committed journal persisted | COMMITTED | COMMITTED |
 
-**7/7 real SIGKILL cut points PASS.** Independent **23/23 Python
+**7/7 real SIGKILL cut points PASS.** Independent **25/25 Python
 unit tests PASS** with strict ResourceWarning, Ruff 0.14.2
 format/lint PASS, all functions at most 40 source lines,
 all Python source lines at most 79 chars.
 
 Negative tests reject missing/corrupt/symlinked journal, missing pending
 with old public metadata, different digest or image ID, missing
-synthetic trust, inconsistent committed journal and busy B or A lock.
+synthetic trust, inconsistent committed journal and busy B or A lock (including independently held flock from a separate child process).
 Successful reconciliation is idempotent.
 
 ## What this does NOT prove
