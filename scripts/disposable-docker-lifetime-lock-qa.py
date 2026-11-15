@@ -141,16 +141,15 @@ def require_lease(root: Path, lease: subprocess.Popen) -> None:
 
 def finish_lease(lease: subprocess.Popen) -> None:
     """Reap the exact synthetic supervisor to prevent stray QA processes."""
-    if lease.poll() is None:
+    try:
+        lease.communicate(timeout=6)
+    except subprocess.TimeoutExpired:
+        lease.terminate()
         try:
-            lease.communicate(timeout=6)
+            lease.communicate(timeout=3)
         except subprocess.TimeoutExpired:
-            lease.terminate()
-            try:
-                lease.communicate(timeout=3)
-            except subprocess.TimeoutExpired:
-                lease.kill()
-                lease.communicate(timeout=3)
+            lease.kill()
+            lease.communicate(timeout=3)
 
 
 def perform_qa(owner: object) -> dict:
