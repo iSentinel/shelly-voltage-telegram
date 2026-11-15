@@ -68,7 +68,9 @@ class ComposePythonIsolationTests(unittest.TestCase):
         source = COMPOSE.read_text()
         command = '/usr/bin/python3 -I "$ROOT/scripts/'
         self.assertIn(command + 'legacy-compose-start-gate.py"', source)
-        self.assertLess(source.index(command), source.index("compose_cmd config"))
+        gate = source.index(command)
+        docker = source.index("compose_cmd config")
+        self.assertLess(gate, docker)
 
     def test_untrusted_pythonpath_cannot_impersonate_gate(self) -> None:
         """Invalid G must refuse without hostile argparse import."""
