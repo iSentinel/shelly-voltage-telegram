@@ -44,7 +44,7 @@ class UpgradeSnapshotRetentionTests(unittest.TestCase):
         stage = script.split("snapshot_upgrade() {", 1)[1].split(
             "\ncopy_source() {", 1
         )[0]
-        self.assertIn('bash "$SOURCE/scripts/source-tar.sh"', stage)
+        self.assertIn('/bin/bash -p "$SOURCE/scripts/source-tar.sh"', stage)
         self.assertIn("validate-sqlite-archive.py", stage)
         self.assertIn('echo "Upgrade snapshot:', stage)
         for operation in (
