@@ -4,6 +4,33 @@ set -euo pipefail
 PROJECT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+# Offline owner-freeze test fixture, held across spawned rollback processes.
+QA_G_DIR="$TMP/maintenance-g"
+mkdir -m 0700 -- "$QA_G_DIR"
+for name in G B W; do
+    touch -- "$QA_G_DIR/$name"
+    chmod 0640 -- "$QA_G_DIR/$name"
+done
+exec {QA_G_FD}<"$QA_G_DIR/G"
+flock -x "$QA_G_FD"
+export SVT_OWNER_GATE_DIR="$QA_G_DIR"
+export SVT_MAINTENANCE_G_FD="$QA_G_FD"
+
+# Only known systemd state queries are mocked; no real systemd calls.
+mkdir -m 0700 -- "$TMP/freeze-test-bin"
+cat > "$TMP/freeze-test-bin/systemctl" <<'MOCK_FREEZE_SYSTEMCTL'
+#!/usr/bin/env bash
+if [[ "$1" == show ]]; then
+    printf '%s
+' ActiveState=inactive UnitFileState=masked-runtime
+    exit 0
+fi
+exit 97
+MOCK_FREEZE_SYSTEMCTL
+chmod 0700 "$TMP/freeze-test-bin/systemctl"
+PATH="$TMP/freeze-test-bin:$PATH"
+export PATH
 TARGET="$TMP/target"
 DB_DIR="$TMP/data"
 SNAP_ROOT="$TMP/snapshots"
@@ -312,6 +339,10 @@ ln -s "$TMP/real-rescue-root" "$TMP/linked-rescue-root"
 ln -s "$DB_DIR" "$TMP/linked-live-db-parent"
 cat > "$TMP/rollback-mock-bin/docker" <<'MOCK_PRECHECK_DOCKER'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 if [[ $1 == compose && $4 == stop ]]; then
     touch "$MOCK_STOP_MARKER"
     exit 0
@@ -478,6 +509,10 @@ echo "ROLLBACK_UNAPPROVED_DB_REWIND=BLOCKED"
 mkdir -p "$TMP/mock-bin"
 cat > "$TMP/mock-bin/docker" <<'MOCK_DOCKER'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 if [[ $1 == compose && $4 == stop ]]; then
     [[ $MOCK_STOP_FAIL == 1 ]] && exit 17
     exit 0
@@ -512,6 +547,10 @@ done
 # Even a successful stop must not allow a writer that restarts later.
 cat > "$TMP/mock-bin/docker" <<'MOCK_DOCKER'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 if [[ $1 == compose && $4 == stop ]]; then
     exit 0
 fi
@@ -552,6 +591,10 @@ cp "$DB_DIR/voltage.sqlite3" "$MISSING_COMPOSE_DB"
 before_missing_db="$(sha256sum "$MISSING_COMPOSE_DB" | cut -d' ' -f1)"
 cat > "$TMP/mock-bin/docker" <<'MOCK_MISSING_COMPOSE_DOCKER'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 if [[ $1 == inspect ]]; then
     [[ "$MOCK_INSPECTION_ERROR" == 1 ]] && exit 17
     printf 'true\n'
@@ -587,6 +630,10 @@ done
 # A deliberately stopped synthetic Docker writer permits the test rollback.
 cat > "$TMP/mock-bin/docker" <<'MOCK_STOPPED_DOCKER'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 if [[ $1 == inspect ]]; then
     printf 'false\n'
     exit 0
@@ -784,6 +831,10 @@ PY
 mkdir -p "$TMP/media-race-bin"
 cat > "$TMP/media-race-bin/docker" <<'MOCK_MEDIA_RACE'
 #!/usr/bin/env bash
+if [[ "$1" == inspect && "$2" == -f ]]; then
+    printf "%s\n" "false|no|0"
+    exit 0
+fi
 set -euo pipefail
 if [[ "$1" == compose ]]; then
     python3 - "$MEDIA_RACE_DB" <<'PY'
