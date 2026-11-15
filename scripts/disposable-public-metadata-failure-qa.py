@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -71,9 +72,7 @@ def fsync_directory(path: Path) -> None:
         os.close(fd)
 
 
-def atomic_publish(
-    path: Path, data: dict, failpoint: str = ""
-) -> None:
+def atomic_publish(path: Path, data: dict, failpoint: str = "") -> None:
     """Write one complete JSON file; never expose a partial JSON."""
     if not valid_deployed(data):
         raise ValueError("INVALID_DEPLOYMENT_DATA")
@@ -140,56 +139,85 @@ def fault_checks(folder: Path, cases: list[str]) -> None:
     path = folder / "deployed.json"
     original = (json.dumps(old, sort_keys=True) + "\n").encode()
     path.write_bytes(original)
-    try:
+    with contextlib.suppress(InjectedFailure):
         atomic_publish(path, current, "after_file_fsync")
-    except InjectedFailure:
-        pass
     check("pre_replace_keeps_old_bytes", path.read_bytes() == original, cases)
     check(
         "pre_replace_cleans_temp",
         not list(folder.glob(".deployed-*")),
         cases,
     )
-    try:
+    with contextlib.suppress(InjectedFailure):
         atomic_publish(path, current, "after_replace")
-    except InjectedFailure:
-        pass
     check("post_replace_complete_json", read_public(path) == current, cases)
-    check("post_replace_is_not_success", status(current, read_public(path))
-          == "CONSISTENT", cases)
-    try:
+    check(
+        "post_replace_is_not_success",
+        status(current, read_public(path)) == "CONSISTENT",
+        cases,
+    )
+    with contextlib.suppress(InjectedFailure):
         atomic_publish(path, current, "after_dir_fsync")
-    except InjectedFailure:
-        pass
     check("post_dir_fsync_complete", read_public(path) == current, cases)
     check("no_orphan_temp", not list(folder.glob(".deployed-*")), cases)
-    check("public_mode_0600", stat.S_IMODE(path.stat().st_mode) == 0o600,
-          cases)
+    check(
+        "public_mode_0600", stat.S_IMODE(path.stat().st_mode) == 0o600, cases
+    )
 
 
 def state_checks(cases: list[str]) -> None:
     """Verify pending, signed identity, corrupted-public refusal."""
+    old, current, _, _ = baseline()
+    check(
+        "private_uncommitted",
+        status(None, old) == "PRIVATE_INVALID_BLOCKED",
+        cases,
+    )
+    check(
+        "pending_before_publish",
+        status(current, old, pending=True) == "PENDING_BLOCKED",
+        cases,
+    )
+    check(
+        "pending_removed_public_stale",
+        status(current, old) == "RECONCILE_REQUIRED",
+        cases,
+    )
+    check(
+        "public_missing", status(current, None) == "RECONCILE_REQUIRED", cases
+    )
+    check(
+        "corrupt_public",
+        status(current, {"garbage": 1}) == "PUBLIC_CORRUPT_BLOCKED",
+        cases,
+    )
+    identity_checks(cases)
+
+
+def identity_checks(cases: list[str]) -> None:
+    """Verify synthetic image identity, trust and complete consistency."""
     old, current, running_ref, image_id = baseline()
-    check("private_uncommitted", status(None, old)
-          == "PRIVATE_INVALID_BLOCKED", cases)
-    check("pending_before_publish", status(current, old, pending=True)
-          == "PENDING_BLOCKED", cases)
-    check("pending_removed_public_stale", status(current, old)
-          == "RECONCILE_REQUIRED", cases)
-    check("public_missing", status(current, None)
-          == "RECONCILE_REQUIRED", cases)
-    check("corrupt_public", status(current, {"garbage": 1})
-          == "PUBLIC_CORRUPT_BLOCKED", cases)
-    check("signed_trust_missing", status(current, old, verified=False)
-          == "TRUST_NOT_VERIFIED_BLOCKED", cases)
-    check("wrong_image_ref", status(current, old,
-          running_ref=running_ref + "x")
-          == "RUNNING_REFERENCE_MISMATCH_BLOCKED", cases)
-    check("wrong_running_id", status(current, old,
-          running_id="sha256:" + "d" * 64)
-          == "RUNNING_IMAGE_ID_MISMATCH_BLOCKED", cases)
-    check("signed_image_consistent", status(current, current)
-          == "CONSISTENT", cases)
+    check(
+        "signed_trust_missing",
+        status(current, old, verified=False) == "TRUST_NOT_VERIFIED_BLOCKED",
+        cases,
+    )
+    check(
+        "wrong_image_ref",
+        status(current, old, running_ref=running_ref + "x")
+        == "RUNNING_REFERENCE_MISMATCH_BLOCKED",
+        cases,
+    )
+    check(
+        "wrong_running_id",
+        status(current, old, running_id="sha256:" + "d" * 64)
+        == "RUNNING_IMAGE_ID_MISMATCH_BLOCKED",
+        cases,
+    )
+    check(
+        "signed_image_consistent",
+        status(current, current) == "CONSISTENT",
+        cases,
+    )
     check("expected_id_is_valid", bool(DIGEST_RE.fullmatch(image_id)), cases)
 
 
@@ -227,14 +255,19 @@ def main() -> int:
     except (AssertionError, OSError, ValueError, RuntimeError) as error:
         print("QA_FAIL", type(error).__name__, str(error))
         return 3
-    print(json.dumps({
-        "result": "PASS_SYNTHETIC_METADATA_FAULT_BOUNDARIES",
-        "assertions": len(cases), "cases": cases,
-        "actual_oci_signature": "MOCKED_OFFLINE",
-        "global_writer_fence": "NOT_INSTALLED",
-        "physical_power_loss": "NOT_TESTED",
-        "production_modified": False,
-    }))
+    print(
+        json.dumps(
+            {
+                "result": "PASS_SYNTHETIC_METADATA_FAULT_BOUNDARIES",
+                "assertions": len(cases),
+                "cases": cases,
+                "actual_oci_signature": "MOCKED_OFFLINE",
+                "global_writer_fence": "NOT_INSTALLED",
+                "physical_power_loss": "NOT_TESTED",
+                "production_modified": False,
+            }
+        )
+    )
     return 0
 
 
