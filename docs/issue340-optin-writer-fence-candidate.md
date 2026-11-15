@@ -144,3 +144,53 @@ cross-owner protocol, fail-closed startup may take monitoring
 offline and the incomplete rollout may create a writer race.
 
 Related: #336, #340, #353–#355, #358–#362.
+
+## Additional observed shutdown transaction race — mandatory NO-GO
+
+At 2026-11-15 ~13:50 Kyiv, a separate **real synthetic
+SQLite WAL threading experiment** ran under the exact offline
+loopback-only LXC114 guard, with original QA writer stopped
+restart=no and QA systemd units disabled. It used only temporary
+root-owned 0750/0640 B/W files and a disposable SQLite
+database. No real Shelly, Telegram or production SQLite used.
+
+A worker thread called the **candidate**
+`assert_sqlite_writer_fenced()` while its parent held B SH and
+W EX, opened SQLite, created a table, then held an open
+transaction after the parent exited its `writer_fence`
+context. On that exit, another thread was able to acquire
+maintenance B EX even though the original worker still had an
+open, uncommitted SQLite transaction. While B EX was held,
+the original worker **successfully committed**. This unsafe
+gap was reproduced and marked `EARLY_RELEASE_UNSAFE`.
+
+The positive comparison joined the SQLite writer thread and
+confirmed its transaction completed **before** releasing B SH
+and W EX. Maintenance B EX was granted only after that joined
+completion, marked `JOIN_BEFORE_RELEASE_SAFE`.
+
+| Actual isolated synthetic mode | Result |
+| --- | --- |
+| Lease exits before SQLite writer thread completes | **UNSAFE: B EX and SQLite commit overlap** |
+| SQLite writer thread joined before lease exit | **No overlap in isolated test** |
+
+**Critical implication for real `app.py`:** `Monitor.run()`
+currently starts a daemon `telegram-commands` thread and
+`start_health_server()` creates a daemon HTTP thread.
+The opt-in lease currently wraps `Monitor.run()`, and it
+does **not yet prove shutdown quiescence** for those worker
+threads. `Storage.connect()` validates the lease before
+opening a *new* connection, but cannot revoke an already
+open SQLite transaction when the main scope exits.
+
+Therefore **release acceptance stays NO-GO**, even when the
+GitHub unit suite passes. A future stage must prove that all
+threads/jobs which can write SQLite are stopped and joined,
+all SQLite connections and WAL transactions are quiescent,
+and the durable handoff is recorded **before** B/W may
+be released. A fail-closed timeout must not permit maintenance
+concurrently with a still-live writer. Actual abrupt container
+termination and Docker daemon restart must be covered.
+
+The QA result does not authorize changing existing production
+signals, Docker policies, SQLite or Telegram.
