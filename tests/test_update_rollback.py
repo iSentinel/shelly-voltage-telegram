@@ -97,6 +97,10 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((public / "deployed.json").exists())
 
+    def create_updater_guard_stub(self):
+        """Provide inert isolated-Python guard/digest CLI fixture."""
+        self.create_updater_guard_stub()
+
     def test_dry_run_cleans_workspace_and_exits_successfully(self):
         """A successful dry-run must not fail in its EXIT trap."""
 
