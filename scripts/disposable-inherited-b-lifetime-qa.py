@@ -39,11 +39,15 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 mode = sys.argv[2]
-if mode not in ("inherited", "parent_only"):
+if mode not in ("inherited", "parent_only", "inherited_bw"):
     raise SystemExit(7)
 fd = os.open(root / "maintenance.lock", os.O_RDONLY)
 fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-pass_fds = (fd,) if mode == "inherited" else ()
+pass_fds = (fd,) if mode != "parent_only" else ()
+if mode == "inherited_bw":
+    W = os.open(root / "writer.lock", os.O_RDONLY)
+    fcntl.flock(W, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    pass_fds = (fd, W)
 child = subprocess.Popen(
     [sys.executable, "-c", sys.argv[3], str(root / "marker")],
     pass_fds=pass_fds, stdout=subprocess.DEVNULL,
@@ -144,6 +148,8 @@ def spawn_supervisor(root: Path, mode: str) -> subprocess.Popen:
     """Start only a synthetic child tree in a new private directory."""
     root.mkdir(mode=0o700)
     (root / "maintenance.lock").touch(mode=0o600)
+    if mode == "inherited_bw":
+        (root / "writer.lock").touch(mode=0o600)
     return subprocess.Popen(
         [
             sys.executable,
@@ -171,6 +177,20 @@ def cleanup_case(
             os.kill(child, signal.SIGTERM)
 
 
+def check_writer_W(root: Path, mode: str, should_be_free: bool) -> None:
+    """Independently verify additional W EX on the synthetic writer."""
+    if mode != "inherited_bw":
+        return
+    with (root / "writer.lock").open("rb") as file:
+        try:
+            fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            free = True
+        except BlockingIOError:
+            free = False
+    if free != should_be_free:
+        raise RuntimeError("WRITER_W_LOCK_LIFETIME_MISMATCH")
+
+
 def case(root: Path, mode: str) -> dict:
     """Kill supervisor and verify inherited lifetime lock survives."""
     process = spawn_supervisor(root, mode)
@@ -179,24 +199,32 @@ def case(root: Path, mode: str) -> dict:
         worker = wait_supervisor(root, process)
         if can_get_exclusive(root):
             raise RuntimeError("B_EX_BEFORE_SUPERVISOR_DEATH")
+        check_writer_W(root, mode, False)
         process.send_signal(signal.SIGKILL)
         process.wait(timeout=4)
         still_running = (root / "marker").read_text() == "RUNNING"
         if not still_running:
             raise RuntimeError("SYNTHETIC_WORKER_ALREADY_EXITED")
         after = can_get_exclusive(root)
-        if after == (mode == "inherited"):
+        if after != (mode == "parent_only"):
             raise RuntimeError("UNEXPECTED_B_EX_AFTER_SUPERVISOR_KILL")
+        check_writer_W(root, mode, False)
         wait_marker(root, "EXITED", time.monotonic() + 7)
         wait_exclusive_release(root, time.monotonic() + 5)
+        check_writer_W(root, mode, True)
         return {
             "mode": mode,
             "supervisor": "KILLED_SIGKILL",
             "synthetic_writer_running_after_supervisor_kill": True,
             "maintenance_B_EX_while_writer_running": (
-                "BLOCKED" if mode == "inherited" else "ALLOWED_GAP"
+                "ALLOWED_GAP" if mode == "parent_only" else "BLOCKED"
             ),
             "maintenance_B_EX_after_writer_exit": "ALLOWED",
+            "writer_W_EX": (
+                "BLOCKED_UNTIL_EXIT"
+                if mode == "inherited_bw"
+                else "NOT_APPLICABLE"
+            ),
         }
     finally:
         cleanup_case(root, process, worker)
@@ -210,6 +238,7 @@ def run_suite() -> dict:
         cases = [
             case(root / "parent-only", "parent_only"),
             case(root / "inherited", "inherited"),
+            case(root / "inherited-bw", "inherited_bw"),
         ]
         return {
             "cases": cases,
