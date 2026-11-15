@@ -163,3 +163,24 @@ NOT equal to the current live database. It must never be silently
 substituted for an approved full-CURRENT rollback image.
 Actual signed source and independent physical-failure-domain
 restores still require owner-approved testing before deployment.
+
+## Physical backup failure domain — read-only Proxmox inventory
+
+At 2026-11-15 **12:03 Kyiv**, `pvesm status` reported
+`local` (directory) and `local-lvm` (LVM thin) as active.
+`pvesm status --content backup` listed **only `local`**
+as a backup-capable Proxmox storage.
+
+The physical block inventory (`lsblk -d`) listed one drive:
+**`nvme0n1`, WD_BLACK SN770 2 TB**. LXC110 rootfs is
+`local-lvm:vm-110-disk-0`; the automatic SQLite archives are
+on its same ext4 root filesystem. Therefore placing copies in
+`local` vs `local-lvm` does **not** establish separate
+physical failure domains on this host.
+
+**Owner decision required before real A/B acceptance:** provide
+a separately failed disk, NAS/export, or backup server on another
+physical machine; verify that A and B live on distinct failure
+domains and can be independently restored with source+SQLite
+parity. This is an infrastructure requirement, not an instruction
+to change any existing Proxmox storage or create a backup job.
