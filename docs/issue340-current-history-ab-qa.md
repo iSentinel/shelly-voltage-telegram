@@ -121,3 +121,45 @@ or missing exact consent must fail closed.
 **Decision: REVIEW-ONLY, NOT FOR MERGE/DEPLOY ON GREEN CI ALONE.**
 
 Related: #335, #336, #340, #355, #358, #359, #360.
+
+## Read-only actual backup inventory — 2026-11-15
+
+A separate **read-only** Gateway LXC110 inspection, not part of the
+synthetic QA runner, found the current backup service
+`shelly-voltage-backup.service` invokes
+`/opt/shelly-voltage/scripts/backup.sh` daily. The timer last ran
+at **03:22 Kyiv on Nov 15**. The script defaults to
+`/var/backups/shelly-voltage` and retains **14 archives**.
+
+Verified mountpoint identity for
+`/var/lib/shelly-voltage`, `/var/lib/shelly-voltage-updater`,
+`/opt/shelly-voltage`, and the actual backup directory:
+all resolve to **the same ext4 virtual block device**
+`/dev/mapper/pve-vm--110--disk--0` (st_dev=64536).
+
+The latest historic backup was verified **without modifying any
+archive or writing a database file to disk**:
+
+| Check | Read-only result |
+| --- | --- |
+| Sidecar SHA-256 equals compressed archive hash | PASS |
+| Gzip decompression with 128 MiB maximum | PASS |
+| Decompressed SQLite bytes | 4,886,528 |
+| SQLite quick_check in a memory-only clone | OK |
+| Rows in historical archive | 67,266 |
+| Rows in current live SQLite at same inspection | 70,360 |
+| CURRENT-history row-count parity | NO |
+
+To inspect the online-backup SQLite file in `:memory:`, its
+journal read/write-version header (2/2 WAL mode) was temporarily
+normalized to 1/1 **in an in-memory bytearray only** before
+`sqlite3.deserialize`. Original archive bytes, sidecar, backup
+directory, live DB, runtime and systemd units were untouched.
+
+**Conclusion:** automatic archives are useful and the most recent
+archive passed basic checksum/integrity, but they are NOT two
+independent physical A/B copies and the latest nightly archive is
+NOT equal to the current live database. It must never be silently
+substituted for an approved full-CURRENT rollback image.
+Actual signed source and independent physical-failure-domain
+restores still require owner-approved testing before deployment.
