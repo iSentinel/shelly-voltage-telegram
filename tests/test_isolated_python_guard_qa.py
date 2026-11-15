@@ -57,10 +57,8 @@ class IsolatedPythonGuardTests(unittest.TestCase):
             ("systemctl", "ActiveState=inactive\nUnitFileState=masked"),
         ):
             candidate = self.bin / name
-            candidate.write_text(
-                "#!/bin/sh\n"
-                f"printf '%b\\n' {output!r}\n"
-            )
+            source = f"#!/bin/sh\nprintf '%b\\n' {output!r}\n"
+            candidate.write_text(source)
             candidate.chmod(0o700)
 
     def invoke(
@@ -94,9 +92,9 @@ class IsolatedPythonGuardTests(unittest.TestCase):
         for source in (UPDATER, ROLLBACK):
             body = source.read_text()
             self.assertIn(command, body)
-            self.assertNotIn('python3 "$guard" --check', body.replace(
-                command, ""
-            ))
+            untrusted = 'python3 "$guard" --check'
+            clean_source = body.replace(command, "")
+            self.assertNotIn(untrusted, clean_source)
 
     @unittest.skipUnless(os.geteuid() == 0, "root-only inherited G QA")
     def test_updater_guard_blocks_poisoned_python(self) -> None:
