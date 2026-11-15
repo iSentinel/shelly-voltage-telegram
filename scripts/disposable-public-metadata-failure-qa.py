@@ -72,13 +72,14 @@ def fsync_directory(path: Path) -> None:
 
 
 def atomic_publish(path: Path, data: dict, failpoint: str = "") -> None:
-    """Write one complete JSON file; never expose a partial JSON."""
+    """Publish complete JSON with DynamicUser-readable public mode."""
     if not valid_deployed(data):
         raise ValueError("INVALID_DEPLOYMENT_DATA")
     fd, raw = tempfile.mkstemp(prefix=".deployed-", dir=path.parent)
     temporary = Path(raw)
     try:
-        os.fchmod(fd, 0o600)
+        # Production public-state reader needs a root-owned 0644 file.
+        os.fchmod(fd, 0o644)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             stream.write(json.dumps(data, sort_keys=True) + "\n")
             stream.flush()
@@ -165,7 +166,7 @@ def fault_checks(folder: Path, cases: list[str]) -> None:
     check("post_dir_fsync_complete", read_public(path) == current, cases)
     check("no_orphan_temp", not list(folder.glob(".deployed-*")), cases)
     check(
-        "public_mode_0600", stat.S_IMODE(path.stat().st_mode) == 0o600, cases
+        "public_mode_0644", stat.S_IMODE(path.stat().st_mode) == 0o644, cases
     )
 
 
