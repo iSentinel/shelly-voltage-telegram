@@ -35,8 +35,7 @@ class IsolatedConfigureTests(unittest.TestCase):
         imports = self.root / "imports"
         imports.mkdir()
         (imports / "pathlib.py").write_text(
-            "import os\n"
-            'open(os.environ["QA_PYTHON_MARKER"], "w").close()\n'
+            'import os\nopen(os.environ["QA_PYTHON_MARKER"], "w").close()\n'
         )
         self.env = {
             **os.environ,
