@@ -34,7 +34,7 @@ class StartComposeYasnoTests(unittest.TestCase):
         self.overlay = self.root / "yasno.yaml"
         self.updater = self.root / "updater.yaml"
 
-    def run_script(self, *args):
+    def run_script(self, *args, overlay_only=False, build=False):
         """Invoke the real script with an offline fake Docker command."""
         env = dict(os.environ)
         env.update(
@@ -44,8 +44,18 @@ class StartComposeYasnoTests(unittest.TestCase):
             COMPOSE_CALLS=str(self.calls),
             PATH=str(self.mockbin) + os.pathsep + env["PATH"],
         )
+        command = ["bash", str(SCRIPT), *args]
+        if overlay_only:
+            mode = "true" if build else "false"
+            quoted = shlex.quote(str(SCRIPT))
+            command = [
+                "bash",
+                "-c",
+                f"source {quoted}; compose_prepare {mode}; "
+                "compose_cmd config -q",
+            ]
         result = subprocess.run(
-            ["bash", str(SCRIPT), *args],
+            command,
             env=env,
             capture_output=True,
             text=True,
@@ -64,42 +74,49 @@ class StartComposeYasnoTests(unittest.TestCase):
 
     def test_no_overlay_keeps_original_base_service(self):
         """Do not enable forecast by merely installing this version."""
-        result, calls = self.run_script()
+        result, calls = self.run_script(overlay_only=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         args = ["compose", "-f", str(self.app / "compose.yaml")]
-        self.assertEqual(calls, [args + ["config", "-q"], args + ["up", "-d"]])
+        self.assertEqual(calls, [args + ["config", "-q"]])
 
     def test_owner_overlay_appends_last_for_regular_start(self):
         """The approved YASNO layer is opt-in and overrides the base."""
         self.enable()
-        result, calls = self.run_script()
+        result, calls = self.run_script(overlay_only=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             calls[0][-4:], ["-f", str(self.overlay), "config", "-q"]
         )
-        self.assertEqual(calls[1][-3:], [str(self.overlay), "up", "-d"])
 
     def test_updater_image_does_not_shadow_opted_in_yasno(self):
         """Keep the approved overlay AFTER the update image settings."""
         self.enable()
         self.updater.write_text("services: {}\n")
-        result, calls = self.run_script()
+        result, calls = self.run_script(overlay_only=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertLess(
             calls[0].index(str(self.updater)),
             calls[0].index(str(self.overlay)),
         )
-        self.assertEqual(calls[1][-3:], ["up", "-d", "--no-build"])
 
-    def test_install_build_uses_yasno_and_ignores_old_updater(self):
-        """Upgrading source must not silently drop the protected overlay."""
+    def test_install_build_refused_but_yasno_plan_kept(self):
+        """Never build a legacy image; still check opt-in layer ordering."""
         self.enable()
         self.updater.write_text("services: {}\n")
-        result, calls = self.run_script("--build")
+        blocked, blocked_calls = self.run_script("--build")
+        self.assertEqual(blocked.returncode, 3)
+        self.assertEqual(blocked_calls, [])
+        result, calls = self.run_script(overlay_only=True, build=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue(all(str(self.updater) not in call for call in calls))
-        self.assertTrue(all(str(self.overlay) in call for call in calls))
-        self.assertEqual(calls[1][-3:], ["up", "-d", "--build"])
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn(str(self.updater), calls[0])
+        self.assertIn(str(self.overlay), calls[0])
+
+    def test_unguarded_start_refused_before_docker(self):
+        """A base-only Compose launch must never bypass signed admission."""
+        result, calls = self.run_script()
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
 
     def test_symlink_refused_before_docker(self):
         """Never follow untrusted symlink configuration files."""
@@ -178,7 +195,7 @@ class StartComposeYasnoTests(unittest.TestCase):
         safe.mkdir(parents=True, mode=0o700)
         self.overlay = safe / "yasno.yaml"
         self.enable()
-        result, calls = self.run_script()
+        result, calls = self.run_script(overlay_only=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(all(str(self.overlay) in call for call in calls))
 
