@@ -75,9 +75,8 @@ class InstallerIsolatedPythonTests(unittest.TestCase):
 
     def test_isolated_stdin_import_ignores_pythonpath(self) -> None:
         """The chosen interpreter mode excludes poisoned module paths."""
-        result = self.invoke(
-            ["/usr/bin/python3", "-I", "-c", "import argparse"]
-        )
+        command = ["/usr/bin/python3", "-I", "-c", "import argparse"]
+        result = self.invoke(command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.marker.exists())
 
