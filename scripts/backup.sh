@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
 if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
@@ -67,7 +67,7 @@ SUFFIX="${STAGE##*.}"
 TMP="$STAGE/snapshot.sqlite3"
 OUT="$DEST/voltage-${STAMP}-${SUFFIX}.sqlite3.gz"
 
-python3 - "$DB" "$TMP" <<'PY'
+/usr/bin/python3 -I - "$DB" "$TMP" <<'PY'
 import sqlite3
 import sys
 from contextlib import closing
