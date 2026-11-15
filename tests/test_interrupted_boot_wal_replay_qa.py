@@ -98,7 +98,9 @@ class InterruptedBootReplayTests(unittest.TestCase):
             timeout=10,
         )
 
-    def verify_current(self, wal_before: bytes) -> None:
+    def verify_current(
+        self, wal_before: bytes, allow_inspection: bool = False
+    ) -> None:
         """Assert that pending recovery never changed committed WAL history."""
         wal = Path(str(self.db_path) + "-wal")
         self.assertEqual(wal.read_bytes(), wal_before)
@@ -111,7 +113,17 @@ class InterruptedBootReplayTests(unittest.TestCase):
             self.database.execute("PRAGMA quick_check").fetchone()[0],
             "ok",
         )
-        self.assertFalse(self.trace.exists())
+        if allow_inspection:
+            self.assertTrue(self.trace.exists())
+            calls = self.trace.read_text().splitlines()
+            self.assertTrue(
+                all(
+                    item.startswith(("docker inspect", "systemctl show"))
+                    for item in calls
+                )
+            )
+        else:
+            self.assertFalse(self.trace.exists())
 
     @unittest.skipUnless(os.geteuid() == 0, "root-only boot prestart")
     def test_no_pending_repeated_boot_is_inert(self) -> None:
@@ -166,7 +178,7 @@ class InterruptedBootReplayTests(unittest.TestCase):
             result = self.run_recover(fd=held.fileno())
         self.assertEqual(result.returncode, 5)
         self.assertIn("complete owner gate", result.stderr)
-        self.verify_current(wal_before)
+        self.verify_current(wal_before, allow_inspection=True)
         self.assertTrue((self.state / "pending-update").exists())
 
     @unittest.skipIf(os.geteuid() == 0, "nonroot boot prestart")
