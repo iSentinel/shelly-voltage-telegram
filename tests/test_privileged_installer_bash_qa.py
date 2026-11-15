@@ -60,10 +60,8 @@ class InstallerPrivilegedBashTests(unittest.TestCase):
         """Both snapshot and source copy must fence Bash startup imports."""
         code = INSTALLER.read_text()
         for target in ("TARGET", "SOURCE"):
-            expected = (
-                '/bin/bash -p "$SOURCE/scripts/source-tar.sh" '
-                f'"${target}" |'
-            )
+            archive = '/bin/bash -p "$SOURCE/scripts/source-tar.sh"'
+            expected = f'{archive} "${target}" |'
             self.assertIn(expected, code)
 
     def test_compose_calls_use_protected_bash(self) -> None:
