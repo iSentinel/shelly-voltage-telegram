@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import sqlite3
 import tempfile
@@ -131,6 +132,55 @@ class TextStatusIdentityQaTests(unittest.TestCase):
         self.assert_text_identity(102)
         self.monitor.clear_stable_recovery_context.assert_called_once()
         self.monitor.delete_previous_voltage_status.assert_called_once()
+
+    def test_stable_recovery_then_edit_reuses_one_status(self) -> None:
+        """A replacement can be edited without sending another message."""
+
+        self.monitor.stable_recovery_status_due = Mock(return_value=True)
+        self.monitor.clear_stable_recovery_context = Mock()
+        with patch.object(APP, "multiphase_status_text", return_value="QA"):
+            APP.Monitor.maybe_rotate_stable_recovery_status(self.monitor)
+        self.assert_text_identity(102)
+        updated = APP.Monitor.upsert_status_message(
+            self.monitor, "latest", KEY, CHAT
+        )
+        self.assertTrue(updated)
+        self.assert_text_identity(102)
+        self.monitor.telegram.send.assert_called_once()
+        self.monitor.telegram.edit.assert_called_once()
+
+    def test_all_text_status_send_paths_bind_confirmed_identity(self) -> None:
+        """Static guard prevents regression in a newly added send path."""
+
+        root = Path(__file__).resolve().parents[1]
+        tree = ast.parse((root / "app.py").read_text())
+        sites = {
+            "upsert_text_status_message": 2,
+            "rotate_status_after_recovery": 1,
+            "maybe_rotate_stable_recovery_status": 1,
+            "replace_voltage_status": 1,
+        }
+        functions = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name in sites
+        }
+        self.assertEqual(functions.keys(), sites.keys())
+        for name, node in functions.items():
+            calls = [item for item in ast.walk(node) if isinstance(item, ast.Call)]
+            atomic = [
+                item for item in calls
+                if isinstance(item.func, ast.Attribute)
+                and item.func.attr == "bind_text_post"
+            ]
+            self.assertEqual(len(atomic), sites[name], name)
+            direct = [
+                item for item in calls
+                if ast.unparse(item.func) == "self.storage.set_meta"
+                and item.args and isinstance(item.args[0], ast.Name)
+                and item.args[0].id == "key"
+            ]
+            self.assertFalse(direct, name)
 
     def test_stable_recovery_unknown_marker_never_sends(self) -> None:
         """A preexisting stale marker must remain fail-closed."""
