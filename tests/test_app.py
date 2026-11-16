@@ -1278,8 +1278,12 @@ class TelegramDestinationTests(unittest.TestCase):
             )
         )
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
-        monitor.storage.get_meta = Mock(return_value=None)
-        monitor.storage.set_meta = Mock()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        monitor.storage = APP.Storage(
+            Path(scratch.name) / "status.sqlite3", "Europe/Kyiv"
+        )
+        monitor.storage.initialize()
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0}
         )
@@ -1289,9 +1293,14 @@ class TelegramDestinationTests(unittest.TestCase):
         self.assertEqual(
             monitor.telegram.send.call_args.kwargs["chat_id"], "-100999"
         )
-        monitor.storage.set_meta.assert_called_with(
-            "telegram_status_message_id", "77"
+        self.assertEqual(
+            monitor.storage.get_meta("telegram_status_message_id"), "77"
         )
+        self.assertEqual(
+            monitor.storage.get_meta("telegram_status_media_identity"),
+            "text:-100999:77",
+        )
+        self.assertEqual(monitor.status_media_kind(), "text")
 
 
 class TelegramSettingsTests(unittest.TestCase):
@@ -2029,12 +2038,13 @@ class MonitorRegressionTests(unittest.TestCase):
 
     def test_deleted_status_message_is_recreated(self):
         monitor = self._telegram_monitor()
-        monitor.storage.get_meta = Mock(
-            side_effect=lambda key: (
-                None if key == "telegram_legacy_text_confirm_pending" else "42"
-            )
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        monitor.storage = APP.Storage(
+            Path(scratch.name) / "status.sqlite3", "Europe/Kyiv"
         )
-        monitor.storage.set_meta = Mock()
+        monitor.storage.initialize()
+        monitor.storage.set_meta("telegram_message_id", "42")
         monitor.telegram.edit.side_effect = RuntimeError(
             "message to edit not found"
         )
@@ -2042,9 +2052,13 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.update_status()
 
         monitor.telegram.send.assert_called_once()
-        monitor.storage.set_meta.assert_called_once_with(
-            "telegram_message_id", "99"
+        stored_id = monitor.storage.get_meta("telegram_message_id")
+        self.assertEqual(stored_id, "99")
+        self.assertEqual(
+            monitor.storage.get_meta("telegram_status_media_identity"),
+            "text:-100123:99",
         )
+        self.assertEqual(monitor.status_media_kind(), "text")
 
 
 class RestartObservabilityTests(unittest.TestCase):
