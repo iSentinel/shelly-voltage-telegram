@@ -2052,9 +2052,8 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.update_status()
 
         monitor.telegram.send.assert_called_once()
-        self.assertEqual(
-            monitor.storage.get_meta("telegram_message_id"), "99"
-        )
+        stored_id = monitor.storage.get_meta("telegram_message_id")
+        self.assertEqual(stored_id, "99")
         self.assertEqual(
             monitor.storage.get_meta("telegram_status_media_identity"),
             "text:-100123:99",
