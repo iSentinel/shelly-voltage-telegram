@@ -3203,6 +3203,14 @@ class Monitor:
         if kind == "text":
             return None
         if kind != "photo":
+            now = time.monotonic()
+            last = getattr(self, "_media_mismatch_log_at", float("-inf"))
+            if now - last >= 300:
+                logger.warning(
+                    "Telegram status media identity mismatch; "
+                    "owner reconciliation required"
+                )
+                self._media_mismatch_log_at = now
             return False
         try:
             current = int(self.storage.get_meta(self.status_message_key()))
