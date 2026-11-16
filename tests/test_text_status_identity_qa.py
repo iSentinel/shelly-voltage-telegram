@@ -149,7 +149,7 @@ class TextStatusIdentityQaTests(unittest.TestCase):
             patch.object(self.storage, "set_meta", side_effect=broken),
             self.assertRaises(sqlite3.OperationalError),
         ):
-            self.storage.set_confirmed_text_status(KEY, 102, CHAT)
+            self.storage.bind_text_status(KEY, 102, CHAT)
         self.assert_text_identity(101)
 
     def test_photo_status_does_not_send_new_text(self) -> None:
