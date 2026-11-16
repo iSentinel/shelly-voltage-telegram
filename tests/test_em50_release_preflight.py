@@ -385,7 +385,6 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             self.assertEqual(
                 GATE.acceptance_status(str(path), time.time()), "PASS"
             )
-            arguments = acceptance_arguments(str(path))
             with (
                 patch.object(
                     GATE, "deployed_version_check", return_value="PASS"
@@ -400,7 +399,7 @@ class Em50ReleasePreflightTests(unittest.TestCase):
                 ),
                 patch.object(GATE, "reader_cache_check", return_value="PASS"),
             ):
-                report = GATE.inspect(arguments)
+                report = GATE.inspect(acceptance_arguments(str(path)))
             self.assertTrue(report["automated_pass"])
             self.assertEqual(report["manual_evidence_status"], "PASS")
             self.assertEqual(report["manual_completed"], [GATE.PENDING[0]])
