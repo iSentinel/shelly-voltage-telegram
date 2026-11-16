@@ -3,7 +3,8 @@
 This is a **read-only** QA check for the source/version inconsistency
 exposed by the incident in [Issue #402](https://github.com/iSentinel/shelly-voltage-telegram/issues/402).
 It compares the *running* bot image and application source against its
-resolved Compose boot pin and the updater's last official release record.
+resolved Compose boot pin, the updater's last official release record,
+and the host checkout's `VERSION`, `RELEASE_VERSION` and `app.py` SHA256.
 It **never** authorizes deployment, publication, backup replacement or merge.
 
 ## Invocation
@@ -44,9 +45,11 @@ The result always includes
 `offhost_backup_verified=false`. Those gates are explicitly
 **outside** this utility's verification scope.
 
-For an emergency local image, the expected result is **DRIFT** with
-`unpublished_local_image`, `updater_pin_mismatch` and
-`registry_digest_not_verified`. Do not make these diagnostics pass by
+For the current emergency local image, the expected result is **DRIFT** with
+`unpublished_local_image`, `updater_pin_mismatch`,
+`registry_digest_not_verified`, `checkout_version_mismatch`,
+`checkout_release_marker_mismatch` and
+`checkout_source_hash_mismatch`. Do not make these diagnostics pass by
 editing the updater's `deployed.json` or by re-tagging an image. Both
 would conceal provenance rather than prove it.
 
@@ -60,8 +63,12 @@ Actual reviewed `/app/app.py` SHA256 was
 Updater `deployed.json` still recorded `0.5.21-hw` with original
 digest `sha256:f880ffc9748ad97a34a5d1bcf5c0ec25fb33793240de70501fd9c46651a00639`.
 
-Running the checker against the live deployment returned exactly the
-three drift reasons above and `runtime_healthy=true`, with exit **1**.
+The live LXC110 checkout remains at `VERSION=RELEASE_VERSION=0.5.15-hw`,
+with host `app.py` SHA256
+`2651a21d3a447e5e839730eaa0bddbddb5bfe9afa89ec9e69bad97d1d7791aea`.
+The running container and GitHub `main` are on the 0.5.21-hw release line.
+Running the expanded checker against the live deployment returned exactly
+**six** drift reasons above and `runtime_healthy=true`, with exit **1**.
 At the same time, LXC110 remained healthy and had been editing public
 Telegram [status #1130](https://t.me/svitlobot_yordanska_7/1130)
 without duplicate messages. This is a **release bookkeeping/signing
@@ -97,5 +104,6 @@ python3 -m unittest discover -s tests \
 ```
 
 Tests use synthetic Compose JSON and mocked Docker stdout, including a
-sentinel secret to verify privacy. The same 12 tests were independently
-run in LXC114 as root and as UID nobody. No test contacts production.
+sentinel secret to verify privacy. The expanded 17 tests were independently
+run in LXC114 as root and as UID nobody. They also reject missing version
+markers or a stale host checkout before an owner-approved cutover. No test contacts production.
