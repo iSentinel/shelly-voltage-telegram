@@ -617,9 +617,7 @@ class Storage:
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
 
-    def bind_text_post(
-        self, key: str, message_id: int, chat_id: str
-    ) -> None:
+    def bind_text_post(self, key: str, message_id: int, chat_id: str) -> None:
         """Atomically bind the ID of one confirmed Telegram text post."""
 
         if key not in {"telegram_message_id", "telegram_status_message_id"}:
