@@ -60,7 +60,7 @@ def checkout_metadata(root: Path) -> dict[str, str]:
     result = {}
     for name in ("VERSION", "RELEASE_VERSION"):
         version = (root / name).read_text(encoding="utf-8").strip()
-        if not re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+-hw", version):
+        if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-hw", version):
             raise ValueError("Invalid checkout version marker")
         result[name] = version
     with (root / "app.py").open("rb") as source:
