@@ -25,7 +25,7 @@ A successful Telegram `sendMessage` returns a confirmed new text
 message ID. Existing text send paths stored the new ID but neglected
 to replace the old format binding. The next edit therefore blocked
 on a stale marker. Update the two values in **one SQLite transaction**
-through `Storage.set_confirmed_text_status()`.
+through `Storage.bind_text_status()`.
 
 The four paths covered are the first status/recreate send, voltage
 status replacement and post-outage recovery rotation. No PHOTO
