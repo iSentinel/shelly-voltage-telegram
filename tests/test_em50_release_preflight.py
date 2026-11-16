@@ -387,8 +387,10 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             )
             arguments = acceptance_arguments(str(path))
             with (
-                patch.object(GATE, "deployed_version_check", return_value="PASS"),
-            patch.object(GATE, "health_check", return_value="PASS"),
+                patch.object(
+                    GATE, "deployed_version_check", return_value="PASS"
+                ),
+                patch.object(GATE, "health_check", return_value="PASS"),
                 patch.object(GATE, "sqlite_check", return_value="PASS"),
                 patch.object(GATE, "backup_check", return_value="PASS"),
                 patch.object(
