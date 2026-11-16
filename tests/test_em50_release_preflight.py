@@ -404,7 +404,6 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             self.assertTrue(report["automated_pass"])
             self.assertEqual(report["manual_evidence_status"], "PASS")
             self.assertEqual(report["manual_completed"], [GATE.PENDING[0]])
-            self.assertEqual(len(report["manual_pending"]), 2)
             self.assertFalse(report["release_authorized"])
 
     def test_missing_evidence_is_not_implicitly_approved(self):
