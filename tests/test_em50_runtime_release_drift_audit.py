@@ -136,7 +136,10 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
                 seen[0] += 1
                 if seen[0] > 1:
                     return (
-                        "sha256:" + "d" * 64 + "|" + self.running_ref
+                        "sha256:"
+                        + "d" * 64
+                        + "|"
+                        + self.running_ref
                         + "|running|healthy"
                     )
             return self.fake_output(command, cwd)
