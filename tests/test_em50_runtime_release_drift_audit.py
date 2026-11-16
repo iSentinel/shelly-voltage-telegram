@@ -126,6 +126,25 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
             "running_image_id_mismatch", self.audit()["reason_codes"]
         )
 
+    def test_container_replacement_during_audit_is_rejected(self) -> None:
+        """Never mix evidence from two different Docker instances."""
+
+        seen = [0]
+
+        def changing(command, cwd=None):
+            if command[:2] == ["docker", "inspect"]:
+                seen[0] += 1
+                if seen[0] > 1:
+                    return (
+                        "sha256:" + "d" * 64 + "|" + self.running_ref
+                        + "|running|healthy"
+                    )
+            return self.fake_output(command, cwd)
+
+        with patch.object(MODULE, "command_output", side_effect=changing):
+            with self.assertRaises(ValueError):
+                MODULE.inspect(self.args)
+
     def test_compose_runtime_drift_is_detected(self) -> None:
         """A stale boot pin must never silently pass."""
 
