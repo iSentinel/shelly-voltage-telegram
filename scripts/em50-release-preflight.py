@@ -160,7 +160,7 @@ def semantic_version(value: object) -> tuple[int, int, int]:
 
     if not isinstance(value, str):
         raise ValueError("release version must be text")
-    match = re.fullmatch(r"([0-9]+)\\.([0-9]+)\\.([0-9]+)-hw", value)
+    match = re.fullmatch(r"([0-9]+)\.([0-9]+)\.([0-9]+)-hw", value)
     if match is None:
         raise ValueError("invalid deployed or checkout version")
     return tuple(int(part) for part in match.groups())
@@ -276,24 +276,24 @@ def check(action) -> dict[str, str]:
         }
 
 
+def deployed_parity_status(args: argparse.Namespace) -> dict[str, str]:
+    """Run the fail-closed updater/checkout version comparison."""
+
+    state = getattr(
+        args, "deployed_state", "/var/lib/shelly-voltage-updater/deployed.json"
+    )
+    return check(
+        lambda: deployed_version_check(Path(args.root), Path(state))
+    )
+
+
 def inspect(args: argparse.Namespace) -> dict:
     """Produce a release report that cannot pretend manual acceptance."""
 
     now = time.time()
     checks = {
         "source_candidate": check(lambda: version_check(Path(args.root))),
-        "source_vs_deployed": check(
-            lambda: deployed_version_check(
-                Path(args.root),
-                Path(
-                    getattr(
-                        args,
-                        "deployed_state",
-                        "/var/lib/shelly-voltage-updater/deployed.json",
-                    )
-                ),
-            )
-        ),
+        "source_vs_deployed": deployed_parity_status(args),
         "live_health": check(
             lambda: health_check(args.health_url, args.ready_url, now),
         ),
