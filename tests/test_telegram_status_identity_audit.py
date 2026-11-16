@@ -97,7 +97,9 @@ class TelegramIdentityAuditTests(unittest.TestCase):
         self.set_meta("telegram_graphic_publish_pending", "pending")
         result = self.run_audit("--jsonl")
         self.assertEqual(result.returncode, 1)
-        self.assertEqual(json.loads(result.stdout)["reason"], "publication_pending")
+        self.assertEqual(
+            json.loads(result.stdout)["reason"], "publication_pending"
+        )
 
     def test_zero_message_id_fails(self) -> None:
         """Reject an invalid status reference."""
