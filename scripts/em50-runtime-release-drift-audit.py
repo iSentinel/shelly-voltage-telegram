@@ -64,7 +64,9 @@ def checkout_metadata(root: Path) -> dict[str, str]:
             raise ValueError("Invalid checkout version marker")
         result[name] = version
     with (root / "app.py").open("rb") as source:
-        result["source_sha"] = hashlib.file_digest(source, "sha256").hexdigest()
+        result["source_sha"] = hashlib.file_digest(
+            source, "sha256"
+        ).hexdigest()
     return result
 
 
@@ -193,9 +195,7 @@ def inspect(args: argparse.Namespace) -> dict:
     issues = check_identity(
         runtime, pinned, deployed, args.expected_app_sha256
     )
-    issues.extend(
-        check_checkout(checkout, deployed, args.expected_app_sha256)
-    )
+    issues.extend(check_checkout(checkout, deployed, args.expected_app_sha256))
     if not args.override.is_file():
         issues.append("updater_override_missing")
     return {
