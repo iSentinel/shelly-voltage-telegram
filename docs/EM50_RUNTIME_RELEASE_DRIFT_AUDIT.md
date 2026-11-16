@@ -39,6 +39,24 @@ environment values, credentials, Telegram chat IDs or tokens.
 | 1 | DRIFT | A runtime identity mismatch or missing official digest was detected. |
 | 2 | ERROR | The audit could not safely read or validate the evidence. |
 
+## Interrupted-update boot guard
+
+The auditor also checks the updater's real
+`<deployed.json directory>/pending-update` marker without reading its
+contents. Any present journal, including a broken symlink, adds
+`pending_update_transaction` and forces **DRIFT**. This matters because
+systemd invokes `apply-update.sh --recover` **before**
+`start-compose.sh`; an interrupted transaction can replace the image
+and restore an earlier SQLite snapshot during the next start even if
+Docker, Compose and the updater digest currently agree.
+
+Do not execute `apply-update.sh --recover` merely to clear a warning.
+Its real recovery logic can stop the bot and restore data. An owner-approved,
+single-writer recovery or cutover rehearsal on disposable storage is
+required before changing this marker. The normal healthy 2026-11-16
+emergency v2 deployment had no pending journal, and the audit still
+correctly reported six unrelated release-provenance drift reasons.
+
 The result always includes
 `release_authorized=false`,
 `signature_verified=false` and
