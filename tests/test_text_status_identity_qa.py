@@ -121,6 +121,40 @@ class TextStatusIdentityQaTests(unittest.TestCase):
             self.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
         )
 
+    def test_stable_recovery_replacement_rebinds(self) -> None:
+        """A silent stable recovery rotation stores the replacement ID."""
+
+        self.monitor.stable_recovery_status_due = Mock(return_value=True)
+        self.monitor.clear_stable_recovery_context = Mock()
+        with patch.object(APP, "multiphase_status_text", return_value="QA"):
+            APP.Monitor.maybe_rotate_stable_recovery_status(self.monitor)
+        self.assert_text_identity(102)
+        self.monitor.clear_stable_recovery_context.assert_called_once()
+        self.monitor.delete_previous_voltage_status.assert_called_once()
+
+    def test_stable_recovery_unknown_marker_never_sends(self) -> None:
+        """A preexisting stale marker must remain fail-closed."""
+
+        self.storage.set_meta(KEY, "102")
+        self.monitor.stable_recovery_status_due = Mock(return_value=True)
+        self.monitor.clear_stable_recovery_context = Mock()
+        with patch.object(APP, "multiphase_status_text", return_value="QA"):
+            APP.Monitor.maybe_rotate_stable_recovery_status(self.monitor)
+        self.monitor.telegram.send.assert_not_called()
+        self.monitor.clear_stable_recovery_context.assert_not_called()
+        self.assertEqual(self.storage.get_meta(MARKER), f"text:{CHAT}:101")
+
+    def test_stable_recovery_send_failure_preserves_old_binding(self) -> None:
+        """An uncertain stable-recovery send cannot overwrite old identity."""
+
+        self.monitor.stable_recovery_status_due = Mock(return_value=True)
+        self.monitor.clear_stable_recovery_context = Mock()
+        self.monitor.telegram.send.side_effect = RuntimeError("synthetic")
+        with patch.object(APP, "multiphase_status_text", return_value="QA"):
+            APP.Monitor.maybe_rotate_stable_recovery_status(self.monitor)
+        self.assert_text_identity(101)
+        self.monitor.clear_stable_recovery_context.assert_not_called()
+
     def test_stale_preexisting_marker_stays_blocked(self) -> None:
         """Never assume that an unknown current post is text or photo."""
         self.storage.set_meta(KEY, "102")
