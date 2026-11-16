@@ -69,7 +69,8 @@ class TextStatusIdentityQaTests(unittest.TestCase):
             last_sent_connectivity=None,
         )
         for name in NAMES:
-            setattr(monitor, name, MethodType(getattr(APP.Monitor, name), monitor))
+            method = MethodType(getattr(APP.Monitor, name), monitor)
+            setattr(monitor, name, method)
         monitor.finish_voltage_status_update = Mock()
         monitor.ensure_status_pinned = Mock()
         monitor.delete_previous_voltage_status = Mock()
