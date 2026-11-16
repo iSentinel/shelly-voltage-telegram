@@ -73,10 +73,16 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
             return self.actual_sha + "  /app/app.py"
         if command[:2] == ["docker", "compose"]:
             return json.dumps(
-                {"services": {"shelly-voltage": {
-                    "image": self.compose_ref,
-                    "environment": {"TELEGRAM_BOT_TOKEN": "TEST_SECRET"},
-                }}}
+                {
+                    "services": {
+                        "shelly-voltage": {
+                            "image": self.compose_ref,
+                            "environment": {
+                                "TELEGRAM_BOT_TOKEN": "TEST_SECRET"
+                            },
+                        }
+                    }
+                }
             )
         raise AssertionError(f"unexpected command: {command[:2]}")
 
@@ -148,9 +154,7 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
         """A missing boot-time override is an explicit release risk."""
 
         self.override.unlink()
-        self.assertIn(
-            "updater_override_missing", self.audit()["reason_codes"]
-        )
+        self.assertIn("updater_override_missing", self.audit()["reason_codes"])
 
     def test_ignores_environment_secrets_from_compose(self) -> None:
         """Never leak parsed Compose credentials in the report."""
