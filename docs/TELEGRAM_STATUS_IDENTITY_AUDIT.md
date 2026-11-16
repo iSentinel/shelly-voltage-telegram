@@ -170,6 +170,24 @@ status-identity QA tool. A forecast is not a physical Shelly reading:
 verify any claimed outage using live electrical telemetry, not merely
 the existence of a scheduled-message post.
 
+### Independent physical cross-check of the scheduled 23:00 transition
+
+At 23:03:19 Kyiv, a **read-only** query of the running EM-50 SQLite
+recorded **23** L1 samples between 22:59:00 and 23:03:00: **5** before
+23:00 and **18** after 23:00. The observed voltage stayed within
+**209.5–213.5 V**, with a maximum sample gap of **10.328 seconds**
+and **zero** gaps exceeding 90 seconds. No outage remained open and
+no new outage started at or after 23:00; SQLite quick_check was `ok`.
+The HTTP readiness check at 23:01:52 was **200**, with Shelly ONLINE
+at **213.5 V**.
+
+Thus the channel's planned outage for 23:00–00:00 was **not a measured
+power loss at the beginning of that interval**. Neither forecast
+publisher's message may set an outage record or trigger recovery
+state without genuine Shelly telemetry. Do not infer the entire
+23:00–00:00 interval from this short observation: a later real
+outage remains possible and requires its own independent evidence.
+
 ## Rollout discipline
 
 During an unresolved outage, avoid bot restarts, `docker compose up
