@@ -1,0 +1,190 @@
+# Issue #402 — independent off-host SQLite recovery acceptance
+
+**Status: BLOCKED / NO-GO.** This is an implementation and acceptance
+plan, not proof that an independent backup already exists.
+
+## Grounded current infrastructure
+
+As of 2026-11-16 19:45 Kyiv, Gateway SSH exposes one authorized server,
+`proxmox`, with **one physical 1.8 TB NVMe** (`nvme0n1`). The only
+active Proxmox storage IDs are `local` (directory `/var/lib/vz`) and
+`local-lvm` (local thin LVM). No NFS, CIFS, Ceph or SSHFS data mounts
+were configured; no PBS storage was configured in `/etc/pve/storage.cfg`.
+`proxmox-backup-client` is installed, but its presence does not prove
+a working authenticated remote PBS repository. No remote connection,
+secret or off-host restoration has been verified.
+
+SQLite snapshots previously copied from LXC110 into a root-only path on
+the same Proxmox host and verified with SHA256 protect against **some
+container-local failures**. They do **not** protect against full NVMe,
+host or disaster-domain loss.
+
+## Local nightly backup evidence is not off-host evidence
+
+On 2026-11-16 at approximately 23:15 Kyiv, the latest scheduled
+`backup.sh` archive
+`voltage-20261116-033011-DHDkYjhp.sqlite3.gz` was audited in
+**read-only** mode. The daily backup timer was active and its last
+service completed successfully at 03:30:12 Kyiv; the next run is
+scheduled for 2026-11-17 at approximately 03:24:57 Kyiv.
+
+The sidecar SHA256 matched the compressed archive. A disposable,
+mode-0700 QA directory was used to decompress the snapshot into a
+mode-0600 temporary file, opened with SQLite
+`mode=ro&immutable=1` and `PRAGMA query_only=ON`.
+`PRAGMA quick_check` returned **ok**, the restored database held
+**75,884** measurements, and its last sample was timestamped
+**2026-11-16 03:30:02 Kyiv**. The temporary file was removed at the
+end of the check. An initial in-memory-deserialize attempt had returned
+`unable to open database file`; the subsequent successful file-backed
+SQLite restore demonstrates that this was a method limitation, not
+evidence of archive corruption.
+
+These checks prove that **this local daily archive is internally
+readable**, but not that a different physical storage host can restore
+it. It predates outage #32 and later Telegram message rotations, so it
+is **stale for the next production cutover**; do not promote it over the
+live database or force the strict predeploy parity guard to PASS.
+No production SQLite writes, backup-job invocation, bot restart,
+Telegram API operation or external transfer occurred.
+
+## Existing three-archive verification and offline restore drill
+
+On 2026-11-16 at approximately 23:20 Kyiv, the existing
+`scripts/verify-backups.py` was executed against the **three newest
+daily archives** mounted read-only in a disposable Docker container,
+with no network, no capabilities, and a private throwaway `/tmp`.
+The newest archive was required to be no older than 24 hours
+(`--max-age-newest-only`). Result:
+`status=pass`, **3/3 verified**. The archived SQLite sample counts
+were **75,884**, **67,266**, and **60,359**.
+
+The existing `scripts/restore-drill.py` then independently restored
+these same **three actual archives** inside fresh disposable SQLite
+workspaces. Each restored copy passed checksum, migration/storage
+initialization and historic measurement checks. All reported initial
+connectivity state `starting` and kept restored monitor readiness
+false until new measurements, as intended. The JSON summary reported
+`status=pass`, `requested=3`, `passed=3`, `network_calls=0`,
+`read_only_source=true`, `temporary_copies_removed=true`.
+No Telegram publication or Shelly RPC took place.
+
+Synthetic test suites on the exact QA source in an isolated,
+network-disabled application-compatible container passed both as
+UID root and UID nobody:
+- `test_verify_backups.py`: **29/29** per user.
+- `test_restore_drill.py`: **16/16** per user.
+- `test_backup_archive_uniqueness.py`: **10/10** per user.
+
+**55/55 per user** passed. These results close the
+**local archive readability and offline restore rehearsal** substage.
+They do **not** satisfy the required physically independent off-host
+restoration, do not include fresh cutover state after outage #32, and
+do not authorize a signed OCI release. The next acceptable test
+must repeat this process using a second failure domain and a fresh,
+owner-approved, WAL-consistent snapshot.
+
+## Destination requirements
+
+1. Owner supplies a second physically separate destination: ideally
+   authenticated PBS on another host/storage system, or an encrypted
+   backup vault with independent disks. Confirm real host, storage
+   identity, retention policy, network access and failure domain.
+2. Transport is authenticated, encrypted in transit, scoped to backup
+   traffic, and has no public unauthenticated endpoint. Credentials
+   remain solely in a root-owned secret store (never GitHub, Telegram,
+   a QA log or a ChatGPT response).
+3. The backup operator may **write** the designated backup namespace
+   and **read** only required source paths. Separate restore credentials
+   should have no write access to production.
+4. A second copy under a different directory, volume, Proxmox LVM
+   dataset or partition of the same `nvme0n1` is **not** off-host
+   evidence. A Proxmox backup tool installed locally is likewise not
+   evidence until an independent remote restore succeeds.
+
+## Prepare a WAL-complete, application-consistent snapshot
+
+All production-changing operations require explicit Owner Approval
+and a documented single-writer fence. Do not activate a second Telegram
+bot or change the public channel merely to take a backup.
+
+For a read-only inspection before cutover:
+
+```bash
+python3 scripts/em50-release-preflight.py --json
+python3 scripts/em50-runtime-release-drift-audit.py \
+  --expected-app-sha256 <reviewed-approved-source-sha256> --jsonl
+```
+
+The existing predeploy parity guard is intentionally strict: historical
+backups diverge from the live database as new meter samples, outages and
+Telegram status IDs are recorded. **Never edit the live SQLite database
+or its `deployed.json` to force parity.**
+
+At an approved cutover:
+- Establish and independently verify one global writer owner for
+  all SQLite and Telegram paths: running Docker bot, systemd/updater,
+  backup workers and rollback paths. Avoid duplicate live instances.
+- Record current production image ID, source SHA256, updater metadata,
+  status message ID/media type and live database integrity.
+- Produce the SQLite snapshot using the SQLite backup API, with
+  explicit WAL-consistent semantics. **Do not** simply copy the
+  `.sqlite3` file while an active WAL may contain uncheckpointed
+  transactions. Preserve ownership, modes and metadata.
+- Verify `PRAGMA quick_check=ok`, expected table counts, correct
+  outage state and an internally consistent Telegram status ID/media
+  marker, without publishing or editing messages.
+- Generate an authenticated manifest with immutable source identity,
+  snapshot checksum and capture timestamp. Move it and the backup over
+  the encrypted channel to the independent destination.
+- Check exact remote content checksum and retained backup object ID;
+  enforce verified retention and ensure the backup cannot be casually
+  overwritten by the next rollout.
+
+## Independent restore acceptance
+
+Before removing the writer fence or authorizing a new official image:
+
+1. Restore on a **different physical host or storage failure domain**,
+   with a separate throwaway workspace and no production Telegram
+   bot token, no internet publishing and no access to the live channel.
+2. Open the restored DB in read-only mode, run `PRAGMA quick_check`,
+   count meter rows, and compare last sample timestamp, outage #32
+   closure, Telegram status ID and matching text/photo media marker.
+   Check parity to the captured snapshot, not a live database that
+   has since resumed taking measurements.
+3. Verify hashes of source snapshot, transferred object and restored
+   SQLite file (accounting for any documented SQLite backup format).
+4. Destroy only the disposable restore workspace **after** immutable
+   evidence is retained. Do not silently promote restored old metadata
+   over newer live Telegram messages.
+
+The accepted evidence should state remote storage identity and
+independent failure domain, remote object identifier, transport and
+storage security checks, capture time, source and destination SHA256,
+`quick_check`, parity verdict, and the identities of the owner/reviewer.
+Redact addresses or credentials in public Issue comments when needed.
+
+## Explicit NO-GO conditions
+
+- Only one physical host/disk, no provisioned remote backup target.
+- Off-host object uploaded but never independently restored.
+- A stale snapshot that does not match the approved cutover point.
+- Uncertain Telegram send results or nonmatching status ID/media marker.
+- Docker/systemd updater can start a second writer while backups are
+  captured or restored.
+- Missing verified signed OCI/source identity, unclear rollback source,
+  pending rollout state, or absent owner approval.
+
+In all such cases, retain the known-good working emergency bot and
+record `NO-GO`. The correct objective is **data recoverability with
+Telegram identity continuity**, not a cosmetic green preflight.
+
+## QA reference
+
+Natural outage #32 is already accepted for live monitoring:
+[public Telegram status #1130](https://t.me/svitlobot_yordanska_7/1130),
+two independent 15-minute checks PASS, and read-only recovery evidence
+checksums in [the field report](https://github.com/iSentinel/shelly-voltage-telegram/blob/qa/issue402-readonly-identity-audit-20261116/docs/EM50_OUTAGE32_FIELD_ACCEPTANCE_20261116.md).
+Those existing host/LXC copies share one NVMe and do not satisfy this
+off-host recovery gate.
