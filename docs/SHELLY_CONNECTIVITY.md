@@ -146,20 +146,29 @@ addresses, or full environment files in public issues.
 
 ## 5. Changing a confirmed stale IP
 
-Only after the correct IP has been verified, back up the private
-`/opt/shelly-voltage/.env`, update **only** `SHELLY_HOST`, and check Compose.
-Recreate just the bot service if the running environment needs to pick up the
-new address:
+**Do not recreate the live bot to investigate a power outage.** A failed
+Shelly connection may be a normal consequence of absent mains power, not
+an IP-address regression. The legacy direct Compose-up procedure bypasses
+the G/B/W/A writer admission gate and is not an approved recovery action.
+
+Read-only diagnostics are allowed even while Shelly is offline:
 
 ```bash
-cd /opt/shelly-voltage
-docker compose config -q
-docker compose up -d --no-deps --force-recreate shelly-voltage
+curl -sS --max-time 4 http://127.0.0.1:8080/health
+curl -sS --max-time 4 -i http://127.0.0.1:8080/ready
+docker inspect shelly-voltage-bot --format '{{.State.Status}} {{.RestartCount}}'
 ```
 
-Then repeat `probe` and `/ready`. Keep the SQLite volume, secret files,
-history, and Telegram state intact. Do not force a power outage, induce
-voltage changes, or issue Shelly control RPCs for diagnostics.
+Treat `/ready` HTTP 503 and an old last voltage as **no current voltage**,
+not a reason to restart the writer. A confirmed, approved address change
+requires a separate maintenance window, private configuration backup,
+complete old-owner freeze, signed source and OCI provenance, independently
+restored fresh WAL-complete SQLite backup copies, and Owner Approval. Only
+after those gates pass may the owner-controlled release workflow apply
+an updated `SHELLY_HOST`. Never use plain Docker Compose as a shortcut.
+
+Keep the SQLite volume, secrets, history and Telegram state intact. Do not
+force a power outage, induce voltage changes, or issue Shelly control RPCs.
 
 ## 6. Natural power-recovery acceptance
 
