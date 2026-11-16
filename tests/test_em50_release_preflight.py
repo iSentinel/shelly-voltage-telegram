@@ -78,6 +78,78 @@ def acceptance_arguments(path: str) -> argparse.Namespace:
 class Em50ReleasePreflightTests(unittest.TestCase):
     """Ensure automated PASS never fabricates release authorization."""
 
+    def test_stale_checkout_version_is_rejected(self):
+        """Matching old checkout markers must not pass a newer deploy."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VERSION").write_text("0.5.15-hw")
+            (root / "RELEASE_VERSION").write_text("0.5.15-hw")
+            state = root / "deployed.json"
+            state.write_text(json.dumps({"version": "0.5.21-hw"}))
+            with self.assertRaisesRegex(ValueError, "older than deployed"):
+                GATE.deployed_version_check(root, state)
+
+    def test_new_candidate_and_current_release_are_accepted(self):
+        """A newer candidate may be staged over the current release."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VERSION").write_text("0.5.22-hw")
+            (root / "RELEASE_VERSION").write_text("0.5.21-hw")
+            state = root / "deployed.json"
+            state.write_text(json.dumps({"version": "0.5.21-hw"}))
+            result = GATE.deployed_version_check(root, state)
+            self.assertIn("not_older_than_deployed=true", result)
+            (root / "RELEASE_VERSION").write_text("0.5.20-hw")
+            with self.assertRaisesRegex(ValueError, "older than deployed"):
+                GATE.deployed_version_check(root, state)
+
+    def test_missing_or_invalid_deployed_state_fails_closed(self):
+        """Unknown updater state cannot make the release eligible."""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "VERSION").write_text("0.5.22-hw")
+            (root / "RELEASE_VERSION").write_text("0.5.21-hw")
+            state = root / "deployed.json"
+            with self.assertRaises(OSError):
+                GATE.deployed_version_check(root, state)
+            state.write_text(json.dumps({"version": "not-a-version"}))
+            with self.assertRaisesRegex(ValueError, "version"):
+                GATE.deployed_version_check(root, state)
+            state.unlink()
+            state.symlink_to(root / "VERSION")
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                GATE.deployed_version_check(root, state)
+
+    def test_stale_checkout_blocks_integrated_preflight(self):
+        """Six other healthy checks cannot excuse stale version markers."""
+
+        args = acceptance_arguments("")
+        with (
+            patch.object(
+                GATE,
+                "deployed_version_check",
+                side_effect=ValueError("older than deployed"),
+            ),
+            patch.object(GATE, "health_check", return_value="PASS"),
+            patch.object(GATE, "sqlite_check", return_value="PASS"),
+            patch.object(GATE, "backup_check", return_value="PASS"),
+            patch.object(
+                GATE,
+                "predeploy_backup_status",
+                return_value={"status": "PASS", "detail": "parity"},
+            ),
+            patch.object(GATE, "reader_cache_check", return_value="PASS"),
+        ):
+            report = GATE.inspect(args)
+        self.assertEqual(
+            report["checks"]["source_vs_deployed"]["status"], "FAIL"
+        )
+        self.assertFalse(report["automated_pass"])
+        self.assertFalse(report["release_authorized"])
+
     def test_health_url_restricts_external_hosts(self):
         """Never follow arbitrary hosts or transport protocols."""
 
@@ -207,6 +279,7 @@ class Em50ReleasePreflightTests(unittest.TestCase):
 
         parameters = acceptance_arguments("")
         with (
+            patch.object(GATE, "deployed_version_check", return_value="PASS"),
             patch.object(GATE, "health_check", return_value="PASS"),
             patch.object(GATE, "sqlite_check", return_value="PASS"),
             patch.object(GATE, "backup_check", return_value="PASS"),
@@ -276,6 +349,7 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             max_age_hours=26,
         )
         with (
+            patch.object(GATE, "deployed_version_check", return_value="PASS"),
             patch.object(GATE, "health_check", return_value="PASS"),
             patch.object(GATE, "sqlite_check", return_value="PASS"),
             patch.object(GATE, "backup_check", return_value="PASS"),
@@ -313,7 +387,8 @@ class Em50ReleasePreflightTests(unittest.TestCase):
             )
             arguments = acceptance_arguments(str(path))
             with (
-                patch.object(GATE, "health_check", return_value="PASS"),
+                patch.object(GATE, "deployed_version_check", return_value="PASS"),
+            patch.object(GATE, "health_check", return_value="PASS"),
                 patch.object(GATE, "sqlite_check", return_value="PASS"),
                 patch.object(GATE, "backup_check", return_value="PASS"),
                 patch.object(
