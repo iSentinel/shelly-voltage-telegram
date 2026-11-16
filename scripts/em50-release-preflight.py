@@ -282,9 +282,7 @@ def deployed_parity_status(args: argparse.Namespace) -> dict[str, str]:
     state = getattr(
         args, "deployed_state", "/var/lib/shelly-voltage-updater/deployed.json"
     )
-    return check(
-        lambda: deployed_version_check(Path(args.root), Path(state))
-    )
+    return check(lambda: deployed_version_check(Path(args.root), Path(state)))
 
 
 def inspect(args: argparse.Namespace) -> dict:
