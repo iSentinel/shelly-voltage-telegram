@@ -79,6 +79,10 @@ success is not an authorization to merge, publish, reboot or update.
       checkout VERSION/RELEASE_VERSION/app.py** and rollback references
       are recorded with checksums and protected. Resolve stale checkout
       only through the reviewed, owner-approved release procedure.
+- [ ] Verify `/var/lib/shelly-voltage-updater/pending-update` is absent;
+      any regular marker, directory, or dangling symlink blocks approval.
+      Never run the real `--recover` pre-start script just to clear
+      the audit, since it can stop Docker and restore SQLite.
 - [ ] Single-writer fence and systemd `--recover` behavior exercised
       with a disposable QA environment and interrupted-upgrade cases.
 - [ ] Signed release staged and checked without second bot, manual
