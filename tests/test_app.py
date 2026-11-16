@@ -1289,9 +1289,16 @@ class TelegramDestinationTests(unittest.TestCase):
         self.assertEqual(
             monitor.telegram.send.call_args.kwargs["chat_id"], "-100999"
         )
-        monitor.storage.set_meta.assert_called_with(
-            "telegram_status_message_id", "77"
+        calls = monitor.storage.set_meta.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(
+            calls[0].args[:2], ("telegram_status_message_id", "77")
         )
+        self.assertEqual(
+            calls[1].args[:2],
+            ("telegram_status_media_identity", "text:-100999:77"),
+        )
+        self.assertIs(calls[0].args[2], calls[1].args[2])
 
 
 class TelegramSettingsTests(unittest.TestCase):
@@ -2042,9 +2049,14 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.update_status()
 
         monitor.telegram.send.assert_called_once()
-        monitor.storage.set_meta.assert_called_once_with(
-            "telegram_message_id", "99"
+        calls = monitor.storage.set_meta.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0].args[:2], ("telegram_message_id", "99"))
+        self.assertEqual(
+            calls[1].args[:2],
+            ("telegram_status_media_identity", "text:-100123:99"),
         )
+        self.assertIs(calls[0].args[2], calls[1].args[2])
 
 
 class RestartObservabilityTests(unittest.TestCase):
