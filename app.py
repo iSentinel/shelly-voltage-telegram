@@ -617,6 +617,22 @@ class Storage:
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
 
+    def set_confirmed_text_status(
+        self, key: str, message_id: int, chat_id: str
+    ) -> None:
+        """Atomically bind the ID of one confirmed Telegram text post."""
+
+        if key not in {"telegram_message_id", "telegram_status_message_id"}:
+            raise ValueError("unsupported Telegram status key")
+        if type(message_id) is not int or message_id <= 0:
+            raise ValueError("invalid Telegram message ID")
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            raise ValueError("invalid Telegram status destination")
+        with closing(self.connect()) as db, db:
+            self.set_meta(key, str(message_id), db)
+            marker = f"text:{chat_id}:{message_id}"
+            self.set_meta("telegram_status_media_identity", marker, db)
+
     def get_meta(self, key: str) -> str | None:
         """Read one metadata value."""
 
@@ -3189,6 +3205,14 @@ class Monitor:
         if kind == "text":
             return None
         if kind != "photo":
+            now = time.monotonic()
+            previous = getattr(self, "_media_mismatch_log_at", 0.0)
+            if now - previous >= 300:
+                logger.warning(
+                    "Telegram status media identity mismatch; "
+                    "owner reconciliation required"
+                )
+                self._media_mismatch_log_at = now
             return False
         try:
             current = int(self.storage.get_meta(self.status_message_key()))
@@ -3235,7 +3259,7 @@ class Monitor:
                 message_id = self.telegram.send(
                     text, reply_markup=markup, chat_id=target
                 )
-                self.storage.set_meta(key, str(message_id))
+                self.storage.set_confirmed_text_status(key, message_id, target)
                 self.storage.delete_meta(
                     "voltage_status_edit_window_started_at"
                 )
@@ -3251,7 +3275,7 @@ class Monitor:
             message_id = self.telegram.send(
                 text, reply_markup=markup, chat_id=target
             )
-            self.storage.set_meta(key, str(message_id))
+            self.storage.set_confirmed_text_status(key, message_id, target)
             self.storage.delete_meta("voltage_status_edit_window_started_at")
             return True
         except Exception as exc:
@@ -3382,7 +3406,9 @@ class Monitor:
             self.last_telegram = 0.0
             self.last_sent_connectivity = None
             return
-        self.storage.set_meta(key, str(new_id))
+        self.storage.set_confirmed_text_status(
+            key, new_id, self.telegram.status_chat_id
+        )
         self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.delete_previous_voltage_status(old_id, new_id)
@@ -3804,7 +3830,9 @@ class Monitor:
         except Exception as exc:
             logger.warning("Telegram voltage status publish failed: {}", exc)
             return False
-        self.storage.set_meta(key, str(new_id))
+        self.storage.set_confirmed_text_status(
+            key, new_id, self.telegram.status_chat_id
+        )
         if notify:
             self.storage.set_meta(
                 "last_voltage_notification_at", str(happened_at)
