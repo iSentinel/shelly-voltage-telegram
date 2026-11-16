@@ -110,24 +110,27 @@ deployment default.
 - An optional instability indicator appears after four confirmed low/high/normal
   transitions within 15 minutes; transition history survives a restart.
 
-## Install in one command
+## Installation and release approval
+
+**Production NO_GO.** Do not execute a mutable GitHub branch through a
+root shell, bypass the protected entrypoints with plain `bash`, or run
+`docker compose up` manually. A one-line production installer is not
+authorized until the global G/B/W/A writer freeze, signed current image and
+source, independent WAL-complete SQLite restores, outage acceptance, and
+explicit Owner Approval have been verified.
+
+On a **disposable QA container** with previously reviewed source, inspect
+the entrypoints without installing anything:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/iSentinel/shelly-voltage-telegram/main/scripts/bootstrap.sh | sudo bash
+/bin/bash -p scripts/install.sh --help
+/bin/bash -p scripts/install-release.sh --help
+/bin/bash -p scripts/configure.sh --help
 ```
 
-Safe dry run:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/iSentinel/shelly-voltage-telegram/main/scripts/bootstrap.sh \
-  | sudo bash -s -- --dry-run --non-interactive
-```
-
-Then configure the deployment:
-
-```bash
-sudo ./scripts/configure.sh
-```
+A verified immutable source reference and exact signed release must be
+approved separately before any installation. During a Shelly outage, leave
+the live Docker container, Telegram state, and SQLite unchanged.
 
 ## Telegram commands
 
