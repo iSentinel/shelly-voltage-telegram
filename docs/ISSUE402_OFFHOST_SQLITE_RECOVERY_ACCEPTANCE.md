@@ -19,6 +19,35 @@ the same Proxmox host and verified with SHA256 protect against **some
 container-local failures**. They do **not** protect against full NVMe,
 host or disaster-domain loss.
 
+## Local nightly backup evidence is not off-host evidence
+
+On 2026-11-16 at approximately 23:15 Kyiv, the latest scheduled
+`backup.sh` archive
+`voltage-20261116-033011-DHDkYjhp.sqlite3.gz` was audited in
+**read-only** mode. The daily backup timer was active and its last
+service completed successfully at 03:30:12 Kyiv; the next run is
+scheduled for 2026-11-17 at approximately 03:24:57 Kyiv.
+
+The sidecar SHA256 matched the compressed archive. A disposable,
+mode-0700 QA directory was used to decompress the snapshot into a
+mode-0600 temporary file, opened with SQLite
+`mode=ro&immutable=1` and `PRAGMA query_only=ON`.
+`PRAGMA quick_check` returned **ok**, the restored database held
+**75,884** measurements, and its last sample was timestamped
+**2026-11-16 03:30:02 Kyiv**. The temporary file was removed at the
+end of the check. An initial in-memory-deserialize attempt had returned
+`unable to open database file`; the subsequent successful file-backed
+SQLite restore demonstrates that this was a method limitation, not
+evidence of archive corruption.
+
+These checks prove that **this local daily archive is internally
+readable**, but not that a different physical storage host can restore
+it. It predates outage #32 and later Telegram message rotations, so it
+is **stale for the next production cutover**; do not promote it over the
+live database or force the strict predeploy parity guard to PASS.
+No production SQLite writes, backup-job invocation, bot restart,
+Telegram API operation or external transfer occurred.
+
 ## Destination requirements
 
 1. Owner supplies a second physically separate destination: ideally
