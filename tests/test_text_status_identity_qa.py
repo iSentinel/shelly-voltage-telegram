@@ -221,6 +221,30 @@ class TextStatusIdentityQaTests(unittest.TestCase):
         self.assertEqual(self.storage.get_meta(MARKER), current_marker)
         self.monitor.telegram.send.assert_not_called()
 
+    def test_mismatch_is_logged_and_throttled_without_ids(self) -> None:
+        """Repeated blocked sends log no chat or post IDs."""
+
+        self.storage.set_meta(KEY, "102")
+        with patch.object(APP, "logger") as logs:
+            for _ in range(2):
+                self.assertFalse(
+                    APP.Monitor.upsert_status_message(
+                        self.monitor, "fixture", KEY, CHAT
+                    )
+                )
+            logs.warning.assert_called_once()
+            self.monitor._media_mismatch_log_at -= 301
+            self.assertFalse(
+                APP.Monitor.upsert_status_message(
+                    self.monitor, "fixture", KEY, CHAT
+                )
+            )
+            self.assertEqual(logs.warning.call_count, 2)
+            for entry in logs.warning.call_args_list:
+                self.assertNotIn(CHAT, entry.args[0])
+                self.assertNotIn("102", entry.args[0])
+        self.monitor.telegram.send.assert_not_called()
+
     def test_atomic_write_failure_retains_old_status(self) -> None:
         """A failed marker write must roll back the ID update too."""
         original = self.storage.set_meta
