@@ -68,18 +68,9 @@ def compose_image(args: argparse.Namespace) -> str:
     return image
 
 
-def inspect_runtime(container: str) -> dict[str, str | list[str]]:
-    """Read one container and referenced image, without Docker writes."""
+def image_metadata(config_image: str) -> tuple[str, list[str]]:
+    """Read Docker image ID and published references without a shell."""
 
-    fields = "{{.Image}}|{{.Config.Image}}|{{.State.Status}}"
-    fields += "|{{.State.Health.Status}}"
-    output = command_output(
-        ["docker", "inspect", container, "--format", fields]
-    )
-    parts = output.split("|")
-    if len(parts) != 4:
-        raise ValueError("Unexpected container inspection format")
-    image_id, config_image, state, health = parts
     manifest = json.loads(
         command_output(
             [
@@ -95,14 +86,30 @@ def inspect_runtime(container: str) -> dict[str, str | list[str]]:
     local_id = command_output(
         ["docker", "image", "inspect", config_image, "--format", "{{.Id}}"]
     )
+    if not isinstance(manifest, list):
+        raise ValueError("Runtime image digests are malformed")
+    return local_id, manifest
+
+
+def inspect_runtime(container: str) -> dict[str, str | list[str]]:
+    """Read one container and referenced image, without Docker writes."""
+
+    fields = "{{.Image}}|{{.Config.Image}}|{{.State.Status}}"
+    fields += "|{{.State.Health.Status}}"
+    output = command_output(
+        ["docker", "inspect", container, "--format", fields]
+    )
+    parts = output.split("|")
+    if len(parts) != 4:
+        raise ValueError("Unexpected container inspection format")
+    image_id, config_image, state, health = parts
+    local_id, manifest = image_metadata(config_image)
     sha_line = command_output(
         ["docker", "exec", container, "sha256sum", "/app/app.py"]
     )
     source_sha = sha_line.split()[0]
     if not re.fullmatch(r"[a-f0-9]{64}", source_sha):
         raise ValueError("Runtime source hash has invalid format")
-    if not isinstance(manifest, list):
-        raise ValueError("Runtime image digests are malformed")
     return {
         "image_id": image_id,
         "config_image": config_image,
