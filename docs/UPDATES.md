@@ -1,10 +1,17 @@
+> **2026-11-16 manual-entrypoint safety:** The commands below are historical
+> QA examples, not permission to deploy during an outage. Always run protected
+> Bash with `/bin/bash -p` and project Python with `/usr/bin/python3 -I`.
+> A successful `--dry-run`, `--help` or isolated restore never establishes
+> G/B/W/A writer ownership, authentic signed OCI/source, or Owner Approval.
+> Do not start/update/rollback the live bot until all release gates pass.
+
 ## Explicit approval before replacing live SQLite on rollback
 
 Rollback to an older application snapshot can also restore an older
 SQLite database, losing measurements and outage history added since
 the snapshot. Inspect --dry-run output before taking action:
 
-    sudo bash scripts/rollback.sh --dry-run --no-start       --snapshot /var/backups/shelly-voltage/upgrades/<snapshot>
+    sudo /bin/bash -p scripts/rollback.sh --dry-run --no-start       --snapshot /var/backups/shelly-voltage/upgrades/<snapshot>
 
 If the current SQLite file exists, REAL rollback now fails closed
 unless the operator explicitly adds --confirm-db-replacement.
@@ -183,13 +190,13 @@ and SQLite archives retain their SHA256 checksums and can be checked
 with the existing rollback dry run:
 
 ```bash
-sudo bash scripts/rollback.sh --dry-run --no-start \
+sudo /bin/bash -p scripts/rollback.sh --dry-run --no-start \
   --snapshot /var/backups/shelly-voltage/upgrades/<snapshot-directory>
 ```
 
 Create or choose the snapshot on the host; never upload private
 archives, credentials, or SQLite data to a public repository.
-`bash scripts/source-tar.sh --help` describes the standalone archive
+`/bin/bash -p scripts/source-tar.sh --help` describes the standalone archive
 filter. These safety checks do not enable automatic installation.
 
 ## Validate SQLite restore content before interruption
@@ -204,10 +211,10 @@ into a temporary directory, opens SQLite read-only, runs
 It does not write to the production database or send Telegram messages.
 
 ```bash
-python3 scripts/validate-sqlite-archive.py --help
-python3 scripts/validate-sqlite-archive.py \
+/usr/bin/python3 -I scripts/validate-sqlite-archive.py --help
+/usr/bin/python3 -I scripts/validate-sqlite-archive.py \
   --archive /var/backups/shelly-voltage/upgrades/<snapshot>/voltage-YYYYMMDD-HHMMSS.sqlite3.gz
-sudo bash scripts/rollback.sh --dry-run --no-start \
+sudo /bin/bash -p scripts/rollback.sh --dry-run --no-start \
   --snapshot /var/backups/shelly-voltage/upgrades/<snapshot>
 ```
 
@@ -403,14 +410,14 @@ released, signed target version. The production installation requires a
 separate hardware acceptance and explicit approval.
 
 ```bash
-python3 scripts/github_update.py --help
-bash scripts/apply-update.sh --help
+/usr/bin/python3 -I scripts/github_update.py --help
+/bin/bash -p scripts/apply-update.sh --help
 # Recovery is invoked automatically by systemd before starting Compose.
 # On the disposable test LXC only:
-sudo bash scripts/apply-update.sh --recover
-python3 scripts/github_update.py check --root /opt/shelly-voltage
-python3 scripts/github_update.py preflight
-sudo bash scripts/apply-update.sh --version 0.5.13-hw --dry-run
+sudo /bin/bash -p scripts/apply-update.sh --recover
+/usr/bin/python3 -I scripts/github_update.py check --root /opt/shelly-voltage
+/usr/bin/python3 -I scripts/github_update.py preflight
+sudo /bin/bash -p scripts/apply-update.sh --version 0.5.13-hw --dry-run
 sudo systemctl start shelly-voltage-updater-apply@0.5.13-hw.service
 sudo journalctl -u shelly-voltage-updater-apply@0.5.13-hw.service -n 80
 sudo systemctl list-timers shelly-voltage-update-check.timer
