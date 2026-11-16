@@ -144,9 +144,11 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
                     )
             return self.fake_output(command, cwd)
 
-        with patch.object(MODULE, "command_output", side_effect=changing):
-            with self.assertRaises(ValueError):
-                MODULE.inspect(self.args)
+        with (
+            patch.object(MODULE, "command_output", side_effect=changing),
+            self.assertRaises(ValueError),
+        ):
+            MODULE.inspect(self.args)
 
     def test_compose_runtime_drift_is_detected(self) -> None:
         """A stale boot pin must never silently pass."""
