@@ -54,11 +54,14 @@ power truly returns and measurements resume, verify the same outage baseline:
 ```bash
 python3 scripts/recovery-acceptance.py \
   --db /var/lib/shelly-voltage/voltage.sqlite3 \
-  verify --baseline /root/shelly-recovery-evidence/<checkpoint>.json
+  verify --baseline /root/shelly-recovery-evidence/<checkpoint>.json \
+  --output /root/shelly-recovery-evidence/verified-outage.json
 ```
 
 Replace `<checkpoint>` with the real checkpoint filename and retain the
-original immutable evidence. This is the **initial recovery check**: it
+original immutable evidence. Output must not exist before the command;
+the verifier writes this separate result once, with private permissions.
+This is the **initial recovery check**: it
 confirms the outage closed, new measurements resumed, and a genuine new
 Telegram status was recorded. A scheduled utility forecast is **not**
 independent evidence of restoration.
@@ -73,7 +76,7 @@ end, run the existing strict, read-only continuity checker:
 python3 scripts/connection-recovery-window.py \
   --db /var/lib/shelly-voltage/voltage.sqlite3 \
   --baseline /root/shelly-recovery-evidence/<checkpoint>.json \
-  --verification /root/shelly-recovery-evidence/<verified>.json --json
+  --verification /root/shelly-recovery-evidence/verified-outage.json --json
 ```
 
 **Important:** the connection recovery checker reports JSON
