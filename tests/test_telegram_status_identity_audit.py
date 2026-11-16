@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 SCRIPT = (
@@ -27,7 +28,7 @@ class TelegramIdentityAuditTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix="qa-status-audit-")
         self.addCleanup(self.temporary.cleanup)
         self.db = Path(self.temporary.name) / "status.sqlite3"
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY,value TEXT)")
             db.executemany(
                 "INSERT INTO meta(key,value) VALUES(?,?)",
@@ -40,7 +41,7 @@ class TelegramIdentityAuditTests(unittest.TestCase):
     def set_meta(self, key: str, value: str) -> None:
         """Change one synthetic metadata value."""
 
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
                 "INSERT INTO meta(key,value) VALUES(?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
