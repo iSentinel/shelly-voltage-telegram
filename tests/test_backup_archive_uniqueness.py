@@ -5,6 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import os
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -173,6 +174,11 @@ class BackupUniquenessTests(unittest.TestCase):
                 "BACKUP_DIR": str(destination),
                 "PATH": f"{directory}:{os.environ['PATH']}",
             }
+            self.assertEqual(
+                shutil.which("ln", path=env["PATH"]),
+                str(stub),
+                "Fault injection needs an executable temporary directory",
+            )
             done = subprocess.run(
                 ["bash", str(SCRIPT)], env=env, capture_output=True
             )
