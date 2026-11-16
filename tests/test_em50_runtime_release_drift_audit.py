@@ -213,6 +213,24 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
         self.override.unlink()
         self.assertIn("updater_override_missing", self.audit()["reason_codes"])
 
+    def test_pending_update_transaction_blocks_release_identity(self) -> None:
+        """A pending boot recovery may replace an apparently valid image."""
+
+        pending = self.args.deployed.parent / "pending-update"
+        pending.write_text("20261116T120000Z-0.5.21-hw\\n")
+        self.assertIn(
+            "pending_update_transaction", self.audit()["reason_codes"]
+        )
+
+    def test_dangling_pending_marker_link_is_not_ignored(self) -> None:
+        """A broken pending journal symlink is still a boot risk."""
+
+        pending = self.args.deployed.parent / "pending-update"
+        pending.symlink_to(self.args.deployed.parent / "missing")
+        self.assertIn(
+            "pending_update_transaction", self.audit()["reason_codes"]
+        )
+
     def test_ignores_environment_secrets_from_compose(self) -> None:
         """Never leak parsed Compose credentials in the report."""
 
