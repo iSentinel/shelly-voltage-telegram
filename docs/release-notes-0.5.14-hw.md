@@ -35,17 +35,17 @@ electricity is present. No public tag or release has been created.
 7. Authorize publication of the v0.5.14-hw tag and production upgrade.
    Creating the tag triggers public GitHub release/image workflows.
 
-## Preview command on target (never modifies production)
+## Historical preview command (disposable QA only; production NO_GO)
 
-    SVT_ROOT=/opt/shelly-voltage bash scripts/install.sh --dry-run --non-interactive
+    SVT_ROOT=/opt/shelly-voltage /bin/bash -p scripts/install.sh --dry-run --non-interactive
 
 ## Pinned installer preview after public release assets exist
 
-    REPO=iSentinel/shelly-voltage-telegram VERSION=0.5.14-hw TAG=v0.5.14-hw bash scripts/install-release.sh --dry-run --non-interactive
+    REPO=iSentinel/shelly-voltage-telegram VERSION=0.5.14-hw TAG=v0.5.14-hw /bin/bash -p scripts/install-release.sh --dry-run --non-interactive
 
 ## Actual install, ONLY after all gates are approved
 
-    sudo env REPO=iSentinel/shelly-voltage-telegram VERSION=0.5.14-hw TAG=v0.5.14-hw bash scripts/install-release.sh --non-interactive
+    sudo env REPO=iSentinel/shelly-voltage-telegram VERSION=0.5.14-hw TAG=v0.5.14-hw /bin/bash -p scripts/install-release.sh --non-interactive
 
 Nightly archives are historical and are not proof of exact-history parity.
 Never rebuild or stop the active production container during the blackout
