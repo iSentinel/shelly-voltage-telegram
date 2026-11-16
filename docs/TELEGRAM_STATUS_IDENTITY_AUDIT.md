@@ -136,6 +136,40 @@ to 17:21:06 Kyiv. The final stable verification passed at 17:36:40 Kyiv;
 re-evaluation after 18:21 could correctly expire. The corresponding
 public text status is Telegram post #1130, with an atomic ID/marker match.
 
+## Channel posts from different publishers
+
+A Telegram channel can contain independently published forecast alerts and
+the single edit-in-place Shelly voltage status. **Do not treat the next public
+post number as a duplicate voltage status without checking its content and
+public author/signature.** The voltage-status ID stored in SQLite and its
+atomic media binding identify the Shelly bot's current status, not every
+subsequent channel message.
+
+Real channel observation on 2026-11-16 (Europe/Kyiv):
+
+| Post | Time (Kyiv) | Public author/signature | Purpose |
+|---|---|---|---|
+| [#1132](https://t.me/svitlobot_yordanska_7/1132) | Originally 20:02, edited later | `voltage monitoring` | Shelly live voltage status |
+| [#1133](https://t.me/svitlobot_yordanska_7/1133) | 22:45:09 | `Світло ⚡️ Відключення` | 15-minute scheduled-outage forecast for 23:00–00:00 |
+| [#1134](https://t.me/svitlobot_yordanska_7/1134) | 22:45:28 | `Світло ⚡️ Чат-бот` | Second forecast for the same 23:00–00:00 window |
+
+These are two *separately signed* scheduled-forecast posts; the public
+signatures alone **do not authenticate the underlying bot account or
+identify which process submitted them**. Public HTML showed that
+the Shelly voltage post #1132 remained intact and updated normally,
+the DB status and text media marker both remained #1132, and no
+status-publication pending flag was set. Therefore #1133/#1134 must
+**not** trigger an emergency status-ID repair or be deleted by the
+Shelly status cleanup code.
+
+The two forecast notices are materially redundant; their owner(s) may
+choose to coordinate notification policy after verifying the actual
+channel publisher identities and whether both notifications are
+intended. Do not suppress an unrelated forecast service from this
+status-identity QA tool. A forecast is not a physical Shelly reading:
+verify any claimed outage using live electrical telemetry, not merely
+the existence of a scheduled-message post.
+
 ## Rollout discipline
 
 During an unresolved outage, avoid bot restarts, `docker compose up
