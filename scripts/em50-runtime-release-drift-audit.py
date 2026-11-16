@@ -198,6 +198,9 @@ def inspect(args: argparse.Namespace) -> dict:
     issues.extend(check_checkout(checkout, deployed, args.expected_app_sha256))
     if not args.override.is_file():
         issues.append("updater_override_missing")
+    pending = args.deployed.parent / "pending-update"
+    if pending.exists() or pending.is_symlink():
+        issues.append("pending_update_transaction")
     return {
         "status": "PASS" if not issues else "DRIFT",
         "reason_codes": issues,
