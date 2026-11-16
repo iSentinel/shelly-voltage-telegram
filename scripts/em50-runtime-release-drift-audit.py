@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -51,6 +52,35 @@ def load_deployed(path: Path) -> dict[str, str]:
     ):
         raise ValueError("Updater version is invalid")
     return {"digest": digest, "version": version}
+
+
+def checkout_metadata(root: Path) -> dict[str, str]:
+    """Read local version markers and application code checksum."""
+
+    result = {}
+    for name in ("VERSION", "RELEASE_VERSION"):
+        version = (root / name).read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[0-9]+\\.[0-9]+\\.[0-9]+-hw", version):
+            raise ValueError("Invalid checkout version marker")
+        result[name] = version
+    with (root / "app.py").open("rb") as source:
+        result["source_sha"] = hashlib.file_digest(source, "sha256").hexdigest()
+    return result
+
+
+def check_checkout(
+    checkout: dict[str, str], deployed: dict[str, str], expected_sha: str
+) -> list[str]:
+    """Flag old boot source even when a newer OCI image is running."""
+
+    reasons = []
+    if checkout["VERSION"] != deployed["version"]:
+        reasons.append("checkout_version_mismatch")
+    if checkout["RELEASE_VERSION"] != deployed["version"]:
+        reasons.append("checkout_release_marker_mismatch")
+    if checkout["source_sha"] != expected_sha:
+        reasons.append("checkout_source_hash_mismatch")
+    return reasons
 
 
 def compose_image(args: argparse.Namespace) -> str:
@@ -157,10 +187,14 @@ def inspect(args: argparse.Namespace) -> dict:
     if not re.fullmatch(r"[a-f0-9]{64}", args.expected_app_sha256):
         raise ValueError("Invalid expected application SHA256")
     deployed = load_deployed(args.deployed)
+    checkout = checkout_metadata(args.project_root)
     runtime = inspect_runtime(args.container)
     pinned = compose_image(args)
     issues = check_identity(
         runtime, pinned, deployed, args.expected_app_sha256
+    )
+    issues.extend(
+        check_checkout(checkout, deployed, args.expected_app_sha256)
     )
     if not args.override.is_file():
         issues.append("updater_override_missing")
@@ -172,6 +206,9 @@ def inspect(args: argparse.Namespace) -> dict:
         "runtime_source_sha256": runtime["source_sha"],
         "updater_version": deployed["version"],
         "updater_digest": deployed["digest"],
+        "checkout_version": checkout["VERSION"],
+        "checkout_release_version": checkout["RELEASE_VERSION"],
+        "checkout_source_sha256": checkout["source_sha"],
         "runtime_healthy": runtime["health"] == "healthy",
         "release_authorized": False,
         "signature_verified": False,
