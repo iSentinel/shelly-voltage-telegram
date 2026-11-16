@@ -617,7 +617,7 @@ class Storage:
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
 
-    def set_confirmed_text_status(
+    def bind_text_status(
         self, key: str, message_id: int, chat_id: str
     ) -> None:
         """Atomically bind the ID of one confirmed Telegram text post."""
@@ -3259,7 +3259,7 @@ class Monitor:
                 message_id = self.telegram.send(
                     text, reply_markup=markup, chat_id=target
                 )
-                self.storage.set_confirmed_text_status(key, message_id, target)
+                self.storage.bind_text_status(key, message_id, target)
                 self.storage.delete_meta(
                     "voltage_status_edit_window_started_at"
                 )
@@ -3275,7 +3275,7 @@ class Monitor:
             message_id = self.telegram.send(
                 text, reply_markup=markup, chat_id=target
             )
-            self.storage.set_confirmed_text_status(key, message_id, target)
+            self.storage.bind_text_status(key, message_id, target)
             self.storage.delete_meta("voltage_status_edit_window_started_at")
             return True
         except Exception as exc:
@@ -3406,9 +3406,7 @@ class Monitor:
             self.last_telegram = 0.0
             self.last_sent_connectivity = None
             return
-        self.storage.set_confirmed_text_status(
-            key, new_id, self.telegram.status_chat_id
-        )
+        self.storage.bind_text_status(key, new_id, self.telegram.status_chat_id)
         self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.delete_previous_voltage_status(old_id, new_id)
@@ -3830,9 +3828,7 @@ class Monitor:
         except Exception as exc:
             logger.warning("Telegram voltage status publish failed: {}", exc)
             return False
-        self.storage.set_confirmed_text_status(
-            key, new_id, self.telegram.status_chat_id
-        )
+        self.storage.bind_text_status(key, new_id, self.telegram.status_chat_id)
         if notify:
             self.storage.set_meta(
                 "last_voltage_notification_at", str(happened_at)
