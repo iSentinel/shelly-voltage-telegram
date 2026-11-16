@@ -114,7 +114,7 @@ single-writer transaction.
 
 Actual power outage #32 and two independent 15-minute windows passed,
 with publicly verified Telegram status #1130. See
-[EM50_OUTAGE32_FIELD_ACCEPTANCE_20261116.md](EM50_OUTAGE32_FIELD_ACCEPTANCE_20261116.md)
+[EM50_OUTAGE32_FIELD_ACCEPTANCE_20261116.md](https://github.com/iSentinel/shelly-voltage-telegram/blob/qa/issue402-readonly-identity-audit-20261116/docs/EM50_OUTAGE32_FIELD_ACCEPTANCE_20261116.md)
 in PR #404. These results demonstrate correct natural monitoring and
 Telegram rotation, **not** a completed official release or off-host
 disaster-recovery acceptance.
