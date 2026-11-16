@@ -1289,8 +1289,8 @@ class TelegramDestinationTests(unittest.TestCase):
         self.assertEqual(
             monitor.telegram.send.call_args.kwargs["chat_id"], "-100999"
         )
-        monitor.storage.set_meta.assert_called_with(
-            "telegram_status_message_id", "77"
+        monitor.storage.bind_text_post.assert_called_once_with(
+            "telegram_status_message_id", 77, "-100999"
         )
 
 
@@ -2042,8 +2042,8 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor.update_status()
 
         monitor.telegram.send.assert_called_once()
-        monitor.storage.set_meta.assert_called_once_with(
-            "telegram_message_id", "99"
+        monitor.storage.bind_text_post.assert_called_once_with(
+            "telegram_message_id", 99, monitor.telegram.status_chat_id
         )
 
 
