@@ -150,9 +150,9 @@ validate_snapshot() {
     [[ -n "$backup" ]] || { echo "ERROR: SQLite backup missing." >&2; exit 3; }
     verify_archive_manifest "$SNAPSHOT/source.tar.gz"
     verify_archive_manifest "$backup"
-    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
+    /usr/bin/python3 -I "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
         --archive "$backup"
-    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-source-archive.py" \
+    /usr/bin/python3 -I "$(dirname "${BASH_SOURCE[0]}")/validate-source-archive.py" \
         "$SNAPSHOT/source.tar.gz"
 }
 
@@ -269,7 +269,7 @@ rescue_current_db() {
     local archive
     archive="$(unique_snapshot_backup "$rescue")"
     verify_archive_manifest "$archive"
-    python3 "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
+    /usr/bin/python3 -I "$(dirname "${BASH_SOURCE[0]}")/validate-sqlite-archive.py" \
         --archive "$archive" --compare-db "$DB" >/dev/null
     echo "Rescue backup: $rescue"
 }
@@ -325,7 +325,7 @@ restore_database() {
     # mktemp uses an unpredictable, exclusive mode-0600 file on this filesystem.
     RESTORE_TMP="$(mktemp -- "${DB}.restore.XXXXXXXX")"
     gzip -dc "$backup" > "$RESTORE_TMP"
-    python3 - "$RESTORE_TMP" <<'PY'
+    /usr/bin/python3 -I - "$RESTORE_TMP" <<'PY'
 import sqlite3
 import sys
 from contextlib import closing
@@ -353,7 +353,7 @@ signed_rollback_preflight() {
         SIGNED_ROLLBACK=false
         return
     fi
-    mode="$(python3 "$(dirname -- "$0")/rollback-signed-image-guard.py" \
+    mode="$(/usr/bin/python3 -I "$(dirname -- "$0")/rollback-signed-image-guard.py" \
         --snapshot "$SNAPSHOT" \
         --state "$(printenv SVT_UPDATE_STATE || printf /var/lib/shelly-voltage-updater)")"
     case "$mode" in
@@ -373,7 +373,7 @@ await_signed_rollback_ready() {
         if [[ "$code" == 200 && "$health" == healthy ]]; then
             (( consecutive += 1 ))
             if [[ "$consecutive" -ge 3 ]]; then
-                python3 "$TARGET/scripts/deployment-state-audit.py" \
+                /usr/bin/python3 -I "$TARGET/scripts/deployment-state-audit.py" \
                     --root "$TARGET"
                 return
             fi
@@ -428,7 +428,7 @@ main() {
     require_db_replacement_approval
     preflight_backup_paths
     signed_rollback_preflight
-    python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
+    /usr/bin/python3 -I "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
         --database "$DB" --env-file "$TARGET/.env"
     if [[ "$NO_START" == false ]]; then
         # Load secure layer checks BEFORE restore_source replaces scripts.
@@ -439,7 +439,7 @@ main() {
     stop_service
     # A Telegram callback may change status media while Docker is stopping.
     # No source or SQLite restore is permitted after an identity race.
-    if ! python3 "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
+    if ! /usr/bin/python3 -I "$(dirname -- "${BASH_SOURCE[0]}")/graphic-rollback-media-guard.py" \
         --database "$DB" --env-file "$TARGET/.env"; then
         echo "ERROR: Telegram status changed during writer stop; rollback blocked." >&2
         if [[ "$NO_START" == false && "$DRY_RUN" == false ]]; then
