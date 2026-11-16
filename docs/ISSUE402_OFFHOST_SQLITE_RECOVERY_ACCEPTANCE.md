@@ -48,6 +48,42 @@ live database or force the strict predeploy parity guard to PASS.
 No production SQLite writes, backup-job invocation, bot restart,
 Telegram API operation or external transfer occurred.
 
+## Existing three-archive verification and offline restore drill
+
+On 2026-11-16 at approximately 23:20 Kyiv, the existing
+`scripts/verify-backups.py` was executed against the **three newest
+daily archives** mounted read-only in a disposable Docker container,
+with no network, no capabilities, and a private throwaway `/tmp`.
+The newest archive was required to be no older than 24 hours
+(`--max-age-newest-only`). Result:
+`status=pass`, **3/3 verified**. The archived SQLite sample counts
+were **75,884**, **67,266**, and **60,359**.
+
+The existing `scripts/restore-drill.py` then independently restored
+these same **three actual archives** inside fresh disposable SQLite
+workspaces. Each restored copy passed checksum, migration/storage
+initialization and historic measurement checks. All reported initial
+connectivity state `starting` and kept restored monitor readiness
+false until new measurements, as intended. The JSON summary reported
+`status=pass`, `requested=3`, `passed=3`, `network_calls=0`,
+`read_only_source=true`, `temporary_copies_removed=true`.
+No Telegram publication or Shelly RPC took place.
+
+Synthetic test suites on the exact QA source in an isolated,
+network-disabled application-compatible container passed both as
+UID root and UID nobody:
+- `test_verify_backups.py`: **29/29** per user.
+- `test_restore_drill.py`: **16/16** per user.
+- `test_backup_archive_uniqueness.py`: **10/10** per user.
+
+**55/55 per user** passed. These results close the
+**local archive readability and offline restore rehearsal** substage.
+They do **not** satisfy the required physically independent off-host
+restoration, do not include fresh cutover state after outage #32, and
+do not authorize a signed OCI release. The next acceptable test
+must repeat this process using a second failure domain and a fresh,
+owner-approved, WAL-consistent snapshot.
+
 ## Destination requirements
 
 1. Owner supplies a second physically separate destination: ideally
