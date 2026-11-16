@@ -90,6 +90,52 @@ valid L1 samples existed and the largest gap was 10.52 seconds. Do not
 confuse this with PASS or a mandatory 15-minute Telegram post rotation:
 the latter requires a distinct voltage-recovery event.
 
+## Time-limited voltage-stability verification
+
+A second acceptance command validates **stable voltage** after a recovered
+voltage event. This is distinct from the completed 15-minute **connectivity**
+window. Immediately after an authentic voltage recovery, use:
+
+```bash
+python3 scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-baseline --output /root/shelly-recovery-evidence/stable-baseline.json
+```
+
+After 15 uninterrupted minutes of normal voltage and automatic replacement
+of the event-bearing Telegram status, persist an exclusive verification:
+
+```bash
+python3 scripts/recovery-acceptance.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  stable-verify \
+  --baseline /root/shelly-recovery-evidence/stable-baseline.json \
+  --output /root/shelly-recovery-evidence/stable-verified.json
+```
+
+The implementation intentionally rejects **new evaluations more than one
+hour after the original stable event**, with messages such as
+`stable voltage transition evidence is outside one hour` and
+`stable phase sample evidence is outside one hour`. This is a bounded
+live-evidence retention rule, **not evidence that a previously verified
+event has since failed**.
+
+Archive the initial successful `stable-verify` JSON, exact SHA256, and
+protected comparison copy immediately. Later acceptance should examine
+that contemporaneous proof and independent Telegram evidence. Never
+overwrite a saved PASS with a later expired live check, never relax
+the hour-long limit to force PASS, and do not imply that a matching
+same-host checksum is an independently protected off-host backup.
+
+An actual voltage dip **resets** the 15-minute stable-voltage timer and
+requires a new stable baseline. Do not reuse a superseded baseline or
+mix its timestamp with the separate connectivity-recovery timer.
+For outage #32 on 2026-11-16, connectivity recovery reached PASS after
+15.96 minutes, while voltage events reset the stable timer from 17:13:40
+to 17:21:06 Kyiv. The final stable verification passed at 17:36:40 Kyiv;
+re-evaluation after 18:21 could correctly expire. The corresponding
+public text status is Telegram post #1130, with an atomic ID/marker match.
+
 ## Rollout discipline
 
 During an unresolved outage, avoid bot restarts, `docker compose up
