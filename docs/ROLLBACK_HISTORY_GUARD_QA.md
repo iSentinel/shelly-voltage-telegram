@@ -17,10 +17,15 @@ the warning and the confirmation required for actual execution.
 Without confirmation, a real rollback fails BEFORE the rescue backup,
 service stop, source replacement or SQLite restore.
 
-## Inspection: safe and no writes
+## Inspection: only in disposable QA, no production writes
 
-    sudo bash scripts/rollback.sh --help
-    sudo bash scripts/rollback.sh --dry-run --no-start \
+These are historical examples. A protected interpreter does not grant
+G/B/W/A writer ownership or permission for a live rollback. Do not
+use them against production without explicit Owner Approval.
+
+
+    sudo /bin/bash -p scripts/rollback.sh --help
+    sudo /bin/bash -p scripts/rollback.sh --dry-run --no-start \
       --snapshot /var/backups/shelly-voltage/upgrades/20261106-085538-0.5.13-hw
 
 ## Risky operation, NEVER run without explicit approval
@@ -29,7 +34,7 @@ After verifying the up-to-date rescue backup, the version match,
 snapshot integrity, lost-history exposure and production downtime,
 an operator may explicitly approve replacement of SQLite history:
 
-    sudo bash scripts/rollback.sh --no-start \
+    sudo /bin/bash -p scripts/rollback.sh --no-start \
       --snapshot /var/backups/shelly-voltage/upgrades/20261106-085538-0.5.13-hw \
       --confirm-db-replacement
 
