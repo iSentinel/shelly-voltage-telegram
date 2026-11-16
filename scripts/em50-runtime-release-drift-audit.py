@@ -110,6 +110,11 @@ def inspect_runtime(container: str) -> dict[str, str | list[str]]:
     source_sha = sha_line.split()[0]
     if not re.fullmatch(r"[a-f0-9]{64}", source_sha):
         raise ValueError("Runtime source hash has invalid format")
+    final = command_output(
+        ["docker", "inspect", container, "--format", fields]
+    )
+    if final != output:
+        raise ValueError("Container identity changed during inspection")
     return {
         "image_id": image_id,
         "config_image": config_image,
