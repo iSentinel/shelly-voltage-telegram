@@ -17,6 +17,12 @@ success is not an authorization to merge, publish, reboot or update.
   digest `sha256:f880ffc9748ad97a34a5d1bcf5c0ec25fb33793240de70501fd9c46651a00639`.
 - GitHub `main` contains both `VERSION=0.5.21-hw` and
   `RELEASE_VERSION=0.5.21-hw`. **No new version or tag is approved**.
+- The separate **on-host checkout** still says
+  `VERSION=RELEASE_VERSION=0.5.15-hw` and has stale 
+  `app.py` SHA256
+  `2651a21d3a447e5e839730eaa0bddbddb5bfe9afa89ec9e69bad97d1d7791aea`.
+  It is not the running 0.5.21-hw OCI source. Never derive the release
+  version or rollback source from this stale directory.
 - LXC110 systemd uses `apply-update.sh --recover` before
   `start-compose.sh`. Both the on-disk boot pin and any pending updater
   state matter; a standalone `docker run` test is not boot acceptance.
@@ -25,7 +31,9 @@ success is not an authorization to merge, publish, reboot or update.
   an independently protected off-host recovery copy.
 - The read-only [runtime drift auditor](EM50_RUNTIME_RELEASE_DRIFT_AUDIT.md)
   reports `DRIFT` with `unpublished_local_image`,
-  `updater_pin_mismatch` and `registry_digest_not_verified`;
+  `updater_pin_mismatch`, `registry_digest_not_verified`,
+  `checkout_version_mismatch`, `checkout_release_marker_mismatch`
+  and `checkout_source_hash_mismatch`;
   it correctly returns `release_authorized=false`.
 
 ## Required review order
@@ -67,8 +75,10 @@ success is not an authorization to merge, publish, reboot or update.
       freeze, one restored and validated **off-host** on independent
       physical storage. Old predeploy backup parity failure is expected
       while readings continue, not permission to rewrite metadata.
-- [ ] Existing runtime, updater metadata, Compose overlay and rollback
-      references are recorded with checksums and protected.
+- [ ] Existing runtime, updater metadata, Compose overlay, **host
+      checkout VERSION/RELEASE_VERSION/app.py** and rollback references
+      are recorded with checksums and protected. Resolve stale checkout
+      only through the reviewed, owner-approved release procedure.
 - [ ] Single-writer fence and systemd `--recover` behavior exercised
       with a disposable QA environment and interrupted-upgrade cases.
 - [ ] Signed release staged and checked without second bot, manual
