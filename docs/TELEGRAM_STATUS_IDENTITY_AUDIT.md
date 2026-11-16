@@ -58,9 +58,34 @@ python3 scripts/recovery-acceptance.py \
 ```
 
 Replace `<checkpoint>` with the real checkpoint filename and retain the
-original immutable evidence. The verifier must see the exact outage closed,
-fresh continuous meter telemetry and a genuine new Telegram status. A
-scheduled utility forecast is **not** independent evidence of restoration.
+original immutable evidence. This is the **initial recovery check**: it
+confirms the outage closed, new measurements resumed, and a genuine new
+Telegram status was recorded. A scheduled utility forecast is **not**
+independent evidence of restoration.
+
+## Full 15-minute connection acceptance
+
+Save a separate accepted verification checkpoint with `verify --output`.
+After a full 15-minute sample window has elapsed since the exact outage
+end, run the existing strict, read-only continuity checker:
+
+```bash
+python3 scripts/connection-recovery-window.py \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  --baseline /root/shelly-recovery-evidence/<checkpoint>.json \
+  --verification /root/shelly-recovery-evidence/<verified>.json --json
+```
+
+**Important:** the connection recovery checker reports JSON
+`"status": "pending"` with **exit code 0** while the 15-minute window is
+incomplete. Exit code alone does **not** authorize physical acceptance:
+only JSON `status == "pass"`, a matching incident, fresh continuous
+phase samples with no gap beyond the configured threshold, online Shelly
+and HTTP 200 readiness constitute success. On 2026-11-16, a real outage
+#32 check at 7.38 elapsed minutes returned `pending` even though 44
+valid L1 samples existed and the largest gap was 10.52 seconds. Do not
+confuse this with PASS or a mandatory 15-minute Telegram post rotation:
+the latter requires a distinct voltage-recovery event.
 
 ## Rollout discipline
 
