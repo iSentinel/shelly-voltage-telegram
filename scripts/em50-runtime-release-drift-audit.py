@@ -73,15 +73,23 @@ def inspect_runtime(container: str) -> dict[str, str | list[str]]:
 
     fields = "{{.Image}}|{{.Config.Image}}|{{.State.Status}}"
     fields += "|{{.State.Health.Status}}"
-    output = command_output(["docker", "inspect", container, "--format", fields])
+    output = command_output(
+        ["docker", "inspect", container, "--format", fields]
+    )
     parts = output.split("|")
     if len(parts) != 4:
         raise ValueError("Unexpected container inspection format")
     image_id, config_image, state, health = parts
     manifest = json.loads(
         command_output(
-            ["docker", "image", "inspect", config_image,
-             "--format", "{{json .RepoDigests}}"]
+            [
+                "docker",
+                "image",
+                "inspect",
+                config_image,
+                "--format",
+                "{{json .RepoDigests}}",
+            ]
         )
     )
     local_id = command_output(
@@ -174,9 +182,19 @@ def main() -> int:
     args = parser.parse_args()
     try:
         report = inspect(args)
-    except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired):
-        report = {"status": "ERROR", "reason_codes": ["inspection_failed"],
-                  "release_authorized": False, "read_only": True}
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        subprocess.TimeoutExpired,
+    ):
+        report = {
+            "status": "ERROR",
+            "reason_codes": ["inspection_failed"],
+            "release_authorized": False,
+            "read_only": True,
+        }
     if args.jsonl:
         print(json.dumps(report, sort_keys=True))
     else:
