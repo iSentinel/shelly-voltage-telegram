@@ -167,17 +167,22 @@ class TextStatusIdentityQaTests(unittest.TestCase):
         }
         self.assertEqual(functions.keys(), sites.keys())
         for name, node in functions.items():
-            calls = [item for item in ast.walk(node) if isinstance(item, ast.Call)]
+            calls = [
+                item for item in ast.walk(node) if isinstance(item, ast.Call)
+            ]
             atomic = [
-                item for item in calls
+                item
+                for item in calls
                 if isinstance(item.func, ast.Attribute)
                 and item.func.attr == "bind_text_post"
             ]
             self.assertEqual(len(atomic), sites[name], name)
             direct = [
-                item for item in calls
+                item
+                for item in calls
                 if ast.unparse(item.func) == "self.storage.set_meta"
-                and item.args and isinstance(item.args[0], ast.Name)
+                and item.args
+                and isinstance(item.args[0], ast.Name)
                 and item.args[0].id == "key"
             ]
             self.assertFalse(direct, name)
