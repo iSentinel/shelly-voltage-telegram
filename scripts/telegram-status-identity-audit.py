@@ -109,7 +109,8 @@ def main() -> int:
         if result["reason"] != "db_read_error":
             print(
                 f"status={result['status_id']} marker={result['marker_id']} "
-                f"kind={result['media_kind']} pending={result['pending_count']} "
+                f"kind={result['media_kind']} "
+                f"pending={result['pending_count']} "
                 f"sqlite={result['sqlite_quick_check']}"
             )
     return 2 if result["reason"] == "db_read_error" else int(not result["ok"])
