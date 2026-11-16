@@ -3679,7 +3679,7 @@ class Monitor:
                 "Telegram stable recovery replacement failed: {}", exc
             )
             return
-        self.storage.set_meta(key, str(new_id))
+        self.storage.bind_text_post(key, new_id, self.telegram.status_chat_id)
         self.clear_stable_recovery_context()
         self.delete_previous_voltage_status(old_id, new_id)
         self.storage.delete_meta("telegram_status_pinned_id")
