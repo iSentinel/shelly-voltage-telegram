@@ -1280,6 +1280,7 @@ class TelegramDestinationTests(unittest.TestCase):
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
         monitor.storage.get_meta = Mock(return_value=None)
         monitor.storage.set_meta = Mock()
+        monitor.storage.bind_text_post = Mock()
         monitor.storage.day_stats = Mock(
             return_value={"count": 1, "min": 220.0, "max": 220.0, "avg": 220.0}
         )
@@ -2035,6 +2036,7 @@ class MonitorRegressionTests(unittest.TestCase):
             )
         )
         monitor.storage.set_meta = Mock()
+        monitor.storage.bind_text_post = Mock()
         monitor.telegram.edit.side_effect = RuntimeError(
             "message to edit not found"
         )
