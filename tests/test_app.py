@@ -2038,7 +2038,7 @@ class MonitorRegressionTests(unittest.TestCase):
         monitor = self._telegram_monitor()
         monitor.storage.get_meta = Mock(
             side_effect=lambda key: (
-                None if key == "telegram_legacy_text_confirm_pending" else "42"
+                "42" if key == "telegram_message_id" else None
             )
         )
         monitor.storage.set_meta = Mock()
