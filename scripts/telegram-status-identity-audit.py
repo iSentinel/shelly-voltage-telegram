@@ -33,8 +33,8 @@ def valid_message_id(value: object) -> bool:
     )
 
 
-def inspect_status(database: Path) -> dict[str, object]:
-    """Read one consistent WAL snapshot without writing anything."""
+def read_snapshot(database: Path) -> tuple[dict[str, str], str]:
+    """Read metadata and integrity from one WAL-consistent snapshot."""
 
     uri = database.expanduser().resolve().as_uri() + "?mode=ro"
     with closing(sqlite3.connect(uri, uri=True, timeout=5)) as db:
@@ -45,7 +45,13 @@ def inspect_status(database: Path) -> dict[str, object]:
         query = "SELECT key,value FROM meta WHERE key IN (" + placeholders + ")"
         saved = dict(db.execute(query, keys))
         integrity = db.execute("PRAGMA quick_check").fetchone()[0]
+    return saved, integrity
 
+
+def inspect_status(database: Path) -> dict[str, object]:
+    """Evaluate the saved message binding without editing the database."""
+
+    saved, integrity = read_snapshot(database)
     current = saved.get(STATUS_KEYS[0]) or saved.get(STATUS_KEYS[1])
     marker = saved.get(STATUS_KEYS[2], "")
     parts = marker.split(":") if marker else []
