@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -21,7 +22,8 @@ SPEC.loader.exec_module(MODULE)
 DIGEST = "sha256:" + "a" * 64
 IMAGE = MODULE.OFFICIAL + DIGEST
 IMAGE_ID = "sha256:" + "b" * 64
-APP_SHA = "c" * 64
+APP_SOURCE = b"# disposable application under test\n"
+APP_SHA = hashlib.sha256(APP_SOURCE).hexdigest()
 
 
 class ReleaseRuntimeDriftTests(unittest.TestCase):
@@ -34,6 +36,9 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
         (root / "compose.yaml").write_text("services: {}\n")
+        (root / "VERSION").write_text("0.5.21-hw\n")
+        (root / "RELEASE_VERSION").write_text("0.5.21-hw\n")
+        (root / "app.py").write_bytes(APP_SOURCE)
         self.override = root / "override.yaml"
         self.override.write_text("services: {}\n")
         self.deployed = root / "deployed.json"
@@ -111,6 +116,34 @@ class ReleaseRuntimeDriftTests(unittest.TestCase):
         self.assertEqual(result["status"], "DRIFT")
         self.assertIn("unpublished_local_image", result["reason_codes"])
         self.assertIn("updater_pin_mismatch", result["reason_codes"])
+
+    def test_stale_host_version_detected(self) -> None:
+        """A local checkout older than the deployed digest is drift."""
+
+        (self.args.project_root / "VERSION").write_text("0.5.15-hw")
+        reasons = self.audit()["reason_codes"]
+        self.assertIn("checkout_version_mismatch", reasons)
+
+    def test_stale_host_release_marker_detected(self) -> None:
+        """The release marker must also match the deployment."""
+
+        (self.args.project_root / "RELEASE_VERSION").write_text("0.5.15-hw")
+        reasons = self.audit()["reason_codes"]
+        self.assertIn("checkout_release_marker_mismatch", reasons)
+
+    def test_stale_host_source_hash_detected(self) -> None:
+        """Reject a checkout that does not match approved source."""
+
+        (self.args.project_root / "app.py").write_bytes(b"stale source")
+        reasons = self.audit()["reason_codes"]
+        self.assertIn("checkout_source_hash_mismatch", reasons)
+
+    def test_missing_checkout_marker_fails_closed(self) -> None:
+        """Absent version evidence is not an acceptable release."""
+
+        (self.args.project_root / "VERSION").unlink()
+        with self.assertRaises(OSError):
+            self.audit()
 
     def test_unhealthy_bot_blocks_identity_pass(self) -> None:
         """Healthy Docker is a prerequisite for operational parity."""
