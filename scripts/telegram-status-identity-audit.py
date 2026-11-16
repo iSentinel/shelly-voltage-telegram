@@ -42,7 +42,9 @@ def read_snapshot(database: Path) -> tuple[dict[str, str], str]:
         db.execute("BEGIN")
         keys = STATUS_KEYS + PENDING_KEYS
         placeholders = ",".join("?" for _ in keys)
-        query = "SELECT key,value FROM meta WHERE key IN (" + placeholders + ")"
+        query = (
+            "SELECT key,value FROM meta WHERE key IN (" + placeholders + ")"
+        )
         saved = dict(db.execute(query, keys))
         integrity = db.execute("PRAGMA quick_check").fetchone()[0]
     return saved, integrity
