@@ -155,6 +155,33 @@ def version_check(root: Path) -> str:
     return f"candidate={candidate}; stable_marker_unchanged=true"
 
 
+def semantic_version(value: object) -> tuple[int, int, int]:
+    """Parse a strict source or deployed hardware-release version."""
+
+    if not isinstance(value, str):
+        raise ValueError("release version must be text")
+    match = re.fullmatch(r"([0-9]+)\\.([0-9]+)\\.([0-9]+)-hw", value)
+    if match is None:
+        raise ValueError("invalid deployed or checkout version")
+    return tuple(int(part) for part in match.groups())
+
+
+def deployed_version_check(root: Path, deployed_state: Path) -> str:
+    """Reject source markers older than the already deployed release."""
+
+    if deployed_state.is_symlink():
+        raise ValueError("updater metadata symlink refused")
+    record = json.loads(deployed_state.read_text(encoding="utf-8"))
+    if not isinstance(record, dict):
+        raise ValueError("updater metadata is not an object")
+    deployed = semantic_version(record.get("version"))
+    candidate = semantic_version((root / "VERSION").read_text().strip())
+    stable = semantic_version((root / "RELEASE_VERSION").read_text().strip())
+    if candidate < deployed or stable < deployed:
+        raise ValueError("checkout source is older than deployed release")
+    return "checkout_versions_not_older_than_deployed=true"
+
+
 def private_acceptance(path: Path, now: float) -> None:
     """Verify an explicitly supplied, protected client receipt."""
 
@@ -255,6 +282,18 @@ def inspect(args: argparse.Namespace) -> dict:
     now = time.time()
     checks = {
         "source_candidate": check(lambda: version_check(Path(args.root))),
+        "source_vs_deployed": check(
+            lambda: deployed_version_check(
+                Path(args.root),
+                Path(
+                    getattr(
+                        args,
+                        "deployed_state",
+                        "/var/lib/shelly-voltage-updater/deployed.json",
+                    )
+                ),
+            )
+        ),
         "live_health": check(
             lambda: health_check(args.health_url, args.ready_url, now),
         ),
@@ -300,6 +339,11 @@ def main() -> int:
         "--db", default="/var/lib/shelly-voltage/voltage.sqlite3"
     )
     parser.add_argument("--backup-dir", default="/var/backups/shelly-voltage")
+    parser.add_argument(
+        "--deployed-state",
+        default="/var/lib/shelly-voltage-updater/deployed.json",
+        help="Read-only updater metadata used for source-version parity",
+    )
     parser.add_argument(
         "--cache", default="/var/lib/shelly-yasno-reader/yasno.json"
     )
