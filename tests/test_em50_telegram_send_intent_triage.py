@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +29,7 @@ class TelegramIntentTriageTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory(prefix="issue402-triage-")
         self.addCleanup(tmp.cleanup)
         self.db = Path(tmp.name) / "fixture.sqlite3"
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
             db.executemany(
                 "INSERT INTO meta(key,value) VALUES (?,?)",
@@ -41,7 +42,7 @@ class TelegramIntentTriageTests(unittest.TestCase):
     def put(self, name: str, value: str) -> None:
         """Write one fixture-only metadata marker."""
 
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
                 "INSERT INTO meta(key,value) VALUES(?,?) "
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -155,7 +156,7 @@ class TelegramIntentTriageTests(unittest.TestCase):
     def test_missing_message_id_requires_hold(self) -> None:
         """The triage script cannot infer Telegram status from old metadata."""
 
-        with sqlite3.connect(self.db) as db:
+        with closing(sqlite3.connect(self.db)) as db, db:
             db.execute(
                 "DELETE FROM meta WHERE key=?",
                 (TRIAGE.STATUS_ID,),
@@ -198,7 +199,7 @@ class TelegramIntentTriageTests(unittest.TestCase):
         for _ in range(3):
             self.assertEqual(TRIAGE.inspect(self.db)["status"], "HOLD")
         self.assertEqual(self.db.read_bytes(), before)
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             found = conn.execute(
                 "SELECT value FROM meta WHERE key=?",
                 (TRIAGE.TEXT_PENDING,),
