@@ -1,5 +1,7 @@
 # Issue #402 — owner-gated signed release cutover plan
 
+> **Superseded governance gates — 2026-11-17:** The sole owner has approved one-NVMe loss risk and sole-owner code review. Second-person review and off-host physical device provisioning are not active requirements. See [sole-owner release policy](ISSUE402_SOLE_OWNER_SINGLE_NVME_RELEASE_POLICY.md). Do not claim off-host backup verification or bypass signed OCI, fresh backup, single-writer, rollback, readiness or specific cutover/PHOTO approval.
+
 **Current decision:** **NO-GO** for an official signed replacement.
 The emergency Telegram text-ID hotfix is stable, but local runtime
 success is not an authorization to merge, publish, reboot or update.
