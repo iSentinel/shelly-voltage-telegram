@@ -25,6 +25,7 @@ NAMES = (
     "status_keyboard",
     "rotate_legacy_photo_after_recovery",
     "upsert_text_status_message",
+    "send_confirmed_text_post",
 )
 
 
@@ -174,7 +175,7 @@ class TextStatusIdentityQaTests(unittest.TestCase):
                 item
                 for item in calls
                 if isinstance(item.func, ast.Attribute)
-                and item.func.attr == "bind_text_post"
+                and item.func.attr == "send_confirmed_text_post"
             ]
             self.assertEqual(len(atomic), sites[name], name)
             direct = [
@@ -260,6 +261,49 @@ class TextStatusIdentityQaTests(unittest.TestCase):
             self.assertRaises(sqlite3.OperationalError),
         ):
             self.storage.bind_text_post(KEY, 102, CHAT)
+        self.assert_text_identity(101)
+
+    def test_text_intent_precedes_send_and_clears_atomically(self) -> None:
+        """A remote send sees its durable intent before network contact."""
+
+        self.storage.delete_meta(KEY)
+        self.storage.delete_meta(MARKER)
+
+        def confirmed(*_args, **_kwargs) -> int:
+            """Observe the already committed intent while sending."""
+            pending = self.storage.get_meta(
+                "telegram_legacy_text_confirm_pending"
+            )
+            self.assertTrue(pending.startswith("send:"))
+            self.assertIsNone(self.storage.get_meta(KEY))
+            return 102
+
+        self.monitor.telegram.send.side_effect = confirmed
+        self.assertTrue(
+            self.monitor.upsert_text_status_message("fixture", KEY, CHAT)
+        )
+        self.assert_text_identity(102)
+        self.assertIsNone(
+            self.storage.get_meta("telegram_legacy_text_confirm_pending")
+        )
+
+    def test_bind_rejects_an_unrelated_intent(self) -> None:
+        """A different reservation cannot finalize the intended post."""
+
+        token = self.storage.reserve_text_post()
+        self.assertIsInstance(token, str)
+        with self.assertRaisesRegex(ValueError, "send intent changed"):
+            self.storage.bind_text_post(
+                KEY, 102, CHAT, pending_token="wrong-token"
+            )
+        self.fixture_pending_unchanged(token)
+
+    def fixture_pending_unchanged(self, token: str) -> None:
+        """Assert the reservation and last valid ID remain unchanged."""
+        self.assertEqual(
+            self.storage.get_meta("telegram_legacy_text_confirm_pending"),
+            "send:" + token,
+        )
         self.assert_text_identity(101)
 
     def test_photo_status_does_not_send_new_text(self) -> None:

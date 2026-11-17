@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import os
+import secrets
 import signal
 import sqlite3
 import sys
@@ -615,8 +616,35 @@ class Storage:
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
 
-    def bind_text_post(self, key: str, message_id: int, chat_id: str) -> None:
-        """Atomically bind one confirmed Telegram text post."""
+    def reserve_text_post(self) -> str | None:
+        """Persist one exclusive intent before sending remote status text."""
+
+        token = secrets.token_hex(16)
+        with closing(self.connect()) as db, db:
+            pending = db.execute(
+                "SELECT key FROM meta WHERE key IN (?,?) LIMIT 1",
+                (
+                    "telegram_legacy_text_confirm_pending",
+                    "telegram_graphic_publish_pending",
+                ),
+            ).fetchone()
+            if pending is not None:
+                return None
+            cursor = db.execute(
+                "INSERT INTO meta(key,value) VALUES (?,?) "
+                "ON CONFLICT(key) DO NOTHING",
+                ("telegram_legacy_text_confirm_pending", f"send:{token}"),
+            )
+            return token if cursor.rowcount == 1 else None
+
+    def bind_text_post(
+        self,
+        key: str,
+        message_id: int,
+        chat_id: str,
+        pending_token: str | None = None,
+    ) -> None:
+        """Atomically commit text identity and clear its exact send intent."""
 
         if key not in {"telegram_message_id", "telegram_status_message_id"}:
             raise ValueError("unsupported Telegram status key")
@@ -625,12 +653,27 @@ class Storage:
         if not isinstance(chat_id, str) or not chat_id.strip():
             raise ValueError("invalid Telegram status destination")
         with closing(self.connect()) as db, db:
+            if pending_token is not None:
+                found = db.execute(
+                    "SELECT value FROM meta WHERE key=?",
+                    ("telegram_legacy_text_confirm_pending",),
+                ).fetchone()
+                if found != (f"send:{pending_token}",):
+                    raise ValueError("text status send intent changed")
             self.set_meta(key, str(message_id), db)
             self.set_meta(
                 "telegram_status_media_identity",
                 f"text:{chat_id}:{message_id}",
                 db,
             )
+            if pending_token is not None:
+                db.execute(
+                    "DELETE FROM meta WHERE key=? AND value=?",
+                    (
+                        "telegram_legacy_text_confirm_pending",
+                        f"send:{pending_token}",
+                    ),
+                )
 
     def get_meta(self, key: str) -> str | None:
         """Read one metadata value."""
@@ -3241,6 +3284,20 @@ class Monitor:
             return fallback
         return self.upsert_text_status_message(text, key, target)
 
+    def send_confirmed_text_post(
+        self, text: str, key: str, target: str, **options
+    ) -> int:
+        """Reserve an intent before sending; leave it on uncertain result."""
+
+        token = self.storage.reserve_text_post()
+        if token is None:
+            raise RuntimeError("Telegram text send requires reconciliation")
+        message_id = self.telegram.send(text, chat_id=target, **options)
+        self.storage.bind_text_post(
+            key, message_id, target, pending_token=token
+        )
+        return message_id
+
     def upsert_text_status_message(
         self, text: str, key: str, target: str
     ) -> bool:
@@ -3254,10 +3311,9 @@ class Monitor:
                     int(stored), text, reply_markup=markup, chat_id=target
                 )
             else:
-                message_id = self.telegram.send(
-                    text, reply_markup=markup, chat_id=target
+                self.send_confirmed_text_post(
+                    text, key, target, reply_markup=markup
                 )
-                self.storage.bind_text_post(key, message_id, target)
                 self.storage.delete_meta(
                     "voltage_status_edit_window_started_at"
                 )
@@ -3270,10 +3326,9 @@ class Monitor:
                 logger.warning("Telegram status update failed: {}", exc)
                 return False
         try:
-            message_id = self.telegram.send(
-                text, reply_markup=markup, chat_id=target
+            self.send_confirmed_text_post(
+                text, key, target, reply_markup=markup
             )
-            self.storage.bind_text_post(key, message_id, target)
             self.storage.delete_meta("voltage_status_edit_window_started_at")
             return True
         except Exception as exc:
@@ -3391,10 +3446,11 @@ class Monitor:
         if self.rotate_legacy_photo_after_recovery():
             return
         try:
-            new_id = self.telegram.send(
+            new_id = self.send_confirmed_text_post(
                 multiphase_status_text(self),
+                key,
+                self.telegram.status_chat_id,
                 reply_markup=self.status_keyboard(),
-                chat_id=self.telegram.status_chat_id,
             )
         except Exception as exc:
             logger.warning("Telegram recovery status publish failed: {}", exc)
@@ -3404,7 +3460,6 @@ class Monitor:
             self.last_telegram = 0.0
             self.last_sent_connectivity = None
             return
-        self.storage.bind_text_post(key, new_id, self.telegram.status_chat_id)
         self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.delete_previous_voltage_status(old_id, new_id)
@@ -3679,15 +3734,14 @@ class Monitor:
                 self.finish_voltage_status_update()
             return
         try:
-            new_id = self.telegram.send(
-                text, notify=False, chat_id=self.telegram.status_chat_id
+            new_id = self.send_confirmed_text_post(
+                text, key, self.telegram.status_chat_id, notify=False
             )
         except Exception as exc:
             logger.warning(
                 "Telegram stable recovery replacement failed: {}", exc
             )
             return
-        self.storage.bind_text_post(key, new_id, self.telegram.status_chat_id)
         self.clear_stable_recovery_context()
         self.delete_previous_voltage_status(old_id, new_id)
         self.storage.delete_meta("telegram_status_pinned_id")
@@ -3818,15 +3872,15 @@ class Monitor:
             if edited is not None:
                 return edited
         try:
-            new_id = self.telegram.send(
+            new_id = self.send_confirmed_text_post(
                 multiphase_status_text(self),
+                key,
+                self.telegram.status_chat_id,
                 notify=notify,
-                chat_id=self.telegram.status_chat_id,
             )
         except Exception as exc:
             logger.warning("Telegram voltage status publish failed: {}", exc)
             return False
-        self.storage.bind_text_post(key, new_id, self.telegram.status_chat_id)
         if notify:
             self.storage.set_meta(
                 "last_voltage_notification_at", str(happened_at)

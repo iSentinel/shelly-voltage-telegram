@@ -1280,6 +1280,7 @@ class TelegramDestinationTests(unittest.TestCase):
         monitor.state.restore(APP.time.time(), 220.0, 50.0)
         monitor.storage.get_meta = Mock(return_value=None)
         monitor.storage.set_meta = Mock()
+        monitor.storage.reserve_text_post = Mock(return_value="fixture-token")
         monitor.storage.bind_text_post = Mock()
         monitor.storage.delete_meta = Mock()
         monitor.storage.day_stats = Mock(
@@ -1292,7 +1293,10 @@ class TelegramDestinationTests(unittest.TestCase):
             monitor.telegram.send.call_args.kwargs["chat_id"], "-100999"
         )
         monitor.storage.bind_text_post.assert_called_once_with(
-            "telegram_status_message_id", 77, "-100999"
+            "telegram_status_message_id",
+            77,
+            "-100999",
+            pending_token="fixture-token",
         )
 
 
@@ -1860,8 +1864,8 @@ class MonitorRegressionTests(unittest.TestCase):
             self.assertIn("Связь с Shelly восстановлена", sent_text)
             self.assertNotIn("Питание восстановлено", sent_text)
 
-    def test_recovery_publish_failure_preserves_existing_channel_status(self):
-        """A failed replacement must not delete the only channel message."""
+    def test_recovery_publish_failure_blocks_ambiguous_retry(self):
+        """Keep the prior status until an owner resolves a send failure."""
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "recovery-send-failure.sqlite3"
@@ -1881,17 +1885,23 @@ class MonitorRegressionTests(unittest.TestCase):
             monitor.telegram.unpin.assert_not_called()
             monitor.telegram.delete.assert_not_called()
             monitor.update_status()
-            self.assertEqual(monitor.telegram.send.call_count, 2)
+            self.assertEqual(monitor.telegram.send.call_count, 1)
             monitor.telegram.edit.assert_not_called()
             self.assertEqual(
-                monitor.storage.get_meta("telegram_status_message_id"), "901"
+                monitor.storage.get_meta("telegram_status_message_id"), "675"
             )
-            self.assertIsNone(
+            self.assertIsNotNone(
                 monitor.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
             )
+            self.assertTrue(
+                monitor.storage.get_meta(
+                    "telegram_legacy_text_confirm_pending"
+                ).startswith("send:")
+            )
+            monitor.telegram.delete.assert_not_called()
 
-    def test_recovery_rotation_retry_survives_process_restart(self):
-        """A pending send remains retryable when a monitor restarts."""
+    def test_recovery_send_uncertainty_survives_restart(self):
+        """Never replay an uncertain send after a process restart."""
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "recovery-retry-restart.sqlite3"
@@ -1910,13 +1920,17 @@ class MonitorRegressionTests(unittest.TestCase):
             restarted.telegram.delete = Mock()
             restarted.update_status()
             self.assertEqual(
-                restarted.storage.get_meta("telegram_status_message_id"), "902"
+                restarted.storage.get_meta("telegram_status_message_id"), "675"
             )
-            restarted.telegram.delete.assert_called_once_with(
-                675, restarted.telegram.status_chat_id
-            )
-            self.assertIsNone(
+            restarted.telegram.send.assert_not_called()
+            restarted.telegram.delete.assert_not_called()
+            self.assertIsNotNone(
                 restarted.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
+            )
+            self.assertTrue(
+                restarted.storage.get_meta(
+                    "telegram_legacy_text_confirm_pending"
+                ).startswith("send:")
             )
 
     def test_new_outage_cancels_pending_recovery_status_rotation(self):
@@ -2043,6 +2057,7 @@ class MonitorRegressionTests(unittest.TestCase):
             )
         )
         monitor.storage.set_meta = Mock()
+        monitor.storage.reserve_text_post = Mock(return_value="fixture-token")
         monitor.storage.bind_text_post = Mock()
         monitor.storage.delete_meta = Mock()
         monitor.telegram.edit.side_effect = RuntimeError(
@@ -2053,7 +2068,10 @@ class MonitorRegressionTests(unittest.TestCase):
 
         monitor.telegram.send.assert_called_once()
         monitor.storage.bind_text_post.assert_called_once_with(
-            "telegram_message_id", 99, monitor.telegram.status_chat_id
+            "telegram_message_id",
+            99,
+            monitor.telegram.status_chat_id,
+            pending_token="fixture-token",
         )
 
 
