@@ -1,3 +1,14 @@
+## 0.5.22-hw - signed Telegram status-identity and recovery hardening
+
+- Publish a pinned, Cosign-signed multi-platform OCI image with source
+  revision, SPDX SBOM and SLSA provenance for amd64 and arm64.
+- Add fail-closed Telegram message identity and durable send-intent
+  protection, including ambiguous-delivery recovery diagnostics.
+- Clarify Shelly connectivity recovery grace-window sample accounting
+  and extend read-only backup/restore and release-safety QA.
+- Keep graphical PHOTO publication disabled unless separately approved;
+  production cutover and recipient-visible acceptance are distinct steps.
+
 ## 0.5.21-hw - preserve historical upgrade recovery snapshots
 
 - Stop pruning old verified source+SQLite upgrade snapshots as an

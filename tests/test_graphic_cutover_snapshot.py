@@ -218,10 +218,8 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         )
         manifest = (path / "manifest.env").read_text()
         self.assertIn("cutover_phase=A", manifest)
-        self.assertIn(
-            f"to_version={(ROOT / 'RELEASE_VERSION').read_text().strip()}",
-            manifest,
-        )
+        # This historical migration targets v0.5.21, not the newest release.
+        self.assertIn("to_version=0.5.21-hw", manifest)
         with tarfile.open(path / "source.tar.gz", "r:gz") as tar:
             members = tar.getnames()
         self.assertFalse(any("secrets" in name for name in members))
