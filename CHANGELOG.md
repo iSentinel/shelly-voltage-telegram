@@ -1,3 +1,16 @@
+## 0.5.23-hw - signed installer/YASNO and backup-family diagnostics
+
+- Promote the exact owner-reviewed Issue #402 fixes merged through PR #409.
+- Wait for stable signed Docker health/parity after fresh Shelly readings,
+  without accepting persistent degraded startup or unsigned fallback.
+- Keep YASNO refresh working after source extraction with least-privilege
+  group traversal. Refuse unexpected owners, private modes and symlinks
+  before granting directory access.
+- Add a read-only backup-family inventory that distinguishes historical
+  restorable SQLite archives from a fresh writer-fenced release backup.
+- Preserve the existing signed image rollback, Telegram status-message
+  identity and PHOTO disabled defaults. app.py remains unchanged.
+
 ## 0.5.22-hw - signed Telegram status-identity and recovery hardening
 
 - Publish a pinned, Cosign-signed multi-platform OCI image with source
