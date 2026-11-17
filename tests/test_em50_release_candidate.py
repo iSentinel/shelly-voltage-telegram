@@ -39,13 +39,9 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
             mock.patch.object(policy, "tag_commit", return_value="a" * 40),
             mock.patch.object(policy, "current_commit", return_value="a" * 40),
         ):
-            policy.validate(
-                "push", "refs/tags/v0.5.22-hw", "", "", ROOT
-            )
+            policy.validate("push", "refs/tags/v0.5.22-hw", "", "", ROOT)
             with self.assertRaisesRegex(ValueError, "tag differs"):
-                policy.validate(
-                    "push", "refs/tags/v0.5.21-hw", "", "", ROOT
-                )
+                policy.validate("push", "refs/tags/v0.5.21-hw", "", "", ROOT)
 
     def test_a_tag_must_point_to_the_exact_approved_commit(self):
         """Even equal test markers must reject a mismatched Git SHA."""
