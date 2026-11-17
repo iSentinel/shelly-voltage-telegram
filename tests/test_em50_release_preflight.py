@@ -317,11 +317,11 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertIn("measurements_not_equal", result["detail"])
 
-    def test_promoted_marker_does_not_auto_approve_release(self):
-        """Aligned release versions cannot bypass independent approval."""
+    def test_staging_marker_and_promoted_marker_never_auto_release(self):
+        """Staged and equal markers cannot grant a signed cutover."""
 
         self.assertIn(
-            "stable_marker_matches=true",
+            "stable_marker_unchanged=true",
             GATE.version_check(ROOT),
         )
         with tempfile.TemporaryDirectory() as tmp:

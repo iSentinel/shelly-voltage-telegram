@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -26,32 +27,49 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_promotion_target_is_distinct_from_live_device(self):
         """Release proposal must not pretend the meter has been upgraded."""
 
-        self.assertEqual(version("VERSION"), "0.5.21-hw")
+        self.assertEqual(version("VERSION"), "0.5.22-hw")
         self.assertEqual(version("RELEASE_VERSION"), "0.5.21-hw")
         self.assertEqual(version("LIVE_VERSION"), "0.5.6-hw")
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
+        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
 
-    def test_version_tag_requires_matching_exact_commit(self):
-        """Only an exact matching tag and commit may sign a release."""
-
-        current = "a" * 40
-        with (
-            mock.patch.object(policy, "tag_commit", return_value=current),
-            mock.patch.object(policy, "current_commit", return_value=current),
-        ):
-            policy.validate("push", "refs/tags/v0.5.21-hw", "", "", ROOT)
-            with self.assertRaisesRegex(ValueError, "tag differs"):
-                policy.validate("push", "refs/tags/v0.5.15-hw", "", "", ROOT)
-
-    def test_tag_pointing_to_different_commit_is_refused(self):
-        """A same-version tag cannot sign a different source revision."""
+    def test_unsigned_candidate_rejects_both_stable_tags(self):
+        """Unpromoted VERSION and RELEASE_VERSION must prevent signing."""
 
         with (
-            mock.patch.object(policy, "tag_commit", return_value="a" * 40),
-            mock.patch.object(policy, "current_commit", return_value="b" * 40),
-            self.assertRaisesRegex(ValueError, "commit differs"),
+            mock.patch.object(policy, "tag_commit") as tag_commit,
+            mock.patch.object(policy, "current_commit") as current,
         ):
-            policy.validate("push", "refs/tags/v0.5.21-hw", "", "", ROOT)
+            for ref in ("v0.5.21-hw", "v0.5.22-hw"):
+                with (
+                    self.subTest(ref=ref),
+                    self.assertRaisesRegex(ValueError, "VERSION differs"),
+                ):
+                    policy.validate("push", "refs/tags/" + ref, "", "", ROOT)
+            tag_commit.assert_not_called()
+            current.assert_not_called()
+
+    def test_a_tag_must_point_to_the_exact_approved_commit(self):
+        """Even equal test markers must reject a mismatched Git SHA."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory)
+            for name in ("VERSION", "RELEASE_VERSION"):
+                (sample / name).write_text("0.5.22-hw\n")
+            with (
+                mock.patch.object(policy, "tag_commit", return_value="a" * 40),
+                mock.patch.object(
+                    policy, "current_commit", return_value="b" * 40
+                ),
+                self.assertRaisesRegex(ValueError, "commit differs"),
+            ):
+                policy.validate("push", "refs/tags/v0.5.22-hw", "", "", sample)
+
+    def test_staging_does_not_retag_existing_release(self):
+        """The published 0.5.21 marker must remain untouched."""
+
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.21-hw")
+        self.assertEqual(version("VERSION"), "0.5.22-hw")
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""
