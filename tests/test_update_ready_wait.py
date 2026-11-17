@@ -21,16 +21,30 @@ class UpdateReadyWaitTests(unittest.TestCase):
         self.path = Path(self.temp.name)
         curl = self.path / "curl"
         curl.write_text(
-            "#!/usr/bin/env python3\n"
-            "import os, sys\n"
-            "from pathlib import Path\n"
-            "count = Path(os.environ['READY_COUNT_FILE'])\n"
-            "used = int(count.read_text()) if count.exists() else 0\n"
-            "count.write_text(str(used + 1))\n"
-            "if not sys.argv[-1].endswith('/ready'):\n"
-            "    sys.exit(21)\n"
-            "codes = os.environ['READY_CODES'].split(',')\n"
-            "print(codes[min(used, len(codes) - 1)], end='')\n",
+            "#!/bin/sh\n"
+            "used=0\n"
+            'if [ -f "$READY_COUNT_FILE" ]; then\n'
+            '    IFS= read -r used < "$READY_COUNT_FILE"\n'
+            "fi\n"
+            'printf \'%s\\n\' "$((used + 1))" > "$READY_COUNT_FILE"\n'
+            "last_arg=\n"
+            'for arg in "$@"; do last_arg=$arg; done\n'
+            'case "$last_arg" in\n'
+            "    */ready) ;;\n"
+            "    *) exit 21 ;;\n"
+            "esac\n"
+            "IFS=,\n"
+            "position=0\n"
+            "last_code=\n"
+            "for code in $READY_CODES; do\n"
+            "    last_code=$code\n"
+            '    if [ "$position" -eq "$used" ]; then\n'
+            "        printf '%s' \"$code\"\n"
+            "        exit 0\n"
+            "    fi\n"
+            "    position=$((position + 1))\n"
+            "done\n"
+            "printf '%s' \"$last_code\"\n",
             encoding="utf-8",
         )
         curl.chmod(0o700)
