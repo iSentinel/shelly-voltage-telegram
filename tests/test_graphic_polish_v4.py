@@ -44,6 +44,13 @@ def pixel(buffer: bytearray, x: int, y: int, width: int = WIDTH) -> bytes:
 class GraphicPolishV4Tests(unittest.TestCase):
     """Enforce past, present, future and clean baseline typography."""
 
+    def setUp(self):
+        """Use bitmap-v4 rendering independent of Docker defaults."""
+
+        style = mock.patch.dict("os.environ", {"TELEGRAM_GRAPHIC_STYLE": "v4"})
+        style.start()
+        self.addCleanup(style.stop)
+
     def test_unit_stays_on_big_number_baseline(self):
         """The Cyrillic unit is no longer a lowered bitmap label."""
 

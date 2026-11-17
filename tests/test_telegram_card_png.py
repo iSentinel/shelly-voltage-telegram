@@ -87,6 +87,9 @@ class TelegramGraphicWidgetTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        style = mock.patch.dict("os.environ", {"TELEGRAM_GRAPHIC_STYLE": "v4"})
+        style.start()
+        self.addCleanup(style.stop)
 
     def render(self, state: dict) -> tuple[dict, bytes]:
         """Render exactly once and return the report plus PNG bytes."""

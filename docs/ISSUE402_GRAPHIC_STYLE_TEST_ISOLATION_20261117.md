@@ -21,11 +21,13 @@ production Telegram renderer failure.
 
 ## Fix
 
-The v4-specific test class now pins `TELEGRAM_GRAPHIC_STYLE=v4`
+The v4-specific test classes now pin `TELEGRAM_GRAPHIC_STYLE=v4`
 using `mock.patch.dict("os.environ", ...)` started in
 `setUp()` and restored by `addCleanup()`. The patch is scoped
 to each test; it neither modifies the user's `.env` nor changes the
 v5 renderer in `telegram_card_v5.py`.
+
+Two more legacy v4 suites also pin their bitmap rendering mode: `test_graphic_polish_v4.py` and `test_telegram_card_png.py`. The latter asserts unfiltered RGB bitmap PNG bytes and cannot be evaluated using the modern v5 encoder; the original failures were fixture drift.
 
 The separate `test_telegram_card_v5.py` already selects v5
 explicitly and continues to test its Unicode fonts, online/offline
