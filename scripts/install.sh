@@ -338,6 +338,27 @@ prepare_state() {
     done
 }
 
+
+prepare_yasno_reader() {
+    # The dedicated forecast account must read code, not .env or secrets.
+    if ! getent group shelly-yasno >/dev/null 2>&1 ||
+        ! id -u shelly-yasno >/dev/null 2>&1; then
+        return 0
+    fi
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: grant minimal YASNO group source traversal"
+        return 0
+    fi
+    chgrp shelly-yasno "$TARGET" "$TARGET/scripts"
+    chmod 0750 "$TARGET"
+    chmod 0710 "$TARGET/scripts"
+    [[ "$(stat -c %a "$TARGET/.env")" == 600 &&
+       "$(stat -c %a "$TARGET/secrets")" == 700 ]] || {
+        echo "ERROR: private Shelly credentials lost protected mode." >&2
+        return 1
+    }
+}
+
 configure_project() {
     if [[ "$DRY_RUN" == true ]]; then
         echo "DRY-RUN: configure Shelly host and optional Telegram secrets"
@@ -370,14 +391,17 @@ await_signed_ready() {
         else
             consecutive=0
         fi
-        if [[ "$consecutive" -ge 3 ]]; then
+        if [[ "$consecutive" -ge 3 ]] &&
             python3 "$TARGET/scripts/deployment-state-audit.py" \
-                --root "$TARGET"
-            return
+                --root "$TARGET" >/dev/null 2>&1; then
+            echo "SIGNED DEPLOYMENT PARITY: PASS"
+            return 0
         fi
         sleep 2
     done
-    echo "ERROR: signed image did not achieve stable Shelly readiness." >&2
+    echo "ERROR: signed deployment did not become fully healthy." >&2
+    python3 "$TARGET/scripts/deployment-state-audit.py" \
+        --root "$TARGET" || true
     return 1
 }
 
@@ -447,6 +471,7 @@ main() {
     install_docker
     copy_source
     prepare_state
+    prepare_yasno_reader
     configure_project
     install_units
     deploy
