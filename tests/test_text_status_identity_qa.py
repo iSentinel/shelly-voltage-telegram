@@ -281,6 +281,26 @@ class TextStatusIdentityQaTests(unittest.TestCase):
             self.storage.get_meta(APP.RECOVERY_ROTATION_PENDING_KEY)
         )
 
+    def test_502_edit_failure_keeps_existing_status_identity(self):
+        """An uncertain edit cannot trigger a duplicate text post."""
+        self.monitor.telegram.edit.side_effect = RuntimeError(
+            "Telegram API error 502"
+        )
+        result = self.monitor.upsert_text_status_message("fixture", KEY, CHAT)
+        self.assertFalse(result)
+        self.assert_text_identity(101)
+        self.monitor.telegram.send.assert_not_called()
+
+    def test_read_timeout_edit_keeps_existing_status_identity(self):
+        """A timed-out edit must not replace the saved message ID."""
+        self.monitor.telegram.edit.side_effect = RuntimeError(
+            "Telegram transport error: ReadTimeout"
+        )
+        result = self.monitor.upsert_text_status_message("fixture", KEY, CHAT)
+        self.assertFalse(result)
+        self.assert_text_identity(101)
+        self.monitor.telegram.send.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

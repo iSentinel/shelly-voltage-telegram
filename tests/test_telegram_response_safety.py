@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import Mock, patch
 
+from requests.exceptions import ReadTimeout
 from test_app import APP, config
 
 
@@ -109,6 +110,62 @@ class TelegramResponseSafetyTests(unittest.TestCase):
         ):
             self.bot.call("getMe", {})
         self.assertEqual(post.call_count, 2)
+
+    def test_http_502_does_not_replay_ambiguous_status_edit(self):
+        """A failed edit must not be implicitly sent again."""
+        reply = {
+            "ok": False,
+            "error_code": 502,
+            "description": "upstream private-marker",
+        }
+        with (
+            patch.object(self.bot, "_post", return_value=reply) as post,
+            patch.object(APP.time, "sleep") as sleep,
+            self.assertRaisesRegex(
+                RuntimeError, "Telegram API error 502"
+            ) as raised,
+        ):
+            self.bot.call("editMessageText", {"text": "fixture"})
+        post.assert_called_once_with("editMessageText", {"text": "fixture"})
+        sleep.assert_not_called()
+        self.assertNotIn("private-marker", str(raised.exception))
+
+    def test_read_timeout_does_not_replay_ambiguous_send(self):
+        """Unknown delivery of sendMessage must not trigger a retry."""
+        with (
+            patch.object(
+                self.bot.api_session,
+                "post",
+                side_effect=ReadTimeout("private-marker"),
+            ) as post,
+            patch.object(APP.time, "sleep") as sleep,
+            self.assertRaisesRegex(
+                RuntimeError, "Telegram transport error: ReadTimeout"
+            ) as raised,
+        ):
+            self.bot.call("sendMessage", {"text": "fixture"})
+        post.assert_called_once()
+        sleep.assert_not_called()
+        self.assertNotIn("private-marker", str(raised.exception))
+
+    def test_429_then_502_stops_after_one_retry(self):
+        """Bound the 429 retry even if the next response is a 502."""
+        replies = [
+            {
+                "ok": False,
+                "error_code": 429,
+                "parameters": {"retry_after": 5},
+            },
+            {"ok": False, "error_code": 502},
+        ]
+        with (
+            patch.object(self.bot, "_post", side_effect=replies) as post,
+            patch.object(APP.time, "sleep") as sleep,
+            self.assertRaisesRegex(RuntimeError, "Telegram API error 502"),
+        ):
+            self.bot.call("getUpdates", {})
+        self.assertEqual(post.call_count, 2)
+        sleep.assert_called_once_with(5.0)
 
 
 if __name__ == "__main__":
