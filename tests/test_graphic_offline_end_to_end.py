@@ -61,6 +61,9 @@ class OfflineGraphicAcceptanceTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.target = Path(self.temp.name) / "graphic.png"
+        style = mock.patch.dict("os.environ", {"TELEGRAM_GRAPHIC_STYLE": "v4"})
+        style.start()
+        self.addCleanup(style.stop)
 
     def render(self, state: dict) -> tuple[dict, bytes]:
         """Return renderer metadata and the exact PNG bytes."""
