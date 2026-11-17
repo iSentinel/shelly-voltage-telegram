@@ -349,14 +349,24 @@ prepare_yasno_reader() {
         echo "DRY-RUN: grant minimal YASNO group source traversal"
         return 0
     fi
+    # Validate owners before any group access changes. A mode-0600 .env
+    # owned by the forecast account is still readable to that account.
+    if [[ -L "$TARGET" || -L "$TARGET/scripts" ||
+          -L "$TARGET/.env" || -L "$TARGET/secrets" ||
+          ! -d "$TARGET" || ! -d "$TARGET/scripts" ||
+          ! -f "$TARGET/.env" || ! -d "$TARGET/secrets" ||
+          "$(stat -c %u "$TARGET")" != "$EUID" ||
+          "$(stat -c %u "$TARGET/scripts")" != "$EUID" ||
+          "$(stat -c %u "$TARGET/.env")" != "$EUID" ||
+          "$(stat -c %u "$TARGET/secrets")" != "$EUID" ||
+          "$(stat -c %a "$TARGET/.env")" != 600 ||
+          "$(stat -c %a "$TARGET/secrets")" != 700 ]]; then
+        echo "ERROR: private Shelly credentials lost protected mode." >&2
+        return 1
+    fi
     chgrp shelly-yasno "$TARGET" "$TARGET/scripts"
     chmod 0750 "$TARGET"
     chmod 0710 "$TARGET/scripts"
-    [[ "$(stat -c %a "$TARGET/.env")" == 600 &&
-       "$(stat -c %a "$TARGET/secrets")" == 700 ]] || {
-        echo "ERROR: private Shelly credentials lost protected mode." >&2
-        return 1
-    }
 }
 
 configure_project() {

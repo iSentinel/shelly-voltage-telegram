@@ -45,6 +45,24 @@ made writable by the forecast service. Missing optional YASNO account
 is a no-op; dry-run is non-mutating. A mode violation on private state
 blocks installation.
 
+## Combined-candidate security review follow-up
+
+The combined QA branch includes an additional fail-closed guard that
+checks **file ownership** and symlinks before any directory group
+permissions are modified. A file with mode 0600 but owned by the
+forecast account is still readable by that account, so checking only
+the mode is insufficient. The installer checks that its project root,
+scripts directory, private .env and secrets directory are real paths
+owned by the invoking account (root in a production installation).
+It verifies .env 0600 and secrets 0700 before chgrp/chmod.
+
+Two new synthetic scenarios reject unexpected config ownership and
+a symlinked scripts directory, and assert that no permissions have
+changed on failure. The existing insecure .env-mode test also verifies
+that the directory modes and group operations remain untouched.
+This extra hardening is present in the combined integration QA branch,
+not in the original immutable v0.5.22-hw production image.
+
 ## Test coverage
 
 `tests/test_install_ready_yasno_permissions_qa.py` runs only the

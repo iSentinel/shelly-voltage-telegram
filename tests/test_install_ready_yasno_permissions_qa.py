@@ -286,6 +286,39 @@ printf 'mode %s\n' "$*" >> "$YASNO_CALLS"
             stat.S_IMODE((self.target / "secrets").stat().st_mode), 0o700
         )
 
+    def test_wrong_owner_fails_before_directory_mode_change(self) -> None:
+        """Reject a private config owned by someone else, even at 0600."""
+
+        self.fake(
+            "stat",
+            """
+case "$*" in
+    *'%u'*'/.env') printf '99999\\n' ;;
+    *) exec /usr/bin/stat "$@" ;;
+esac
+""",
+        )
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("credentials lost protected mode", result.stderr)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+        self.assertEqual(
+            stat.S_IMODE((self.target / "scripts").stat().st_mode),
+            0o700,
+        )
+        self.assertFalse(self.calls.exists())
+
+    def test_symlinked_scripts_fail_before_group_change(self) -> None:
+        """Never grant traversal to arbitrary paths through a linked dir."""
+
+        scripts = self.target / "scripts"
+        scripts.rmdir()
+        scripts.symlink_to(self.root, target_is_directory=True)
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+        self.assertFalse(self.calls.exists())
+
     def test_insecure_env_blocks_source_install(self) -> None:
         """Never accept a readable private .env after the access change."""
 
@@ -293,6 +326,12 @@ printf 'mode %s\n' "$*" >> "$YASNO_CALLS"
         result = self.run_yasno(present=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("credentials lost protected mode", result.stderr)
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+        self.assertEqual(
+            stat.S_IMODE((self.target / "scripts").stat().st_mode),
+            0o700,
+        )
+        self.assertFalse(self.calls.exists())
 
 
 if __name__ == "__main__":
