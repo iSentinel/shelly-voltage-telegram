@@ -34,7 +34,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Source release version: `0.5.22-hw`. Verify signed assets at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); last field-tested production: `0.5.21-hw`. Publication does not imply installation.
+Source release version: `0.5.23-hw`. Verify signed assets at [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); last field-tested production: `0.5.22-hw`. Publication does not imply installation.
 
 ## What it does
 
@@ -55,9 +55,9 @@ The service is designed as a **monitor only**. It does not switch relays, change
 
 ## Project status
 
-- **Current source release version: `0.5.22-hw`** (installation is separate).
+- **Current source release version: `0.5.23-hw`** (installation is separate).
 - **Signed release:** verify the [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases) assets and immutable Cosign signature.
-- **Production field-test runtime: `0.5.21-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
+- **Production field-test runtime: `0.5.22-hw`**, live on the physical Shelly Pro EM-50; the last fully hardware-accepted electrical-transition checkpoint remains `0.5.6-hw`.
 - **Hardware-accepted live checkpoint: `0.5.6-hw`**.
 - Candidate `0.5.9-hw` silently replaces an unchanged recovery post with a fresh current-status post after 15 stable minutes.
 - Candidate `0.5.10-hw` adds read-only field acceptance for the natural 15-minute stable-recovery status rotation.
