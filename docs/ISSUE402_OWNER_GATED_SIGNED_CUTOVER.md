@@ -20,7 +20,7 @@ success is not an authorization to merge, publish, reboot or update.
 - GitHub `main` contains both `VERSION=0.5.21-hw` and
   `RELEASE_VERSION=0.5.21-hw`. **No new version or tag is approved**.
 - The separate **on-host checkout** still says
-  `VERSION=RELEASE_VERSION=0.5.15-hw` and has stale 
+  `VERSION=RELEASE_VERSION=0.5.15-hw` and has stale
   `app.py` SHA256
   `2651a21d3a447e5e839730eaa0bddbddb5bfe9afa89ec9e69bad97d1d7791aea`.
   It is not the running 0.5.21-hw OCI source. Never derive the release
