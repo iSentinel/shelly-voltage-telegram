@@ -321,7 +321,7 @@ class Em50ReleasePreflightTests(unittest.TestCase):
         """Staged and equal markers cannot grant a signed cutover."""
 
         self.assertIn(
-            "stable_marker_unchanged=true",
+            "stable_marker_matches=true",
             GATE.version_check(ROOT),
         )
         with tempfile.TemporaryDirectory() as tmp:

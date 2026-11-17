@@ -1,4 +1,4 @@
-"""Keep the EM-50 candidate separate from published and live releases."""
+"""Require a promoted EM-50 release to match its exact signed tag."""
 
 from __future__ import annotations
 
@@ -22,32 +22,30 @@ def version(name: str) -> str:
 
 
 class Em50ReleaseCandidateTests(unittest.TestCase):
-    """Never authorize a stable tag from an unaccepted candidate."""
+    """Allow only the newly approved exact stable release tag."""
 
-    def test_promotion_target_is_distinct_from_live_device(self):
-        """Release proposal must not pretend the meter has been upgraded."""
+    def test_promotion_markers_are_equal(self):
+        """The approved release must have matching stable version files."""
 
         self.assertEqual(version("VERSION"), "0.5.22-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.21-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.22-hw")
         self.assertEqual(version("LIVE_VERSION"), "0.5.6-hw")
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
-        self.assertNotEqual(version("VERSION"), version("RELEASE_VERSION"))
 
-    def test_unsigned_candidate_rejects_both_stable_tags(self):
-        """Unpromoted VERSION and RELEASE_VERSION must prevent signing."""
+    def test_signed_release_accepts_only_its_exact_tag(self):
+        """Never republish the old version under the new release source."""
 
         with (
-            mock.patch.object(policy, "tag_commit") as tag_commit,
-            mock.patch.object(policy, "current_commit") as current,
+            mock.patch.object(policy, "tag_commit", return_value="a" * 40),
+            mock.patch.object(policy, "current_commit", return_value="a" * 40),
         ):
-            for ref in ("v0.5.21-hw", "v0.5.22-hw"):
-                with (
-                    self.subTest(ref=ref),
-                    self.assertRaisesRegex(ValueError, "VERSION differs"),
-                ):
-                    policy.validate("push", "refs/tags/" + ref, "", "", ROOT)
-            tag_commit.assert_not_called()
-            current.assert_not_called()
+            policy.validate(
+                "push", "refs/tags/v0.5.22-hw", "", "", ROOT
+            )
+            with self.assertRaisesRegex(ValueError, "tag differs"):
+                policy.validate(
+                    "push", "refs/tags/v0.5.21-hw", "", "", ROOT
+                )
 
     def test_a_tag_must_point_to_the_exact_approved_commit(self):
         """Even equal test markers must reject a mismatched Git SHA."""
@@ -65,10 +63,10 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
             ):
                 policy.validate("push", "refs/tags/v0.5.22-hw", "", "", sample)
 
-    def test_staging_does_not_retag_existing_release(self):
-        """The published 0.5.21 marker must remain untouched."""
+    def test_published_marker_is_the_exact_release_target(self):
+        """Stable and candidate markers may match only on release."""
 
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.21-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.22-hw")
         self.assertEqual(version("VERSION"), "0.5.22-hw")
 
     def test_manual_qa_build_ref_is_allowed(self):
