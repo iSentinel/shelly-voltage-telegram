@@ -65,6 +65,11 @@ def sample_counts(
 
     early_end = max(start, (ended or start) - grace)
     queries = {
+        "recorded_count": (
+            "SELECT COUNT(*) FROM measurements "
+            "WHERE phase=? AND ts>=? AND ts<?",
+            (phase, start, ended or start),
+        ),
         "early_count": (
             "SELECT COUNT(*) FROM measurements "
             "WHERE phase=? AND ts>=? AND ts<?",
@@ -171,7 +176,14 @@ def report(state: dict, health: dict, now: float, grace: int) -> dict:
         "ended_at": ended.isoformat(timespec="seconds"),
         "duration_seconds": round(state["end"] - state["start"], 1),
         "recovery_grace_seconds": grace,
-        "measurements_during_offline": state["early_count"],
+        "measurements_during_offline": state["recorded_count"],
+        "measurements_before_recovery_grace": state["early_count"],
+        "measurements_in_recovery_grace": (
+            state["recorded_count"] - state["early_count"]
+        ),
+        "grace_covers_whole_incident": (
+            state["end"] - state["start"] <= grace
+        ),
         "measurements_after_recovery": state["after_count"],
         "synthetic_zero_samples": state["zero_count"],
         "status_id_saved": state["status_saved"],

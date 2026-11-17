@@ -92,6 +92,64 @@ class NaturalRecoveryAuditTests(unittest.TestCase):
         self.assertFalse(record["release_authorized"])
         self.assertNotIn("synthetic-private-id", json.dumps(record))
 
+    def test_short_outage_grace_covers_recorded_event(self):
+        """Count a recovered sample inside a short incident."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "UPDATE outages SET started_at=?,ended_at=? WHERE id=18",
+                (self.now - 66, self.now - 45),
+            )
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 55, 219.5, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        AUDIT.check_recovery(
+            state, health(self.now), {"ready": True}, self.now, 60
+        )
+        report = AUDIT.report(state, health(self.now), self.now, 60)
+        self.assertEqual(report["measurements_during_offline"], 1)
+        self.assertEqual(report["measurements_before_recovery_grace"], 0)
+        self.assertEqual(report["measurements_in_recovery_grace"], 1)
+        self.assertTrue(report["grace_covers_whole_incident"])
+
+    def test_long_outage_distinguishes_raw_and_recovery_samples(self):
+        """A valid reading during hysteresis is not proof of early recovery."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 75, 220.1, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        AUDIT.check_recovery(
+            state, health(self.now), {"ready": True}, self.now, 60
+        )
+        report = AUDIT.report(state, health(self.now), self.now, 60)
+        self.assertEqual(report["measurements_during_offline"], 1)
+        self.assertEqual(report["measurements_before_recovery_grace"], 0)
+        self.assertEqual(report["measurements_in_recovery_grace"], 1)
+        self.assertFalse(report["grace_covers_whole_incident"])
+
+    def test_sample_before_grace_remains_a_recovery_failure(self):
+        """A sample in the confirmed offline section must remain NO-GO."""
+
+        with contextlib.closing(sqlite3.connect(self.db)) as db:
+            db.execute(
+                "INSERT INTO measurements VALUES (?,?,?,?)",
+                (self.now - 120, 219.5, 50.0, "L1"),
+            )
+            db.commit()
+        state = AUDIT.read_state(self.db, 60)
+        self.assertEqual(state["early_count"], 1)
+        with self.assertRaisesRegex(ValueError, "incident history"):
+            AUDIT.check_recovery(
+                state, health(self.now), {"ready": True}, self.now, 60
+            )
+
     def test_read_only_does_not_modify_source_database(self):
         """Even metadata must stay byte-for-byte unchanged."""
 
