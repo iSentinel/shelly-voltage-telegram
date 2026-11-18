@@ -280,3 +280,75 @@ participates in the shared fencing design.
 Release gate remains BLOCKED: a common production writer contract,
 reliable supervisor, exact source/OCI rollback and latest complete
 SQLite/WAL history with PHOTO identity must all be accepted together.
+
+## Disposable two-lock real Docker writer protocol, 2026-11-19
+
+A new source-only *synthetic* experiment in
+scripts/boot-fenced-writer-disposable-qa.py uses two independent
+POSIX flock locks to model the complete boot/update agreement:
+
+- A lifetime owner.lock lease rejects a second writer with
+  WRITER_ALREADY_ACTIVE. This prevents two writers from
+  alternating batches without a single owner.
+- A short writer.lock surrounds both the pending-update check
+  and each atomic SQLite transaction containing L1/L2/L3.
+  The synthetic updater must acquire that same lock before
+  publishing its pending-update marker with O_EXCL and fsync.
+- The writer rechecks pending inside the SQLite transaction.
+  A marker present before start returns PENDING_FENCED with
+  no measurements. A marker published during a live writer
+  stops the next cycle; completed phase triplets and the
+  synthetic PHOTO identity are preserved.
+- A signed production image or current production updater
+  has NOT been changed to use these new locks.
+
+Five private-process regression tests PASS, including pending
+before start, three-phase atomic triplets, owner contention,
+pending publication during continuous writing, and linked lock
+path rejection; the existing 11/11 owner-race regression tests
+and full source quality gate also PASS.
+
+The script was copied byte-for-byte into **offline disposable
+LXC114** (loopback only), where a separate QA directory and
+synthetic SQLite were created for UID 10001. A real Docker
+container used the preinstalled local QA-only signed Storage
+image with --network none, read-only root, dropped privileges,
+no production mounts, and --restart no:
+
+- Preexisting pending caused blocked exit 2, zero rows.
+- Three successful cycles wrote nine rows, exactly three per
+  phase. A second concurrent Docker process was rejected
+  with WRITER_ALREADY_ACTIVE.
+- The shared-lock publisher created pending while the first
+  writer was running. The first writer exited code 2, and a
+  final read-only audit confirmed **33/33** completed synthetic
+  phase records, SQLite quick_check=ok, unmodified PHOTO ID
+  and zero further writes after pending.
+- An initial QA setup used root-owned writer.lock and thus
+  failed access as UID 10001. Correcting ownership **only in
+  the isolated QA directory** fixed the setup; no product
+  code or production file was involved.
+
+A further *deliberately unsafe* QA Docker unless-stopped
+experiment used the guarded test writer with pending already
+present. Docker restarted the test container across a real
+**LXC114 Docker daemon restart** (RestartCount 2 -> 3),
+but the in-process pending check prevented all new SQLite
+writes; the 33 synthetic records and PHOTO marker survived.
+The container was promptly deleted and its image was not
+deployed elsewhere. This also shows why unless-stopped is an
+undesirable busy-restart owner for a blocked writer.
+
+Final QA cleanup: no extra QA Docker containers, original
+LXC114 QA writer still stopped with restart=no, disposable
+systemd unit/watchdog inactive/disabled, original pending
+marker preserved. No live Shelly, Telegram, production SQLite,
+Proxmox host reboot or LXC110 service was touched.
+
+**Release boundary:** A mock in-process writer gate is not
+an installed production gate. The actual bot, updater and
+recovery must all adopt a consistent owner lease and short
+transaction/marker fence; user-approved signed image and
+rollback acceptance remain required. Existing Issue340
+BOOT_INSTALLED_SOURCE_DRIFT and BOOT_DOCKER_RESTART_OWNER_UNFENCED
+must not be marked resolved by this experiment alone.
