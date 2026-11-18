@@ -9,6 +9,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -200,7 +201,7 @@ class DisposableRollbackTests(unittest.TestCase):
         QA.create_fixture(active, 10)
         QA.sqlite_backup(active, rescue)
         original = QA.fixture_digest(active)
-        with sqlite3.connect(rescue) as database:
+        with closing(sqlite3.connect(rescue)) as database:
             database.execute(
                 "UPDATE telegram_status SET message_id=2000 WHERE id=1"
             )
@@ -232,7 +233,7 @@ class DisposableRollbackTests(unittest.TestCase):
 
         folder = self.directory("photo")
         QA.run_case(folder, self.signed, OLD, NEW, "after_old_db_swap")
-        with sqlite3.connect(folder / "active.sqlite3") as connection:
+        with closing(sqlite3.connect(folder / "active.sqlite3")) as connection:
             entry = connection.execute(
                 "SELECT media_kind, message_id FROM telegram_status"
             ).fetchone()

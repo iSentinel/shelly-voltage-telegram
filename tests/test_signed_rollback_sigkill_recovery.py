@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,7 +134,7 @@ class ProcessKillRollbackTests(unittest.TestCase):
         folder = self.kill_disposable_child("after_old_db_swap")
         original = QA.fixture_digest(folder / "rescue.sqlite3")[0]
         QA.recover_fenced(folder, original, TARGET)
-        with sqlite3.connect(folder / "active.sqlite3") as connection:
+        with closing(sqlite3.connect(folder / "active.sqlite3")) as connection:
             marker = connection.execute(
                 "SELECT media_kind, message_id FROM telegram_status"
             ).fetchone()
