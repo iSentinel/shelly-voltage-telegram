@@ -34,7 +34,31 @@ if [[ ! -f "$checker" || ! -f "$release" ]]; then
 fi
 
 unit="svt-checker-cred-qa-$(date +%s)-$$"
-credential="/run/credentials/${unit}.service/github_update.py"
+credential_dir="/run/credentials/${unit}.service"
+expected_version="$(cat "$release")"
+probe="$(cat <<'PY'
+from pathlib import Path
+import os
+import runpy
+import sys
+
+credential_dir = Path(sys.argv[1])
+expected = sys.argv[2]
+module = runpy.run_path(
+    str(credential_dir / "github_update.py"),
+    run_name="credential_smoke",
+)
+actual = module["installed_version"](
+    credential_dir, credential_dir / "unused_state"
+)
+if actual != expected:
+    raise SystemExit("FAIL: incorrect release credential")
+os.execv(
+    "/usr/bin/python3",
+    ["/usr/bin/python3", str(credential_dir / "github_update.py"), "--help"],
+)
+PY
+)"
 if ! output="$(systemd-run --unit="$unit" --collect --wait --pipe \
     --service-type=exec \
     -p DynamicUser=yes -p WorkingDirectory=/ \
@@ -44,7 +68,7 @@ if ! output="$(systemd-run --unit="$unit" --collect --wait --pipe \
     -p Environment=PYTHONDONTWRITEBYTECODE=1 \
     -p "LoadCredential=github_update.py:$checker" \
     -p "LoadCredential=RELEASE_VERSION:$release" \
-    /usr/bin/python3 "$credential" --help 2>&1)"; then
+    /usr/bin/python3 -c "$probe" "$credential_dir"         "$expected_version" 2>&1)"; then
     printf '%s\n' "$output" >&2
     echo "FAIL: transient DynamicUser credential invocation" >&2
     exit 1
@@ -56,4 +80,4 @@ if [[ "$output" != *"usage: github_update.py"* ||
     echo "FAIL: missing expected checker or service success receipt" >&2
     exit 1
 fi
-echo "PASS: isolated systemd DynamicUser; two public LoadCredentials; no network"
+echo "PASS: DynamicUser reads checker and release credentials; no network"

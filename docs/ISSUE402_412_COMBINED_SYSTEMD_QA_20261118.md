@@ -20,10 +20,11 @@ installed systemd units. Do not treat this QA as release authorization.
   and `systemd-analyze verify` for its service unit passed.
 - A **real PID1 systemd** transient DynamicUser service on LXC110 successfully
   loaded two public credentials from a source tree protected by `/root`.
-  It executed the copied checker with `--help` (exit 0), with
+  It loaded and parsed the public release marker and executed the copied checker with `--help` (exit 0), with
   `ProtectHome=yes`, `ProtectSystem=strict` and AF_UNIX-only address family.
-- The repeatable, help-only, no-network test is provided as
+- The repeatable, read-only, no-network test is provided as
   `scripts/qa-update-check-credentials-systemd.sh` and completed PASS.
+  It verifies installed_version() against the release marker before --help.
   Its transient service is collected; it never starts the actual checker timer.
 - The initial raw `systemd-run` argument containing `%d` did **not**
   expand in its transient command (expected CLI escaping distinction).

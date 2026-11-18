@@ -49,6 +49,7 @@ jobs:
           bash -n scripts/rollback.sh
           bash -n scripts/release.sh
           bash -n scripts/quality.sh
+          bash -n scripts/qa-update-check-credentials-systemd.sh
           bash -n tests/test_rollback.sh
           bash -n tests/test_release.sh
           bash -n tests/test_install_release.sh
