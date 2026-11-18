@@ -173,8 +173,8 @@ the actual writer/service fencing remain separate release gates.
 
 The fixture-only recovery procedure now validates the latest rescue
 database **before any replacement**, writes and fsyncs a separate
-\`.recovery-candidate.sqlite3\`, checks whole-row plus PHOTO identity
-parity, then atomically replaces the synthetic active SQLite with
+\`.recovery-candidate.sqlite3\`, checks all logical SQLite tables, columns, phase mappings, saved
+meter selection and PHOTO identity before atomically replacing the synthetic active SQLite with
 \`os.replace\`. The fixture journal is atomically replaced and fsynced
 together with its directory. An attacker-linked candidate path is
 rejected before replacement. Every recovery entrypoint still requires
@@ -191,3 +191,29 @@ This is local filesystem **process crash** testing, not proof that the
 hypervisor, NVMe or host filesystem survives actual loss of power.
 Exact production signed rollback and physical power-loss recovery still
 require separate tests and owner approval.
+
+## Three-phase history cutover regression, 2026-11-18
+
+After the owner-approved replacement of permanently retired EM-50
+with Pro3EM-3CT63, LXC110 has historical L1 measurements plus new
+L1/L2/L3 triplets. The persisted Telegram setting must remain
+telegram_setting_meter_type=pro3em following any restore.
+
+The synthetic fixture_digest now hashes the complete deterministic
+SQLite iterdump() output, rather than just id and voltage
+from measurements plus the PHOTO record. This includes table schema,
+added phase/frequency columns, all measurement rows, meta,
+and PHOTO identity. Four targeted regressions prove that a rescue
+with an unchanged row count and voltage values but lost L3 mapping or
+a stale pro_em50 setting does not match. A verified synthetic
+rescue restores L1/L2/L3, the saved pro3em selection and PHOTO ID.
+No actual production history is used in these tests.
+
+The existing installed apply-update.sh --recover remains separate
+and NOT ACCEPTED for an upgrade. It can replace newer live SQLite
+with an old snapshot even after archiving the newer state; source-only
+fixture tests do not change that implementation or prove rollback
+transaction and Docker/systemd fencing. Never execute production
+--recover, overwrite newer history, change the OCI pin, or reactivate
+the update timer without fresh owner approval and a real isolated
+full-history acceptance that includes all three phases.

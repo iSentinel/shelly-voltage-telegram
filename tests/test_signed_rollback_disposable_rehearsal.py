@@ -57,6 +57,24 @@ class DisposableRollbackTests(unittest.TestCase):
         target.mkdir(mode=0o700)
         return target
 
+    def phase_fixture(self, target: Path) -> tuple[str, int]:
+        """Create synthetic post-cutover L1/L2/L3 plus saved Pro3EM type."""
+
+        QA.create_fixture(target, 10)
+        with closing(sqlite3.connect(target)) as db, db:
+            db.executescript(
+                "ALTER TABLE measurements ADD COLUMN phase TEXT "
+                "NOT NULL DEFAULT 'L1';"
+                "ALTER TABLE measurements ADD COLUMN frequency REAL "
+                "NOT NULL DEFAULT 50.0;"
+                "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);"
+                "INSERT INTO meta VALUES ('telegram_setting_meter_type',"
+                " 'pro3em');"
+                "UPDATE measurements SET phase='L2' WHERE id IN (8,9);"
+                "UPDATE measurements SET phase='L3' WHERE id=10;"
+            )
+        return QA.fixture_digest(target)
+
     def test_each_power_loss_boundary_preserves_new_history(self):
         """Never lose measurements, PHOTO ID or source/receipt parity."""
 
@@ -83,6 +101,69 @@ class DisposableRollbackTests(unittest.TestCase):
         QA.create_fixture(older, 6)
         self.assertNotEqual(QA.fixture_digest(newer), QA.fixture_digest(older))
         self.assertEqual(QA.fixture_digest(newer)[1], 10)
+
+    def test_phase_change_with_identical_voltage_and_count_is_detected(self):
+        """No rollback can disguise a lost L3 row as a current L1 row."""
+
+        active = self.root / "newer-phases.sqlite3"
+        rescue = self.root / "old-phases.sqlite3"
+        current = self.phase_fixture(active)
+        QA.sqlite_backup(active, rescue)
+        with closing(sqlite3.connect(rescue)) as db, db:
+            db.execute("UPDATE measurements SET phase='L1' WHERE id=10")
+        self.assertEqual(QA.fixture_digest(rescue)[1], current[1])
+        self.assertNotEqual(QA.fixture_digest(rescue)[0], current[0])
+
+    def test_saved_meter_type_change_invalidates_full_history(self):
+        """Old EM50 override cannot pass with the same voltage series."""
+
+        active = self.root / "newer-config.sqlite3"
+        rescue = self.root / "old-config.sqlite3"
+        current = self.phase_fixture(active)
+        QA.sqlite_backup(active, rescue)
+        with closing(sqlite3.connect(rescue)) as db, db:
+            db.execute(
+                "UPDATE meta SET value='pro_em50' "
+                "WHERE key='telegram_setting_meter_type'"
+            )
+        self.assertEqual(QA.fixture_digest(rescue)[1], current[1])
+        self.assertNotEqual(QA.fixture_digest(rescue)[0], current[0])
+
+    def test_stale_three_phase_rescue_refused_before_overwrite(self):
+        """Preserve post-cutover phase rows when rescue is a stale image."""
+
+        folder = self.directory("stale-three-phase")
+        active, rescue = folder / "active.sqlite3", folder / "rescue.sqlite3"
+        current = self.phase_fixture(active)
+        QA.sqlite_backup(active, rescue)
+        with closing(sqlite3.connect(rescue)) as db, db:
+            db.execute("UPDATE measurements SET phase='L1' WHERE id=10")
+        with self.assertRaisesRegex(QA.Blocked, "RESCUE_HISTORY_MISMATCH"):
+            QA.recover_newer(folder, current[0], NEW)
+        self.assertEqual(QA.fixture_digest(active), current)
+
+    def test_three_phase_recovery_preserves_saved_model_and_photo(self):
+        """Restore all new phases and config only from a verified rescue."""
+
+        folder = self.directory("preserve-three-phase")
+        active, rescue = folder / "active.sqlite3", folder / "rescue.sqlite3"
+        current = self.phase_fixture(active)
+        QA.sqlite_backup(active, rescue)
+        with closing(sqlite3.connect(active)) as db, db:
+            db.execute("UPDATE measurements SET phase='L1'")
+            db.execute("UPDATE meta SET value='pro_em50'")
+        QA.recover_fenced(folder, current[0], NEW)
+        self.assertEqual(QA.fixture_digest(active), current)
+        with closing(sqlite3.connect(active)) as db:
+            phase_counts = db.execute(
+                "SELECT phase,count(*) FROM measurements GROUP BY phase"
+            ).fetchall()
+            saved = db.execute("SELECT value FROM meta").fetchone()[0]
+            photo = db.execute(
+                "SELECT media_kind,message_id FROM telegram_status"
+            ).fetchone()
+        self.assertEqual(phase_counts, [("L1", 7), ("L2", 2), ("L3", 1)])
+        self.assertEqual((saved, photo), ("pro3em", ("photo", 1000)))
 
     def test_corrupted_rescue_fails_before_database_overwrite(self):
         """Do not replace current records using a corrupt rescue image."""

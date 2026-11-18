@@ -61,19 +61,18 @@ def create_fixture(path: Path, rows: int) -> None:
 
 
 def fixture_digest(path: Path) -> tuple[str, int]:
-    """Hash full logical records and preserved PHOTO identity."""
+    """Hash every logical table and setting, including phase metadata."""
 
+    digest = hashlib.sha256()
     with closing(sqlite3.connect(f"file:{path}?mode=ro", uri=True)) as db:
+        db.execute("PRAGMA query_only=ON")
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise Blocked("FIXTURE_SQLITE_CORRUPT")
-        rows = db.execute(
-            "SELECT id, voltage FROM measurements ORDER BY id"
-        ).fetchall()
-        status = db.execute(
-            "SELECT id, media_kind, message_id FROM telegram_status"
-        ).fetchall()
-    data = json.dumps([rows, status], separators=(",", ":")).encode()
-    return hashlib.sha256(data).hexdigest(), len(rows)
+        rows = db.execute("SELECT count(*) FROM measurements").fetchone()[0]
+        for statement in db.iterdump():
+            digest.update(statement.encode("utf-8"))
+            digest.update(b"\n")
+    return digest.hexdigest(), rows
 
 
 def sqlite_backup(source: Path, destination: Path) -> None:
