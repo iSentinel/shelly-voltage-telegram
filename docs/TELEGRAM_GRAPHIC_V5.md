@@ -26,3 +26,21 @@ upload blocks further posts until the result is reconciled.
 Disabling graphics on a verified photo switches to caption updates.
 Returning the channel to a text post requires a separate publication with
 a verified destination and cleanup of the photo.
+
+## Elapsed schedule times
+
+The current Kyiv-local clock determines which YASNO schedule labels have
+fully elapsed. Completed hourly labels in the 24-hour grid and fully
+finished text windows are dimmed and struck through. The current
+part-hour, its active schedule window and all future labels remain clear,
+including at exact 30-minute boundaries and before midnight.
+
+This presentation-only rule applies to both the smooth v5 card and the
+bitmap v4 fallback. It never modifies the YASNO forecast, electricity
+measurements, Telegram message identity or delivery state. A planned
+power-on interval is not proof of measured power availability.
+
+Network-isolated acceptance uses the test_elapsed_schedule_strikes.py
+suite. It checks 03:59 versus 04:00, 16:45, 23:59 and 00:00 Kyiv time.
+The existing renderer regressions verify schedule colors and current-slot
+highlighting remain unchanged.
