@@ -37,6 +37,13 @@ start. Expired events never receive a new deadline merely because the
 service restarts. Periodic recreation of a missing status clears the old
 window start. Invalid or future timestamps do not allow message reuse.
 
+Cleanup of a previous status is saved in SQLite when the new post is
+confirmed. The bot unpins a known bot-managed pin before deleting the post.
+If either operation fails, the bot retries that step after 60 seconds,
+including after a restart. An old post is eligible only when its stored
+identity matches the configured chat. Unverified legacy posts and posts
+that Telegram refuses to delete may require manual cleanup.
+
 ## Verification
 
 `scripts/quality.sh` passed with Ruff 0.14.2. The complete unit suite passed
