@@ -202,3 +202,48 @@ full SQLite/WAL restore transaction.
 
 No production restart policy, systemd hook, updater timer, image,
 signed version or Telegram channel message was changed by this QA.
+
+## Real guest reboot A/B acceptance, 2026-11-18
+
+Unlike the prior Docker-daemon restart test, this pair rebooted
+**only disposable Proxmox LXC114** using pct reboot 114. The guest
+remains offline with no production mounts, and every test used a
+synthetic app.Storage writer under a private QA directory.
+
+With a pending-update marker present, an enabled guarded systemd
+unit and Docker restart=no:
+
+- After reboot, ExecStartPre returned its pending-marker refusal.
+  The real systemd unit failed closed and Docker never started.
+- Synthetic SQLite remained **900 of 900 rows**. The deterministic
+  complete logical SQLite dump SHA256 was identical before/after.
+  Its synthetic writer-start counter remained **17**.
+- The pending marker survived the reboot. The unit was returned
+  to inactive/disabled and the Docker policy stayed no.
+
+A second QA-only guest reboot deliberately reproduced the defect:
+the same container was temporarily set to Docker
+restart=unless-stopped, explicitly started before reboot, and the
+systemd unit was enabled with pending-update still present.
+
+- After reboot, guarded ExecStartPre again correctly refused start.
+- Nevertheless Docker started the mock writer *independently*.
+  Synthetic SQLite grew **900 -> 984 rows** (+84), and mock writer
+  starts advanced **17 -> 19**.
+- The unit, marker and Docker image were otherwise unchanged.
+  Post-test cleanup restored Docker restart=no, stopped the writer,
+  disabled the QA unit and preserved pending.
+
+Full evidence is recorded in Issue #340:
+https://github.com/iSentinel/shelly-voltage-telegram/issues/340
+
+This contrast demonstrates the exact real-boot restart-owner bypass
+that no purely static systemd inspection can rule out. Merely
+adding a pending check in ExecStartPre does not guard a container
+Docker can start autonomously. A safe signed release must prove
+both outage availability *and* that no writer runs during unresolved
+pending-update, with newest whole SQLite/WAL and Telegram PHOTO state
+intact. These are **guest-reboot** results, not sudden physical power
+loss, NVMe cache durability or an actual production signed rollback.
+The current production image, Compose restart policy, unit and
+updater timer were not changed.
