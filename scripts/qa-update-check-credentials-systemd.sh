@@ -7,7 +7,7 @@ usage() {
 Usage: scripts/qa-update-check-credentials-systemd.sh [-h|--help]
 
 Verify LoadCredential and DynamicUser using a transient systemd unit.
-Runs only github_update.py --help; never contacts GitHub or alters the bot.
+Validates the release marker, then runs --help; never contacts GitHub.
 Requires root and PID 1 systemd. No production unit is installed or restarted.
 HELP
 }
@@ -68,7 +68,8 @@ if ! output="$(systemd-run --unit="$unit" --collect --wait --pipe \
     -p Environment=PYTHONDONTWRITEBYTECODE=1 \
     -p "LoadCredential=github_update.py:$checker" \
     -p "LoadCredential=RELEASE_VERSION:$release" \
-    /usr/bin/python3 -c "$probe" "$credential_dir"         "$expected_version" 2>&1)"; then
+    /usr/bin/python3 -c "$probe" "$credential_dir" \
+        "$expected_version" 2>&1)"; then
     printf '%s\n' "$output" >&2
     echo "FAIL: transient DynamicUser credential invocation" >&2
     exit 1
