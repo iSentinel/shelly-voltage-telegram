@@ -4,14 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import importlib.util
 import json
 import os
 import shutil
 import sqlite3
+import stat
 import tempfile
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 PAIR = Path(__file__).with_name("signed-rollback-pair-preflight.py")
@@ -148,6 +150,13 @@ def recover_newer(folder: Path, newer_digest: str, version: str) -> None:
     journal(folder, "RECOVERED_NO_BOT_START")
 
 
+def recover_fenced(folder: Path, newer_digest: str, version: str) -> None:
+    """Acquire a new fixture writer lease before post-SIGKILL recovery."""
+
+    with writer_fence(folder):
+        recover_newer(folder, newer_digest, version)
+
+
 def write_current_pair(folder: Path, version: str) -> None:
     """Restore the fictional current version, receipt and Compose pin."""
 
@@ -165,10 +174,32 @@ def write_current_pair(folder: Path, version: str) -> None:
         os.chmod(folder / name, 0o600)
 
 
+@contextmanager
+def writer_fence(folder: Path):
+    """Hold a nonblocking POSIX lock on a private fixture writer token."""
+
+    path = folder / "synthetic-writer.lock"
+    if path.is_symlink():
+        raise Blocked("WRITER_FENCE_PATH_UNSAFE")
+    flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise Blocked("WRITER_FENCE_PATH_UNSAFE")
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Blocked("WRITER_NOT_FENCED") from exc
+        yield
+    finally:
+        os.close(descriptor)
+
+
 def run_case(
     root: Path, signed: Path, old: str, target: str, fault: str
 ) -> dict:
-    """Exercise a disposable abort and verify newest data is not erased."""
+    """Build synthetic databases and hold the fixture writer fence."""
 
     active = root / "active.sqlite3"
     historical = root / "historical.sqlite3"
@@ -180,6 +211,18 @@ def run_case(
     write_current_pair(root, target)
     if os.getenv("SVT_DISPOSABLE_WRITER_FENCED", "true") != "true":
         raise Blocked("WRITER_NOT_FENCED")
+    with writer_fence(root):
+        return execute_fenced_case(root, signed, old, target, fault)
+
+
+def execute_fenced_case(
+    root: Path, signed: Path, old: str, target: str, fault: str
+) -> dict:
+    """Inject an abort while keeping sole-writer mock fencing active."""
+
+    active = root / "active.sqlite3"
+    historical = root / "historical.sqlite3"
+    initial_digest = fixture_digest(active)[0]
     try:
         sqlite_backup(active, root / "rescue.sqlite3")
         require_equal(active, root / "rescue.sqlite3")

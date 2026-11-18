@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -117,6 +118,26 @@ class DisposableRollbackTests(unittest.TestCase):
             QA.run_case(folder, self.signed, OLD, NEW, "after_old_db_swap")
         self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 10)
         self.assertFalse((folder / "rescue.sqlite3").exists())
+
+    def test_actual_contending_writer_lock_blocks_transaction(self):
+        """A second fixture writer lease cannot be acquired concurrently."""
+
+        folder = self.directory("locked")
+        with (folder / "synthetic-writer.lock").open("w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(QA.Blocked, "WRITER_NOT_FENCED"):
+                QA.run_case(folder, self.signed, OLD, NEW, "after_old_db_swap")
+        self.assertFalse((folder / "rescue.sqlite3").exists())
+
+    def test_linked_writer_fence_path_is_rejected(self):
+        """Symlink substitution never bypasses the disposable writer lock."""
+
+        folder = self.directory("linked-fence")
+        (folder / "synthetic-writer.lock").symlink_to(
+            self.signed / "deployed.json"
+        )
+        with self.assertRaisesRegex(QA.Blocked, "WRITER_FENCE_PATH_UNSAFE"):
+            QA.run_case(folder, self.signed, OLD, NEW, "after_rescue")
 
     def test_bad_old_receipt_cannot_be_staged_as_a_verified_pair(self):
         """The staged old version must agree with the saved receipt."""

@@ -93,7 +93,7 @@ class ProcessKillRollbackTests(unittest.TestCase):
                 self.assertEqual(journal["phase"], fault)
                 newest = QA.fixture_digest(folder / "rescue.sqlite3")
                 self.assertEqual(newest[1], 10)
-                QA.recover_newer(folder, newest[0], TARGET)
+                QA.recover_fenced(folder, newest[0], TARGET)
                 self.assertEqual(
                     QA.fixture_digest(folder / "active.sqlite3"), newest
                 )
@@ -109,15 +109,30 @@ class ProcessKillRollbackTests(unittest.TestCase):
         folder = self.kill_disposable_child("after_old_db_swap")
         (folder / "rescue.sqlite3").unlink()
         with self.assertRaisesRegex(QA.Blocked, "RESCUE_HISTORY_MISMATCH"):
-            QA.recover_newer(folder, "0" * 64, TARGET)
+            QA.recover_fenced(folder, "0" * 64, TARGET)
         self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 6)
+
+    def test_contending_writer_blocks_post_kill_recovery(self):
+        """Recovery also requires an uncontended file lock."""
+
+        import fcntl
+
+        folder = self.kill_disposable_child("after_old_db_swap")
+        expected = QA.fixture_digest(folder / "rescue.sqlite3")[0]
+        with (folder / "synthetic-writer.lock").open("r+") as writer:
+            fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(QA.Blocked, "WRITER_NOT_FENCED"):
+                QA.recover_fenced(folder, expected, TARGET)
+        self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 6)
+        QA.recover_fenced(folder, expected, TARGET)
+        self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 10)
 
     def test_photo_record_survives_real_child_kill(self):
         """Even after a killed child, exact mock PHOTO ID survives."""
 
         folder = self.kill_disposable_child("after_old_db_swap")
         original = QA.fixture_digest(folder / "rescue.sqlite3")[0]
-        QA.recover_newer(folder, original, TARGET)
+        QA.recover_fenced(folder, original, TARGET)
         with sqlite3.connect(folder / "active.sqlite3") as connection:
             marker = connection.execute(
                 "SELECT media_kind, message_id FROM telegram_status"

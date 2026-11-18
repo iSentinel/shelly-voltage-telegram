@@ -140,6 +140,16 @@ authorization. No automatic DB replacement or public Telegram edit.
 
 ## Disposable process-kill acceptance
 
+The synthetic rehearsal now holds a **real nonblocking POSIX flock**
+on a private, non-symlinked per-case writer token through each recovery
+operation. A contending lock and a symlinked token both fail closed
+before mock rescue/rollback work. The kernel releases the child's file
+lock when a disposable SIGKILL test kills that child; subsequent
+fixture-only recovery must acquire its own independent writer lease,
+then verify the saved DB and PHOTO marker. If another process holds
+the lock, recovery refuses to replace the fixture DB.
+This models a lease, not the real systemd/Docker/SQLite writer fences.
+
 In addition to exception-injected recovery, the test suite launches a
 separate Python child with *only synthetic* SQLite and release metadata
 and terminates that child using actual SIGKILL at each of three journal
