@@ -93,6 +93,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         telegram.send.return_value = 555
         monitor = SimpleNamespace(
             cfg=SimpleNamespace(telegram_status_chat_id="-100123"),
+            config_lock=threading.RLock(),
             status_publish_lock=threading.RLock(),
             storage=storage,
             telegram=telegram,

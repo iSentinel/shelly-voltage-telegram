@@ -19,6 +19,7 @@ from telegram_card_png import (
     valid_forecast,
 )
 from telegram_schedule_periods import duration_label, schedule_periods
+from telegram_widget_data import numeric
 
 SCALE = 2
 BACKGROUND = "#0B1422"
@@ -32,11 +33,118 @@ AMBER = "#F3BE69"
 BLUE = "#83BBF7"
 SLOT_COLORS = {"O": GREEN, "X": RED, "?": AMBER}
 PAST_COLORS = {"O": "#22584B", "X": "#654354", "?": "#685540"}
-STATUS = {
-    "online": ("ОНЛАЙН", GREEN),
-    "offline": ("ОФЛАЙН", RED),
-    "stale": ("ЗАСТАРІЛІ ДАНІ", AMBER),
-    "unknown": ("НЕМАЄ ДАНИХ", AMBER),
+STATE_COLORS = {
+    "online": GREEN,
+    "offline": RED,
+    "stale": AMBER,
+    "unknown": AMBER,
+    "partial": AMBER,
+}
+QUALITY_COLORS = {
+    "normal": GREEN,
+    "low": AMBER,
+    "high": AMBER,
+    "critical_low": RED,
+    "critical_high": RED,
+    "unknown": MUTED,
+}
+CARD_TEXT = {
+    "uk": {
+        "title": "Електромережа",
+        "voltage": "ПОТОЧНА НАПРУГА",
+        "online": "НА ЗВ'ЯЗКУ",
+        "offline": "НЕМАЄ ЗВ'ЯЗКУ",
+        "stale": "ЗАСТАРІЛІ ДАНІ",
+        "unknown": "НЕМАЄ ДАНИХ",
+        "partial": "ЧАСТКОВІ ДАНІ",
+        "normal": "Напруга в нормі",
+        "low": "Знижена напруга",
+        "high": "Підвищена напруга",
+        "critical_low": "Критично низька",
+        "critical_high": "Критично висока",
+        "quality_unknown": "Пороги недоступні",
+        "unavailable": "Напруга недоступна",
+        "frequency": "ЧАСТОТА",
+        "volts": "В",
+        "hertz": "Гц",
+        "measured": "Виміряно",
+        "forecast": "Графік відключень",
+        "source": "YASNO · ДТЕК Київ",
+        "group": "Група {group}",
+        "no_forecast": "Актуального графіка немає",
+        "checked": "Лише прогноз YASNO · перевірено {time}",
+        "O": "Є світло",
+        "X": "Відключення",
+        "?": "Можливо",
+        "period_O": "ЗА ГРАФІКОМ Є СВІТЛО",
+        "period_X": "ПЛАНОВЕ ВІДКЛЮЧЕННЯ",
+        "period_?": "МОЖЛИВЕ ВІДКЛЮЧЕННЯ",
+        "extra": "ЩЕ {count} ІНТЕРВАЛІВ",
+    },
+    "ru": {
+        "title": "Электросеть",
+        "voltage": "ТЕКУЩЕЕ НАПРЯЖЕНИЕ",
+        "online": "НА СВЯЗИ",
+        "offline": "НЕТ СВЯЗИ",
+        "stale": "ДАННЫЕ УСТАРЕЛИ",
+        "unknown": "НЕТ ДАННЫХ",
+        "partial": "ЧАСТИЧНЫЕ ДАННЫЕ",
+        "normal": "Напряжение в норме",
+        "low": "Пониженное напряжение",
+        "high": "Повышенное напряжение",
+        "critical_low": "Критически низкое",
+        "critical_high": "Критически высокое",
+        "quality_unknown": "Пороги недоступны",
+        "unavailable": "Напряжение недоступно",
+        "frequency": "ЧАСТОТА",
+        "volts": "В",
+        "hertz": "Гц",
+        "measured": "Измерено",
+        "forecast": "График отключений",
+        "source": "YASNO · ДТЭК Киев",
+        "group": "Группа {group}",
+        "no_forecast": "Актуального графика нет",
+        "checked": "Только прогноз YASNO · проверено {time}",
+        "O": "Есть свет",
+        "X": "Отключение",
+        "?": "Возможно",
+        "period_O": "СВЕТ ПО ГРАФИКУ",
+        "period_X": "ПЛАНОВОЕ ОТКЛЮЧЕНИЕ",
+        "period_?": "ВОЗМОЖНОЕ ОТКЛЮЧЕНИЕ",
+        "extra": "ЕЩЁ {count} ИНТЕРВАЛОВ",
+    },
+    "en": {
+        "title": "Power monitor",
+        "voltage": "LIVE VOLTAGE",
+        "online": "CONNECTED",
+        "offline": "OFFLINE",
+        "stale": "STALE DATA",
+        "unknown": "NO DATA",
+        "partial": "PARTIAL DATA",
+        "normal": "Voltage in range",
+        "low": "Low voltage",
+        "high": "High voltage",
+        "critical_low": "Critically low",
+        "critical_high": "Critically high",
+        "quality_unknown": "Thresholds unavailable",
+        "unavailable": "Voltage unavailable",
+        "frequency": "FREQUENCY",
+        "volts": "V",
+        "hertz": "Hz",
+        "measured": "Measured",
+        "forecast": "Outage schedule",
+        "source": "YASNO · DTEK Kyiv",
+        "group": "Group {group}",
+        "no_forecast": "Current schedule unavailable",
+        "checked": "YASNO forecast only · checked {time}",
+        "O": "Power scheduled",
+        "X": "Scheduled off",
+        "?": "Possible outage",
+        "period_O": "POWER SCHEDULED",
+        "period_X": "SCHEDULED OUTAGE",
+        "period_?": "POSSIBLE OUTAGE",
+        "extra": "{count} MORE PERIODS",
+    },
 }
 FONT_FILES = {
     "regular": "opentype/inter/Inter-Regular.otf",
@@ -58,9 +166,11 @@ def font(root: str, weight: str, size: int):
 class Painter:
     """Paint vector glyphs at 2x and downsample the whole card."""
 
-    def __init__(self):
+    def __init__(self, language: str = "uk"):
         """Keep rendering independent of the network and filesystem state."""
 
+        self.language = language
+        self.labels = CARD_TEXT[language]
         self.image = Image.new(
             "RGB", (WIDTH * SCALE, HEIGHT * SCALE), BACKGROUND
         )
@@ -106,61 +216,135 @@ class Painter:
         reduced.save(path, "PNG", optimize=True)
 
 
-def header(painter: Painter, result: dict) -> None:
-    """Separate the physical connectivity badge from the outage forecast."""
+def voltage_quality(voltage: float, limits: object) -> str:
+    """Classify only with valid thresholds supplied by the running bot."""
+
+    if not isinstance(limits, (list, tuple)) or len(limits) != 4:
+        return "unknown"
+    values = [numeric(value, 0, 500) for value in limits]
+    if any(value is None for value in values) or values != sorted(values):
+        return "unknown"
+    critical_low, warning_low, warning_high, critical_high = values
+    if voltage <= critical_low:
+        return "critical_low"
+    if voltage >= critical_high:
+        return "critical_high"
+    if voltage <= warning_low:
+        return "low"
+    if voltage >= warning_high:
+        return "high"
+    return "normal"
+
+
+def phase_measurements(state: dict, now: float) -> dict:
+    """Validate each phase independently before rendering any value."""
+
+    secondary = state.get("p")
+    phases = {"L": state}
+    if isinstance(secondary, dict) and set(secondary) == {"L2", "L3"}:
+        phases = {"L1": state, **secondary}
+    result = {}
+    for phase, source in phases.items():
+        data = current_measurement(
+            source if isinstance(source, dict) else {}, now
+        )
+        if data["status"] == "online":
+            data["quality"] = voltage_quality(
+                data["voltage"], state.get("limits")
+            )
+        result[phase] = data
+    return result
+
+
+def header(painter: Painter, phases: dict) -> None:
+    """Show meter connectivity separately from electrical severity."""
 
     painter.rect((34, 24, 926, 112), PANEL, 24)
-    painter.text(63, 43, "Електромережа", 30, TEXT, "semibold")
-    painter.text(64, 81, "SHELLY  ·  ФАЗА L1", 15, MUTED, "medium")
-    status, color = STATUS[result["status"]]
-    painter.rect((698, 45, 899, 93), PANEL_LIGHT, 17)
-    painter.rect((714, 62, 730, 78), color, 8)
-    size = 17 if len(status) <= 12 else 13
-    painter.text(743, 58, status, size, color, "semibold")
+    painter.text(63, 41, painter.labels["title"], 34, TEXT, "semibold")
+    painter.text(64, 80, "SHELLY  ·  " + " / ".join(phases), 19, MUTED)
+    statuses = {result["status"] for result in phases.values()}
+    status = next(iter(statuses)) if len(statuses) == 1 else "partial"
+    color = STATE_COLORS[status]
+    painter.rect((628, 45, 899, 93), PANEL_LIGHT, 17)
+    painter.rect((644, 62, 660, 78), color, 8)
+    painter.text(673, 59, painter.labels[status], 20, color, "semibold")
+
+
+def quality_label(painter: Painter, result: dict) -> tuple[str, str]:
+    """Provide both a severity label and color for a fresh measurement."""
+
+    quality = result["quality"]
+    key = "quality_unknown" if quality == "unknown" else quality
+    return painter.labels[key], QUALITY_COLORS[quality]
+
+
+def frequency_text(painter: Painter, result: dict) -> str:
+    """Format known meter frequency using the selected language's units."""
+
+    hz = result.get("frequency")
+    return f"{hz:.2f} {painter.labels['hertz']}" if hz is not None else "—"
 
 
 def live_measurement(painter: Painter, result: dict) -> None:
-    """Make voltage readable without displaying old or invalid samples."""
+    """Show one large voltage and explicit measured severity."""
 
     painter.rect((34, 128, 926, 320), PANEL, 26)
-    painter.text(63, 151, "ПОТОЧНА НАПРУГА", 17, MUTED, "medium")
-    if result["status"] != "online":
-        unavailable_measurement(painter, result["status"])
+    painter.text(63, 151, painter.labels["voltage"], 22, MUTED, "medium")
+    status = result["status"]
+    if status != "online":
+        painter.text(
+            63, 204, painter.labels["unavailable"], 43, TEXT, "semibold"
+        )
+        painter.text(64, 269, painter.labels[status], 23, STATE_COLORS[status])
         return
+    label, color = quality_label(painter, result)
     volts = f"{result['voltage']:.1f}"
-    painter.text(62, 187, volts, 87, TEXT, "semibold")
-    x = min(572, 71 + painter.measure(volts, 87, "semibold"))
-    painter.text(x, 221, "В", 37, GREEN, "medium")
-    painter.rect((63, 295, 230, 300), GREEN, 2)
-    painter.text(695, 172, "ЧАСТОТА", 16, MUTED, "medium")
-    hz = result.get("frequency")
-    label = f"{hz:.2f} Гц" if hz is not None else "—"
-    painter.text(695, 207, label, 29, TEXT, "semibold")
+    painter.text(62, 183, volts, 85, color, "semibold")
+    x = 75 + painter.measure(volts, 85, "semibold")
+    painter.text(x, 214, painter.labels["volts"], 35, color, "medium")
+    painter.text(64, 279, label, 25, color, "semibold")
+    painter.text(650, 159, painter.labels["frequency"], 20, MUTED, "medium")
+    painter.text(
+        650, 200, frequency_text(painter, result), 32, TEXT, "semibold"
+    )
     local = datetime.fromtimestamp(result["time"], KYIV)
-    painter.text(695, 259, "Оновлено " + local.strftime("%H:%M"), 16, MUTED)
+    when = f"{painter.labels['measured']} {local:%H:%M}"
+    painter.text(650, 267, when, 20, MUTED)
 
 
-def unavailable_measurement(painter: Painter, status: str) -> None:
-    """Never show the previous physical voltage during an outage."""
+def phase_column(painter: Painter, phase: str, result: dict, x: int) -> None:
+    """Show one phase with its independent voltage and severity."""
 
-    painter.text(63, 206, "Напруга недоступна", 43, TEXT, "semibold")
-    note = {
-        "offline": "Немає зв'язку із Shelly",
-        "stale": "Очікуємо нові показання",
-    }.get(status, "Немає достовірних показань")
-    painter.text(65, 274, note, 19, AMBER, "medium")
+    painter.rect((x, 140, x + 278, 310), PANEL_LIGHT, 19)
+    painter.text(x + 16, 154, phase, 24, TEXT, "semibold")
+    status = result["status"]
+    if status != "online":
+        painter.text(x + 16, 199, "—", 50, MUTED, "semibold")
+        painter.text(
+            x + 16, 263, painter.labels[status], 20, STATE_COLORS[status]
+        )
+        return
+    label, color = quality_label(painter, result)
+    volts = f"{result['voltage']:.1f}"
+    painter.text(x + 16, 190, volts, 47, color, "semibold")
+    unit_x = x + 25 + painter.measure(volts, 47, "semibold")
+    painter.text(unit_x, 204, painter.labels["volts"], 26, color)
+    painter.text(x + 16, 246, label, 20, color, "semibold")
+    local = datetime.fromtimestamp(result["time"], KYIV)
+    details = f"{frequency_text(painter, result)}  ·  {local:%H:%M}"
+    painter.text(x + 16, 280, details, 19, TEXT)
 
 
 def forecast_legend(painter: Painter) -> None:
     """Explain each forecast state without confusing it with a meter."""
 
     for x, marker, caption in (
-        (64, "O", "Є світло"),
-        (290, "X", "Відключення"),
-        (558, "?", "Можливо"),
+        (64, "O", painter.labels["O"]),
+        (344, "X", painter.labels["X"]),
+        (624, "?", painter.labels["?"]),
     ):
         painter.rect((x, 580, x + 13, 593), SLOT_COLORS[marker], 6)
-        painter.text(x + 21, 577, caption, 15, MUTED, "medium")
+        painter.text(x + 21, 577, caption, 21, TEXT, "medium")
 
 
 def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
@@ -183,12 +367,13 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
                 stroke=2,
             )
     hour_label = f"{hour:02d}:00"
-    advance = painter.measure(hour_label, 18, "semibold")
+    advance = painter.measure(hour_label, 23, "semibold")
+    painter.rect((x + 24, y + 4, x + 106, y + 31), BACKGROUND, 7)
     painter.text(
         x + (130 - advance) / 2,
         y + 8,
         hour_label,
-        18,
+        23,
         TEXT,
         "semibold",
     )
@@ -204,25 +389,22 @@ def visible_periods(bars: str) -> list[tuple[str, str, str, int]]:
 def forecast_periods(painter: Painter, bars: str) -> None:
     """Restore the old readable textual outage schedule under the grid."""
 
-    names = {
-        "O": "ЗА ГРАФІКОМ Є СВІТЛО",
-        "X": "ПЛАНОВЕ ВІДКЛЮЧЕННЯ",
-        "?": "МОЖЛИВЕ ВІДКЛЮЧЕННЯ",
-    }
     rows = visible_periods(bars)
     for index, (kind, start, end, minutes) in enumerate(rows):
         y = 608 + 24 * index
         painter.rect((65, y + 4, 79, y + 18), SLOT_COLORS[kind], 4)
-        window = f"{start} – {end} ({duration_label(minutes)})"
-        painter.text(92, y, window, 17, TEXT, "medium")
-        painter.text(592, y + 1, names[kind], 15, SLOT_COLORS[kind])
+        duration = duration_label(minutes, painter.language)
+        window = f"{start} – {end} ({duration})"
+        painter.text(92, y, window, 22, TEXT, "medium")
+        name = painter.labels["period_" + kind]
+        painter.text(592, y + 1, name, 18, SLOT_COLORS[kind])
     extra = len(schedule_periods(bars)) - len(rows)
     if extra:
         painter.text(
             92,
             608 + 24 * len(rows),
-            f"ЩЕ {extra} ІНТЕРВАЛІВ",
-            17,
+            painter.labels["extra"].format(count=extra),
+            22,
             AMBER,
             "semibold",
         )
@@ -234,22 +416,15 @@ def forecast_panel(
     """Keep all 24 labelled hours and the textual period breakdown."""
 
     painter.rect((34, 336, 926, 787), PANEL, 26)
-    painter.text(63, 352, "Графік відключень", 27, TEXT, "semibold")
+    painter.text(63, 352, painter.labels["forecast"], 30, TEXT, "semibold")
     day = datetime.fromtimestamp(now, KYIV).strftime("%d.%m.%Y")
-    painter.text(63, 387, "YASNO · ДТЕК Київ  ·  " + day, 16, MUTED)
-    painter.rect((737, 356, 898, 396), PANEL_LIGHT, 15)
-    painter.text(
-        754,
-        366,
-        "Група " + str(state.get("g", "")),
-        18,
-        BLUE,
-        "semibold",
-    )
+    painter.text(63, 387, f"{painter.labels['source']}  ·  {day}", 19, MUTED)
     if not bars:
-        painter.text(64, 476, "Актуального графіка немає", 28, MUTED)
-        painter.text(64, 532, "Дані YASNO відсутні або застарілі", 18, MUTED)
+        painter.text(64, 476, painter.labels["no_forecast"], 34, MUTED)
         return
+    painter.rect((737, 356, 898, 396), PANEL_LIGHT, 15)
+    group = painter.labels["group"].format(group=state["g"])
+    painter.text(754, 366, group, 20, BLUE, "semibold")
     local = datetime.fromtimestamp(now, KYIV)
     current = local.hour * 2 + local.minute // 30
     for hour in range(24):
@@ -260,8 +435,8 @@ def forecast_panel(
     painter.text(
         64,
         764,
-        "Лише прогноз YASNO · перевірено " + checked,
-        13,
+        painter.labels["checked"].format(time=checked),
+        17,
         MUTED,
     )
 
@@ -276,17 +451,26 @@ def render_card_v5(
     clock = time.time() if now is None else float(now)
     if not math.isfinite(clock):
         raise ValueError("invalid clock")
-    result = current_measurement(state, clock)
+    language = state.get("l")
+    if not isinstance(language, str) or language not in CARD_TEXT:
+        language = "uk"
+    phases = phase_measurements(state, clock)
+    primary = next(iter(phases.values()))
     bars = valid_forecast(state, clock)
-    painter = Painter()
-    header(painter, result)
-    live_measurement(painter, result)
+    painter = Painter(language)
+    header(painter, phases)
+    if len(phases) == 1:
+        live_measurement(painter, primary)
+    else:
+        for slot, (phase, result) in enumerate(phases.items()):
+            phase_column(painter, phase, result, 47 + 294 * slot)
     forecast_panel(painter, state, bars, clock)
     painter.save(target)
     return {
         "style": "v5",
-        "status": result["status"],
-        "live_voltage_visible": result["status"] == "online",
+        "status": primary["status"],
+        "live_voltage_visible": primary["status"] == "online",
+        "phases": {phase: data["status"] for phase, data in phases.items()},
         "forecast_visible": bool(bars),
         "forecast_off_slots": bars.count("X"),
         "image_bytes": target.stat().st_size,

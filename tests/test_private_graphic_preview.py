@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import time
 import unittest
@@ -122,6 +123,28 @@ class PrivateGraphicPreviewTests(unittest.TestCase):
             state = APP.private_graphic_preview_state(monitor)
         self.assertNotIn('"b":', state)
         self.assertIn('"v":224.3', state)
+
+    def test_preview_reads_live_thresholds_and_each_phase(self):
+        """Follow the monitor freshness limit before building card data."""
+
+        monitor = APP.Monitor(
+            config(
+                shelly_meter_type="pro3em", stale_after=20, critical_low=185
+            )
+        )
+        with patch.object(APP.time, "time", return_value=1000):
+            monitor.phase_states["L2"].success(222.2, 50.0, 1.0)
+        with (
+            patch.object(APP.time, "time", return_value=1030),
+            patch.object(APP, "cached_yasno_preview_args", return_value=None),
+        ):
+            monitor.state.success(220.0, 50.0, 1.0)
+            monitor.phase_states["L3"].success(181.2, 50.0, 1.0)
+            card = json.loads(APP.private_graphic_preview_state(monitor))
+        self.assertEqual(card["limits"][:2], [185, monitor.warning_low])
+        self.assertEqual(card["p"]["L2"], {"s": "stale"})
+        self.assertEqual(card["p"]["L3"]["v"], 181.2)
+        self.assertEqual(card["v"], 220.0)
 
     def test_private_photo_transport_preserves_default_channel_behavior(self):
         """New opt-in chat ID must not change legacy photo uploads."""
