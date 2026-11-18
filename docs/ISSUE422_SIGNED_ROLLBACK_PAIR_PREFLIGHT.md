@@ -137,3 +137,24 @@ correct stopped-writer and update-recovery fencing, a fresh
 writer-fenced full-history production rescue at release time, signature
 and source/image validation before a live start, and explicit owner
 authorization. No automatic DB replacement or public Telegram edit.
+
+## Disposable process-kill acceptance
+
+In addition to exception-injected recovery, the test suite launches a
+separate Python child with *only synthetic* SQLite and release metadata
+and terminates that child using actual SIGKILL at each of three journal
+checkpoints. A new test process then reads the persistent 0700 temporary
+fixture directory and restores the newer ten measurements and exact
+synthetic Telegram PHOTO message ID. Recovery is blocked when the rescue
+file has been removed. No old bot entrypoint is executed and no actual
+Telegram API, production database, systemd unit or Docker Compose stack
+is touched.
+
+~~~bash
+python3 -m unittest discover -s tests \
+  -p test_signed_rollback_sigkill_recovery.py -v
+~~~
+
+**SIGKILL is not a hard power loss.** This does not test disk cache
+flushes, NVMe durability or real system reboot. Such failures and
+the actual writer/service fencing remain separate release gates.
