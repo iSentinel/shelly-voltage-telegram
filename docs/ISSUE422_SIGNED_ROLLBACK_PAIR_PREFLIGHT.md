@@ -217,3 +217,45 @@ transaction and Docker/systemd fencing. Never execute production
 --recover, overwrite newer history, change the OCI pin, or reactivate
 the update timer without fresh owner approval and a real isolated
 full-history acceptance that includes all three phases.
+
+## Synthetic Pro3EM WAL rescue acceptance, 2026-11-18
+
+Additional offline tests in tests/test_signed_rollback_wal_phases.py
+verify a subtle requirement not covered by row-count-only checks:
+newest **committed** L1/L2/L3 triplets may reside only in the SQLite
+WAL file, not yet in the main database file.
+
+The test opens a completely synthetic 3phase SQLite fixture with
+journal_mode=WAL and wal_autocheckpoint=0. It commits one independent
+L1/L2/L3 triplet and intentionally retains an open fixture connection
+so checkpointing is delayed:
+
+- A raw copy of the standalone main .sqlite3 sees only the old ten
+  measurements; this is **not** a valid whole-history rescue.
+- SQLite's supported backup() API preserves all 13 committed rows,
+  three independent phase labels, saved pro3em meter selection and
+  synthetic Telegram PHOTO identity.
+- Trying to recover from the stale bare-main copy fails closed with
+  RESCUE_HISTORY_MISMATCH, leaving the current fixture unchanged.
+- The verified WAL-inclusive backup restores the newer triplet,
+  correct saved model and PHOTO identity after an intentionally
+  changed synthetic active database.
+- A transaction that is still uncommitted must not be promoted to
+  successfully recorded history by an online backup.
+
+These tests neither connect to production nor prove live writer fencing.
+In particular, the fixture writer connection is closed before any
+simulated os.replace recovery; replacing a real active WAL-mode SQLite
+database while a writer holds open main/-wal/-shm files is unsafe and
+**not supported** by this rehearsal. The real updater, Docker start
+owner and signed rollback remain gated by Issues #340 and #422.
+
+Run in the isolated source QA worktree:
+
+    python3 -W error::ResourceWarning -m unittest discover -s tests       -p test_signed_rollback_wal_phases.py -q
+    scripts/quality.sh
+
+Local QA on 2026-11-18: 4/4 WAL tests, 19/19 existing disposable
+rollback tests, 6/6 independent SIGKILL recovery tests and
+250-file Ruff/maintainability gate PASS. New signed image, real
+update/rollback, production SQLite and Telegram were not modified.
