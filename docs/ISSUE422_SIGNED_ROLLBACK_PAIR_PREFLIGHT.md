@@ -85,3 +85,55 @@ python3 -m unittest discover -s tests \
   -p test_signed_rollback_pair_preflight.py -v
 scripts/quality.sh
 ~~~
+
+## Disposable fault-injection rehearsal
+
+An additional source-only tool rehearses **fictional** rollback recovery.
+The CLI validates the real saved source/OCI pair first, with optional
+Cosign verification. It then generates completely synthetic SQLite
+databases in 0700 temporary directories:
+
+- ten newer measurements plus a synthetic Telegram PHOTO message ID;
+- six historical measurements, which must **not** replace newer history;
+- an online SQLite rescue of all ten newest measurements;
+- private synthetic deployed.json/override.yaml/source VERSION records.
+
+It injects an exception at **three** checkpoints: after the rescue,
+after the old pair is staged, and after the old (synthetic) SQLite
+database is swapped in. At each point, simulated recovery validates
+the rescue **before** replacing the temporary database, restores the
+newer records and PHOTO marker, and returns to consistent fictional
+source/receipt/Compose version state. An unfenced simulated writer,
+corrupt/missing rescue, forged old receipt or mismatched image pin
+blocks the rehearsal; failure to verify an old signature blocks before
+creating fixtures.
+
+Run it without a network operation:
+
+~~~bash
+python3 scripts/signed-rollback-disposable-rehearsal.py \
+  --source-snapshot /var/backups/shelly-voltage/upgrades/SOURCE_NAME \
+  --signed-snapshot /var/lib/shelly-voltage-updater/snapshots/SIGNED_NAME \
+  --jsonl
+~~~
+
+To recheck the **old** OCI signature using Cosign first, add
+--verify-signature. The tool does not pull, start, stop or replace a
+Docker image. It makes no Telegram API calls, changes no live SQLite,
+does not touch the live systemd/Compose state and removes synthetic
+fixtures upon completion. It always returns
+real_power_loss_tested=false, production_modified=false and
+rollback_authorized=false.
+
+**Limitations:** Exception injection is not a real SIGKILL, filesystem
+crash, reboot or power failure. This is *not* an end-to-end signed OCI
+rollback or a real sole-writer fencing implementation. It stages only
+the already-verified version markers and prior immutable receipt/override;
+it does not extract, install or run old application source. The actual
+production guard still prevents an old source-only downgrade.
+
+Further required acceptance: isolated, durable crash/restart testing,
+correct stopped-writer and update-recovery fencing, a fresh
+writer-fenced full-history production rescue at release time, signature
+and source/image validation before a live start, and explicit owner
+authorization. No automatic DB replacement or public Telegram edit.
