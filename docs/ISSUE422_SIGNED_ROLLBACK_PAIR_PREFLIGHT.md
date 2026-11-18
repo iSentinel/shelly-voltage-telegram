@@ -259,3 +259,27 @@ Local QA on 2026-11-18: 4/4 WAL tests, 19/19 existing disposable
 rollback tests, 6/6 independent SIGKILL recovery tests and
 250-file Ruff/maintainability gate PASS. New signed image, real
 update/rollback, production SQLite and Telegram were not modified.
+
+### Open WAL writer and sidecar refusal
+
+The disposable recovery helper now deliberately refuses an atomic
+active-DB replacement if it can see any existing active -wal or -shm
+sidecar, including a symlink. It returns the stable error
+ACTIVE_SQLITE_WAL_SIDECAR_UNFENCED before constructing or swapping the
+rescue candidate. This policy is intentionally conservative: even an
+empty or stale sidecar blocks an attempted fixture recovery until a
+real single-writer fence and explicit cleanup can be verified.
+
+Two added networkless regressions check that an open synthetic
+SQLite WAL writer cannot be bypassed by merely acquiring the fixture
+POSIX lock, and that a symlinked WAL sidecar also fails closed.
+All **6/6** WAL tests, **19/19** existing rollback tests,
+**6/6** fixture SIGKILL tests and the 250-file source quality gate
+passed.
+
+**Important limitation:** absence of WAL sidecar files alone cannot
+prove that every real SQLite handle has closed. These are source-only
+fixture constraints, not authorization for production rollback. Real
+Docker/systemd writer shutdown, WAL checkpoint discipline, latest
+full-history rescue, signed source/OCI pairing and Owner Approval are
+still separate required gates.

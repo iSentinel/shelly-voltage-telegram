@@ -133,6 +133,34 @@ class SignedRollbackWalPhaseTests(unittest.TestCase):
             1,
         )
 
+    def test_open_wal_writer_blocks_atomic_restore_before_swap(self):
+        """Fixture writer lock cannot make open SQLite files safe."""
+
+        writer = self.open_wal()
+        current = QA.fixture_digest(self.active)
+        QA.sqlite_backup(self.active, self.rescue)
+        with self.assertRaisesRegex(
+            QA.Blocked, "ACTIVE_SQLITE_WAL_SIDECAR_UNFENCED"
+        ):
+            QA.recover_fenced(self.folder, current[0], "0.5.25-hw")
+        self.assertEqual(QA.fixture_digest(self.active), current)
+        self.assertFalse((self.folder / "journal.json").exists())
+        writer.close()
+
+    def test_linked_wal_sidecar_fails_closed(self):
+        """Reject untrusted SQLite sidecar paths before an atomic swap."""
+
+        QA.sqlite_backup(self.active, self.rescue)
+        expected = QA.fixture_digest(self.active)
+        sidecar = Path(str(self.active) + "-wal")
+        sidecar.symlink_to(self.folder / "untrusted-wal")
+        with self.assertRaisesRegex(
+            QA.Blocked, "ACTIVE_SQLITE_WAL_SIDECAR_UNFENCED"
+        ):
+            QA.recover_fenced(self.folder, expected[0], "0.5.25-hw")
+        self.assertFalse((self.folder / "journal.json").exists())
+        self.assertEqual(QA.fixture_digest(self.rescue), expected)
+
     def test_uncommitted_wal_writes_are_not_in_backup(self):
         """An open transaction is never promoted to confirmed history."""
 

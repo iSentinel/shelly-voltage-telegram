@@ -177,6 +177,15 @@ def fail_at(folder: Path, current: str, chosen: str) -> None:
         raise SimulatedFailure(current)
 
 
+def require_closed_wal_state(active: Path) -> None:
+    """Refuse a fixture swap while WAL sidecars may remain in use."""
+
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(active) + suffix)
+        if sidecar.exists() or sidecar.is_symlink():
+            raise Blocked("ACTIVE_SQLITE_WAL_SIDECAR_UNFENCED")
+
+
 def recover_newer(folder: Path, newer_digest: str, version: str) -> None:
     """Restore all synthetic current data without starting a bot."""
 
@@ -184,6 +193,7 @@ def recover_newer(folder: Path, newer_digest: str, version: str) -> None:
     active = folder / "active.sqlite3"
     if not rescued.is_file() or fixture_digest(rescued)[0] != newer_digest:
         raise Blocked("RESCUE_HISTORY_MISMATCH")
+    require_closed_wal_state(active)
     candidate = restored_candidate(folder, rescued)
     recovery_checkpoint(folder, "RESTORE_PREPARED")
     os.replace(candidate, active)
