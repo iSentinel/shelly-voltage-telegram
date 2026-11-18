@@ -40,10 +40,18 @@ class MetadataConsistencyTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text()
         changelog = (ROOT / "CHANGELOG.md").read_text()
         hardware = (ROOT / "HARDWARE_VALIDATION.md").read_text()
-        self.assertIn(f"Current release: **{release_version}**", readme)
+        notes = ROOT / "docs" / f"release-notes-{release_version}.md"
+        if notes.is_file():
+            self.assertEqual(
+                notes.read_text().splitlines()[0], f"# {release_version}"
+            )
+            self.assertIn("/shelly-voltage-telegram/releases", readme)
+        else:
+            self.assertIn(f"Current release: **{release_version}**", readme)
+            self.assertIn(f"## {release_version} -", changelog)
         if version != release_version:
             self.assertIn(f"Current software candidate: **{version}**", readme)
-        self.assertIn(f"## {version} -", changelog)
+            self.assertIn(f"## {version} -", changelog)
         self.assertIn(
             f"Hardware-accepted live checkpoint: **{live_version}**", readme
         )
