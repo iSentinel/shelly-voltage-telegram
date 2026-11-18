@@ -5,8 +5,10 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from pathlib import Path
+from threading import Barrier
 from unittest.mock import Mock, patch
 
 from test_app import APP, config
@@ -94,6 +96,62 @@ class AtomicPro3EMStorageTests(unittest.TestCase):
             self.store.add_phases(1800000000.0, {})
             conn.assert_not_called()
         self.assertEqual(self.phase_rows(), [])
+
+    def test_same_cycle_retry_is_idempotent(self):
+        """A duplicate full reply must not insert duplicate phase rows."""
+
+        sample = readings()
+        self.store.add_phases(1800000000.0, sample)
+        self.store.add_phases(1800000000.0, sample)
+        self.assertEqual(len(self.phase_rows()), 3)
+
+    def test_conflicting_cycle_retry_fails_without_mutation(self):
+        """Changed voltage at an existing timestamp must never overwrite it."""
+
+        self.store.add_phases(1800000000.0, readings())
+        changed = readings()
+        changed["L3"] = (201.0, 50.0, 3.0)
+        with self.assertRaisesRegex(ValueError, "conflicting Pro3EM"):
+            self.store.add_phases(1800000000.0, changed)
+        self.assertEqual(
+            [r[1] for r in self.phase_rows()],
+            [214.0, 212.0, 207.0],
+        )
+
+    def test_existing_partial_cycle_is_not_silently_completed(self):
+        """A preexisting lone L1 must not become a forged full triplet."""
+
+        self.store.add(1800000000.0, 214.0, 50.0, "L1")
+        with self.assertRaisesRegex(ValueError, "conflicting Pro3EM"):
+            self.store.add_phases(1800000000.0, readings())
+        self.assertEqual(
+            [(r[0], r[1]) for r in self.phase_rows()], [("L1", 214.0)]
+        )
+
+    def test_unexpected_phase_is_rejected_before_opening_db(self):
+        """A fourth phase must never be inserted by the new batch API."""
+
+        response = readings()
+        response["L4"] = (210.0, 50.0, 3.0)
+        with self.assertRaisesRegex(ValueError, "unsupported Pro3EM"):
+            self.store.add_phases(1800000000.0, response)
+        self.assertEqual(self.phase_rows(), [])
+
+    def test_two_concurrent_replays_do_not_duplicate_rows(self):
+        """BEGIN IMMEDIATE serializes two separate SQLite writer handles."""
+
+        gate = Barrier(2)
+
+        def one_writer() -> None:
+            storage = APP.Storage(self.path, "Europe/Kyiv")
+            gate.wait(timeout=5)
+            storage.add_phases(1800000000.0, readings())
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(one_writer) for _ in range(2)]
+            for task in futures:
+                task.result(timeout=10)
+        self.assertEqual(len(self.phase_rows()), 3)
 
     def test_existing_single_phase_api_remains_compatible(self):
         """Keep the legacy L1-only commit path for older meters."""

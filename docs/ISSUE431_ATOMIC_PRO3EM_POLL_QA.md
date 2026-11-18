@@ -131,3 +131,40 @@ threads, Compose, systemd, apply-update.sh or rollback.sh.
 The real production Issue340 boot-owner and Issue422 signed
 WAL rollback gates remain open until all actors adopt the
 same verified on-disk inode and fail-closed protocol.
+
+## Idempotent phase-cycle replay without schema migration
+
+The source-only batch writer now serializes a cycle replay with
+BEGIN IMMEDIATE and checks for existing readings at the exact
+timestamp before any insert. If a complete previous cycle
+contains precisely the same set of phase/voltage/frequency
+triples, the replay returns without adding duplicate records.
+
+If a prior batch exists but has different values, a different
+phase set, an incomplete historical L1-only cycle, or
+duplicated/conflicting phase data, the new writer raises
+ValueError ("conflicting Pro3EM poll-cycle replay") and
+does not replace or extend historical data.
+
+Only supported L1/L2/L3 labels are accepted by this method.
+The older single-phase Storage.add API is unchanged, as are
+legitimate missing-phase states and low-voltage alert policy.
+
+This protects source-only replay paths without introducing a
+UNIQUE(ts,phase) constraint into historical production SQLite.
+Read-only check on 2026-11-19 found zero duplicated
+(timestamp,phase) groups in live history, but neither existing
+index is UNIQUE. A schema migration must be reviewed separately.
+
+Five additional isolated tests PASS: exact retry no-op,
+conflicting voltage fail-closed, existing partial cycle refusal,
+unexpected L4 rejection, and two concurrent SQL writer handles
+serialized without duplicate phase rows. The focused suite is
+now 13 atomic/replay tests plus 3 cross-process pending-fence
+tests; 154 test_app, 6 readiness, 11 RPC nonfinite, and 5
+runtime error regression tests also PASS. Total 192/192
+selected tests PASS, and the source quality gate PASS.
+
+**Remaining:** idempotent SQLite inserts alone do not guarantee
+exactly-once Telegram sends or a sole Docker writer. Issues
+#340 and #422 still require coordinated end-to-end acceptance.

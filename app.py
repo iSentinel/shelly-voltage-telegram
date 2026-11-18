@@ -638,11 +638,24 @@ class Storage:
 
         if not readings:
             return
+        if set(readings) - {"L1", "L2", "L3"}:
+            raise ValueError("unsupported Pro3EM phase")
         rows = [
             (ts, sample[0], sample[1], phase)
             for phase, sample in readings.items()
         ]
         with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute(
+                "SELECT phase, voltage, frequency FROM measurements "
+                "WHERE ts=?",
+                (ts,),
+            ).fetchall()
+            if old:
+                expected = {(phase, v, f) for _, v, f, phase in rows}
+                if len(old) != len(rows) or set(old) != expected:
+                    raise ValueError("conflicting Pro3EM poll-cycle replay")
+                return
             db.executemany(
                 "INSERT INTO measurements(ts, voltage, frequency, phase) "
                 "VALUES(?,?,?,?)",
