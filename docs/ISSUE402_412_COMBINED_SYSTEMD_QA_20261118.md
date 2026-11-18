@@ -26,6 +26,13 @@ installed systemd units. Do not treat this QA as release authorization.
   `scripts/qa-update-check-credentials-systemd.sh` and completed PASS.
   It verifies installed_version() against the release marker before --help.
   Its transient service is collected; it never starts the actual checker timer.
+- Extended functional smoke verified on real systemd as an ephemeral
+  RuntimeDirectory owned by the short-lived DynamicUser: an offline mocked
+  release check wrote status.json with mode 0640, kept auto_install=false
+  and did not write into the read-only credential directory. It also checked
+  that the protected .env and secrets paths were not readable. The runtime
+  directory is removed automatically after the test. No Telegram API,
+  GitHub network request or production state was changed.
 - The initial raw `systemd-run` argument containing `%d` did **not**
   expand in its transient command (expected CLI escaping distinction).
   The smoke uses the exact transient credential directory instead. This
