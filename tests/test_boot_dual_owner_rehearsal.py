@@ -15,8 +15,11 @@ CHILD = """
 from contextlib import closing
 from pathlib import Path
 import fcntl, os, sqlite3, sys
-root, owner, hold = Path(sys.argv[1]), sys.argv[2], sys.argv[3] == 'hold'
-if (root / 'pending-update').exists():
+root, owner, mode = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+def pending_present():
+    pending = root / 'pending-update'
+    return pending.is_symlink() or pending.exists()
+if pending_present():
     print('BLOCKED_PENDING', flush=True)
     raise SystemExit(4)
 path = root / 'writer.lock'
@@ -29,12 +32,49 @@ try:
     except BlockingIOError:
         print('BLOCKED_OWNER', flush=True)
         raise SystemExit(5)
+    if mode == 'pause_after_fence':
+        print('FENCE_ACQUIRED', flush=True)
+        sys.stdin.readline()
+    if pending_present():
+        print('BLOCKED_PENDING', flush=True)
+        raise SystemExit(4)
     with closing(sqlite3.connect(root / 'synthetic.sqlite3')) as db:
         db.execute('INSERT INTO measurements(voltage) VALUES (223.1)')
         db.commit()
     print('OWNER_ACQUIRED:' + owner, flush=True)
-    if hold:
+    if mode == 'hold':
         sys.stdin.readline()
+finally:
+    os.close(fd)
+"""
+
+
+UPDATER = """
+from pathlib import Path
+import fcntl, os, sys
+root = Path(sys.argv[1])
+path = root / 'writer.lock'
+if path.is_symlink():
+    raise SystemExit(6)
+fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+try:
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print('BLOCKED_OWNER', flush=True)
+        raise SystemExit(5)
+    pending = root / 'pending-update'
+    if pending.exists() or pending.is_symlink():
+        print('BLOCKED_PENDING', flush=True)
+        raise SystemExit(4)
+    marker_fd = os.open(
+        pending, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600
+    )
+    with os.fdopen(marker_fd, 'w') as stream:
+        stream.write('synthetic-update-marker')
+        stream.flush()
+        os.fsync(stream.fileno())
+    print('PENDING_CREATED', flush=True)
 finally:
     os.close(fd)
 """
@@ -63,9 +103,12 @@ class DualOwnerRehearsalTests(unittest.TestCase):
             )
             db.commit()
 
-    def start(self, owner: str, hold: bool = False) -> subprocess.Popen:
-        """Launch a mock systemd/Docker writer without network or secrets."""
+    def start(
+        self, owner: str, hold: bool = False, pause: bool = False
+    ) -> subprocess.Popen:
+        """Launch one mock writer with an optional post-lock race barrier."""
 
+        mode = "pause_after_fence" if pause else "hold" if hold else "once"
         process = subprocess.Popen(
             [
                 sys.executable,
@@ -74,8 +117,21 @@ class DualOwnerRehearsalTests(unittest.TestCase):
                 CHILD,
                 str(self.root),
                 owner,
-                "hold" if hold else "once",
+                mode,
             ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.addCleanup(self.close_child, process)
+        return process
+
+    def start_updater(self) -> subprocess.Popen:
+        """Start one disposable marker writer sharing the same lock."""
+
+        process = subprocess.Popen(
+            [sys.executable, "-B", "-c", UPDATER, str(self.root)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -165,6 +221,72 @@ class DualOwnerRehearsalTests(unittest.TestCase):
             (output.strip(), resumed.returncode), ("OWNER_ACQUIRED:systemd", 0)
         )
         self.assertEqual(self.count_and_photo(), (12, ("photo", 1000)))
+
+    def test_pending_created_after_lock_blocks_any_sqlite_write(self):
+        """A pending marker racing with startup fails after the lock."""
+
+        owner = self.start("systemd", pause=True)
+        self.assertEqual(owner.stdout.readline().strip(), "FENCE_ACQUIRED")
+        (self.root / "pending-update").write_text("synthetic-marker")
+        self.assertIsNotNone(owner.stdin)
+        owner.stdin.write("resume\n")
+        owner.stdin.flush()
+        stdout, _ = owner.communicate(timeout=5)
+        self.assertEqual(
+            (stdout.strip(), owner.returncode), ("BLOCKED_PENDING", 4)
+        )
+        self.assertEqual(self.count_and_photo(), (10, ("photo", 1000)))
+
+    def test_pending_symlink_is_refused_even_when_target_absent(self):
+        """A dangling linked marker cannot evade the fixture boot gate."""
+
+        marker = self.root / "pending-update"
+        marker.symlink_to(self.root / "absent-file")
+        for name in ("docker", "systemd"):
+            with self.subTest(owner=name):
+                process = self.start(name)
+                output, _ = process.communicate(timeout=5)
+                self.assertEqual(
+                    (output.strip(), process.returncode),
+                    ("BLOCKED_PENDING", 4),
+                )
+        self.assertEqual(self.count_and_photo(), (10, ("photo", 1000)))
+
+    def test_updater_cannot_publish_pending_while_boot_writer_holds_lock(self):
+        """A real competing updater process cannot cross the writer fence."""
+
+        boot = self.start("docker", hold=True)
+        self.assertEqual(
+            boot.stdout.readline().strip(), "OWNER_ACQUIRED:docker"
+        )
+        updater = self.start_updater()
+        output, _ = updater.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), updater.returncode), ("BLOCKED_OWNER", 5)
+        )
+        self.assertFalse((self.root / "pending-update").exists())
+        self.assertEqual(self.count_and_photo(), (11, ("photo", 1000)))
+
+    def test_updater_pending_after_sigkill_blocks_new_boot(self):
+        """Update marker written under lock prevents independent reboot."""
+
+        boot = self.start("systemd", hold=True)
+        self.assertEqual(
+            boot.stdout.readline().strip(), "OWNER_ACQUIRED:systemd"
+        )
+        boot.kill()
+        boot.wait(timeout=5)
+        updater = self.start_updater()
+        output, _ = updater.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), updater.returncode), ("PENDING_CREATED", 0)
+        )
+        restarted = self.start("docker")
+        output, _ = restarted.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), restarted.returncode), ("BLOCKED_PENDING", 4)
+        )
+        self.assertEqual(self.count_and_photo(), (11, ("photo", 1000)))
 
     def test_symlinked_writer_token_rejected(self):
         """File substitution cannot redirect a new writer lock."""

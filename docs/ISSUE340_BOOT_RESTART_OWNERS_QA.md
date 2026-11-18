@@ -103,11 +103,22 @@ before acquiring the token. Tests cover:
 - A new mock can resume after explicit simulated pending resolution;
   all existing measurements and PHOTO message ID survive.
 - A linked lock path is rejected before a synthetic write.
+- A pending marker appearing *after* boot acquires the fixture lock
+  is detected by a second under-lock check before SQLite is opened.
+  Even a dangling linked marker is rejected.
+- A third ordinary Python fixture process represents an updater:
+  it uses the **same** POSIX lock to create and fsync a pending marker.
+  It cannot publish the marker while the mock bot owns the lock.
+  Once that boot process is killed, the updater may publish the
+  marker, but a subsequent boot remains blocked.
 
 Both fixture types run without network access or user credentials.
 The exercise is a *desired boot-policy contract*, not proof that
 production implements this lock across Docker, systemd, Compose
-and the update/rollback process. In particular it does NOT perform
+and the update/rollback process. The pending marker creator must
+participate in the **same fencing discipline**: the boot process's
+double-check alone does not protect against a marker created
+immediately after its second check by an unfenced updater. In particular it does NOT perform
 a system reboot, a physical power-loss experiment, a real systemd
 ExecStartPre execution or an actual source/OCI rollback.
 
