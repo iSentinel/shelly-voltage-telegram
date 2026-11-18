@@ -629,6 +629,39 @@ class Storage:
                 (ts, voltage, frequency, phase),
             )
 
+    def add_phases(
+        self,
+        ts: float,
+        readings: dict[str, tuple[float, float, float]],
+    ) -> None:
+        """Commit one Pro3EM poll's available phases atomically."""
+
+        if not readings:
+            return
+        if set(readings) - {"L1", "L2", "L3"}:
+            raise ValueError("unsupported Pro3EM phase")
+        rows = [
+            (ts, sample[0], sample[1], phase)
+            for phase, sample in readings.items()
+        ]
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute(
+                "SELECT phase, voltage, frequency FROM measurements "
+                "WHERE ts=?",
+                (ts,),
+            ).fetchall()
+            if old:
+                expected = {(phase, v, f) for _, v, f, phase in rows}
+                if len(old) != len(rows) or set(old) != expected:
+                    raise ValueError("conflicting Pro3EM poll-cycle replay")
+                return
+            db.executemany(
+                "INSERT INTO measurements(ts, voltage, frequency, phase) "
+                "VALUES(?,?,?,?)",
+                rows,
+            )
+
     def set_meta(
         self,
         key: str,
@@ -3009,12 +3042,18 @@ class Monitor:
                 self.maybe_availability_alert("offline")
 
     def accept_phase_sample(
-        self, phase: str, sample: tuple[float, float, float], now: float
+        self,
+        phase: str,
+        sample: tuple[float, float, float],
+        now: float,
+        *,
+        persisted: bool = False,
     ) -> None:
-        """Persist one valid phase sample and update its state/alerts."""
+        """Update phase state and alerts after an optional stored sample."""
 
         voltage, frequency, rpc_ms = sample
-        self.storage.add(now, voltage, frequency, phase)
+        if not persisted:
+            self.storage.add(now, voltage, frequency, phase)
         state = self.phase_states[phase]
         changed = state.success(
             voltage, frequency, rpc_ms, self.cfg.recovery_after_successes
@@ -3053,15 +3092,21 @@ class Monitor:
                 self.record_phase_missing(phase, str(exc))
             return False
         now = time.time()
+        valid = {
+            phase: readings[phase]
+            for phase in ("L1", "L2", "L3")
+            if phase in readings
+        }
+        self.storage.add_phases(now, valid)
         for phase in ("L1", "L2", "L3"):
-            sample = readings.get(phase)
+            sample = valid.get(phase)
             if sample is None:
                 self.record_phase_missing(
                     phase, f"{phase} missing from EM.GetStatus"
                 )
             else:
-                self.accept_phase_sample(phase, sample, now)
-        return bool(readings)
+                self.accept_phase_sample(phase, sample, now, persisted=True)
+        return bool(valid)
 
     def poll_cycle(self) -> bool:
         """Poll the independent voltage phases of the selected model."""
