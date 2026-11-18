@@ -339,6 +339,20 @@ prepare_state() {
 }
 
 
+check_yasno_source_files() {
+    # Fail before granting any access if a public script is linked or unowned.
+    local file
+    for file in "$TARGET/scripts/yasno-refresh.py" \
+                "$TARGET/yasno_cache.py" "$TARGET/yasno_schedule.py"; do
+        if [[ -L "$file" || ! -f "$file" ||
+              "$(stat -c %u "$file")" != "$EUID" ||
+              "$(stat -c %h "$file")" != 1 ]]; then
+            echo "ERROR: unsafe YASNO public source file." >&2
+            return 1
+        fi
+    done
+}
+
 prepare_yasno_reader() {
     # The dedicated forecast account must read code, not .env or secrets.
     if ! getent group shelly-yasno >/dev/null 2>&1 ||
@@ -364,9 +378,16 @@ prepare_yasno_reader() {
         echo "ERROR: private Shelly credentials lost protected mode." >&2
         return 1
     fi
+    check_yasno_source_files || return 1
     chgrp shelly-yasno "$TARGET" "$TARGET/scripts"
     chmod 0750 "$TARGET"
     chmod 0710 "$TARGET/scripts"
+    local file
+    for file in "$TARGET/scripts/yasno-refresh.py" \
+                "$TARGET/yasno_cache.py" "$TARGET/yasno_schedule.py"; do
+        chgrp shelly-yasno "$file"
+        chmod 0640 "$file"
+    done
 }
 
 configure_project() {
