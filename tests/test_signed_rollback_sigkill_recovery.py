@@ -39,6 +39,22 @@ qa.run_case(folder, signed, '0.5.24-hw', '0.5.25-hw', fault)
 """
 
 
+RECOVERY_CHILD = """
+import importlib.util, os, signal, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('child_recovery', sys.argv[1])
+qa = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(qa)
+folder, expected, stop = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+def kill_recovery(path, phase):
+    qa.journal(path, phase)
+    if phase == stop:
+        os.kill(os.getpid(), signal.SIGKILL)
+qa.recovery_checkpoint = kill_recovery
+qa.recover_fenced(folder, expected, '0.5.25-hw')
+"""
+
+
 class ProcessKillRollbackTests(unittest.TestCase):
     """Kill only isolated Python children, then recover local test SQLite."""
 
@@ -127,6 +143,48 @@ class ProcessKillRollbackTests(unittest.TestCase):
         self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 6)
         QA.recover_fenced(folder, expected, TARGET)
         self.assertEqual(QA.fixture_digest(folder / "active.sqlite3")[1], 10)
+
+    def test_sigkill_inside_recovery_is_safe_on_retry(self):
+        """An interrupted atomic SQLite restore remains recoverable."""
+
+        for index, phase in enumerate(("RESTORE_PREPARED", "RESTORE_SWAPPED")):
+            with self.subTest(phase=phase):
+                folder = self.kill_disposable_child(
+                    "after_old_db_swap" if index == 0 else "after_old_stage"
+                )
+                rescue = QA.fixture_digest(folder / "rescue.sqlite3")
+                command = [
+                    sys.executable,
+                    "-c",
+                    RECOVERY_CHILD,
+                    str(SCRIPT),
+                    str(folder),
+                    rescue[0],
+                    phase,
+                ]
+                result = subprocess.run(
+                    command, capture_output=True, text=True, timeout=15
+                )
+                self.assertEqual(result.returncode, -signal.SIGKILL)
+                marker = json.loads((folder / "journal.json").read_text())
+                self.assertEqual(marker["phase"], phase)
+                QA.recover_fenced(folder, rescue[0], TARGET)
+                self.assertEqual(
+                    QA.fixture_digest(folder / "active.sqlite3"), rescue
+                )
+                self.assertEqual(QA.staged_identity(folder)[0], TARGET)
+
+    def test_recovering_twice_preserves_entire_photo_history(self):
+        """Replaying a complete fixture recovery must be idempotent."""
+
+        folder = self.kill_disposable_child("after_old_db_swap")
+        expected = QA.fixture_digest(folder / "rescue.sqlite3")
+        QA.recover_fenced(folder, expected[0], TARGET)
+        QA.recover_fenced(folder, expected[0], TARGET)
+        self.assertEqual(
+            QA.fixture_digest(folder / "active.sqlite3"), expected
+        )
+        self.assertEqual(QA.staged_identity(folder)[0], TARGET)
 
     def test_photo_record_survives_real_child_kill(self):
         """Even after a killed child, exact mock PHOTO ID survives."""

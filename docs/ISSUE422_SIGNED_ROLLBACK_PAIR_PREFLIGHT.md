@@ -168,3 +168,26 @@ python3 -m unittest discover -s tests \
 **SIGKILL is not a hard power loss.** This does not test disk cache
 flushes, NVMe durability or real system reboot. Such failures and
 the actual writer/service fencing remain separate release gates.
+
+## Atomic disposable recovery and replay safety
+
+The fixture-only recovery procedure now validates the latest rescue
+database **before any replacement**, writes and fsyncs a separate
+\`.recovery-candidate.sqlite3\`, checks whole-row plus PHOTO identity
+parity, then atomically replaces the synthetic active SQLite with
+\`os.replace\`. The fixture journal is atomically replaced and fsynced
+together with its directory. An attacker-linked candidate path is
+rejected before replacement. Every recovery entrypoint still requires
+a fresh nonblocking per-fixture writer lock.
+
+A child is SIGKILLed inside recovery at two additional checkpoints:
+\`RESTORE_PREPARED\` (before replacement) and \`RESTORE_SWAPPED\`
+(after replacement but before final paired metadata). A new process
+retries and verifies full rescue parity and coherent fixture metadata.
+A second recovery after completion is also safe. Tests use synthetic
+SQLite records only; no Telegram API or production file modifications.
+
+This is local filesystem **process crash** testing, not proof that the
+hypervisor, NVMe or host filesystem survives actual loss of power.
+Exact production signed rollback and physical power-loss recovery still
+require separate tests and owner approval.

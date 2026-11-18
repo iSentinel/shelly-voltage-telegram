@@ -120,12 +120,54 @@ def stage_old_pair(folder: Path, signed: Path, old_version: str) -> None:
         os.chmod(folder / name, 0o600)
 
 
-def journal(folder: Path, phase: str) -> None:
-    """Persist synthetic phase metadata before injected interruption."""
+def sync_directory(folder: Path) -> None:
+    """Persist private fixture directory entries for crash-point testing."""
 
-    tmp = folder / ".journal.new"
-    tmp.write_text(json.dumps({"phase": phase}), encoding="ascii")
-    os.replace(tmp, folder / "journal.json")
+    fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def journal(folder: Path, phase: str) -> None:
+    """Atomically fsync a synthetic phase marker and its directory."""
+
+    temporary = folder / ".journal.new"
+    flags = os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_NOFOLLOW
+    fd = os.open(temporary, flags, 0o600)
+    with os.fdopen(fd, "w", encoding="ascii") as stream:
+        json.dump({"phase": phase}, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, folder / "journal.json")
+    sync_directory(folder)
+
+
+def recovery_checkpoint(folder: Path, phase: str) -> None:
+    """Persist one recovery checkpoint; isolated tests may inject a kill."""
+
+    journal(folder, phase)
+
+
+def restored_candidate(folder: Path, rescued: Path) -> Path:
+    """Build and verify a temporary SQLite before replacing active state."""
+
+    candidate = folder / ".recovery-candidate.sqlite3"
+    if candidate.is_symlink() or (
+        candidate.exists() and not candidate.is_file()
+    ):
+        raise Blocked("RECOVERY_CANDIDATE_PATH_UNSAFE")
+    candidate.unlink(missing_ok=True)
+    sqlite_backup(rescued, candidate)
+    require_equal(rescued, candidate)
+    fd = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    sync_directory(folder)
+    return candidate
 
 
 def fail_at(folder: Path, current: str, chosen: str) -> None:
@@ -143,8 +185,11 @@ def recover_newer(folder: Path, newer_digest: str, version: str) -> None:
     active = folder / "active.sqlite3"
     if not rescued.is_file() or fixture_digest(rescued)[0] != newer_digest:
         raise Blocked("RESCUE_HISTORY_MISMATCH")
-    active.unlink(missing_ok=True)
-    sqlite_backup(rescued, active)
+    candidate = restored_candidate(folder, rescued)
+    recovery_checkpoint(folder, "RESTORE_PREPARED")
+    os.replace(candidate, active)
+    sync_directory(folder)
+    recovery_checkpoint(folder, "RESTORE_SWAPPED")
     require_equal(rescued, active)
     write_current_pair(folder, version)
     journal(folder, "RECOVERED_NO_BOT_START")

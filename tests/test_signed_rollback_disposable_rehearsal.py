@@ -97,6 +97,24 @@ class DisposableRollbackTests(unittest.TestCase):
             QA.recover_newer(folder, original[0], NEW)
         self.assertEqual(QA.fixture_digest(active), original)
 
+    def test_linked_restore_candidate_is_refused_before_active_swap(self):
+        """A linked temporary SQLite file cannot redirect the recovery."""
+
+        folder = self.directory("linked-candidate")
+        active = folder / "active.sqlite3"
+        rescued = folder / "rescue.sqlite3"
+        QA.create_fixture(active, 6)
+        QA.create_fixture(rescued, 10)
+        old = QA.fixture_digest(active)
+        newer = QA.fixture_digest(rescued)
+        (folder / ".recovery-candidate.sqlite3").symlink_to(active)
+        with self.assertRaisesRegex(
+            QA.Blocked, "RECOVERY_CANDIDATE_PATH_UNSAFE"
+        ):
+            QA.recover_fenced(folder, newer[0], NEW)
+        self.assertEqual(QA.fixture_digest(active), old)
+        self.assertEqual(QA.fixture_digest(rescued), newer)
+
     def test_missing_rescue_fails_without_losing_current_history(self):
         """A missing rescue cannot be waved through as recovery."""
 
