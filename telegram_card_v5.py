@@ -207,6 +207,31 @@ class Painter:
         face = font(self.font_root, weight, size)
         return self.draw.textlength(value, font=face) / SCALE
 
+    def diagonal_past_slot(self, x, y):
+        """Cross a completed half-hour diagonally, inside its own tile."""
+
+        self.draw.line(
+            (
+                ((x + 6) * SCALE, (y + 29) * SCALE),
+                ((x + 59) * SCALE, (y + 6) * SCALE),
+            ),
+            fill=MUTED,
+            width=2 * SCALE,
+        )
+
+    def strike(self, x, y, width, size):
+        """Cross only completed time text at double-resolution scale."""
+
+        center = round((y + size * 0.53) * SCALE)
+        self.draw.line(
+            (
+                (round(x * SCALE), center),
+                (round((x + width) * SCALE), center),
+            ),
+            fill=MUTED,
+            width=2 * SCALE,
+        )
+
     def save(self, path):
         """Write a reproducible 960x800 RGB image with smooth text."""
 
@@ -358,7 +383,9 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
         kind = bars[index]
         color = PAST_COLORS[kind] if index < current else SLOT_COLORS[kind]
         painter.rect((left, y, left + 65, y + 35), color, 5)
-        if index == current:
+        if index < current:
+            painter.diagonal_past_slot(left, y)
+        elif index == current:
             painter.rect(
                 (left + 1, y + 1, left + 64, y + 34),
                 None,
@@ -369,14 +396,18 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
     hour_label = f"{hour:02d}:00"
     advance = painter.measure(hour_label, 23, "semibold")
     painter.rect((x + 24, y + 4, x + 106, y + 31), BACKGROUND, 7)
+    text_x = x + (130 - advance) / 2
+    completed = (hour + 1) * 2 <= current
     painter.text(
-        x + (130 - advance) / 2,
+        text_x,
         y + 8,
         hour_label,
         23,
-        TEXT,
+        MUTED if completed else TEXT,
         "semibold",
     )
+    if completed:
+        painter.strike(text_x, y + 8, advance, 23)
 
 
 def visible_periods(bars: str) -> list[tuple[str, str, str, int]]:
@@ -386,16 +417,21 @@ def visible_periods(bars: str) -> list[tuple[str, str, str, int]]:
     return intervals if len(intervals) <= 6 else intervals[:5]
 
 
-def forecast_periods(painter: Painter, bars: str) -> None:
-    """Restore the old readable textual outage schedule under the grid."""
+def forecast_periods(painter: Painter, bars: str, minute: int) -> None:
+    """Strike elapsed windows; keep the current and future rows legible."""
 
     rows = visible_periods(bars)
+    end_minute = 0
     for index, (kind, start, end, minutes) in enumerate(rows):
         y = 608 + 24 * index
         painter.rect((65, y + 4, 79, y + 18), SLOT_COLORS[kind], 4)
         duration = duration_label(minutes, painter.language)
         window = f"{start} – {end} ({duration})"
-        painter.text(92, y, window, 22, TEXT, "medium")
+        end_minute += minutes
+        completed = end_minute <= minute
+        painter.text(92, y, window, 22, MUTED if completed else TEXT, "medium")
+        if completed:
+            painter.strike(92, y, painter.measure(window, 22, "medium"), 22)
         name = painter.labels["period_" + kind]
         painter.text(592, y + 1, name, 18, SLOT_COLORS[kind])
     extra = len(schedule_periods(bars)) - len(rows)
@@ -430,7 +466,7 @@ def forecast_panel(
     for hour in range(24):
         hourly_tile(painter, bars, hour, current)
     forecast_legend(painter)
-    forecast_periods(painter, bars)
+    forecast_periods(painter, bars, local.hour * 60 + local.minute)
     checked = datetime.fromtimestamp(state["u"], KYIV).strftime("%H:%M")
     painter.text(
         64,

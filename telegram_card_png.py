@@ -197,10 +197,22 @@ def draw_battery(pixels: bytearray, x: int, y: int, kind: str) -> None:
         rectangle(pixels, x + 10, y + 4, x + 12, y + 9, AMBER)
 
 
-def draw_schedule_rows(
-    pixels: bytearray, periods: list[tuple[str, str, str, int]]
+def strike_text(
+    pixels: bytearray, value: str, x: int, y: int, size: int
 ) -> None:
-    """Draw five chronological forecast windows; the mini-bar shows all."""
+    """Cross a completed time label without hiding its original text."""
+
+    center = y + 3 * size
+    width = len(value) * 6 * size - size
+    rectangle(pixels, x, center, x + width, center + 2, MUTED)
+
+
+def draw_schedule_rows(
+    pixels: bytearray,
+    periods: list[tuple[str, str, str, int]],
+    minute: int,
+) -> None:
+    """Draw elapsed windows crossed out; preserve active and future rows."""
 
     names = {
         "X": "ПЛАНОВЕ ВІДКЛЮЧЕННЯ",
@@ -208,11 +220,16 @@ def draw_schedule_rows(
         "?": "МОЖЛИВЕ ВІДКЛЮЧЕННЯ",
     }
     shown = periods[:5] if len(periods) <= 5 else periods[:4]
+    end_minute = 0
     for index, (kind, begin, end, minutes) in enumerate(shown):
         y = 588 + 30 * index
         draw_battery(pixels, 60, y + 2, kind)
         interval = f"{begin} - {end} ({duration_label(minutes)})"
-        label(pixels, interval, 104, y, INK, 3)
+        end_minute += minutes
+        completed = end_minute <= minute
+        label(pixels, interval, 104, y, MUTED if completed else INK, 3)
+        if completed:
+            strike_text(pixels, interval, 104, y, 3)
         label(
             pixels,
             names[kind],
@@ -232,6 +249,12 @@ def strike_past_tile(pixels: bytearray, x: int, y: int, color: bytes) -> None:
         (part * 42 + panel * 58) // 100 for part, panel in zip(color, PANEL)
     )
     rectangle(pixels, x, y, x + 66, y + 40, faded, 5)
+    strike_past_diagonal(pixels, x, y)
+
+
+def strike_past_diagonal(pixels: bytearray, x: int, y: int) -> None:
+    """Draw a single diagonal for one completed 30-minute slot."""
+
     for step in range(54):
         col = x + 6 + step
         row = y + 34 - (step * 29 // 53)
@@ -268,7 +291,11 @@ def draw_hour_tiles(pixels: bytearray, bars: str, now: float) -> None:
                 strike_past_tile(pixels, tile_x, y, colors[kind])
             elif index == current:
                 outline_current_tile(pixels, tile_x, y)
-        label(pixels, f"{hour:02d}:00", x + 20, y + 9, INK, 3)
+        stamp = f"{hour:02d}:00"
+        completed = hour < local.hour
+        label(pixels, stamp, x + 20, y + 9, MUTED if completed else INK, 3)
+        if completed:
+            strike_text(pixels, stamp, x + 20, y + 9, 3)
 
 
 def half_hour_total(slots: int) -> str:
@@ -327,7 +354,10 @@ def draw_timeline(
     label(pixels, "ГРУПА " + str(state["g"]), 734, 347, BLUE, 3)
     draw_hour_tiles(pixels, bars, now)
     draw_forecast_legend(pixels, state)
-    draw_schedule_rows(pixels, schedule_periods(bars))
+    local = datetime.fromtimestamp(now, KYIV)
+    draw_schedule_rows(
+        pixels, schedule_periods(bars), local.hour * 60 + local.minute
+    )
     draw_forecast_totals(pixels, bars)
     hint = (
         "ЛИШЕ ПРОГНОЗ / " + OFFLINE_HINT
