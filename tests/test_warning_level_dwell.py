@@ -79,7 +79,7 @@ class WarningDwellTests(unittest.TestCase):
 
         monitor = live_style_monitor()
         monitor.warning_dwell = 180.0
-        monitor.alert_level = "warning"
+        monitor.alert_level = "warning_low"
         with patch.object(
             APP.time, "monotonic", side_effect=[100.0, 129.0, 130.0]
         ):

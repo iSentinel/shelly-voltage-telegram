@@ -232,6 +232,8 @@ _TEXT = {
         "quality_bad": "Вне нормы: {value:.2f}%",
         "audit_title": "🧾 Последние изменения настроек",
         "status_online": "🟢 Связь с Shelly установлена",
+        "reading_stale": "данные устарели",
+        "status_stale": "🟡 Показания Shelly устарели",
         "status_recovering": "🟡 Shelly восстанавливает соединение",
         "status_offline": (
             "🔴 Нет связи с Shelly · напряжение сейчас неизвестно"
@@ -537,6 +539,8 @@ _TEXT = {
             "📍 Вимірювань: {samples} · втрат зв'язку: {count}, {duration}"
         ),
         "status_online": "🟢 Зв'язок із Shelly є",
+        "reading_stale": "дані застаріли",
+        "status_stale": "🟡 Показання Shelly застаріли",
         "status_recovering": "🟡 Shelly відновлює з'єднання",
         "status_offline": (
             "🔴 Немає зв'язку із Shelly · поточна напруга невідома"
@@ -830,6 +834,8 @@ _TEXT = {
             "📍 Samples: {samples} · connection losses: {count}, {duration}"
         ),
         "status_online": "🟢 Shelly is connected",
+        "reading_stale": "stale reading",
+        "status_stale": "🟡 Shelly readings are stale",
         "status_recovering": "🟡 Shelly connection recovering",
         "status_offline": "🔴 Shelly is offline · current voltage unknown",
         "status_starting": "🟡 Awaiting Shelly readings",
