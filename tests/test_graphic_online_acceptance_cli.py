@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from test_yasno_schedule import response
@@ -49,6 +51,43 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         }
         payload.update(overrides)
         self.health.write_text(json.dumps(payload))
+
+    def write_three_phase(self, **overrides):
+        """Supply the exact three-phase structure returned by /health."""
+
+        phase1 = {
+            "connectivity": "online",
+            "voltage": 217.7,
+            "frequency": 50.0,
+            "last_success": NOW.timestamp() - 5,
+        }
+        primary = {
+            **phase1,
+            "line_labels": ["L1", "L2", "L3"],
+            "phases": {
+                "L1": dict(phase1),
+                "L2": {
+                    "connectivity": "online",
+                    "voltage": 213.8,
+                    "frequency": 50.0,
+                    "last_success": NOW.timestamp() - 5,
+                },
+                "L3": {
+                    "connectivity": "online",
+                    "voltage": 202.3,
+                    "frequency": 50.0,
+                    "last_success": NOW.timestamp() - 5,
+                },
+            },
+        }
+        primary.update(overrides)
+        self.health.write_text(json.dumps(primary), encoding="utf-8")
+
+    def run_v5(self):
+        """Force explicit tri-phase renderer only in this QA subprocess."""
+
+        with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v5"}):
+            return self.run_check()
 
     def write_forecast(self, **overrides):
         """Supply a verified local YASNO 48-slot day for group 10.1."""
@@ -128,6 +167,110 @@ class OnlineAcceptanceCliTests(unittest.TestCase):
         record = json.loads(result.stdout)
         self.assertTrue(record["forecast_visible"])
         self.assertEqual(record["voltage_v"], 217.7)
+
+    def test_three_phase_v5_preview_verifies_all_live_tiles(self):
+        """The acceptance cannot pass with an L1-only screenshot."""
+
+        self.write_three_phase()
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["verified_phases"], ["L1", "L2", "L3"])
+        self.assertEqual(data["voltage_v"], 217.7)
+        self.assertEqual(data["status"], "PASS")
+        self.assertFalse(data["telegram_sent"])
+        self.assertEqual(data["image_size"], "960x800")
+        self.assertTrue(self.output.read_bytes().startswith(b"\x89PNG"))
+
+    def test_three_phase_secondary_stale_fails_before_png(self):
+        """A disconnected or stale L2 must never appear fresh."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        data["phases"]["L2"]["last_success"] = NOW.timestamp() - 75
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_NOT_FRESH", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_secondary_offline_fails_before_png(self):
+        """A cached L3 voltage cannot pass when phase is offline."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        data["phases"]["L3"]["connectivity"] = "offline"
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_NOT_FRESH", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_missing_l3_fails_before_png(self):
+        """Never show a normal-looking single-phase fallback."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        del data["phases"]["L3"]
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_TOPOLOGY_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_extra_l4_fails_before_png(self):
+        """Unexpected phase maps cannot silently trim extra channels."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        data["phases"]["L4"] = data["phases"]["L3"]
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_TOPOLOGY_INVALID", result.stdout)
+
+    def test_three_phase_primary_disagreement_fails_before_png(self):
+        """The L1 phase snapshot must match the published primary."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        data["phases"]["L1"]["voltage"] = 180.0
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_PRIMARY_MISMATCH", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_primary_stale_fails_before_png(self):
+        """A stale L1 in the phase map cannot inherit live global data."""
+
+        self.write_three_phase()
+        data = json.loads(self.health.read_text())
+        data["phases"]["L1"]["last_success"] = NOW.timestamp() - 90
+        self.health.write_text(json.dumps(data))
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_PRIMARY_MISMATCH", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_requires_v5_style(self):
+        """Do not let the single-phase v4 renderer claim triple PASS."""
+
+        self.write_three_phase()
+        with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v4"}):
+            result = self.run_check()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("THREE_PHASE_STYLE_REQUIRED", result.stdout)
+        self.assertFalse(self.output.exists())
+
+    def test_three_phase_inconsistent_labels_fails_before_png(self):
+        """Do not accept one-phase line label with three-phase map."""
+
+        self.write_three_phase(line_labels=["L"])
+        result = self.run_v5()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("PHASE_TOPOLOGY_INVALID", result.stdout)
+        self.assertFalse(self.output.exists())
 
     def test_offline_is_rejected_without_png(self):
         """The online acceptance cannot misrepresent a power outage."""
