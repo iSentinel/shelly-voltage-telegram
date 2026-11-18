@@ -97,4 +97,57 @@ if [[ "$output" != *"usage: github_update.py"* ||
     echo "FAIL: missing expected checker or service success receipt" >&2
     exit 1
 fi
-echo "PASS: DynamicUser, isolated runtime status, protected secrets; no network"
+# Also verify the writable StateDirectory used by the real installed unit.
+state_unit="svt-checker-state-qa-$(date +%s)-$$"
+state_name="svt-checker-state-qa-$(date +%s)-$$"
+state_dir="/var/lib/$state_name"
+state_credential="/run/credentials/$state_unit.service"
+
+cleanup_state() {
+    # Only delete paths from this unique test namespace, never live state.
+    if [[ "$state_name" == svt-checker-state-qa-* ]]; then
+        if [[ -L "$state_dir" ]]; then
+            rm -f -- "$state_dir"
+        fi
+        if [[ -d "/var/lib/private/$state_name" &&
+              ! -L "/var/lib/private/$state_name" ]]; then
+            rm -rf -- "/var/lib/private/$state_name"
+        fi
+    fi
+}
+trap cleanup_state EXIT
+
+if ! state_output="$(systemd-run --unit="$state_unit" --collect --wait --pipe \
+    --service-type=exec \
+    -p DynamicUser=yes -p WorkingDirectory=/ \
+    -p PrivateTmp=yes -p PrivateDevices=yes \
+    -p NoNewPrivileges=yes -p ProtectHome=yes \
+    -p ProtectSystem=strict -p RestrictAddressFamilies=AF_UNIX \
+    -p CapabilityBoundingSet= -p LockPersonality=yes \
+    -p MemoryDenyWriteExecute=yes \
+    -p Environment=PYTHONDONTWRITEBYTECODE=1 \
+    -p "StateDirectory=$state_name" -p StateDirectoryMode=0750 \
+    -p "LoadCredential=github_update.py:$checker" \
+    -p "LoadCredential=RELEASE_VERSION:$release" \
+    /usr/bin/python3 -c "$probe" "$state_credential" \
+        "$state_dir" "$expected_version" 2>&1)"; then
+    printf '%s\n' "$state_output" >&2
+    echo "FAIL: transient StateDirectory DynamicUser check" >&2
+    exit 1
+fi
+if [[ "$state_output" != *"status=0/SUCCESS"* ||
+      "$state_output" != *"simulated release, isolated 0640 status"* ||
+      ! -f "$state_dir/status.json" ||
+      "$(stat -c %a "$state_dir/status.json")" != 640 ||
+      "$(stat -L -c %a "$state_dir")" != 750 ]]; then
+    printf '%s\n' "$state_output" >&2
+    echo "FAIL: unexpected isolated persistent state acceptance" >&2
+    exit 1
+fi
+cleanup_state
+trap - EXIT
+if [[ -e "$state_dir" || -e "/var/lib/private/$state_name" ]]; then
+    echo "FAIL: isolated StateDirectory residue" >&2
+    exit 1
+fi
+echo "PASS: DynamicUser RuntimeDirectory and StateDirectory, protected secrets; no network"

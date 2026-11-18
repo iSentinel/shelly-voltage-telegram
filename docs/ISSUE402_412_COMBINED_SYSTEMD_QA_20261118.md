@@ -59,3 +59,8 @@ installed systemd units. Do not treat this QA as release authorization.
 3. After authorized install, run real checker service once and confirm
    status path/permissions and timer scheduling without auto-install.
 4. Continue non-invasive Shelly, SQLite, Telegram and YASNO observations.
+
+- Extended real StateDirectory acceptance: systemd DynamicUser uses a
+  symlink to a private /var/lib/private directory. Validate directory mode
+  with stat -L (follow symlink), while the generated status.json is verified
+  as 0640 and the disposable QA StateDirectory is removed after test.
