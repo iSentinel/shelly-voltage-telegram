@@ -177,6 +177,14 @@ class YasnoSourcePermissionsTests(InstallerFunctionsTest):
         (self.target / ".env").write_text("SECRET=private\n")
         (self.target / ".env").chmod(0o600)
         (self.target / "secrets").mkdir(mode=0o700)
+        for file in (
+            "scripts/yasno-refresh.py",
+            "yasno_cache.py",
+            "yasno_schedule.py",
+        ):
+            path = self.target / file
+            path.write_text("# safe public YASNO fixture\n")
+            path.chmod(0o600)
         self.calls = self.root / "calls.txt"
         self.fake("getent", 'test "$YASNO_PRESENT" = 1\n')
         self.fake("id", 'test "$YASNO_PRESENT" = 1\n')
@@ -219,6 +227,14 @@ printf 'mode %s\n' "$*" >> "$YASNO_CALLS"
             stat.S_IMODE((self.target / ".env").stat().st_mode), 0o600
         )
         self.assertIn("group shelly-yasno", self.calls.read_text())
+        for file in (
+            "scripts/yasno-refresh.py",
+            "yasno_cache.py",
+            "yasno_schedule.py",
+        ):
+            self.assertEqual(
+                stat.S_IMODE((self.target / file).stat().st_mode), 0o640
+            )
 
     def test_absent_yasno_account_does_not_change_modes(self) -> None:
         """Do not require the optional YASNO sidecar on other installs."""
@@ -245,7 +261,11 @@ printf 'mode %s\n' "$*" >> "$YASNO_CALLS"
         scripts.mkdir(mode=0o700)
         shutil.copy2(INSTALLER.parent / "source-tar.sh", scripts)
         (scripts / "yasno-refresh.py").write_text("# test fixture\n")
-        (source / "VERSION").write_text("0.5.22-hw\n")
+        (source / "yasno_cache.py").write_text("# cache module fixture\n")
+        (source / "yasno_schedule.py").write_text(
+            "# schedule module fixture\n"
+        )
+        (source / "VERSION").write_text("0.5.25-hw\n")
         (source / ".env").write_text("PRIVATE=overwritten\n")
         private = source / "secrets"
         private.mkdir(mode=0o700)
@@ -312,11 +332,62 @@ esac
         """Never grant traversal to arbitrary paths through a linked dir."""
 
         scripts = self.target / "scripts"
+        (scripts / "yasno-refresh.py").unlink()
         scripts.rmdir()
         scripts.symlink_to(self.root, target_is_directory=True)
         result = self.run_yasno(present=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+        self.assertFalse(self.calls.exists())
+
+    def test_public_yasno_symlink_fails_before_changes(self) -> None:
+        """Do not follow links to .env or unrelated private state."""
+
+        code = self.target / "yasno_cache.py"
+        code.unlink()
+        code.symlink_to(self.target / ".env")
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe YASNO public source", result.stderr)
+        self.assertFalse(self.calls.exists())
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+
+    def test_hardlinked_yasno_source_fails_closed(self) -> None:
+        """Never group-read a linked private file during permission repair."""
+
+        code = self.target / "yasno_schedule.py"
+        code.unlink()
+        code.hardlink_to(self.target / ".env")
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe YASNO public source", result.stderr)
+        self.assertFalse(self.calls.exists())
+
+    def test_missing_yasno_module_blocks_without_partial_chmod(self) -> None:
+        """A partial source extraction must not grant directory access."""
+
+        (self.target / "yasno_schedule.py").unlink()
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe YASNO public source", result.stderr)
+        self.assertFalse(self.calls.exists())
+        self.assertEqual(stat.S_IMODE(self.target.stat().st_mode), 0o700)
+
+    def test_owner_mismatch_yasno_module_fails_closed(self) -> None:
+        """Reject foreign-owned public code before changing file groups."""
+
+        self.fake(
+            "stat",
+            r"""
+case "$*" in
+    *'%u'*'yasno_schedule.py') printf '99999\n' ;;
+    *) exec /usr/bin/stat "$@" ;;
+esac
+""",
+        )
+        result = self.run_yasno(present=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsafe YASNO public source", result.stderr)
         self.assertFalse(self.calls.exists())
 
     def test_insecure_env_blocks_source_install(self) -> None:
