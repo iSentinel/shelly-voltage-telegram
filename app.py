@@ -2265,9 +2265,28 @@ def private_graphic_preview_state(monitor: Monitor) -> str:
 
     with monitor.config_lock:
         snapshot = monitor.state.snapshot()
+        phases = {
+            phase: monitor.phase_states[phase].snapshot()
+            for phase in monitor.active_phases()
+            if phase != "L1"
+        }
         language = monitor.language
+        max_age = monitor.cfg.stale_after
+        limits = (
+            monitor.critical_low,
+            monitor.warning_low,
+            monitor.warning_high,
+            monitor.critical_high,
+        )
     forecast = cached_yasno_preview_args() or {}
-    return widget_public_data(snapshot, language=language, **forecast)
+    return widget_public_data(
+        snapshot,
+        language=language,
+        phases=phases or None,
+        max_sample_age=max_age,
+        voltage_limits=limits,
+        **forecast,
+    )
 
 
 def compact_preview_text(monitor: Monitor) -> str:
@@ -3273,7 +3292,8 @@ class Monitor:
     def publish_graphic_status(self, text: str, notify: bool = False) -> bool:
         """Serialize channel mutations and preserve status identity."""
 
-        with self.status_publish_lock:
+        # Polling already holds config_lock. Keep the same lock order here.
+        with self.config_lock, self.status_publish_lock:
             return self._publish_graphic_status_locked(text, notify)
 
     def _publish_graphic_status_locked(
@@ -3314,7 +3334,7 @@ class Monitor:
     def update_graphic_status(self, text: str) -> bool:
         """Serialize verified edits with any concurrent new publication."""
 
-        with self.status_publish_lock:
+        with self.config_lock, self.status_publish_lock:
             return self._update_graphic_status_locked(text)
 
     def _update_graphic_status_locked(self, text: str) -> bool:
@@ -6819,7 +6839,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.reply(200, metrics_text(self.monitor), "text/plain")
         elif self.path == "/dashboard":
             page = dashboard_html(
-                "Shelly Voltage · 3 phases", dashboard_rows(self.monitor)
+                f"Shelly Voltage · {self.monitor.phase_labels()}",
+                dashboard_rows(self.monitor),
             )
             self.reply(200, page, "text/html; charset=utf-8")
         elif self.path in {"/", "/health", "/status.json"}:

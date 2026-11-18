@@ -30,7 +30,9 @@ def numeric(value: object, low: float, high: float) -> float | None:
     return number
 
 
-def health_state(health: object, now: float) -> dict:
+def health_state(
+    health: object, now: float, max_age: float = MAX_SAMPLE_AGE
+) -> dict:
     """Expose current voltage only from a recently connected meter."""
 
     if not isinstance(health, dict):
@@ -39,7 +41,7 @@ def health_state(health: object, now: float) -> dict:
     if connectivity != "online":
         return {"s": "offline" if connectivity == "offline" else "unknown"}
     ts = numeric(health.get("last_success"), 1, now + 2)
-    if ts is None or not 0 <= now - ts <= MAX_SAMPLE_AGE:
+    if ts is None or not 0 <= now - ts <= min(max_age, MAX_SAMPLE_AGE):
         return {"s": "stale"}
     voltage = numeric(health.get("voltage"), MIN_VISIBLE_VOLTAGE, 400)
     if voltage is None:
@@ -87,6 +89,23 @@ def forecast_state(
     }
 
 
+def widget_phase_states(
+    phases: dict[str, dict] | None, clock: float, max_age: float
+) -> dict:
+    """Encode secondary measurements only for the three-phase topology."""
+
+    if phases is None:
+        return {}
+    if not isinstance(phases, dict) or set(phases) != {"L2", "L3"}:
+        raise ValueError("three-phase widget needs L2 and L3")
+    if not all(isinstance(snapshot, dict) for snapshot in phases.values()):
+        raise ValueError("invalid secondary phase snapshot")
+    return {
+        name: health_state(snap, clock, max_age)
+        for name, snap in phases.items()
+    }
+
+
 def widget_public_data(
     health: dict,
     group: str = "",
@@ -97,6 +116,8 @@ def widget_public_data(
     language: str = "uk",
     phases: dict[str, dict] | None = None,
     forecast_source: str = "community",
+    max_sample_age: float = MAX_SAMPLE_AGE,
+    voltage_limits: tuple[float, float, float, float] | None = None,
 ) -> str:
     """Encode an opaque per-widget state fitting Bot API widget limits."""
 
@@ -106,16 +127,13 @@ def widget_public_data(
     state = {
         "schema": STATE_VERSION,
         "l": language,
-        **health_state(health, clock),
+        **health_state(health, clock, max_sample_age),
     }
-    if phases is not None:
-        if not isinstance(phases, dict) or set(phases) != {"L2", "L3"}:
-            raise ValueError("three-phase widget needs L2 and L3")
-        if not all(isinstance(phases[name], dict) for name in phases):
-            raise ValueError("invalid secondary phase snapshot")
-        state["p"] = {
-            name: health_state(phases[name], clock) for name in ("L2", "L3")
-        }
+    secondary = widget_phase_states(phases, clock, max_sample_age)
+    if secondary:
+        state["p"] = secondary
+    if voltage_limits is not None:
+        state["limits"] = voltage_limits
     if group:
         if not re.fullmatch(r"\d{1,2}\.\d", group):
             raise ValueError("unsupported outage group")

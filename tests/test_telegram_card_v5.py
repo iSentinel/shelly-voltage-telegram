@@ -283,6 +283,64 @@ class GraphicV5Tests(unittest.TestCase):
         self.assertEqual(len(current), 1)
         self.assertEqual(current[0].args[1], (690, 494, 753, 527))
 
+    def labels_drawn(self, payload: dict) -> set[tuple[str, str]]:
+        """Identify visible labels and colors from the real renderer."""
+
+        original = Painter.text
+        with patch.object(
+            Painter, "text", autospec=True, side_effect=original
+        ) as writer:
+            self.render(payload)
+        return {
+            (call.args[3], call.args[5])
+            for call in writer.call_args_list
+            if len(call.args) > 5
+        }
+
+    def test_localized_critical_voltage_is_distinct_from_connectivity(self):
+        """A connected meter can have critically low voltage."""
+
+        for lang, label in (
+            ("uk", "Критично низька"),
+            ("ru", "Критически низкое"),
+            ("en", "Critically low"),
+        ):
+            with self.subTest(lang=lang):
+                payload = state()
+                payload.update(l=lang, v=170, limits=[190, 207, 253, 255])
+                labels = self.labels_drawn(payload)
+                self.assertIn((label, "#FF7786"), labels)
+                self.assertIn(("170.0", "#FF7786"), labels)
+                self.assertIn(("SHELLY  ·  L", "#A6B9D0"), labels)
+
+    def test_each_active_phase_has_own_status_and_voltage(self):
+        """Stale L2 stays hidden while critical L3 is called out."""
+
+        payload = state()
+        payload.update(
+            l="en",
+            limits=[190, 207, 253, 255],
+            p={
+                "L2": {"s": "online", "v": 199.4, "t": NOW - 120},
+                "L3": {"s": "online", "v": 263.7, "t": NOW - 3, "f": 50},
+            },
+        )
+        labels = self.labels_drawn(payload)
+        self.assertIn(("SHELLY  ·  L1 / L2 / L3", "#A6B9D0"), labels)
+        self.assertIn(("PARTIAL DATA", "#F3BE69"), labels)
+        self.assertIn(("Critically high", "#FF7786"), labels)
+        self.assertIn(("263.7", "#FF7786"), labels)
+        self.assertNotIn("199.4", {label for label, _ in labels})
+
+    def test_unknown_thresholds_never_color_voltage_as_normal(self):
+        """A missing or invalid limit cannot produce a green verdict."""
+
+        payload = state()
+        payload.update(l="en", limits=[190, 207, 203, 255])
+        labels = self.labels_drawn(payload)
+        self.assertIn(("Thresholds unavailable", "#A6B9D0"), labels)
+        self.assertNotIn(("Voltage in range", "#3DD5A1"), labels)
+
     def test_font_packages_and_pillow_are_built_into_docker(self):
         """Avoid creating a build that works only with host font files."""
 
