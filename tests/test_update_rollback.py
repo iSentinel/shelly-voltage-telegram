@@ -3,6 +3,7 @@
 import gzip
 import hashlib
 import os
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -25,6 +26,11 @@ class OfflineRollbackTests(unittest.TestCase):
         self.database = self.root / "monitor.sqlite3"
         self.snapshot = self.root / "snapshot"
         self.snapshot.mkdir()
+        (self.root / "scripts").mkdir()
+        shutil.copy2(
+            ROOT / "scripts/pending-recovery-history-guard.py",
+            self.root / "scripts/pending-recovery-history-guard.py",
+        )
         with closing(sqlite3.connect(self.database)) as db, db:
             db.execute("CREATE TABLE samples (id INTEGER)")
             db.execute("INSERT INTO samples VALUES (42)")
@@ -178,19 +184,33 @@ class OfflineRollbackTests(unittest.TestCase):
             with self.subTest(version=version):
                 self.assertEqual(result.returncode == 0, accepted)
 
-    def test_valid_snapshot_restores_previous_database(self):
-        """Recover old records and retain post-failure data separately."""
+    def test_stale_snapshot_blocks_without_replacing_database(self):
+        """Newer data must never be replaced with an old archive."""
 
+        old_inode = self.database.stat().st_ino
         result = self.run_restore()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        with closing(sqlite3.connect(self.database)) as db, db:
-            self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (42,)
-            )
-        rescue = self.snapshot / "failed-upgrade-database.sqlite3"
-        with closing(sqlite3.connect(rescue)) as db:
+        self.assertNotEqual(result.returncode, 0)
+        with closing(sqlite3.connect(self.database)) as db:
             self.assertEqual(
                 db.execute("SELECT id FROM samples").fetchone(), (99,)
+            )
+        self.assertEqual(self.database.stat().st_ino, old_inode)
+        self.assertFalse(
+            (self.snapshot / "failed-upgrade-database.sqlite3").exists()
+        )
+
+    def test_matching_snapshot_keeps_database_in_place(self):
+        """An equal archive validates without rewriting a live file."""
+
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=42")
+        inode = self.database.stat().st_ino
+        result = self.run_restore()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.database.stat().st_ino, inode)
+        with closing(sqlite3.connect(self.database)) as db:
+            self.assertEqual(
+                db.execute("SELECT id FROM samples").fetchone(), (42,)
             )
 
     def test_restore_does_not_overwrite_stale_temp_file(self):
@@ -199,7 +219,7 @@ class OfflineRollbackTests(unittest.TestCase):
         stale = Path(str(self.database) + ".recovery.$")
         stale.write_text("previous interrupted attempt", encoding="utf-8")
         result = self.run_restore()
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0)
         self.assertEqual(
             stale.read_text(encoding="utf-8"),
             "previous interrupted attempt",
@@ -209,11 +229,11 @@ class OfflineRollbackTests(unittest.TestCase):
         )
         with closing(sqlite3.connect(self.database)) as db:
             self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (42,)
+                db.execute("SELECT id FROM samples").fetchone(), (99,)
             )
 
-    def test_rescue_includes_uncheckpointed_wal_data(self):
-        """Rescue must include committed rows still residing in the WAL."""
+    def test_new_committed_wal_data_is_not_rewound(self):
+        """A committed WAL value cannot be lost on archive rollback."""
 
         writer = sqlite3.connect(self.database)
         try:
@@ -223,12 +243,15 @@ class OfflineRollbackTests(unittest.TestCase):
             writer.commit()
             self.assertTrue(Path(str(self.database) + "-wal").exists())
             result = self.run_restore()
-            self.assertEqual(result.returncode, 0, result.stderr)
-            rescue = self.snapshot / "failed-upgrade-database.sqlite3"
-            with closing(sqlite3.connect(rescue)) as db:
+            self.assertNotEqual(result.returncode, 0)
+            self.assertTrue(Path(str(self.database) + "-wal").exists())
+            with closing(sqlite3.connect(self.database)) as db:
                 self.assertEqual(
                     db.execute("SELECT id FROM samples").fetchone(), (777,)
                 )
+            self.assertFalse(
+                (self.snapshot / "failed-upgrade-database.sqlite3").exists()
+            )
         finally:
             writer.close()
 
