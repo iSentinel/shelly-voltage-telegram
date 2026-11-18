@@ -75,7 +75,6 @@ def read_version() -> str:
 
 VERSION = read_version()
 SCHEMA_VERSION = 3
-STATUS_CLEANUP_RETRY_SECONDS = 60
 RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
 RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
 RECOVERY_ROTATION_PENDING_KEY = "telegram_recovery_rotation_pending_at"
@@ -2574,6 +2573,9 @@ def voltage_level(voltage: float, cfg: Config) -> str:
     if voltage <= cfg.warning_low or voltage >= cfg.warning_high:
         return "warning"
     return "normal"
+
+
+STATUS_CLEANUP_RETRY_SECONDS = 60
 
 
 class Monitor:
