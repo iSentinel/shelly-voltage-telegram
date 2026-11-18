@@ -247,3 +247,36 @@ intact. These are **guest-reboot** results, not sudden physical power
 loss, NVMe cache durability or an actual production signed rollback.
 The current production image, Compose restart policy, unit and
 updater timer were not changed.
+
+## Three-phase WAL + owner contention integration QA, 2026-11-19
+
+Two additional cross-process tests now connect the shared OS
+writer-lease/pending-update protocol to actual synthetic SQLite
+in WAL mode, including three-phase phase labels/frequency and the
+existing Telegram PHOTO marker. These tests use unique temporary
+directories; nothing reaches live Shelly, Telegram or production.
+
+- With a paused systemd-model writer holding its lock, the QA
+  updater marker is introduced between first and second pending
+  checks. The writer resumes but returns BLOCKED_PENDING without
+  adding any WAL rows; historical L1/L2/L3 and PHOTO state match.
+- With a Docker-model writer holding a lock and using WAL, real
+  SIGKILL terminates it. A separate updater process acquires the
+  released lock and publishes pending-update. A new systemd-model
+  writer sees pending and refuses before SQLite writes; the
+  committed first-writer L1 record and both other phases plus the
+  PHOTO marker remain intact.
+- This is intentionally a *cooperating synthetic writer*:
+  the production signed bot and its Docker/systemd startup paths
+  have NOT been changed to acquire the same lock.
+
+Strict regression results: 11/11 owner concurrency tests including
+these 2 WAL cases PASS, 34/34 boot-audit tests PASS, source quality
+over 247 Python files PASS. The earlier actual LXC114 A/B reboot
+result still proves that an autonomous Docker restart bypasses a
+mere systemd ExecStartPre pending check unless the writer itself
+participates in the shared fencing design.
+
+Release gate remains BLOCKED: a common production writer contract,
+reliable supervisor, exact source/OCI rollback and latest complete
+SQLite/WAL history with PHOTO identity must all be accepted together.

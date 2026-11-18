@@ -157,6 +157,81 @@ class DualOwnerRehearsalTests(unittest.TestCase):
                 db.execute("SELECT * FROM telegram_status").fetchone(),
             )
 
+    def enable_pro3em_wal(self) -> None:
+        """Convert only the synthetic fixture to three-phase WAL mode."""
+
+        with closing(sqlite3.connect(self.root / "synthetic.sqlite3")) as db:
+            self.assertEqual(
+                db.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal"
+            )
+            db.executescript(
+                "ALTER TABLE measurements ADD COLUMN phase TEXT "
+                "NOT NULL DEFAULT 'L1';"
+                "ALTER TABLE measurements ADD COLUMN frequency REAL "
+                "NOT NULL DEFAULT 50.0;"
+            )
+            db.executemany(
+                "INSERT INTO measurements(voltage,phase,frequency) "
+                "VALUES (?,?,?)",
+                [(211.0, "L2", 50.0), (205.0, "L3", 50.0)],
+            )
+            db.commit()
+
+    def assert_three_phase_photo(self, l1: int) -> None:
+        """Require all real committed fixture WAL records and PHOTO ID."""
+
+        with closing(sqlite3.connect(self.root / "synthetic.sqlite3")) as db:
+            self.assertEqual(
+                db.execute("PRAGMA quick_check").fetchone()[0], "ok"
+            )
+            phases = db.execute(
+                "SELECT phase,count(*) FROM measurements "
+                "GROUP BY phase ORDER BY phase"
+            ).fetchall()
+            photo = db.execute(
+                "SELECT media_kind,message_id FROM telegram_status"
+            ).fetchone()
+        self.assertEqual(phases, [("L1", l1), ("L2", 1), ("L3", 1)])
+        self.assertEqual(photo, ("photo", 1000))
+
+    def test_three_phase_wal_pending_race_preserves_every_phase(self):
+        """A marker created after writer lease still blocks WAL writes."""
+
+        self.enable_pro3em_wal()
+        owner = self.start("systemd", pause=True)
+        self.assertEqual(owner.stdout.readline().strip(), "FENCE_ACQUIRED")
+        (self.root / "pending-update").write_text("synthetic-marker")
+        self.assertIsNotNone(owner.stdin)
+        owner.stdin.write("resume\n")
+        owner.stdin.flush()
+        output, _ = owner.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), owner.returncode), ("BLOCKED_PENDING", 4)
+        )
+        self.assert_three_phase_photo(10)
+
+    def test_three_phase_wal_sigkill_then_pending_blocks_reboot(self):
+        """After a killed WAL writer, updater owns the recovery gate."""
+
+        self.enable_pro3em_wal()
+        writer = self.start("docker", hold=True)
+        self.assertEqual(
+            writer.stdout.readline().strip(), "OWNER_ACQUIRED:docker"
+        )
+        writer.send_signal(signal.SIGKILL)
+        self.assertEqual(writer.wait(timeout=5), -signal.SIGKILL)
+        update = self.start_updater()
+        output, _ = update.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), update.returncode), ("PENDING_CREATED", 0)
+        )
+        boot = self.start("systemd")
+        output, _ = boot.communicate(timeout=5)
+        self.assertEqual(
+            (output.strip(), boot.returncode), ("BLOCKED_PENDING", 4)
+        )
+        self.assert_three_phase_photo(11)
+
     def test_docker_owner_blocks_second_systemd_writer(self):
         """A competing owner cannot insert any records while lock held."""
 
