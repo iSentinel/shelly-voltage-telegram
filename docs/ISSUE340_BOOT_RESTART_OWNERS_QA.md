@@ -87,8 +87,9 @@ rollback_authorized=false, production_modified=false.
 5. Obtain separate exact-head Owner Approval for any production
    configuration/restart and public Telegram changes.
 
-The new installed but not configured three-phase Shelly and its
-future owner-supplied IP are tracked independently under Issue #425.
+The new Pro3EM-3CT63 at 192.168.131.176 has since passed owner-approved
+physical acceptance and is in production. Issue #425 is complete;
+this boot-owner gate still applies to all three phases.
 
 ## QA
 
@@ -136,3 +137,68 @@ ExecStartPre execution or an actual source/OCI rollback.
 python3 -W error::ResourceWarning -m unittest discover -s tests \
   -p test_boot_dual_owner_rehearsal.py -v
 ~~~
+
+## Real isolated LXC114 Docker/systemd experiment, 2026-11-18
+
+LXC114 is a disposable, offline QA guest: hostname
+shelly-docker-reboot-qa, no network interface beyond loopback, no
+production mounts, and a single synthetic Storage writer under a
+private data folder. No current Shelly, production bot, Telegram or
+production SQLite was present.
+
+With the existing QA pending-update marker, an actual
+systemctl start svt-qa-compose.service returned exit 1 as required
+by ExecStartPre. Docker remained stopped, the synthetic SQLite stayed
+at 876 records, and the marker survived. The unit was reset to
+inactive/disabled.
+
+The independent restart-owner failure was then reproduced by
+temporarily changing only this synthetic container from restart=no
+to unless-stopped, explicitly starting it and restarting the
+**LXC114 Docker daemon**. Docker autorestarted the synthetic writer
+despite the still-present pending-update marker. A subsequent
+systemctl start again returned exit 1, yet the writer was already
+running and 11 new synthetic records had appeared (876 -> 887).
+This is a real Docker-daemon restart, not an NVMe/power-loss reboot.
+
+Finally the synthetic container was stopped, restart=no restored,
+the QA systemd unit left inactive/disabled and the pending marker
+preserved. The isolated QA database intentionally retains the 887
+synthetic records. Issue #340 was updated with exact observations:
+https://github.com/iSentinel/shelly-voltage-telegram/issues/340
+
+These experiments prove the particular bypass independently of any
+prestart unit syntax check. They DO NOT authorize any changes to
+production, demonstrate physical reboot durability or validate the
+full SQLite/WAL restore transaction.
+
+## Proposed future single-owner acceptance contract (not deployed)
+
+- Exactly one restart authority may start the monitored writer.
+  Docker cannot have an independent automatic restart policy that
+  bypasses the chosen systemd guard. Any systemd watchdog or
+  restart timer must perform that same guard on each attempt.
+- Each boot, restart, updater and rollback path must share a
+  verified writer-fencing protocol, with pending-update checked
+  while holding the relevant lock before opening SQLite.
+  The updater must use the same fencing discipline before it
+  publishes the pending marker. Never auto-restore an old snapshot.
+- Installed and tracked effective systemd unit commands must match,
+  with required Docker and network dependencies. The currently
+  installed apply-update.sh --recover hook is not an approved
+  automated recovery plan: newest Pro3EM L1/L2/L3 history and saved
+  meter selection require separate whole-database parity acceptance.
+- A disposable real systemd+Docker test must prove that a stale or
+  corrupt pending marker prevents *all* writers, even when Docker
+  restarts independently, without falsely creating zero-voltages
+  or publishing duplicate Telegram status messages.
+- Add SIGKILL and actual isolated reboot tests; preserve SQLite
+  history/WAL, PHOTO marker, pending intents, and signed
+  OCI/source/receipt version parity across retries. Verify this
+  before presenting an exact candidate for Owner Approval.
+- A fail-closed design without a supervised recovery path may
+  compromise availability. Supervision itself must never bypass
+  a pending-update fence.
+
+No production restart policy, systemd hook, updater timer, image,
+signed version or Telegram channel message was changed by this QA.
