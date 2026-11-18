@@ -1189,7 +1189,11 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.storage.set_meta("telegram_status_message_id", "44")
+            monitor.storage.bind_text_post(
+                monitor.status_message_key(),
+                44,
+                monitor.telegram.status_chat_id,
+            )
             monitor.telegram.quiet_now = Mock(return_value=False)
             monitor.telegram.send = Mock(side_effect=RuntimeError("failed"))
             monitor.telegram.delete = Mock()
@@ -1212,7 +1216,11 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
                 )
             )
             monitor.storage.initialize()
-            monitor.storage.set_meta("telegram_status_message_id", "44")
+            monitor.storage.bind_text_post(
+                monitor.status_message_key(),
+                44,
+                monitor.telegram.status_chat_id,
+            )
             monitor.storage.set_meta("telegram_status_pinned_id", "44")
             monitor.telegram.quiet_now = Mock(return_value=False)
             calls = []
@@ -1777,7 +1785,9 @@ class MonitorRegressionTests(unittest.TestCase):
         started = APP.time.time() - 60
         monitor.storage.begin_outage(started)
         monitor.state.restore_outage(started, 1)
-        monitor.storage.set_meta("telegram_status_message_id", "675")
+        monitor.storage.bind_text_post(
+            monitor.status_message_key(), 675, monitor.telegram.status_chat_id
+        )
         monitor.shelly.read = Mock(return_value=(230.0, 50.0, 5.0))
         monitor.telegram.unpin = Mock()
         monitor.telegram.delete = Mock()
@@ -3053,76 +3063,6 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.telegram.unpin.assert_called_once_with(
                 77, monitor.telegram.status_chat_id
             )
-
-    def test_unpin_failure_prevents_old_status_delete(self):
-        monitor = APP.Monitor(
-            config(
-                telegram_token="token",
-                telegram_chat_id="123",
-                telegram_status_chat_id="-1009",
-            )
-        )
-        monitor.storage.get_meta = Mock(return_value="42")
-        monitor.telegram.unpin = Mock(side_effect=RuntimeError("forbidden"))
-        monitor.telegram.delete = Mock()
-        monitor.delete_previous_status("42")
-        monitor.telegram.unpin.assert_called_once()
-        monitor.telegram.delete.assert_not_called()
-
-    def test_unpinned_status_is_deleted_without_unpin_request(self):
-        """Skip unpinning for status messages never pinned by this bot."""
-
-        monitor = APP.Monitor(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
-        monitor.storage.get_meta = Mock(return_value=None)
-        monitor.telegram.unpin = Mock(
-            side_effect=RuntimeError("message to unpin not found")
-        )
-        monitor.telegram.delete = Mock()
-        monitor.delete_previous_status("42")
-        monitor.telegram.unpin.assert_not_called()
-        monitor.telegram.delete.assert_called_once_with(
-            42, monitor.telegram.status_chat_id
-        )
-
-    def test_already_unpinned_marker_does_not_block_old_status_cleanup(self):
-        """A stale pin marker must not leave duplicate channel messages."""
-
-        monitor = APP.Monitor(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
-        monitor.storage.get_meta = Mock(return_value="42")
-        monitor.storage.delete_meta = Mock()
-        monitor.telegram.unpin = Mock(
-            side_effect=RuntimeError("Bad Request: message to unpin not found")
-        )
-        monitor.telegram.delete = Mock()
-        monitor.delete_previous_status("42")
-        monitor.telegram.unpin.assert_called_once_with(
-            42, monitor.telegram.status_chat_id
-        )
-        monitor.storage.delete_meta.assert_called_once_with(
-            "telegram_status_pinned_id"
-        )
-        monitor.telegram.delete.assert_called_once_with(
-            42, monitor.telegram.status_chat_id
-        )
-
-    def test_unrelated_pinned_status_is_not_unpinned(self):
-        """Never unpin a different message while cleaning the old post."""
-
-        monitor = APP.Monitor(
-            config(telegram_token="token", telegram_chat_id="123")
-        )
-        monitor.storage.get_meta = Mock(return_value="77")
-        monitor.telegram.unpin = Mock()
-        monitor.telegram.delete = Mock()
-        monitor.delete_previous_status("42")
-        monitor.telegram.unpin.assert_not_called()
-        monitor.telegram.delete.assert_called_once_with(
-            42, monitor.telegram.status_chat_id
-        )
 
     def test_channel_status_has_no_inline_buttons(self):
         monitor = APP.Monitor(

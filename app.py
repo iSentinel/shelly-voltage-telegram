@@ -526,6 +526,13 @@ SCHEMA_SQL = """
                 );
                 CREATE INDEX IF NOT EXISTS idx_settings_audit_ts
                 ON settings_audit(ts);
+                CREATE TABLE IF NOT EXISTS telegram_status_cleanup (
+                    chat_id TEXT NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    needs_unpin INTEGER NOT NULL,
+                    retry_at REAL NOT NULL DEFAULT 0,
+                    PRIMARY KEY(chat_id, message_id)
+                );
                 CREATE TABLE IF NOT EXISTS hourly_aggregates (
                     phase TEXT NOT NULL,
                     hour_ts REAL NOT NULL,
@@ -646,22 +653,27 @@ class Storage:
         """Persist one exclusive intent before sending remote status text."""
 
         token = secrets.token_hex(16)
+        taken = self.reserve_status_post(
+            "telegram_legacy_text_confirm_pending", f"send:{token}"
+        )
+        return token if taken else None
+
+    def reserve_status_post(self, key: str, value: str) -> bool:
+        """Allow only one uncertain text or photo send at a time."""
+
         with closing(self.connect()) as db, db:
-            pending = db.execute(
-                "SELECT key FROM meta WHERE key IN (?,?) LIMIT 1",
+            cursor = db.execute(
+                "INSERT INTO meta(key,value) "
+                "SELECT ?,? WHERE NOT EXISTS ("
+                "SELECT 1 FROM meta WHERE key IN (?,?))",
                 (
+                    key,
+                    value,
                     "telegram_legacy_text_confirm_pending",
                     "telegram_graphic_publish_pending",
                 ),
-            ).fetchone()
-            if pending is not None:
-                return None
-            cursor = db.execute(
-                "INSERT INTO meta(key,value) VALUES (?,?) "
-                "ON CONFLICT(key) DO NOTHING",
-                ("telegram_legacy_text_confirm_pending", f"send:{token}"),
             )
-            return token if cursor.rowcount == 1 else None
+            return cursor.rowcount == 1
 
     def bind_text_post(
         self,
@@ -672,42 +684,125 @@ class Storage:
     ) -> None:
         """Atomically commit text identity and clear its exact send intent."""
 
+        intent = None
+        if pending_token is not None:
+            intent = (
+                "telegram_legacy_text_confirm_pending",
+                f"send:{pending_token}",
+            )
+        self.bind_status_post(key, message_id, chat_id, "text", intent)
+
+    def bind_status_post(
+        self,
+        key: str,
+        message_id: int,
+        chat_id: str,
+        kind: str,
+        intent: tuple[str, str] | None,
+    ) -> None:
+        """Commit the new identity, cleanup, and send receipt together."""
+
         if key not in {"telegram_message_id", "telegram_status_message_id"}:
             raise ValueError("unsupported Telegram status key")
         if type(message_id) is not int or message_id <= 0:
             raise ValueError("invalid Telegram message ID")
         if not isinstance(chat_id, str) or not chat_id.strip():
             raise ValueError("invalid Telegram status destination")
+        if kind not in {"text", "photo"}:
+            raise ValueError("invalid status media kind")
         with closing(self.connect()) as db, db:
-            if pending_token is not None:
-                found = db.execute(
-                    "SELECT value FROM meta WHERE key=?",
-                    ("telegram_legacy_text_confirm_pending",),
-                ).fetchone()
-                if found != (f"send:{pending_token}",):
-                    raise ValueError("text status send intent changed")
+            db.execute("BEGIN IMMEDIATE")
+            if intent is not None:
+                pending_key, expected = intent
+                if self.get_meta(pending_key, db) != expected:
+                    raise ValueError("status send intent changed")
+                self.queue_previous_status(db, key, message_id, chat_id)
+                db.execute("DELETE FROM meta WHERE key=?", (pending_key,))
             self.set_meta(key, str(message_id), db)
             self.set_meta(
                 "telegram_status_media_identity",
-                f"text:{chat_id}:{message_id}",
+                f"{kind}:{chat_id}:{message_id}",
                 db,
             )
-            if pending_token is not None:
-                db.execute(
-                    "DELETE FROM meta WHERE key=? AND value=?",
-                    (
-                        "telegram_legacy_text_confirm_pending",
-                        f"send:{pending_token}",
-                    ),
-                )
 
-    def get_meta(self, key: str) -> str | None:
-        """Read one metadata value."""
+    def queue_previous_status(
+        self, db: sqlite3.Connection, key: str, new_id: int, chat_id: str
+    ) -> None:
+        """Record cleanup only for a previous post bound to this exact chat."""
+
+        old_id = self.get_meta(key, db)
+        if not old_id or not old_id.isascii() or not old_id.isdecimal():
+            return
+        old = int(old_id)
+        if not 0 < old < new_id:
+            return
+        marker = self.get_meta("telegram_status_media_identity", db)
+        if marker not in {
+            f"text:{chat_id}:{old_id}",
+            f"photo:{chat_id}:{old_id}",
+        }:
+            return
+        pinned = self.get_meta("telegram_status_pinned_id", db) == old_id
+        db.execute(
+            "INSERT OR IGNORE INTO telegram_status_cleanup "
+            "(chat_id,message_id,needs_unpin) VALUES(?,?,?)",
+            (chat_id, old, int(pinned)),
+        )
+        if pinned:
+            db.execute(
+                "DELETE FROM meta WHERE key='telegram_status_pinned_id'"
+            )
+
+    def next_status_cleanup(
+        self, chat_id: str, now: float, message_id: int | None
+    ) -> tuple[int, int] | None:
+        """Find one due cleanup for the configured chat."""
+
+        with closing(self.connect()) as db:
+            return db.execute(
+                "SELECT message_id,needs_unpin FROM telegram_status_cleanup "
+                "WHERE chat_id=? AND retry_at<=? "
+                "AND (? IS NULL OR message_id=?) "
+                "ORDER BY retry_at,message_id LIMIT 1",
+                (chat_id, now, message_id, message_id),
+            ).fetchone()
+
+    def advance_status_cleanup(
+        self, chat_id: str, message_id: int, step: str, retry_at: float = 0
+    ) -> None:
+        """Record completed unpin or delete, or delay a failed attempt."""
 
         with closing(self.connect()) as db, db:
-            row = db.execute(
-                "SELECT value FROM meta WHERE key=?", (key,)
-            ).fetchone()
+            if step == "unpin":
+                db.execute(
+                    "UPDATE telegram_status_cleanup SET needs_unpin=0 "
+                    "WHERE chat_id=? AND message_id=?",
+                    (chat_id, message_id),
+                )
+            elif step == "delete":
+                db.execute(
+                    "DELETE FROM telegram_status_cleanup "
+                    "WHERE chat_id=? AND message_id=?",
+                    (chat_id, message_id),
+                )
+            else:
+                db.execute(
+                    "UPDATE telegram_status_cleanup SET retry_at=? "
+                    "WHERE chat_id=? AND message_id=?",
+                    (retry_at, chat_id, message_id),
+                )
+
+    def get_meta(
+        self, key: str, db: sqlite3.Connection | None = None
+    ) -> str | None:
+        """Read metadata using the supplied transaction when available."""
+
+        if db is None:
+            with closing(self.connect()) as conn:
+                return self.get_meta(key, conn)
+        row = db.execute(
+            "SELECT value FROM meta WHERE key=?", (key,)
+        ).fetchone()
         return str(row[0]) if row else None
 
     def delete_meta(self, key: str) -> None:
@@ -749,24 +844,31 @@ class Storage:
                 (limit,),
             ).fetchall()
 
-    def rollup_hourly(self, before: float | None = None) -> int:
-        """Upsert hourly aggregates for retained raw measurements."""
+    def rollup_hourly(
+        self, before: float | None = None, db: sqlite3.Connection | None = None
+    ) -> int:
+        """Summarize closed hours and preserve larger historical rollups."""
 
-        cutoff = before or time.time()
-        with closing(self.connect()) as db, db:
-            rows = db.execute(
-                "SELECT phase,CAST(ts/3600 AS INT)*3600,COUNT(*),MIN(voltage),"
-                "MAX(voltage),AVG(voltage) FROM measurements WHERE ts<? "
-                "GROUP BY phase,CAST(ts/3600 AS INT)",
-                (cutoff,),
-            ).fetchall()
-            db.executemany(
-                "INSERT OR REPLACE INTO hourly_aggregates "
-                "(phase,hour_ts,samples,min_v,max_v,avg_v) "
-                "VALUES(?,?,?,?,?,?)",
-                rows,
-            )
-        return len(rows)
+        if db is None:
+            with closing(self.connect()) as conn, conn:
+                return self.rollup_hourly(before, conn)
+        cutoff = math.floor((time.time() if before is None else before) / 3600)
+        cursor = db.execute(
+            """
+            INSERT INTO hourly_aggregates
+                (phase,hour_ts,samples,min_v,max_v,avg_v)
+            SELECT phase,CAST(ts/3600 AS INT)*3600,
+                   COUNT(*),MIN(voltage),MAX(voltage),AVG(voltage)
+            FROM measurements WHERE ts<?
+            GROUP BY phase,CAST(ts/3600 AS INT)
+            ON CONFLICT(phase,hour_ts) DO UPDATE SET
+                samples=excluded.samples, min_v=excluded.min_v,
+                max_v=excluded.max_v, avg_v=excluded.avg_v
+            WHERE excluded.samples >= hourly_aggregates.samples
+            """,
+            (cutoff * 3600,),
+        )
+        return int(cursor.rowcount)
 
     def database_maintenance(self) -> dict[str, object]:
         """Checkpoint WAL, optimize SQLite and vacuum only when worthwhile."""
@@ -947,10 +1049,11 @@ class Storage:
         return {"count": count, "duration": duration}
 
     def prune(self, retention_days: int) -> int:
-        """Delete samples older than the configured retention period."""
+        """Archive and delete the same complete hours in one transaction."""
 
-        cutoff = time.time() - retention_days * 86400
+        cutoff = (time.time() - retention_days * 86400) // 3600 * 3600
         with closing(self.connect()) as db, db:
+            self.rollup_hourly(cutoff, db)
             cursor = db.execute(
                 "DELETE FROM measurements WHERE ts < ?", (cutoff,)
             )
@@ -1378,6 +1481,7 @@ def safe_telegram_api_error(payload: object) -> str:
         "message can't be edited",
         "message_id_invalid",
         "message to unpin not found",
+        "message to delete not found",
     )
     for marker in markers:
         if text == marker or text.startswith(marker + ":"):
@@ -2508,6 +2612,9 @@ def voltage_level(voltage: float, cfg: Config) -> str:
     return "normal"
 
 
+STATUS_CLEANUP_RETRY_SECONDS = 60
+
+
 class Monitor:
     """Coordinate polling, persistence, and Telegram."""
 
@@ -2516,6 +2623,7 @@ class Monitor:
         self.cfg = cfg
         self.config_lock = threading.RLock()
         self.status_publish_lock = threading.RLock()
+        self.status_cleanup_lock = threading.Lock()
         self.storage = Storage(cfg.database_path, cfg.timezone)
         self.meter_type = cfg.shelly_meter_type
         self.state = RuntimeState()
@@ -2578,6 +2686,7 @@ class Monitor:
         self.telegram_consecutive_failures = 0
         self.telegram_last_poll_success: float | None = None
         self.last_db_maintenance = 0.0
+        self.next_status_cleanup = 0.0
         self.last_db_maintenance_attempt = -300.0
         self.alert_candidate: tuple[str, float] | None = None
         self.phase_alert_levels = {"L2": "normal", "L3": "normal"}
@@ -2937,8 +3046,6 @@ class Monitor:
         now = time.monotonic()
         if now < self.next_prune:
             return
-        cutoff = time.time() - self.cfg.retention_days * 86400
-        self.storage.rollup_hourly(cutoff)
         deleted = self.storage.prune(self.cfg.retention_days)
         self.next_prune = now + 21600
         if deleted:
@@ -3218,27 +3325,24 @@ class Monitor:
             return False
         if old_id and self.status_media_kind() not in {"photo", "text"}:
             return False
+        target = self.telegram.status_chat_id
+        intent = f"{target}:{old_id or 'new'}"
         try:
-            self.storage.set_meta(
-                pending_key,
-                f"{self.telegram.status_chat_id}:{old_id or 'new'}",
-            )
+            if not self.storage.reserve_status_post(pending_key, intent):
+                return False
             with tempfile.TemporaryDirectory(
                 prefix="shelly-status-"
             ) as folder:
                 new_id, kind = self.send_graphic_candidate(
                     text, folder, notify
                 )
-            self.storage.set_meta(key, str(new_id))
-            self.record_status_media_kind(
-                new_id, kind, self.telegram.status_chat_id
+            self.storage.bind_status_post(
+                key, new_id, target, kind, (pending_key, intent)
             )
-            self.storage.delete_meta(pending_key)
         except Exception as exc:
             logger.warning("Graphic publish pending: {}", type(exc).__name__)
             return False
         self.delete_previous_voltage_status(old_id, new_id)
-        self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         return True
 
@@ -3361,9 +3465,10 @@ class Monitor:
                 logger.warning("Telegram status update failed: {}", exc)
                 return False
         try:
-            self.send_confirmed_text_post(
+            new_id = self.send_confirmed_text_post(
                 text, key, target, reply_markup=markup
             )
+            self.delete_previous_voltage_status(stored, new_id)
             self.storage.delete_meta("voltage_status_edit_window_started_at")
             return True
         except Exception as exc:
@@ -3498,7 +3603,6 @@ class Monitor:
         self.storage.delete_meta(RECOVERY_ROTATION_PENDING_KEY)
         self.storage.delete_meta("voltage_status_edit_window_started_at")
         self.delete_previous_voltage_status(old_id, new_id)
-        self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         self.finish_voltage_status_update()
 
@@ -3817,7 +3921,6 @@ class Monitor:
             return
         self.clear_stable_recovery_context()
         self.delete_previous_voltage_status(old_id, new_id)
-        self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         self.finish_voltage_status_update()
 
@@ -3963,36 +4066,83 @@ class Monitor:
             "voltage_status_edit_window_started_at", str(happened_at)
         )
         self.delete_previous_voltage_status(old_id, new_id)
-        self.storage.delete_meta("telegram_status_pinned_id")
         self.ensure_status_pinned(new_id)
         self.finish_voltage_status_update()
         return True
 
-    def delete_previous_status(self, old_id: str) -> None:
-        """Unpin only known pinned status messages before deleting them."""
+    def cleanup_status_step(
+        self, chat: str, message_id: int, step: str
+    ) -> bool:
+        """Perform one idempotent operation and persist the resulting step."""
 
-        pinned_id = self.storage.get_meta("telegram_status_pinned_id")
-        if pinned_id == old_id:
-            try:
-                self.telegram.unpin(int(old_id), self.telegram.status_chat_id)
-            except Exception as exc:
-                if "message to unpin not found" not in str(exc).lower():
-                    logger.warning("Telegram old status unpin failed: {}", exc)
-                    return
-            self.storage.delete_meta("telegram_status_pinned_id")
         try:
-            self.telegram.delete(int(old_id), self.telegram.status_chat_id)
+            if step == "unpin":
+                self.telegram.unpin(message_id, chat)
+            else:
+                self.telegram.delete(message_id, chat)
         except Exception as exc:
-            logger.warning("Telegram old status delete failed: {}", exc)
+            missing = f"message to {step} not found"
+            if missing not in str(exc).lower():
+                logger.warning("Telegram status {} retry queued", step)
+                self.storage.advance_status_cleanup(
+                    chat,
+                    message_id,
+                    "retry",
+                    time.time() + STATUS_CLEANUP_RETRY_SECONDS,
+                )
+                return False
+        self.storage.advance_status_cleanup(chat, message_id, step)
+        return True
+
+    def delete_previous_status(self, message_id: int | None = None) -> None:
+        """Resume one queued cleanup without acting on the active message."""
+
+        with self.status_cleanup_lock:
+            chat = self.telegram.status_chat_id
+            current = self.storage.get_meta(self.status_message_key())
+            if not current or self.status_media_kind() not in {
+                "text",
+                "photo",
+            }:
+                return
+            row = self.storage.next_status_cleanup(
+                chat, time.time(), message_id
+            )
+            if row is None:
+                return
+            old_id, needs_unpin = row
+            if old_id >= int(current):
+                return
+            if needs_unpin and not self.cleanup_status_step(
+                chat, old_id, "unpin"
+            ):
+                return
+            self.cleanup_status_step(chat, old_id, "delete")
 
     def delete_previous_voltage_status(
         self, old_id: str | None, new_id: int
     ) -> None:
-        """Delete the previous shared status after the replacement exists."""
+        """Clean the verified previous status immediately after replacement."""
 
-        if not old_id or str(new_id) == old_id:
+        if (
+            old_id
+            and old_id.isascii()
+            and old_id.isdecimal()
+            and 0 < int(old_id) < new_id
+        ):
+            try:
+                self.delete_previous_status(int(old_id))
+            except sqlite3.Error:
+                logger.warning("Telegram status cleanup remains queued")
+
+    def maybe_cleanup_status(self) -> None:
+        """Resume queued cleanup after restarts at a bounded rate."""
+
+        now = time.monotonic()
+        if not self.telegram.enabled or now < self.next_status_cleanup:
             return
-        self.delete_previous_status(old_id)
+        self.next_status_cleanup = now + STATUS_CLEANUP_RETRY_SECONDS
+        self.delete_previous_status()
 
     def record_voltage_event(
         self,
@@ -5885,6 +6035,7 @@ class Monitor:
             ("daily_summary", self.maybe_daily_summary),
             ("weekly_private", self.maybe_weekly_private_reports),
             ("database", self.maybe_database_maintenance),
+            ("status_cleanup", self.maybe_cleanup_status),
         )
         for name, task in jobs:
             try:
@@ -6823,10 +6974,11 @@ def pending_readiness(
     return None
 
 
-def readiness(monitor: Monitor) -> tuple[int, dict]:
-    """Return data readiness without conflating it with service liveness."""
+def phase_readiness(
+    monitor: Monitor, snap: dict[str, object], now: float
+) -> tuple[int, dict]:
+    """Apply the existing freshness and recovery rules to one phase."""
 
-    snap = monitor.state.snapshot()
     last = snap["last_success"]
     if snap["connectivity"] == "offline":
         payload = {
@@ -6835,7 +6987,7 @@ def readiness(monitor: Monitor) -> tuple[int, dict]:
             "connectivity": "offline",
         }
         if last is not None:
-            payload["age"] = max(0.0, time.time() - float(last))
+            payload["age"] = max(0.0, now - float(last))
         return 503, payload
     if last is None:
         return 503, {
@@ -6846,7 +6998,7 @@ def readiness(monitor: Monitor) -> tuple[int, dict]:
     pending = pending_readiness(monitor, snap)
     if pending is not None:
         return pending
-    age = max(0.0, time.time() - float(last))
+    age = max(0.0, now - float(last))
     if age > monitor.cfg.stale_after:
         return 503, {
             "ready": False,
@@ -6859,6 +7011,33 @@ def readiness(monitor: Monitor) -> tuple[int, dict]:
         "age": age,
         "connectivity": snap["connectivity"],
     }
+
+
+def readiness(monitor: Monitor) -> tuple[int, dict]:
+    """Require fresh, confirmed data from every active voltage phase."""
+
+    now = time.time()
+    phases = monitor.active_phases()
+    states = monitor.phase_states.copy()
+    results = {}
+    for phase in phases:
+        state = states.get(phase)
+        snap = (
+            state.snapshot()
+            if state
+            else {"connectivity": "starting", "last_success": None}
+        )
+        results[phase] = phase_readiness(monitor, snap, now)
+    code, payload = results["L1"]
+    if len(phases) == 1:
+        return code, payload
+    details = {phase: result[1] for phase, result in results.items()}
+    unavailable = [phase for phase in phases if results[phase][0] != 200]
+    payload = {**payload, "phases": details, "unready_phases": unavailable}
+    if unavailable and code == 200:
+        payload.update(ready=False, reason="active phase not ready")
+        return 503, payload
+    return code, payload
 
 
 def start_health_server(monitor: Monitor) -> ThreadingHTTPServer:

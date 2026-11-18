@@ -52,14 +52,39 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         self.card = Path(self.folder.name) / "status.png"
         self.card.write_bytes(bytes.fromhex("89504e470d0a1a0a") + b"test")
 
-    def make_monitor(self, initial: dict | None = None) -> tuple[object, dict]:
-        """Wire existing Monitor methods to a fake storage and Telegram API."""
+    def make_storage(self, state):
+        """Provide a mutable metadata fixture for graphic routing tests."""
 
-        state = dict(initial or {})
         storage = Mock()
         storage.get_meta.side_effect = state.get
         storage.set_meta.side_effect = state.__setitem__
         storage.delete_meta.side_effect = lambda key: state.pop(key, None)
+
+        def bind_post(key, message_id, chat, kind, intent):
+            """Record the successful bind in this in-memory fixture."""
+            pending_key, expected = intent
+            if state.get(pending_key) != expected:
+                raise ValueError("status send intent changed")
+            state[key] = str(message_id)
+            state["telegram_status_media_identity"] = (
+                f"{kind}:{chat}:{message_id}"
+            )
+            state.pop(pending_key)
+
+        def reserve(key, value):
+            """Remember the simulated send reservation."""
+            state[key] = value
+            return True
+
+        storage.bind_status_post.side_effect = bind_post
+        storage.reserve_status_post.side_effect = reserve
+        return storage
+
+    def make_monitor(self, initial: dict | None = None) -> tuple[object, dict]:
+        """Wire existing Monitor methods to a fake storage and Telegram API."""
+
+        state = dict(initial or {})
+        storage = self.make_storage(state)
         telegram = Mock()
         telegram.enabled = True
         telegram.status_chat_id = "-100123"
