@@ -459,6 +459,12 @@ class TelegramTransportTests(unittest.TestCase):
 class TelegramNotificationPolicyTests(unittest.TestCase):
     """Validate silent mode, quiet hours and low-voltage alerts."""
 
+    def record_event_at(self, monitor, stamp, kind, voltage):
+        """Use a stable test clock for all work triggered by one event."""
+
+        with patch.object(APP.time, "time", return_value=stamp):
+            monitor.record_voltage_event(kind, voltage, 50.0)
+
     def _stable_recovery_monitor(self, path: Path):
         """Create one monitor ready for stable recovery rotation tests."""
 
@@ -726,12 +732,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.telegram.send = Mock(side_effect=[101, 102, 103])
             monitor.telegram.unpin = Mock()
             monitor.telegram.delete = Mock()
-            with patch.object(
-                APP.time, "time", side_effect=[1000.0, 1240.0, 1421.0]
-            ):
-                monitor.record_voltage_event("warning_high", 254.0, 50.0)
-                monitor.record_voltage_event("critical_high", 256.0, 50.0)
-                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            self.record_event_at(monitor, 1000.0, "warning_high", 254.0)
+            self.record_event_at(monitor, 1240.0, "critical_high", 256.0)
+            self.record_event_at(monitor, 1421.0, "warning_high", 254.0)
             notifications = [
                 call.kwargs["notify"]
                 for call in monitor.telegram.send.call_args_list
@@ -764,9 +767,8 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.telegram.edit = Mock()
             monitor.telegram.unpin = Mock()
             monitor.telegram.delete = Mock()
-            with patch.object(APP.time, "time", side_effect=[1000.0, 1599.0]):
-                monitor.record_voltage_event("critical_high", 256.0, 50.0)
-                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            self.record_event_at(monitor, 1000.0, "critical_high", 256.0)
+            self.record_event_at(monitor, 1599.0, "recovered", 230.0)
             self.assertEqual(monitor.telegram.send.call_count, 1)
             monitor.telegram.edit.assert_called_once()
             self.assertEqual(monitor.telegram.edit.call_args.args[0], 301)
@@ -803,10 +805,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.telegram.edit = Mock()
             monitor.telegram.unpin = Mock()
             monitor.telegram.delete = Mock()
-            with patch.object(APP.time, "time", side_effect=[1000.0, 1601.0]):
-                monitor.record_voltage_event("critical_high", 256.0, 50.0)
-                monitor.storage.set_meta("telegram_status_pinned_id", "401")
-                monitor.record_voltage_event("recovered", 230.0, 50.0)
+            self.record_event_at(monitor, 1000.0, "critical_high", 256.0)
+            monitor.storage.set_meta("telegram_status_pinned_id", "401")
+            self.record_event_at(monitor, 1601.0, "recovered", 230.0)
             self.assertEqual(monitor.telegram.send.call_count, 2)
             monitor.telegram.edit.assert_not_called()
             monitor.telegram.unpin.assert_called_once_with(
@@ -841,12 +842,9 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             monitor.telegram.edit = Mock()
             monitor.telegram.unpin = Mock()
             monitor.telegram.delete = Mock()
-            with patch.object(
-                APP.time, "time", side_effect=[1000.0, 1060.0, 1070.0]
-            ):
-                monitor.record_voltage_event("critical_high", 256.0, 50.0)
-                monitor.record_voltage_event("recovered", 230.0, 50.0)
-                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            self.record_event_at(monitor, 1000.0, "critical_high", 256.0)
+            self.record_event_at(monitor, 1060.0, "recovered", 230.0)
+            self.record_event_at(monitor, 1070.0, "warning_high", 254.0)
             self.assertEqual(monitor.telegram.send.call_count, 1)
             self.assertEqual(monitor.telegram.edit.call_count, 2)
             self.assertEqual(
@@ -934,9 +932,8 @@ class TelegramNotificationPolicyTests(unittest.TestCase):
             path = Path(directory) / "recovery-reset.sqlite3"
             monitor = self._stable_recovery_monitor(path)
             monitor.telegram.send = Mock(return_value=301)
-            with patch.object(APP.time, "time", side_effect=[1000.0, 1100.0]):
-                monitor.record_voltage_event("recovered", 230.0, 50.0)
-                monitor.record_voltage_event("warning_high", 254.0, 50.0)
+            self.record_event_at(monitor, 1000.0, "recovered", 230.0)
+            self.record_event_at(monitor, 1100.0, "warning_high", 254.0)
             with patch.object(APP.time, "time", return_value=2100.0):
                 monitor.maybe_rotate_stable_recovery_status()
             self.assertIsNone(
@@ -1304,22 +1301,19 @@ class TelegramSettingsTests(unittest.TestCase):
     """Validate admin-only runtime Telegram settings."""
 
     def _monitor(self, admin_ids=("7",)):
+        """Use real SQLite so callback tests also verify committed changes."""
+
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
         monitor = APP.Monitor(
             config(
+                database_path=Path(folder.name) / "settings.sqlite3",
                 telegram_token="token",
                 telegram_chat_id="123",
                 telegram_admin_user_ids=admin_ids,
             )
         )
-        defaults = monitor.setting_defaults()
-        monitor.storage.get_meta = Mock(
-            side_effect=lambda key: defaults.get(
-                key.removeprefix("telegram_setting_")
-            )
-            if key.startswith("telegram_setting_")
-            else None
-        )
-        monitor.storage.set_meta = Mock()
+        monitor.storage.initialize()
         return monitor
 
     def _callback(self, data: str, message_id: int = 10) -> dict:
@@ -1376,25 +1370,13 @@ class TelegramSettingsTests(unittest.TestCase):
             }
         }
         monitor.handle_callback(update)
-        monitor.storage.set_meta.assert_not_called()
+        self.assertEqual(monitor.storage.audit_recent(), [])
         monitor.telegram.answer_callback.assert_called_once_with(
             "cb1", "Только администратор"
         )
 
     def test_admin_callback_persists_and_applies_setting(self):
         monitor = self._monitor()
-        values = monitor.setting_defaults().copy()
-        monitor.storage.get_meta.side_effect = (
-            lambda key: values.get(key.removeprefix("telegram_setting_"))
-            if key.startswith("telegram_setting_")
-            else None
-        )
-
-        def save(key, value):
-            if key.startswith("telegram_setting_"):
-                values[key.removeprefix("telegram_setting_")] = value
-
-        monitor.storage.set_meta.side_effect = save
         monitor.telegram.answer_callback = Mock()
         monitor.telegram.edit = Mock()
         update = {
@@ -1407,7 +1389,7 @@ class TelegramSettingsTests(unittest.TestCase):
         }
         monitor.handle_callback(update)
         self.assertFalse(monitor.telegram.silent_default)
-        self.assertEqual(values["silent"], "0")
+        self.assertEqual(monitor.setting_value("silent"), "0")
         monitor.telegram.edit.assert_called_once()
 
     def test_compact_main_settings_has_five_buttons(self):
@@ -1432,29 +1414,18 @@ class TelegramSettingsTests(unittest.TestCase):
         monitor.telegram.answer_callback = Mock()
         monitor.telegram.edit = Mock()
         monitor.handle_callback(self._callback("cfg:nav:notifications"))
-        monitor.storage.set_meta.assert_not_called()
+        self.assertEqual(monitor.storage.audit_recent(), [])
         monitor.telegram.answer_callback.assert_called_once_with("cb")
         text = monitor.telegram.edit.call_args.args[1]
         self.assertIn("Уведомления", text)
 
     def test_contextual_action_stays_on_current_page(self):
         monitor = self._monitor()
-        values = monitor.setting_defaults().copy()
-        monitor.storage.get_meta.side_effect = (
-            lambda key: values.get(key.removeprefix("telegram_setting_"))
-            if key.startswith("telegram_setting_")
-            else None
-        )
-        monitor.storage.set_meta.side_effect = (
-            lambda key, value: values.__setitem__(
-                key.removeprefix("telegram_setting_"), value
-            )
-        )
         monitor.telegram.answer_callback = Mock()
         monitor.telegram.edit = Mock()
         data = "cfg:set:notifications:silent_toggle"
         monitor.handle_callback(self._callback(data))
-        self.assertEqual(values["silent"], "0")
+        self.assertEqual(monitor.setting_value("silent"), "0")
         self.assertIn("Уведомления", monitor.telegram.edit.call_args.args[1])
 
     def test_reset_requires_confirmation_page(self):
@@ -1474,21 +1445,10 @@ class TelegramSettingsTests(unittest.TestCase):
 
     def test_legacy_settings_callback_remains_supported(self):
         monitor = self._monitor()
-        values = monitor.setting_defaults().copy()
-        monitor.storage.get_meta.side_effect = (
-            lambda key: values.get(key.removeprefix("telegram_setting_"))
-            if key.startswith("telegram_setting_")
-            else None
-        )
-        monitor.storage.set_meta.side_effect = (
-            lambda key, value: values.__setitem__(
-                key.removeprefix("telegram_setting_"), value
-            )
-        )
         monitor.telegram.answer_callback = Mock()
         monitor.telegram.edit = Mock()
         monitor.handle_callback(self._callback("cfg:silent_toggle"))
-        self.assertEqual(values["silent"], "0")
+        self.assertEqual(monitor.setting_value("silent"), "0")
         self.assertIn(
             "Выберите раздел", monitor.telegram.edit.call_args.args[1]
         )
@@ -1508,21 +1468,10 @@ class TelegramSettingsTests(unittest.TestCase):
 
     def test_reset_restores_environment_defaults(self):
         monitor = self._monitor()
-        values = monitor.setting_defaults().copy()
-        values["low_v"] = "170"
-        monitor.storage.get_meta.side_effect = (
-            lambda key: values.get(key.removeprefix("telegram_setting_"))
-            if key.startswith("telegram_setting_")
-            else None
-        )
-        monitor.storage.set_meta.side_effect = (
-            lambda key, value: values.__setitem__(
-                key.removeprefix("telegram_setting_"), value
-            )
-        )
+        monitor.storage.set_meta("telegram_setting_low_v", "170")
         monitor.update_setting("reset")
         self.assertEqual(monitor.low_voltage_alert_v, 180.0)
-        self.assertEqual(values["low_v"], "180.0")
+        self.assertEqual(monitor.setting_value("low_v"), "180.0")
 
 
 class TelegramLogicTests(unittest.TestCase):
@@ -2497,6 +2446,7 @@ class AdvancedFeatureTests(unittest.TestCase):
             duration=APP.duration_text(354 * 60, monitor.language),
         )
         with patch.object(APP.time, "time", return_value=1100.0):
+            monitor.state.success(225.9, 50.0, 1.0)
             status = APP.multiphase_status_text(monitor)
         self.assertIn(expected, status)
 

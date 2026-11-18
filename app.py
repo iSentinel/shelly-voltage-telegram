@@ -75,6 +75,13 @@ def read_version() -> str:
 
 VERSION = read_version()
 SCHEMA_VERSION = 3
+VOLTAGE_ALERT_STATES = {
+    "normal",
+    "warning_low",
+    "warning_high",
+    "critical_low",
+    "critical_high",
+}
 RECOVERY_STATUS_STABLE_SECONDS = 15 * 60
 RECOVERY_STATUS_STABLE_KEY = "voltage_recovery_stable_since"
 RECOVERY_ROTATION_PENDING_KEY = "telegram_recovery_rotation_pending_at"
@@ -459,6 +466,25 @@ def validate_monitoring_config(cfg: Config) -> None:
 def validate_config(cfg: Config) -> None:
     """Validate configuration without network calls."""
 
+    numeric_settings = (
+        cfg.shelly_timeout,
+        cfg.poll_interval,
+        cfg.telegram_interval,
+        cfg.telegram_min_edit_interval,
+        cfg.low_voltage_alert_v,
+        cfg.low_voltage_recovery_v,
+        cfg.significant_change,
+        cfg.stale_after,
+        cfg.offline_log_interval,
+        cfg.warning_low,
+        cfg.warning_high,
+        cfg.critical_low,
+        cfg.critical_high,
+        cfg.alert_dwell_sec,
+        cfg.alert_recovery_dwell_sec,
+    )
+    if not all(math.isfinite(value) for value in numeric_settings):
+        raise ValueError("numeric settings must be finite")
     validate_shelly_config(cfg)
     validate_telegram_config(cfg)
     validate_monitoring_config(cfg)
@@ -691,17 +717,26 @@ class Storage:
             db.execute("DELETE FROM meta WHERE key=?", (key,))
 
     def audit_setting(
-        self, user_id: str, setting: str, old_value: str | None, new_value: str
+        self,
+        user_id: str,
+        setting: str,
+        old_value: str | None,
+        new_value: str,
+        db: sqlite3.Connection | None = None,
     ) -> None:
-        """Append one admin settings change to the audit journal."""
+        """Append one admin change, optionally in its settings transaction."""
 
-        with closing(self.connect()) as db, db:
-            db.execute(
-                "INSERT INTO settings_audit("
-                "ts,user_id,setting,old_value,new_value) "
-                "VALUES(?,?,?,?,?)",
-                (time.time(), user_id, setting, old_value, new_value),
-            )
+        if db is None:
+            with closing(self.connect()) as conn, conn:
+                self.audit_setting(
+                    user_id, setting, old_value, new_value, conn
+                )
+            return
+        db.execute(
+            "INSERT INTO settings_audit("
+            "ts,user_id,setting,old_value,new_value) VALUES(?,?,?,?,?)",
+            (time.time(), user_id, setting, old_value, new_value),
+        )
 
     def audit_recent(self, limit: int = 10) -> list[tuple]:
         """Return newest settings audit records."""
@@ -1067,8 +1102,9 @@ class RuntimeState:
                 should_offline = True
             if should_offline and previous != "offline":
                 self.connectivity = "offline"
-                self.offline_since = self.offline_since or now
-                self.outage_count += 1
+                if self.offline_since is None:
+                    self.offline_since = now
+                    self.outage_count += 1
             if previous != self.connectivity:
                 self.last_transition = now
             return previous != self.connectivity
@@ -1925,7 +1961,7 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     lang = monitor.language
     if not monitor.phase_configured(phase):
         return tr(lang, "phase_unconfigured", phase=phase)
-    snap = monitor.phase_states[phase].snapshot()
+    snap = phase_service_snapshot(monitor, phase)
     phase = monitor.phase_label(phase)
     connectivity = str(snap["connectivity"])
     if connectivity == "offline":
@@ -1933,8 +1969,6 @@ def phase_line(monitor: Monitor, phase: str) -> str:
     if snap["voltage"] is None:
         return f"🟡 {phase}: {tr(lang, 'phase_no_data')}"
     voltage = float(snap["voltage"])
-    if connectivity == "recovering":
-        return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
     if connectivity == "starting":
         return tr(
             lang,
@@ -1943,6 +1977,10 @@ def phase_line(monitor: Monitor, phase: str) -> str:
             voltage=voltage,
             unit=tr(lang, "unit_voltage"),
         )
+    if snap["sample_is_stale"]:
+        return f"🟡 {phase}: {tr(lang, 'reading_stale')}"
+    if connectivity == "recovering":
+        return tr(lang, "phase_recovering", phase=phase, voltage=voltage)
     warning = voltage <= monitor.warning_low or voltage >= monitor.warning_high
     critical = (
         voltage <= monitor.critical_low or voltage >= monitor.critical_high
@@ -2222,26 +2260,25 @@ def render_voltage_status(
     """Render voltage and primary history under the configuration lock."""
 
     lang = monitor.language
-    l1 = monitor.state.snapshot()
+    l1 = phase_service_snapshot(monitor, "L1")
     connectivity = str(l1["connectivity"])
+    if l1["sample_is_stale"] and connectivity in {"online", "recovering"}:
+        connectivity = "stale"
     show_event = include_event_context and connectivity == "online"
     lines = voltage_event_lines(monitor) if show_event else []
     lines.extend(
         [tr(lang, "network_title", phases=monitor.phase_labels()), ""]
     )
-    status_key = "status_" + connectivity
-    if connectivity not in {"online", "recovering", "offline", "starting"}:
-        status_key = "status_starting"
-    lines.append(tr(lang, status_key))
+    lines.append(tr(lang, "status_" + connectivity))
     lines.extend(phase_line(monitor, p) for p in monitor.active_phases())
-    frequency = l1.get("frequency")
+    frequency = l1["live_frequency"]
     if connectivity == "online" and frequency is not None:
         lines.append(tr(lang, "status_frequency", value=float(frequency)))
     if l1["voltage"] is None:
         notice = tr(lang, "no_measurements", phase=monitor.phase_label("L1"))
         return "\n".join(lines + ["", notice])
     ts = float(l1["last_success"] or time.time())
-    lines.extend(primary_day_lines(monitor, ts))
+    lines.extend(primary_day_lines(monitor, time.time()))
     if connectivity == "online":
         lines.extend(recovery_banner_lines(monitor))
     lines.extend(instability_lines(monitor))
@@ -2728,7 +2765,7 @@ class Monitor:
 
         if not self.alerts_enabled:
             return
-        level = self.runtime_voltage_level(voltage)
+        level = self.runtime_voltage_state(voltage)
         if level == self.phase_alert_levels[phase]:
             self.phase_alert_candidates.pop(phase, None)
             return
@@ -2741,10 +2778,7 @@ class Monitor:
             return
         self.phase_alert_levels[phase] = level
         self.phase_alert_candidates.pop(phase, None)
-        kind = "recovered"
-        if level != "normal":
-            side = "high" if voltage >= self.warning_high else "low"
-            kind = f"{level}_{side}"
+        kind = "recovered" if level == "normal" else level
         self.record_voltage_event(kind, voltage, frequency, phase)
 
     def initialize(self) -> None:
@@ -2754,6 +2788,7 @@ class Monitor:
         self.load_runtime_settings()
         self.last_summary_day = self.storage.get_meta("daily_summary_day")
         self.restore_voltage_event()
+        self.restore_alert_detectors()
         self.restore_recovery_stability_timer()
         self.restore_voltage_status_window()
         self.restore_voltage_episode()
@@ -3530,6 +3565,44 @@ class Monitor:
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             logger.warning("Ignoring invalid stored voltage event metadata")
 
+    def restore_alert_detectors(self) -> None:
+        """Restore confirmed states and restart dwell on fresh samples."""
+
+        for phase in self.active_phases():
+            key = f"voltage_detector_{phase}"
+            saved = load_json_object(self.storage.get_meta(key))
+            event = self.last_voltage_event
+            kind = event[0] if event and event[4] == phase else "normal"
+            if saved is None:
+                # Older databases only remember the last published event.
+                level, low = kind, kind == "low"
+            else:
+                level = saved.get("level")
+                low = saved.get("low") is True
+            if not isinstance(level, str) or level not in VOLTAGE_ALERT_STATES:
+                level = "normal"
+            if phase == "L1":
+                self.alert_level = level
+                self.low_voltage_active = low
+            else:
+                self.phase_alert_levels[phase] = level
+                self.phase_low_active[phase] = low
+
+    def persist_voltage_event(self, payload: dict, phase: str) -> None:
+        """Save event text and its confirmed detector state together."""
+
+        if phase == "L1":
+            level, low = self.alert_level, self.low_voltage_active
+        else:
+            level = self.phase_alert_levels[phase]
+            low = self.phase_low_active[phase]
+        detector = json.dumps({"level": level, "low": low})
+        with closing(self.storage.connect()) as db, db:
+            self.storage.set_meta(
+                "last_voltage_event", json.dumps(payload), db
+            )
+            self.storage.set_meta(f"voltage_detector_{phase}", detector, db)
+
     def restore_recovery_stability_timer(self) -> None:
         """Restore the timer for a recovered event from an older version."""
 
@@ -3945,7 +4018,7 @@ class Monitor:
             "timestamp": happened_at,
             "phase": phase,
         }
-        self.storage.set_meta("last_voltage_event", json.dumps(payload))
+        self.persist_voltage_event(payload, phase)
         self.track_recovery_stability(kind, happened_at)
         self.update_voltage_episode(kind, voltage, happened_at, phase)
         if not self.telegram.enabled:
@@ -3981,17 +4054,26 @@ class Monitor:
     def level_dwell(self, level: str) -> float:
         """Choose warning, critical, or normal-state confirmation time."""
 
-        if level == "warning":
+        if level.startswith("warning"):
             return self.warning_dwell
         return self.recovery_dwell if level == "normal" else self.alert_dwell
 
     def runtime_voltage_level(self, voltage: float) -> str:
         """Classify voltage using live-adjustable alert thresholds."""
 
-        if voltage <= self.critical_low or voltage >= self.critical_high:
-            return "critical"
-        if voltage <= self.warning_low or voltage >= self.warning_high:
-            return "warning"
+        return self.runtime_voltage_state(voltage).split("_", 1)[0]
+
+    def runtime_voltage_state(self, voltage: float) -> str:
+        """Classify severity and direction using the active thresholds."""
+
+        if voltage <= self.critical_low:
+            return "critical_low"
+        if voltage >= self.critical_high:
+            return "critical_high"
+        if voltage <= self.warning_low:
+            return "warning_low"
+        if voltage >= self.warning_high:
+            return "warning_high"
         return "normal"
 
     def maybe_alert(self, voltage: float, frequency: float) -> None:
@@ -4003,7 +4085,7 @@ class Monitor:
             or self.maintenance_active()
         ):
             return
-        level = self.runtime_voltage_level(voltage)
+        level = self.runtime_voltage_state(voltage)
         if level == self.alert_level:
             self.alert_candidate = None
             return
@@ -4016,10 +4098,7 @@ class Monitor:
             return
         self.alert_level = level
         self.alert_candidate = None
-        kind = "recovered"
-        if level != "normal":
-            side = "high" if voltage >= self.warning_high else "low"
-            kind = f"{level}_{side}"
+        kind = "recovered" if level == "normal" else level
         self.record_voltage_event(kind, voltage, frequency)
 
     def maintenance_active(self) -> bool:
@@ -5634,47 +5713,52 @@ class Monitor:
     def persist_settings(
         self, values: dict[str, str], original: dict[str, str], user_id: str
     ) -> None:
-        """Persist setting values and append best-effort audit entries."""
+        """Commit changed settings and their audit together before applying."""
 
-        for name, value in values.items():
-            self.storage.set_meta(f"telegram_setting_{name}", value)
-            if original.get(name) == value:
-                continue
-            try:
-                self.storage.audit_setting(
-                    user_id, name, original.get(name), value
-                )
-            except sqlite3.Error as exc:
-                logger.warning(
-                    "Settings audit write failed: {}", type(exc).__name__
-                )
+        with closing(self.storage.connect()) as db, db:
+            for name, value in values.items():
+                old = original.get(name)
+                if old == value:
+                    continue
+                self.storage.set_meta(f"telegram_setting_{name}", value, db)
+                self.storage.audit_setting(user_id, name, old, value, db)
         self.load_runtime_settings()
 
-    def update_setting(self, action: str, user_id: str = "system") -> None:
-        """Apply one validated settings action and persist it."""
+    def save_settings_action(
+        self, action: str, user_id: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """Read, change, and apply settings without interleaving a poll."""
 
-        values = {
-            name: self.setting_value(name) for name in self.setting_defaults()
-        }
-        original = values.copy()
+        with self.config_lock:
+            original = {
+                name: self.setting_value(name)
+                for name in self.setting_defaults()
+            }
+            values = original.copy()
+            if action == "reset":
+                values = self.setting_defaults()
+            elif not (
+                self.apply_meter_setting(action, values)
+                or self.apply_basic_setting(action, values)
+                or self.apply_low_setting(action, values)
+                or self.apply_timing_setting(action, values)
+                or self.apply_warning_dwell_setting(action, values)
+                or self.apply_level_setting(action, values)
+            ):
+                raise ValueError("unknown settings action")
+            self.persist_settings(values, original, user_id)
+            return original, values
+
+    def update_setting(self, action: str, user_id: str = "system") -> None:
+        """Apply one settings action, then refresh Telegram if needed."""
+
         if action in {"maint_60", "maint_off"}:
             self.set_maintenance(60 if action == "maint_60" else 0)
             return
-        if action == "reset":
-            values = self.setting_defaults()
-        elif not (
-            self.apply_meter_setting(action, values)
-            or self.apply_basic_setting(action, values)
-            or self.apply_low_setting(action, values)
-            or self.apply_timing_setting(action, values)
-            or self.apply_warning_dwell_setting(action, values)
-            or self.apply_level_setting(action, values)
-        ):
-            raise ValueError("unknown settings action")
-        self.persist_settings(values, original, user_id)
-        if original.get("pin_status") != values.get("pin_status"):
+        original, values = self.save_settings_action(action, user_id)
+        if original["pin_status"] != values["pin_status"]:
             self.sync_status_pin_setting()
-        if original.get("language") != values.get("language"):
+        if original["language"] != values["language"]:
             self.telegram.set_commands(self.language)
             self.last_telegram = 0.0
             self.last_sent_connectivity = None
@@ -6508,9 +6592,7 @@ def connectivity_metric_lines(
 def live_metric_value(snap: dict[str, object], key: str) -> str:
     """Return a live metric value or NaN when the sample is stale."""
 
-    if snap["connectivity"] not in {"online", "recovering"}:
-        return "NaN"
-    value = snap[key]
+    value = snap[f"live_{key}"]
     return "NaN" if value is None else str(value)
 
 
@@ -6519,7 +6601,7 @@ def phase_metrics(monitor: Monitor, phase: str) -> list[str]:
 
     if not monitor.phase_configured(phase):
         return [f'shelly_phase_configured{{phase="{phase}"}} 0']
-    snap = monitor.phase_states[phase].snapshot()
+    snap = phase_service_snapshot(monitor, phase)
     voltage = live_metric_value(snap, "voltage")
     frequency = live_metric_value(snap, "frequency")
     last = snap["last_success"]
@@ -6547,7 +6629,7 @@ def telegram_poll_success_age(monitor: Monitor) -> float | None:
 
 def metrics_text(monitor: Monitor) -> str:
     """Render legacy-compatible and three-phase Prometheus metrics."""
-    snap = monitor.state.snapshot()
+    snap = phase_service_snapshot(monitor, "L1")
     now = time.time()
     last = snap["last_success"]
     age = -1 if last is None else max(0.0, now - float(last))
