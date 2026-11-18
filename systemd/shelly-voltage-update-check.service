@@ -8,8 +8,13 @@ Type=oneshot
 DynamicUser=yes
 StateDirectory=shelly-voltage-update-check
 StateDirectoryMode=0750
-WorkingDirectory=/opt/shelly-voltage
-ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/github_update.py check
+# PID1 copies only the public checker and version into a private,
+# read-only credential directory for this short-lived DynamicUser.
+# Do not grant traversal of the protected application or secret paths.
+WorkingDirectory=/
+LoadCredential=github_update.py:/opt/shelly-voltage/scripts/github_update.py
+LoadCredential=RELEASE_VERSION:/opt/shelly-voltage/RELEASE_VERSION
+ExecStart=/usr/bin/python3 %d/github_update.py check --root %d
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
