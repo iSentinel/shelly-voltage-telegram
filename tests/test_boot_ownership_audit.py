@@ -43,7 +43,10 @@ SYSTEMD_SHOW = (
             "ExecStop={ path=/usr/bin/docker ; "
             "argv[]=/usr/bin/docker compose stop ; "
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "LoadState=loaded",
             "ActiveState=active",
+            "UnitFileState=enabled",
+            "NeedDaemonReload=no",
             "FragmentPath=/etc/systemd/system/shelly-voltage-compose.service",
             "DropInPaths=",
         )
@@ -268,6 +271,45 @@ class BootOwnerAuditTests(unittest.TestCase):
         fields["ActiveState"] = "failed"
         self.assertIn(
             "BOOT_EFFECTIVE_SERVICE_STATE_UNVERIFIED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_disabled_unit_cannot_claim_next_boot(self):
+        """Active now does not imply an enabled service at next boot."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["UnitFileState"] = "disabled"
+        self.assertIn(
+            "BOOT_SERVICE_NOT_ENABLED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_daemon_reload_required_is_blocked(self):
+        """Unreloaded unit changes are not accepted as effective evidence."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["NeedDaemonReload"] = "yes"
+        self.assertIn(
+            "BOOT_DAEMON_RELOAD_REQUIRED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_unloaded_unit_blocks_boot_claim(self):
+        """A missing effective unit cannot be declared next-boot ready."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["LoadState"] = "not-found"
+        self.assertIn(
+            "BOOT_SERVICE_NOT_LOADED",
             AUDIT.effective_issues(
                 fields,
                 Path("/etc/systemd/system/shelly-voltage-compose.service"),

@@ -110,7 +110,10 @@ SYSTEMD_KEYS = (
     "FragmentPath",
     "DropInPaths",
     "Type",
+    "LoadState",
     "ActiveState",
+    "UnitFileState",
+    "NeedDaemonReload",
     "ExecStartPre",
     "ExecStart",
     "ExecStop",
@@ -186,6 +189,12 @@ def effective_issues(fields: dict[str, str], installed: Path) -> list[str]:
         issues.append("BOOT_EFFECTIVE_DROPINS_UNREVIEWED")
     if fields["Type"] != "oneshot" or fields["ActiveState"] != "active":
         issues.append("BOOT_EFFECTIVE_SERVICE_STATE_UNVERIFIED")
+    if fields["LoadState"] != "loaded":
+        issues.append("BOOT_SERVICE_NOT_LOADED")
+    if fields["UnitFileState"] != "enabled":
+        issues.append("BOOT_SERVICE_NOT_ENABLED")
+    if fields["NeedDaemonReload"] != "no":
+        issues.append("BOOT_DAEMON_RELOAD_REQUIRED")
     for key, expected, reason in (
         ("ExecStartPre", EXPECTED_RECOVER, "BOOT_EFFECTIVE_RECOVERY_CHANGED"),
         ("ExecStart", EXPECTED_START, "BOOT_EFFECTIVE_START_CHANGED"),
