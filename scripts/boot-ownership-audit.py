@@ -114,6 +114,9 @@ SYSTEMD_KEYS = (
     "ActiveState",
     "UnitFileState",
     "NeedDaemonReload",
+    "After",
+    "Requires",
+    "Wants",
     "ExecStartPre",
     "ExecStart",
     "ExecStop",
@@ -195,6 +198,14 @@ def effective_issues(fields: dict[str, str], installed: Path) -> list[str]:
         issues.append("BOOT_SERVICE_NOT_ENABLED")
     if fields["NeedDaemonReload"] != "no":
         issues.append("BOOT_DAEMON_RELOAD_REQUIRED")
+    if "docker.service" not in fields["After"].split():
+        issues.append("BOOT_DOCKER_ORDERING_MISSING")
+    if "docker.service" not in fields["Requires"].split():
+        issues.append("BOOT_DOCKER_REQUIRED_DEPENDENCY_MISSING")
+    if "network-online.target" not in fields["After"].split():
+        issues.append("BOOT_NETWORK_ORDERING_MISSING")
+    if "network-online.target" not in fields["Wants"].split():
+        issues.append("BOOT_NETWORK_WANTS_MISSING")
     for key, expected, reason in (
         ("ExecStartPre", EXPECTED_RECOVER, "BOOT_EFFECTIVE_RECOVERY_CHANGED"),
         ("ExecStart", EXPECTED_START, "BOOT_EFFECTIVE_START_CHANGED"),

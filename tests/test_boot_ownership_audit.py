@@ -47,6 +47,9 @@ SYSTEMD_SHOW = (
             "ActiveState=active",
             "UnitFileState=enabled",
             "NeedDaemonReload=no",
+            "After=docker.service network-online.target sysinit.target",
+            "Requires=docker.service sysinit.target",
+            "Wants=network-online.target",
             "FragmentPath=/etc/systemd/system/shelly-voltage-compose.service",
             "DropInPaths=",
         )
@@ -310,6 +313,58 @@ class BootOwnerAuditTests(unittest.TestCase):
         fields["LoadState"] = "not-found"
         self.assertIn(
             "BOOT_SERVICE_NOT_LOADED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_missing_docker_ordering_is_blocked(self):
+        """Docker must precede a Compose boot attempt."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["After"] = "network-online.target"
+        self.assertIn(
+            "BOOT_DOCKER_ORDERING_MISSING",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_missing_docker_requirement_is_blocked(self):
+        """Ordering by itself is not a hard Docker dependency."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["Requires"] = "sysinit.target"
+        self.assertIn(
+            "BOOT_DOCKER_REQUIRED_DEPENDENCY_MISSING",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_missing_network_ordering_is_blocked(self):
+        """Network-online ordering is part of boot acceptance."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["After"] = "docker.service"
+        self.assertIn(
+            "BOOT_NETWORK_ORDERING_MISSING",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_missing_network_wants_is_blocked(self):
+        """Waiting after a target does not pull it into the transaction."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["Wants"] = ""
+        self.assertIn(
+            "BOOT_NETWORK_WANTS_MISSING",
             AUDIT.effective_issues(
                 fields,
                 Path("/etc/systemd/system/shelly-voltage-compose.service"),

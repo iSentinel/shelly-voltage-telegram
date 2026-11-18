@@ -29,11 +29,15 @@ The script reads the two regular unit files, marker existence and
 Docker restart policy/running status through a bounded inspect
 command. It also calls read-only systemctl show for the actual loaded
 FragmentPath, DropInPaths, Type, LoadState, ActiveState, UnitFileState,
-NeedDaemonReload and ExecStartPre/ExecStart/ExecStop commands. It refuses an unreviewed systemd drop-in, missing
+NeedDaemonReload, After, Requires, Wants, and
+ExecStartPre/ExecStart/ExecStop commands. It refuses an unreviewed systemd drop-in, missing
 or duplicated effective directives, ignored ExecStartPre errors and
 loaded executable arguments that do not match the expected recovery
 hook. A disabled unit, unloaded service or pending daemon-reload
-also blocks any next-boot claim. This catches disk-vs-loaded unit
+also blocks any next-boot claim. Effective Requires and After must
+include docker.service; effective After and Wants must include
+network-online.target. These are ordering/activation prerequisites,
+not proof of safe actual Docker restart ownership. This catches disk-vs-loaded unit
 changes before a real restart. It never inspects environment variables or secrets and
 never runs Docker start/stop, systemctl start/stop, updater --recover,
 Telegram sends or SQLite writes.
@@ -58,7 +62,9 @@ rollback_authorized=false, production_modified=false.
 - Pending marker absent, Docker container running,
   Docker restart policy unless-stopped.
 - Effective systemd: UnitFileState=enabled, LoadState=loaded,
-  NeedDaemonReload=no. These are necessary checks, not boot approval.
+  NeedDaemonReload=no; Requires/After include docker.service;
+  After/Wants include network-online.target. Necessary checks only,
+  not boot approval.
 - Effective systemctl show directives match the installed unit,
   DropInPaths is empty and no extra loaded start/recovery command exists.
 - Exact result:
