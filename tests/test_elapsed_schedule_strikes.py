@@ -10,6 +10,8 @@ from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from PIL import Image, ImageChops
+
 from telegram_card_png import render_card_png, strike_text
 from telegram_card_v5 import Painter
 
@@ -115,6 +117,57 @@ class ElapsedScheduleStrikeTests(unittest.TestCase):
                 self.assertEqual(capture(0, 0), (0, 0))
                 row_count = 5 if name == "v5" else 4
                 self.assertEqual(capture(23, 59), (23, row_count))
+
+    def strike_pixel_difference(self, style: str):
+        """Return only pixels affected by crossing elapsed labels."""
+
+        if style == "v5":
+            disabled = patch.object(Painter, "strike", return_value=None)
+        else:
+            disabled = patch(
+                "telegram_card_png.strike_text", return_value=None
+            )
+        with disabled:
+            self.make_card(style, 16, 45)
+        with Image.open(self.target) as image:
+            baseline = image.copy()
+        self.make_card(style, 16, 45)
+        with Image.open(self.target) as image:
+            actual = image.copy()
+        return ImageChops.difference(baseline, actual)
+
+    def test_strikes_change_only_elapsed_image_regions(self) -> None:
+        """Compare real PNG pixels, not only renderer method calls."""
+
+        areas = {
+            "v5": {
+                "past_hour": (64, 413, 194, 448),
+                "current_hour": (624, 493, 754, 528),
+                "future_hour": (64, 533, 194, 568),
+                "past_row": (92, 608, 375, 632),
+                "current_row": (92, 680, 375, 704),
+            },
+            "v4": {
+                "past_hour": (60, 383, 192, 423),
+                "current_hour": (620, 473, 752, 513),
+                "future_hour": (60, 518, 192, 558),
+                "past_row": (104, 588, 575, 618),
+                "current_row": (104, 678, 575, 708),
+            },
+        }
+        for style, regions in areas.items():
+            with self.subTest(style=style):
+                delta = self.strike_pixel_difference(style)
+                self.assertIsNotNone(delta.getbbox())
+                for part in ("past_hour", "past_row"):
+                    with self.subTest(style=style, region=part):
+                        self.assertIsNotNone(
+                            delta.crop(regions[part]).getbbox()
+                        )
+                for part in ("current_hour", "future_hour", "current_row"):
+                    with self.subTest(style=style, region=part):
+                        self.assertIsNone(delta.crop(regions[part]).getbbox())
+                self.assertIsNone(delta.crop((0, 0, 960, 333)).getbbox())
 
 
 if __name__ == "__main__":
