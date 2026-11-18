@@ -7,6 +7,7 @@ import json
 import tempfile
 import threading
 import unittest
+from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -29,10 +30,10 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         self.card = Path(self.temp.name) / "card.png"
         self.card.write_bytes(bytes.fromhex("89504e470d0a1a0a") + b"test")
 
-    def response(self, payload: object) -> None:
+    def response(self, payload: object, status: int = 200) -> None:
         """Return one fake Telegram JSON object from the upload."""
 
-        result = Mock()
+        result = Mock(status_code=status)
         result.json.return_value = payload
         self.bot.api_session.post = Mock(return_value=result)
 
@@ -216,13 +217,53 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         )
 
     def test_future_public_photo_never_defaults_to_private_chat(self):
-        """Reject an empty destination or inaccessible caption before API."""
+        """Reject an empty destination before calling Telegram."""
 
         self.bot.api_session.post = Mock()
-        for channel, caption in (("", "Grid"), ("  ", "Grid"), ("-100", "")):
+        for channel, caption in (("", "Grid"), ("  ", "")):
             with self.subTest(channel=channel), self.assertRaises(ValueError):
                 self.bot.send_status_photo(self.card, caption, channel)
         self.bot.api_session.post.assert_not_called()
+
+    def test_status_photo_sends_without_caption(self):
+        """Blank captions are omitted from the outgoing photo request."""
+
+        self.response({"ok": True, "result": {"message_id": 930}})
+        self.assertEqual(
+            self.bot.send_status_photo(self.card, "", "-100456"), 930
+        )
+        data = self.bot.api_session.post.call_args.kwargs["data"]
+        self.assertNotIn("caption", data)
+
+    def test_photo_rejection_requires_matching_http_and_api_errors(self):
+        """Only an explicit bad request permits text after an upload."""
+
+        for status, code in ((400, 400), (502, 400), (400, 429)):
+            with self.subTest(status=status, code=code):
+                self.response({"ok": False, "error_code": code}, status)
+                with self.assertRaises(RuntimeError) as error:
+                    self.bot.send_status_photo(self.card, "", "-100456")
+                self.assertEqual(
+                    isinstance(error.exception, APP.TelegramPhotoRejected),
+                    (status, code) == (400, 400),
+                )
+
+    def test_photo_edit_clears_caption(self):
+        """Telegram can omit a blank caption in the edited photo receipt."""
+
+        self.response(
+            {
+                "ok": True,
+                "result": {
+                    "message_id": 811,
+                    "chat": {"id": -100123},
+                    "photo": [{"file_id": "photo"}],
+                },
+            }
+        )
+        self.assertTrue(self.bot.edit_photo(811, self.card, "", "-100123"))
+        data = self.bot.api_session.post.call_args.kwargs["data"]
+        self.assertEqual(json.loads(data["media"])["caption"], "")
 
     def test_current_status_loop_does_not_publish_photos_yet(self):
         """Source-only transport must not silently activate public photos."""
@@ -485,6 +526,9 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
         monitor, state = self.media_monitor(values)
         monitor.telegram = Mock()
         monitor.telegram.status_chat_id = "-100123"
+        monitor.edit_graphic_photo = partial(
+            APP.Monitor.edit_graphic_photo, monitor
+        )
         monitor.legacy_confirmation_pending = (
             lambda: APP.Monitor.legacy_confirmation_pending(monitor)
         )
@@ -517,7 +561,7 @@ class GraphicChannelMediaTransportTests(unittest.TestCase):
             )
         )
         monitor.telegram.edit_photo.assert_called_once_with(
-            101, self.card, "Caption", "-100123"
+            101, self.card, "", "-100123"
         )
         monitor.telegram.send.assert_not_called()
         self.assertEqual(

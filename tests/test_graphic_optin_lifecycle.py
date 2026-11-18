@@ -27,6 +27,7 @@ METHODS = (
     "update_graphic_status",
     "_update_graphic_status_locked",
     "edit_existing_status_media",
+    "edit_graphic_photo",
     "replace_graphic_voltage_status",
     "edit_voltage_status",
     "upsert_status_message",
@@ -171,8 +172,9 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor, state = self.make_monitor()
         self.assertTrue(monitor.publish_graphic_status("Grid status"))
         monitor.telegram.send_status_photo.assert_called_once_with(
-            self.card, "Caption", "-100123", notify=False
+            self.card, "", "-100123", notify=False
         )
+        monitor.telegram.send.assert_not_called()
         self.assertEqual(state["telegram_status_message_id"], "555")
         self.assertEqual(
             state["telegram_status_media_identity"], "photo:-100123:555"
@@ -327,6 +329,43 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor.telegram.send.assert_not_called()
         self.assertEqual(state["telegram_status_message_id"], "101")
 
+    def test_existing_photo_upload_failure_uses_caption_on_same_post(self):
+        """If a photo edit fails, use its caption until a photo edit works."""
+
+        monitor, state = self.make_monitor(
+            {
+                "telegram_status_message_id": "101",
+                "telegram_status_media_identity": "photo:-100123:101",
+            }
+        )
+        monitor.telegram.edit_photo.side_effect = [RuntimeError("down"), True]
+        self.assertTrue(monitor.update_graphic_status("Offline"))
+        monitor.telegram.edit_photo_caption.assert_called_once_with(
+            101, "Caption", "-100123"
+        )
+        self.assertTrue(monitor.update_graphic_status("Online"))
+        monitor.telegram.edit_photo.assert_called_with(
+            101, self.card, "", "-100123"
+        )
+        monitor.telegram.send.assert_not_called()
+        self.assertEqual(state["telegram_status_message_id"], "101")
+
+    def test_rejected_photo_uses_single_text_post_with_same_sound_policy(self):
+        """Use text only after Telegram confirms it refused the upload."""
+
+        monitor, state = self.make_monitor()
+        monitor.telegram.send_status_photo.side_effect = (
+            APP.TelegramPhotoRejected("Telegram API error 400")
+        )
+        self.assertTrue(monitor.publish_graphic_status("Low V", notify=True))
+        monitor.telegram.send.assert_called_once_with(
+            "Low V", notify=True, chat_id="-100123"
+        )
+        self.assertEqual(
+            state["telegram_status_media_identity"], "text:-100123:555"
+        )
+        self.assertNotIn("telegram_graphic_publish_pending", state)
+
     def test_existing_text_converts_in_place_then_remembers_photo_kind(self):
         """Switch to photo by editing the old message, never republishing."""
 
@@ -338,7 +377,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         )
         self.assertTrue(monitor.update_graphic_status("Grid"))
         monitor.telegram.edit_photo.assert_called_once_with(
-            101, self.card, "Caption", "-100123"
+            101, self.card, "", "-100123"
         )
         monitor.telegram.send_status_photo.assert_not_called()
         self.assertEqual(
@@ -466,7 +505,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
             result = monitor.replace_graphic_voltage_status(True, 1000.0)
         self.assertTrue(result)
         monitor.telegram.send_status_photo.assert_called_once_with(
-            self.card, "Caption", "-100123", notify=True
+            self.card, "", "-100123", notify=True
         )
         self.assertEqual(state["last_voltage_notification_at"], "1000.0")
         self.assertEqual(
@@ -509,7 +548,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         ):
             monitor.rotate_status_after_recovery(20.0)
         monitor.telegram.send_status_photo.assert_called_once_with(
-            self.card, "Caption", "-100123", notify=False
+            self.card, "", "-100123", notify=False
         )
         self.assertNotIn(APP.RECOVERY_ROTATION_PENDING_KEY, state)
         monitor.delete_previous_voltage_status.assert_called_once_with(
@@ -549,7 +588,7 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         with patch.object(APP, "multiphase_status_text", return_value="Now"):
             monitor.maybe_rotate_stable_recovery_status()
         monitor.telegram.send_status_photo.assert_called_once_with(
-            self.card, "Caption", "-100123", notify=False
+            self.card, "", "-100123", notify=False
         )
         monitor.clear_stable_recovery_context.assert_called_once()
 

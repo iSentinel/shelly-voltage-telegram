@@ -17,6 +17,12 @@ configured channel and message ID, with no pending publication. A verified
 text status can then be converted in place during the cutover. Verify the
 photo and message ID in Telegram after activation.
 
+The public status card normally has no caption. If a card cannot be
+created or its upload is explicitly rejected, the bot can publish the
+status as text. If a known photo cannot be updated, its caption carries
+the fallback until the next successful photo edit. An unconfirmed new
+upload blocks further posts until the result is reconciled.
+
 Disabling graphics on a verified photo switches to caption updates.
 Returning the channel to a text post requires a separate publication with
 a verified destination and cleanup of the photo.

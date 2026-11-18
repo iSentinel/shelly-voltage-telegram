@@ -1489,6 +1489,30 @@ def safe_telegram_api_error(payload: object) -> str:
     return prefix
 
 
+class TelegramPhotoRejected(RuntimeError):
+    """Telegram explicitly rejected a photo upload without creating a post."""
+
+
+def telegram_upload_message_id(
+    payload: object, http_status: int, method: str
+) -> int:
+    """Distinguish a rejected photo from an unknown upload outcome."""
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Telegram returned invalid JSON object")
+    if payload.get("ok"):
+        return int(payload["result"]["message_id"])
+    detail = safe_telegram_api_error(payload)
+    if (
+        method == "sendPhoto"
+        and http_status == 400
+        and payload.get("ok") is False
+        and payload.get("error_code") == 400
+    ):
+        raise TelegramPhotoRejected(detail)
+    raise RuntimeError(detail)
+
+
 class Telegram:
     """Small Telegram Bot API client with isolated long polling."""
 
@@ -1728,11 +1752,9 @@ class Telegram:
             raise RuntimeError(
                 f"Telegram file upload failed: {type(exc).__name__}"
             ) from None
-        if not isinstance(payload, dict):
-            raise RuntimeError("Telegram returned invalid JSON object")
-        if not payload.get("ok"):
-            raise RuntimeError(safe_telegram_api_error(payload))
-        return int(payload["result"]["message_id"])
+        return telegram_upload_message_id(
+            payload, response.status_code, method
+        )
 
     def send_photo(self, path: Path, caption: str = "") -> int:
         """Send one generated PNG chart."""
@@ -1748,7 +1770,12 @@ class Telegram:
     def validate_status_photo(path: Path, caption: str) -> None:
         """Fail closed before sending an invalid public status image."""
 
-        if len(caption) > 1024 or path.is_symlink() or not path.is_file():
+        if (
+            not isinstance(caption, str)
+            or len(caption) > 1024
+            or path.is_symlink()
+            or not path.is_file()
+        ):
             raise ValueError("invalid caption or media path")
         if path.stat().st_size > 10_000_000:
             raise ValueError("Telegram photo exceeds limit")
@@ -1763,8 +1790,6 @@ class Telegram:
 
         if not isinstance(chat_id, str) or not chat_id.strip():
             raise ValueError("explicit channel required")
-        if not isinstance(caption, str) or not caption.strip():
-            raise ValueError("accessible caption required")
         self.validate_status_photo(path, caption)
         return self.send_file(
             "sendPhoto", "photo", path, caption, chat_id, notify=notify
@@ -1793,7 +1818,7 @@ class Telegram:
             for photo in photos
         ):
             raise RuntimeError("Telegram returned invalid photo media")
-        if result.get("caption") != caption:
+        if result.get("caption", "") != caption:
             raise RuntimeError("Telegram did not confirm requested caption")
 
     def edit_photo(
@@ -3215,11 +3240,7 @@ class Monitor:
                 if kind == "text":
                     key = "telegram_status_media_identity"
                     self.storage.set_meta(key, f"unknown:{chat}:{message_id}")
-                edit_confirmed = self.telegram.edit_photo(
-                    message_id, photo, caption, chat
-                )
-                if kind == "text" and edit_confirmed is not True:
-                    raise ValueError("text-to-photo conversion is unverified")
+                self.edit_graphic_photo(message_id, photo, caption, kind)
             elif action == "edit_caption":
                 self.telegram.edit_photo_caption(message_id, caption, chat)
             else:
@@ -3230,6 +3251,22 @@ class Monitor:
             logger.warning("Graphic status edit: {}", type(exc).__name__)
             return False
         return True
+
+    def edit_graphic_photo(
+        self, message_id: int, photo: Path, fallback: str, kind: str
+    ) -> None:
+        """Clear the status caption or provide text on a known photo."""
+
+        chat = self.telegram.status_chat_id
+        try:
+            confirmed = self.telegram.edit_photo(message_id, photo, "", chat)
+        except (RuntimeError, ValueError):
+            if kind != "photo":
+                raise
+            self.telegram.edit_photo_caption(message_id, fallback, chat)
+            return
+        if kind == "text" and confirmed is not True:
+            raise ValueError("text-to-photo conversion is unverified")
 
     @staticmethod
     def valid_legacy_status_target(stored: object, target: object) -> bool:
@@ -3296,13 +3333,14 @@ class Monitor:
     def graphic_status_media(
         self, text: str, folder: str
     ) -> tuple[Path | None, str]:
-        """Build one guarded card with an accessible, bounded caption."""
+        """Build a validated card and prepare its text fallback."""
 
         caption = text[:1024]
         image = Path(folder) / "channel-status.png"
         try:
             payload = private_graphic_preview_state(self)
             render_card_png(json.loads(payload), image)
+            Telegram.validate_status_photo(image, "")
         except Exception as exc:
             logger.warning("Graphic render fallback: {}", type(exc).__name__)
             return None, caption
@@ -3311,18 +3349,20 @@ class Monitor:
     def send_graphic_candidate(
         self, text: str, folder: str, notify: bool
     ) -> tuple[int, str]:
-        """Upload one candidate; never retry a possibly successful send."""
+        """Send text only if no photo could have been published."""
 
-        image, caption = self.graphic_status_media(text, folder)
-        if image is None:
-            result = self.telegram.send(
-                text, notify=notify, chat_id=self.telegram.status_chat_id
-            )
-            return result, "text"
-        result = self.telegram.send_status_photo(
-            image, caption, self.telegram.status_chat_id, notify=notify
-        )
-        return result, "photo"
+        image, _ = self.graphic_status_media(text, folder)
+        target = self.telegram.status_chat_id
+        if image is not None:
+            try:
+                result = self.telegram.send_status_photo(
+                    image, "", target, notify=notify
+                )
+                return result, "photo"
+            except TelegramPhotoRejected:
+                logger.warning("Telegram rejected status photo; sending text")
+        result = self.telegram.send(text, notify=notify, chat_id=target)
+        return result, "text"
 
     def publish_graphic_status(self, text: str, notify: bool = False) -> bool:
         """Serialize channel mutations and preserve status identity."""
