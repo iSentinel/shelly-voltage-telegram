@@ -96,3 +96,38 @@ was writable.
   crash/rollback tests on isolated Docker/systemd. Require
   all Python 3.11/3.12/3.13 CI results and exact-head
   Owner Approval before any release.
+
+## Cross-process pending marker and actual Storage batch, 2026-11-19
+
+The source-only follow-up
+tests/test_pro3em_batch_pending_fence.py exercises the real
+patched Storage.add_phases() from independent Python subprocesses
+sharing the *proposed* Issue340 two-lock protocol:
+
+- A lifetime nonblocking owner.lock admits only one writer.
+  A second process returns BLOCKED_OWNER before writing.
+- A shorter txn.lock protects both the entire actual SQLite
+  add_phases transaction and the synthetic updater's durable
+  pending-update marker publication.
+- A pending marker already present before a poll causes a
+  fail-closed BLOCKED_PENDING, leaving zero phase rows.
+- If an updater tries to publish pending while a writer is
+  paused under txn.lock, publication cannot pass the
+  transaction. Once the writer completes its atomic batch,
+  the updater publishes pending. The next writer loop sees
+  the marker and refuses all further writes.
+- All tests verify real L1/L2/L3 completeness, SQLite
+  quick_check=ok, nonzero genuine readings, selected meter
+  model pro3em and persisted PHOTO identity.
+- 3/3 real cross-process acceptance tests PASS. Together
+  with the original 8/8 batch tests, these provide 11/11
+  new source-only focused tests. Project Ruff/maintainability
+  gate PASS across 246 Python files.
+
+**Scope warning:** the lifetime and short transaction locks
+exist only in the synthetic test subprocess. They have NOT
+been installed in Monitor, Storage.connect, Telegram command
+threads, Compose, systemd, apply-update.sh or rollback.sh.
+The real production Issue340 boot-owner and Issue422 signed
+WAL rollback gates remain open until all actors adopt the
+same verified on-disk inode and fail-closed protocol.
