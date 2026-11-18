@@ -12,7 +12,11 @@ from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageChops
 
-from telegram_card_png import render_card_png, strike_text
+from telegram_card_png import (
+    render_card_png,
+    strike_past_diagonal,
+    strike_text,
+)
 from telegram_card_v5 import Painter
 
 KYIV = ZoneInfo("Europe/Kyiv")
@@ -117,6 +121,83 @@ class ElapsedScheduleStrikeTests(unittest.TestCase):
                 self.assertEqual(capture(0, 0), (0, 0))
                 row_count = 5 if name == "v5" else 4
                 self.assertEqual(capture(23, 59), (23, row_count))
+
+    def diagonal_count(self, style: str, hour: int, minute: int) -> int:
+        """Count diagonals without changing the real rendering behavior."""
+
+        if style == "v5":
+            original = Painter.diagonal_past_slot
+            stroke = patch.object(
+                Painter,
+                "diagonal_past_slot",
+                autospec=True,
+                side_effect=original,
+            )
+        else:
+            stroke = patch(
+                "telegram_card_png.strike_past_diagonal",
+                wraps=strike_past_diagonal,
+            )
+        with stroke as drawn:
+            self.make_card(style, hour, minute)
+        return drawn.call_count
+
+    def test_diagonal_per_completed_half_hour(self) -> None:
+        """A slot is crossed only after its own half-hour finishes."""
+
+        cases = (
+            (0, 0, 0),
+            (3, 29, 6),
+            (3, 30, 7),
+            (3, 59, 7),
+            (4, 0, 8),
+            (14, 10, 28),
+            (14, 30, 29),
+            (23, 59, 47),
+        )
+        for style in ("v5", "v4"):
+            for hour, minute, expected in cases:
+                with self.subTest(
+                    style=style, clock=f"{hour:02d}:{minute:02d}"
+                ):
+                    self.assertEqual(
+                        self.diagonal_count(style, hour, minute), expected
+                    )
+
+    def test_diagonals_touch_only_finished_slot_pixels(self) -> None:
+        """Verify actual PNG diagonal pixels do not alter active tiles."""
+
+        geometry = {
+            "v5": (484, 413, 65, 35),
+            "v4": (480, 383, 66, 40),
+        }
+        for style, (x, y, width, height) in geometry.items():
+            with self.subTest(style=style):
+                if style == "v5":
+                    disabled = patch.object(
+                        Painter, "diagonal_past_slot", return_value=None
+                    )
+                else:
+                    disabled = patch(
+                        "telegram_card_png.strike_past_diagonal",
+                        return_value=None,
+                    )
+                with disabled:
+                    self.make_card(style, 3, 30)
+                with Image.open(self.target) as image:
+                    baseline = image.copy()
+                self.make_card(style, 3, 30)
+                with Image.open(self.target) as image:
+                    delta = ImageChops.difference(baseline, image)
+                self.assertIsNotNone(
+                    delta.crop((x, y, x + width, y + height)).getbbox()
+                )
+                self.assertIsNone(
+                    delta.crop(
+                        (x + width, y, x + 2 * width, y + height)
+                    ).getbbox()
+                )
+                self.assertIsNone(delta.crop((0, 0, 960, 333)).getbbox())
 
     def strike_pixel_difference(self, style: str):
         """Return only pixels affected by crossing elapsed labels."""

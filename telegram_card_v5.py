@@ -207,6 +207,18 @@ class Painter:
         face = font(self.font_root, weight, size)
         return self.draw.textlength(value, font=face) / SCALE
 
+    def diagonal_past_slot(self, x, y):
+        """Cross a completed half-hour diagonally, inside its own tile."""
+
+        self.draw.line(
+            (
+                ((x + 6) * SCALE, (y + 29) * SCALE),
+                ((x + 59) * SCALE, (y + 6) * SCALE),
+            ),
+            fill=MUTED,
+            width=2 * SCALE,
+        )
+
     def strike(self, x, y, width, size):
         """Cross only completed time text at double-resolution scale."""
 
@@ -371,7 +383,9 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
         kind = bars[index]
         color = PAST_COLORS[kind] if index < current else SLOT_COLORS[kind]
         painter.rect((left, y, left + 65, y + 35), color, 5)
-        if index == current:
+        if index < current:
+            painter.diagonal_past_slot(left, y)
+        elif index == current:
             painter.rect(
                 (left + 1, y + 1, left + 64, y + 34),
                 None,

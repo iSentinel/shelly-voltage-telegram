@@ -30,9 +30,11 @@ a verified destination and cleanup of the photo.
 ## Elapsed schedule times
 
 The current Kyiv-local clock determines which YASNO schedule labels have
-fully elapsed. Completed hourly labels in the 24-hour grid and fully
-finished text windows are dimmed and struck through. The current
-part-hour, its active schedule window and all future labels remain clear,
+fully elapsed. Every fully completed 30-minute tile in the 24-hour grid
+has its own rising diagonal slash, including both halves of a completed
+hour. The currently active half-hour and all future tiles have no slash.
+Only fully elapsed hourly text labels and forecast windows are dimmed and
+horizontally struck. Current and future time labels remain clear,
 including at exact 30-minute boundaries and before midnight.
 
 This presentation-only rule applies to both the smooth v5 card and the

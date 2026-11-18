@@ -249,6 +249,12 @@ def strike_past_tile(pixels: bytearray, x: int, y: int, color: bytes) -> None:
         (part * 42 + panel * 58) // 100 for part, panel in zip(color, PANEL)
     )
     rectangle(pixels, x, y, x + 66, y + 40, faded, 5)
+    strike_past_diagonal(pixels, x, y)
+
+
+def strike_past_diagonal(pixels: bytearray, x: int, y: int) -> None:
+    """Draw a single diagonal for one completed 30-minute slot."""
+
     for step in range(54):
         col = x + 6 + step
         row = y + 34 - (step * 29 // 53)
