@@ -27,7 +27,12 @@ python3 scripts/boot-ownership-audit.py   --installed-unit /etc/systemd/system/s
 
 The script reads the two regular unit files, marker existence and
 Docker restart policy/running status through a bounded inspect
-command. It never inspects environment variables or secrets and
+command. It also calls read-only systemctl show for the actual loaded
+FragmentPath, DropInPaths, Type, ActiveState and ExecStartPre/ExecStart/
+ExecStop commands. It refuses an unreviewed systemd drop-in, missing
+or duplicated effective directives, ignored ExecStartPre errors and
+loaded executable arguments that do not match the expected recovery
+hook. This catches disk-vs-loaded unit changes before a real restart. It never inspects environment variables or secrets and
 never runs Docker start/stop, systemctl start/stop, updater --recover,
 Telegram sends or SQLite writes.
 
@@ -50,6 +55,8 @@ rollback_authorized=false, production_modified=false.
   0b944ee5a807d1958e15d7c7fb848fcf17976a385e053810aab4f4db12841bee.
 - Pending marker absent, Docker container running,
   Docker restart policy unless-stopped.
+- Effective systemctl show directives match the installed unit,
+  DropInPaths is empty and no extra loaded start/recovery command exists.
 - Exact result:
   BLOCKED BOOT_INSTALLED_SOURCE_DRIFT,
   BOOT_DOCKER_RESTART_OWNER_UNFENCED.

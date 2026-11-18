@@ -29,6 +29,29 @@ WantedBy=multi-user.target
 """
 
 
+SYSTEMD_SHOW = (
+    "\n".join(
+        (
+            "Type=oneshot",
+            "ExecStartPre={ path=/bin/bash ; argv[]="
+            "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh "
+            "--recover ; "
+            "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "ExecStart={ path=/bin/bash ; argv[]="
+            "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh ; "
+            "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "ExecStop={ path=/usr/bin/docker ; "
+            "argv[]=/usr/bin/docker compose stop ; "
+            "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "ActiveState=active",
+            "FragmentPath=/etc/systemd/system/shelly-voltage-compose.service",
+            "DropInPaths=",
+        )
+    )
+    + "\n"
+)
+
+
 class BootOwnerAuditTests(unittest.TestCase):
     """Model only unit and restart metadata; never touch Docker or bot."""
 
@@ -198,6 +221,130 @@ class BootOwnerAuditTests(unittest.TestCase):
         self.assertEqual(args[:3], ["docker", "inspect", "test-bot"])
         self.assertNotIn("Env", " ".join(args))
         self.assertNotIn("exec", args)
+
+    def test_realistic_effective_systemd_unit_is_static_evidence(self):
+        """Compare actual loaded commands without touching services."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        reasons = AUDIT.effective_issues(
+            fields, Path("/etc/systemd/system/shelly-voltage-compose.service")
+        )
+        self.assertEqual(reasons, [])
+        self.assertEqual(
+            AUDIT.effective_exec(fields["ExecStartPre"]),
+            AUDIT.EXPECTED_RECOVER,
+        )
+
+    def test_effective_dropins_are_never_silently_ignored(self):
+        """An unexpected loaded drop-in changes the effective boot plan."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["DropInPaths"] = "/etc/systemd/system/test.d/override.conf"
+        self.assertIn(
+            "BOOT_EFFECTIVE_DROPINS_UNREVIEWED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_recovery_hook_drift_is_blocked(self):
+        """A changed loaded ExecStartPre cannot pass only on file parity."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["ExecStartPre"] = fields["ExecStart"]
+        self.assertIn(
+            "BOOT_EFFECTIVE_RECOVERY_CHANGED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_restart_state_is_not_assumed_ready(self):
+        """Inactive systemd is a separate readiness risk."""
+
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["ActiveState"] = "failed"
+        self.assertIn(
+            "BOOT_EFFECTIVE_SERVICE_STATE_UNVERIFIED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
+
+    def test_effective_multiple_commands_fail_closed(self):
+        """A second ExecStartPre cannot be hidden in serialized metadata."""
+
+        raw = SYSTEMD_SHOW.splitlines()[1].split("=", 1)[1]
+        for variant in ("", raw + " " + raw):
+            with (
+                self.subTest(variant=bool(variant)),
+                self.assertRaisesRegex(
+                    AUDIT.Blocked, "SYSTEMD_EXEC_AMBIGUOUS"
+                ),
+            ):
+                AUDIT.effective_exec(variant)
+
+    def test_effective_ignore_errors_fails_closed(self):
+        """Systemd ignore_errors=yes must never count as recovery fencing."""
+
+        raw = SYSTEMD_SHOW.splitlines()[1].split("=", 1)[1]
+        with self.assertRaisesRegex(
+            AUDIT.Blocked, "SYSTEMD_EXEC_IGNORED_ERROR"
+        ):
+            AUDIT.effective_exec(
+                raw.replace("ignore_errors=no", "ignore_errors=yes")
+            )
+
+    def test_effective_inspect_uses_only_read_only_properties(self):
+        """Systemd show must not trigger daemon-reload or start/stop."""
+
+        response = subprocess.CompletedProcess([], 0, stdout=SYSTEMD_SHOW)
+        with patch.object(
+            AUDIT.subprocess, "run", return_value=response
+        ) as call:
+            fields = AUDIT.inspect_systemd_service(
+                "shelly-voltage-compose.service"
+            )
+        self.assertEqual(fields["ActiveState"], "active")
+        args = call.call_args.args[0]
+        self.assertEqual(args[:2], ["systemctl", "show"])
+        self.assertNotIn("daemon-reload", args)
+        self.assertNotIn("restart", args)
+
+    def test_effective_incomplete_response_fails_closed(self):
+        """Do not infer unseen effective directives from source files."""
+
+        response = subprocess.CompletedProcess([], 0, stdout="Type=oneshot\n")
+        with (
+            patch.object(AUDIT.subprocess, "run", return_value=response),
+            self.assertRaisesRegex(
+                AUDIT.Blocked, "SYSTEMD_INSPECT_INCOMPLETE"
+            ),
+        ):
+            AUDIT.inspect_systemd_service("shelly-voltage-compose.service")
+
+    def test_effective_duplicate_fields_fail_closed(self):
+        """A second effective field cannot override the first."""
+
+        response = subprocess.CompletedProcess(
+            [], 0, stdout=SYSTEMD_SHOW + "ExecStart=another\n"
+        )
+        with (
+            patch.object(AUDIT.subprocess, "run", return_value=response),
+            self.assertRaisesRegex(AUDIT.Blocked, "SYSTEMD_INSPECT_INVALID"),
+        ):
+            AUDIT.inspect_systemd_service("shelly-voltage-compose.service")
+
+    def test_effective_unsafe_unit_name_fails_closed(self):
+        """A unit selector cannot be treated as a shell expression."""
+
+        with self.assertRaisesRegex(
+            AUDIT.Blocked, "SYSTEMD_UNIT_NAME_INVALID"
+        ):
+            AUDIT.inspect_systemd_service("../../another.service")
 
     def test_docker_inspect_failure_denied(self):
         """Unavailable Docker metadata must not be guessed."""
