@@ -283,3 +283,42 @@ fixture constraints, not authorization for production rollback. Real
 Docker/systemd writer shutdown, WAL checkpoint discipline, latest
 full-history rescue, signed source/OCI pairing and Owner Approval are
 still separate required gates.
+
+## Real independent WAL writer process fencing QA, 2026-11-19
+
+The added test_signed_rollback_wal_process_fence.py uses a separate
+Python process with an actual SQLite WAL connection plus a real POSIX
+writer lease. This is stronger than simulating a lock inside the
+same process, but remains disposable fixture QA only.
+
+- The independent writer commits L1/L2/L3 synthetic samples and
+  holds a POSIX flock. A complete SQLite backup sees all current
+  logical data and its full digest verifies. A second process
+  cannot acquire the shared lease: WRITER_NOT_FENCED blocks
+  recovery before writing a journal or swapping active SQLite.
+- When the cooperative fixture writer exits normally, its lock and
+  WAL handles close. Only then can a verified rescued SQLite be
+  restored, preserving the entire logical history and PHOTO.
+- When a writer is killed by real SIGKILL, its OS lease is released
+  but the crash-time WAL sidecar remains. Recovery still fails
+  closed with ACTIVE_SQLITE_WAL_SIDECAR_UNFENCED rather than
+  treating lock availability alone as proof of a safe swap.
+- All fixture paths are unique private temporary directories.
+  No live bot, Shelly hardware, Telegram network or production
+  SQLite is referenced by these tests.
+
+Acceptance results: 2/2 real cross-process tests, 6/6 WAL tests,
+19/19 existing full logical rescue tests, 6/6 additional
+SIGKILL/retry tests, and source-quality gate across 251 Python
+files PASS.
+
+### Release boundary
+
+This proves only that a **cooperating** fixture writer and recovery
+share the same OS lock, and that WAL sidecars fail closed.
+It does not prove any current production process obtains that
+lock, nor that apply-update.sh --recover checks it.
+A real Docker unless-stopped process bypassed the systemd
+pending-update guard during isolated LXC114 guest reboot
+(Issue #340). The complete shared writer-fence, single restart
+owner and latest history recovery remain blocked for release.
