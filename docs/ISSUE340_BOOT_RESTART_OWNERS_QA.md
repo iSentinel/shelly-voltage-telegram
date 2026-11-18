@@ -86,3 +86,32 @@ future owner-supplied IP are tracked independently under Issue #425.
 python3 -W error::ResourceWarning -m unittest discover -s tests   -p test_boot_ownership_audit.py -v
 scripts/quality.sh
 ~~~
+
+## Disposable dual-owner contention rehearsal
+
+Tests in tests/test_boot_dual_owner_rehearsal.py launch two separate
+**plain Python mock owners** labelled docker and systemd. These are
+not actual Docker/systemd instances or Shelly bot processes. Each
+mock needs the same private POSIX flock token before inserting into
+its generated SQLite. The mock checks pending-update marker presence
+before acquiring the token. Tests cover:
+
+- The first mock holding the token denies a simultaneous second
+  writer, preserving PHOTO identity.
+- Pending marker blocks either owner before SQLite mutation.
+- SIGKILL releases the mock token but does not erase the pending gate.
+- A new mock can resume after explicit simulated pending resolution;
+  all existing measurements and PHOTO message ID survive.
+- A linked lock path is rejected before a synthetic write.
+
+Both fixture types run without network access or user credentials.
+The exercise is a *desired boot-policy contract*, not proof that
+production implements this lock across Docker, systemd, Compose
+and the update/rollback process. In particular it does NOT perform
+a system reboot, a physical power-loss experiment, a real systemd
+ExecStartPre execution or an actual source/OCI rollback.
+
+~~~bash
+python3 -W error::ResourceWarning -m unittest discover -s tests \
+  -p test_boot_dual_owner_rehearsal.py -v
+~~~
