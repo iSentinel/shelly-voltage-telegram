@@ -68,6 +68,7 @@ validate_inputs() {
         compose.yaml requirements.txt README.md scripts/graphic-emergency-restore.py
         scripts/prepare-writer-fence.py scripts/writer-fence-marker.py
         scripts/supervised-container.py scripts/fenced-newest-rescue.py
+        scripts/stage-guarded-update.py
     )
     for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {
