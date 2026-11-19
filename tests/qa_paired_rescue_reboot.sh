@@ -58,6 +58,20 @@ with sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True) as db:
         "SELECT value FROM meta "
         "WHERE key='telegram_status_media_identity'"
     ).fetchone() == ("photo:REBOOT-PAIR",)
+    assert db.execute(
+        "SELECT value FROM meta "
+        "WHERE key='telegram_status_message_id'"
+    ).fetchone() == ("202",)
+    pending = db.execute(
+        "SELECT value FROM meta "
+        "WHERE key='telegram_legacy_text_confirm_pending'"
+    ).fetchone()
+    assert pending and pending[0].startswith("send:")
+    queue = db.execute(
+        "SELECT chat_id,message_id,needs_unpin,retry_at "
+        "FROM telegram_status_cleanup"
+    ).fetchall()
+    assert queue == [("-100999",101,1,1300.0)]
     print(sum(counts.values()))
 PY
 }
@@ -140,10 +154,16 @@ PYFAULT
     [[ -e "$FENCE/.svt-update-pending" ]]
     [[ "$(docker inspect "$NAME" --format '{{.State.Running}}')" == false ]]
     row_count >"$OUTPUT/row-count-before"
+    cat /proc/sys/kernel/random/boot_id >"$OUTPUT/boot-id-before"
     echo "CONTROLLED_FAILURE_AFTER_RESCUE_FAIL_CLOSED_PASS"
 }
 
 verify_fault_boundary() {
+    [[ -s "$OUTPUT/boot-id-before" ]]
+    [[ "$(cat /proc/sys/kernel/random/boot_id)" !=        "$(cat "$OUTPUT/boot-id-before")" ]] || {
+        echo "FAIL: fault-boundary guest boot ID unchanged" >&2
+        return 3
+    }
     [[ -s "$RESCUE" && ! -e "$RESCUE.qa.json" ]]
     [[ -e "$FENCE/.svt-update-pending" ]]
     [[ "$(docker inspect "$NAME" --format '{{.State.Running}}')" == false ]]
@@ -179,6 +199,7 @@ seed_history() {
     local code
     code="$(cat <<'PY'
 from pathlib import Path
+from contextlib import closing
 from app import Storage
 from writer_fence import writer_lease
 
@@ -188,6 +209,14 @@ with writer_lease(path):
     store.initialize()
     store.set_meta("telegram_setting_meter_type", "pro3em")
     store.set_meta("telegram_status_media_identity", "photo:REBOOT-PAIR")
+    store.set_meta("telegram_status_message_id", "202")
+    assert store.reserve_text_post()
+    with closing(store.connect()) as db, db:
+        db.execute(
+            "INSERT INTO telegram_status_cleanup "
+            "(chat_id,message_id,needs_unpin,retry_at) VALUES(?,?,?,?)",
+            ("-100999", 101, 1, 1300.0),
+        )
     for ts in (1000.0, 1010.0):
         store.add_phases(ts, {
             "L1": (221.0, 50.0, 1.0),
