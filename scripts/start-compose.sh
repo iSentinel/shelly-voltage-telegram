@@ -48,6 +48,10 @@ validate_yasno_overlay() {
 }
 
 compose_cmd() {
+    if [[ "$has_supervisor" == true && "$1" == "up" ]]; then
+        echo "FAIL: direct Compose up bypasses the sole supervisor" >&2
+        return 3
+    fi
     local -a layers=(-f "$ROOT/compose.yaml")
     [[ "$pinned" == true ]] && layers+=(-f "$OVERRIDE")
     [[ "$has_supervisor" == true ]] && layers+=(-f "$SUPERVISOR_OVERLAY")

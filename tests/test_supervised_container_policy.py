@@ -37,6 +37,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             once=True,
         )
         self.info = {
+            "State": {"Running": False},
             "HostConfig": {
                 "RestartPolicy": {"Name": "no"},
                 "NetworkMode": "none",
@@ -50,6 +51,14 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             ],
             "Config": {"Image": "qa-offline-synthetic"},
         }
+
+    def test_foreign_running_writer_refused(self) -> None:
+        """Systemd must not silently adopt an existing live Docker writer."""
+        self.info["State"]["Running"] = True
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "OWNER_UNVERIFIED"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
 
     def test_disposable_guard_accepts_single_supervisor(self) -> None:
         """One offline QA container with restart:no can be supervised."""

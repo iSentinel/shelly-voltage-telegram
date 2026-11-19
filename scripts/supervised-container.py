@@ -89,7 +89,9 @@ def verify_receipt(path: Path | None) -> str:
 
 
 def validate_container(info: dict, args: argparse.Namespace) -> None:
-    """Require no Docker autostart and exactly the shared fence mount."""
+    """Refuse a foreign running writer and independent Docker restarts."""
+    if info.get("State", {}).get("Running") is not False:
+        raise BootBlocked("SVT_RUNNING_WRITER_OWNER_UNVERIFIED")
     policy = info.get("HostConfig", {}).get("RestartPolicy", {}).get("Name")
     if policy != "no":
         raise BootBlocked("SVT_DOCKER_RESTART_OWNER_UNFENCED")

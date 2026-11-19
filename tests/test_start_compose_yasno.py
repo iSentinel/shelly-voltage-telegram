@@ -137,6 +137,33 @@ class StartComposeYasnoTests(unittest.TestCase):
             calls[1][-3:], ["create", "--no-build", "--no-recreate"]
         )
 
+    def test_sourced_compose_up_cannot_bypass_supervisor(self):
+        """Rollback sourcing the functions cannot start the writer."""
+        self.enable_supervisor()
+        self.updater.write_text("services: {}\n")
+        environment = dict(os.environ)
+        environment.update(
+            SVT_ROOT=str(self.app),
+            SVT_SUPERVISOR_OVERLAY=str(self.supervisor),
+            SVT_UPDATE_OVERRIDE=str(self.updater),
+            COMPOSE_CALLS=str(self.calls),
+            PATH=str(self.mockbin) + os.pathsep + environment["PATH"],
+        )
+        command = (
+            f"source {shlex.quote(str(SCRIPT))}; "
+            "compose_prepare false; compose_cmd up -d"
+        )
+        result = subprocess.run(
+            ["bash", "-c", command],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 3)
+        self.assertFalse(self.calls.exists())
+
     def test_supervisor_symlink_fails_before_docker(self):
         """A linked candidate layer cannot supply Docker configuration."""
         destination = self.root / "unsafe-candidate.yaml"

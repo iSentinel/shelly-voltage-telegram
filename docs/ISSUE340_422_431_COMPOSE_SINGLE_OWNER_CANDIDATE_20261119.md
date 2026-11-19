@@ -57,3 +57,17 @@ test. The source-only unit must NOT be enabled together with the
 currently active production unit. No source/image cutover, GitHub
 push or Telegram action is approved. Keep LXC110 unchanged while
 electricity is OFF and the meter is unavailable.
+
+## Follow-up: bypass prevention
+
+Source-only follow-up ensures that scripts sourcing
+start-compose.sh cannot call compose_cmd up while the supervisor
+overlay is selected; direct up now returns 3 before invoking Docker.
+The candidate supervisor also refuses to start if Docker reports
+the chosen container is already running, so systemd cannot silently
+adopt a foreign writer.
+
+Checks: 27 targeted source-only unit tests PASS; 168 joined selected
+tests PASS on isolated LXC114 Docker; Ruff 0.14.2 and maintainability
+PASS. The separate real Compose-created Pro3EM worker failure remains
+unresolved and cannot be counted as a passing boot acceptance.
