@@ -55,6 +55,7 @@ from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
 from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
+from writer_fence import WriterFenceError, fenced_connect, writer_lease
 from yasno_cache import read_verified_cache as read_yasno_verified_cache
 from yasno_schedule import parse_schedule as parse_yasno_schedule
 from yasno_schedule import read_cached as read_yasno_cache
@@ -557,7 +558,7 @@ class Storage:
     def connect(self) -> sqlite3.Connection:
         """Open SQLite with WAL and a busy timeout."""
 
-        db = sqlite3.connect(self.path, timeout=10)
+        db = fenced_connect(self.path, timeout=10)
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA busy_timeout=5000")
         return db
@@ -7469,7 +7470,12 @@ def main() -> int:
     if args.command == "telegram-channel-rights":
         return telegram_channel_rights_check(cfg)
     install_signals()
-    Monitor(cfg).run()
+    try:
+        with writer_lease(cfg.database_path):
+            Monitor(cfg).run()
+    except WriterFenceError as exc:
+        logger.error("Monitoring writer fenced: {}", exc)
+        return 3
     return 0
 
 

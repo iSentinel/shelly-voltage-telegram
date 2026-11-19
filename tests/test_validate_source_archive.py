@@ -15,6 +15,7 @@ SCRIPT = ROOT / "scripts/validate-source-archive.py"
 REQUIRED = (
     "VERSION",
     "app.py",
+    "writer_fence.py",
     "Dockerfile",
     "compose.yaml",
     "requirements.txt",
@@ -67,6 +68,14 @@ class SourceArchiveValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "source.tar.gz"
             create_archive(path, missing="app.py")
+            self.assertEqual(check_archive(path).returncode, 3)
+
+    def test_missing_writer_fence_rejected(self) -> None:
+        """A source archive must contain the runtime writer guard."""
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "source.tar.gz"
+            create_archive(path, missing="writer_fence.py")
             self.assertEqual(check_archive(path).returncode, 3)
 
     def test_invalid_gzip_trailer_rejected(self) -> None:

@@ -32,6 +32,7 @@ def python_files(root: Path) -> list[Path]:
 
     files = [
         root / "app.py",
+        root / "writer_fence.py",
         root / "advanced_features.py",
         root / "apartment_phases.py",
         root / "dtek_correlation.py",
