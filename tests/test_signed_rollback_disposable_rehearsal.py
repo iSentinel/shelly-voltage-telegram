@@ -25,6 +25,7 @@ SPEC.loader.exec_module(QA)
 OLD = "0.5.24-hw"
 NEW = "0.5.25-hw"
 DIGEST = "sha256:" + "a" * 64
+OLD_COMMIT = "c" * 40
 
 
 class DisposableRollbackTests(unittest.TestCase):
@@ -274,14 +275,14 @@ class DisposableRollbackTests(unittest.TestCase):
         """A guarded synthetic rehearsal is only an evidence receipt."""
 
         pair = SimpleNamespace(
-            check_pair=lambda *args: {
+            check_pair=lambda *args, **kwargs: {
                 "source_version": OLD,
                 "target_version": NEW,
                 "signature_verified": True,
             }
         )
         with patch.object(QA, "load_pair", return_value=pair):
-            outcome = QA.rehearse(self.root, self.signed, True)
+            outcome = QA.rehearse(self.root, self.signed, True, OLD_COMMIT)
         self.assertEqual(len(outcome["cases"]), 3)
         self.assertTrue(outcome["signed_identity_verified"])
         self.assertFalse(outcome["production_modified"])
@@ -310,11 +311,69 @@ class DisposableRollbackTests(unittest.TestCase):
             QA.recover_newer(folder, original[0], NEW)
         self.assertEqual(QA.fixture_digest(active), original)
 
+    def test_signed_rehearsal_rejects_missing_git_sha(self):
+        """A version-tag-only old snapshot cannot certify rollback."""
+        with (
+            patch.object(QA, "load_pair") as loader,
+            self.assertRaisesRegex(
+                QA.Blocked, "OLD_IMAGE_CERT_COMMIT_REQUIRED"
+            ),
+        ):
+            QA.rehearse(self.root, self.signed, True)
+        loader.assert_not_called()
+
+    def test_mutable_git_ref_rejected_before_old_image_probe(self):
+        """A mutable tag or branch cannot substitute a source commit."""
+        with (
+            patch.object(QA, "load_pair") as loader,
+            self.assertRaisesRegex(
+                QA.Blocked, "OLD_IMAGE_CERT_COMMIT_REQUIRED"
+            ),
+        ):
+            QA.rehearse(self.root, self.signed, True, "refs/tags/v0.5.24-hw")
+        loader.assert_not_called()
+
+    def test_signed_old_commit_is_forwarded_to_verifier(self):
+        """Actual pair preflight gets the exact immutable old commit."""
+        calls = []
+
+        def fake_pair(*args, **kwargs):
+            calls.append((args, kwargs))
+            return {
+                "source_version": OLD,
+                "target_version": NEW,
+                "signature_verified": True,
+            }
+
+        pair = SimpleNamespace(check_pair=fake_pair)
+        with patch.object(QA, "load_pair", return_value=pair):
+            result = QA.rehearse(self.root, self.signed, True, OLD_COMMIT)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0][2], True)
+        self.assertEqual(calls[0][1], {"expected_commit": OLD_COMMIT})
+        self.assertTrue(result["signed_identity_verified"])
+        self.assertFalse(result["rollback_authorized"])
+
+    def test_identity_only_does_not_claim_verified_signature(self):
+        """Unsigned metadata QA stays separate and non-authorizing."""
+        pair = SimpleNamespace(
+            check_pair=lambda *_args, **_kwargs: {
+                "source_version": OLD,
+                "target_version": NEW,
+                "signature_verified": False,
+            }
+        )
+        with patch.object(QA, "load_pair", return_value=pair):
+            result = QA.rehearse(self.root, self.signed, False)
+        self.assertFalse(result["signed_identity_verified"])
+        self.assertFalse(result["release_authorized"])
+        self.assertFalse(result["rollback_authorized"])
+
     def test_unverified_pair_blocks_before_fixture_creation(self):
         """The signed identity guard runs before any simulated transaction."""
 
         pair = SimpleNamespace(
-            check_pair=lambda *_args: (_ for _ in ()).throw(
+            check_pair=lambda *_args, **_kwargs: (_ for _ in ()).throw(
                 QA.Blocked("OLD_IMAGE_SIGNATURE_UNVERIFIED")
             )
         )
@@ -324,7 +383,7 @@ class DisposableRollbackTests(unittest.TestCase):
                 QA.Blocked, "OLD_IMAGE_SIGNATURE_UNVERIFIED"
             ),
         ):
-            QA.rehearse(self.root, self.signed, True)
+            QA.rehearse(self.root, self.signed, True, OLD_COMMIT)
         self.assertFalse((self.root / "case-0").exists())
 
     def test_rescue_contains_photo_message_marker(self):

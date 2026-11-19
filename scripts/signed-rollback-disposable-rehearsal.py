@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import stat
@@ -300,10 +301,18 @@ def execute_fenced_case(
         }
 
 
-def rehearse(source: Path, signed: Path, verify_signature: bool) -> dict:
-    """Validate real snapshot evidence then run synthetic fault fixtures."""
-
-    pair = load_pair().check_pair(source, signed, verify_signature)
+def rehearse(
+    source: Path,
+    signed: Path,
+    verify_signature: bool,
+    expected_commit: str = "",
+) -> dict:
+    """Bind the old image to an immutable Git SHA before fault fixtures."""
+    if verify_signature and not re.fullmatch(r"[0-9a-f]{40}", expected_commit):
+        raise Blocked("OLD_IMAGE_CERT_COMMIT_REQUIRED")
+    pair = load_pair().check_pair(
+        source, signed, verify_signature, expected_commit=expected_commit
+    )
     stages = []
     with tempfile.TemporaryDirectory(prefix="svt-disposable-rollback-") as tmp:
         root = Path(tmp)
@@ -340,11 +349,19 @@ def main() -> int:
     parser.add_argument("--source-snapshot", type=Path, required=True)
     parser.add_argument("--signed-snapshot", type=Path, required=True)
     parser.add_argument("--verify-signature", action="store_true")
+    parser.add_argument(
+        "--expected-commit",
+        default="",
+        help="Exact old source Git SHA required for --verify-signature.",
+    )
     parser.add_argument("--jsonl", action="store_true")
     args = parser.parse_args()
     try:
         report = rehearse(
-            args.source_snapshot, args.signed_snapshot, args.verify_signature
+            args.source_snapshot,
+            args.signed_snapshot,
+            args.verify_signature,
+            args.expected_commit,
         )
     except (Blocked, OSError, ValueError, sqlite3.Error) as exc:
         report = {
