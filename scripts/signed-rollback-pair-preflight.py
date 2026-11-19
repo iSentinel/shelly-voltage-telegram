@@ -181,6 +181,39 @@ def receipt_identity(snapshot: Path) -> tuple[str, str]:
     return old, digest
 
 
+def trusted_cosign() -> str:
+    """Refuse writable, linked, unowned or pre-v3 rollback verifiers."""
+    binary = Path("/usr/local/bin/cosign")
+    for component in (binary, *binary.parents):
+        try:
+            info = component.lstat()
+        except OSError as exc:
+            raise Blocked("OLD_COSIGN_UNAVAILABLE") from exc
+        valid = (
+            stat.S_ISREG(info.st_mode)
+            if component == binary
+            else stat.S_ISDIR(info.st_mode)
+        )
+        if not valid or info.st_uid != 0 or info.st_mode & 0o022:
+            raise Blocked("OLD_COSIGN_PATH_UNSAFE")
+    if not os.access(binary, os.X_OK):
+        raise Blocked("OLD_COSIGN_UNAVAILABLE")
+    try:
+        result = subprocess.run(
+            [str(binary), "version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Blocked("OLD_COSIGN_UNAVAILABLE") from exc
+    match = re.search(r"(?m)^GitVersion:\s*v?([0-9]+)\.", result.stdout)
+    if result.returncode or match is None or int(match.group(1)) < 3:
+        raise Blocked("OLD_COSIGN_VERSION_UNSUPPORTED")
+    return str(binary)
+
+
 def verify_old_signature(
     version: str, digest: str, expected_commit: str
 ) -> bool:
@@ -192,7 +225,7 @@ def verify_old_signature(
         ".github/workflows/image.yml@refs/tags/v" + version
     )
     command = [
-        "/usr/local/bin/cosign",
+        trusted_cosign(),
         "verify",
         "--certificate-identity",
         identity,

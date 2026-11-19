@@ -126,9 +126,16 @@ class SignedPairPreflightTests(unittest.TestCase):
         """A trusted signature cannot itself authorize a DB rollback."""
 
         result = subprocess.CompletedProcess([], 0)
-        with patch.object(
-            MODULE.subprocess, "run", return_value=result
-        ) as call:
+        with (
+            patch.object(
+                MODULE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
+            patch.object(
+                MODULE.subprocess, "run", return_value=result
+            ) as call,
+        ):
             report = MODULE.check_pair(
                 self.source,
                 self.signed,
@@ -162,11 +169,18 @@ class SignedPairPreflightTests(unittest.TestCase):
 
     def test_old_oci_cert_claims_are_bound_to_rollback_git_sha(self):
         """The actual Cosign command includes exact SHA, ref and repo."""
-        with patch.object(
-            MODULE.subprocess,
-            "run",
-            return_value=subprocess.CompletedProcess([], 0),
-        ) as execute:
+        with (
+            patch.object(
+                MODULE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0),
+            ) as execute,
+        ):
             MODULE.verify_old_signature(OLD, DIGEST, OLD_SHA)
         command = execute.call_args.args[0]
         expected = {
@@ -182,11 +196,53 @@ class SignedPairPreflightTests(unittest.TestCase):
                 self.assertEqual(command[command.index(flag) + 1], value)
         self.assertEqual(command[-1], MODULE.IMAGE + DIGEST)
 
+    def test_missing_rollback_cosign_is_never_trusted(self):
+        """Read-only verification must not accept a missing executable."""
+        with (
+            patch.object(
+                MODULE.Path, "lstat", side_effect=FileNotFoundError()
+            ),
+            self.assertRaisesRegex(MODULE.Blocked, "OLD_COSIGN_UNAVAILABLE"),
+        ):
+            MODULE.trusted_cosign()
+
+    def test_untrusted_cosign_version_refuses_signature(self):
+        """A v2 or unspecified signer cannot certify source rollback."""
+        import stat
+        from types import SimpleNamespace
+
+        def fake_stat(path):
+            mode = stat.S_IFREG if path.name == "cosign" else stat.S_IFDIR
+            return SimpleNamespace(st_mode=mode | 0o755, st_uid=0)
+
+        with (
+            patch.object(
+                MODULE.Path, "lstat", autospec=True, side_effect=fake_stat
+            ),
+            patch.object(MODULE.os, "access", return_value=True),
+            patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    [], 0, stdout="GitVersion: v2.9.0\n", stderr=""
+                ),
+            ),
+            self.assertRaisesRegex(
+                MODULE.Blocked, "OLD_COSIGN_VERSION_UNSUPPORTED"
+            ),
+        ):
+            MODULE.trusted_cosign()
+
     def test_invalid_cosign_signature_fails_closed(self):
         """Never label a rejected old signature as a recovery candidate."""
 
         result = subprocess.CompletedProcess([], 1)
         with (
+            patch.object(
+                MODULE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
             patch.object(MODULE.subprocess, "run", return_value=result),
             self.assertRaisesRegex(
                 MODULE.Blocked, "OLD_IMAGE_SIGNATURE_UNVERIFIED"
@@ -203,6 +259,11 @@ class SignedPairPreflightTests(unittest.TestCase):
         """No release endorsement follows a timeout of signature checks."""
 
         with (
+            patch.object(
+                MODULE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
             patch.object(
                 MODULE.subprocess,
                 "run",
