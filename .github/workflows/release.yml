@@ -190,8 +190,65 @@ jobs:
           version="$(tr -d '\r\n' < VERSION)"
           archive="dist/shelly-voltage-telegram-$version.tar.gz"
           gh release create "$RELEASE_TAG" \
-            "$archive" "$archive.sigstore.json" \
-            dist/SHA256SUMS \
-            --verify-tag \
-            --title "$RELEASE_TAG" \
-            --generate-notes
+            --draft --verify-tag --title "$RELEASE_TAG" --generate-notes
+
+      - name: Upload and verify draft source assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
+          bundle="$archive.sigstore.json"
+          gh release upload "$RELEASE_TAG" "$archive" "$bundle" dist/SHA256SUMS
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh release view "$RELEASE_TAG" --json tagName,isDraft,assets >"$scratch/draft.json"
+          python3 - "$scratch/draft.json" "$RELEASE_TAG" "$archive" "$bundle" dist/SHA256SUMS <<'PYCHECK'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          tag = sys.argv[2]
+          paths = [Path(item) for item in sys.argv[3:]]
+          expected = {p.name: p.stat().st_size for p in paths}
+          if len(expected) != 3 or any(size <= 0 for size in expected.values()):
+              raise SystemExit("DRAFT_LOCAL_ASSET_LIST_INVALID")
+          if manifest.get("tagName") != tag or manifest.get("isDraft") is not True:
+              raise SystemExit("DRAFT_IDENTITY_INVALID")
+          assets = manifest.get("assets")
+          if not isinstance(assets, list) or len(assets) != 3:
+              raise SystemExit("DRAFT_ASSET_COUNT_INVALID")
+          received = {
+              item.get("name"): item.get("size")
+              for item in assets if isinstance(item, dict)
+          }
+          if received != expected:
+              raise SystemExit("DRAFT_ASSET_METADATA_MISMATCH")
+          print("DRAFT_SOURCE_ASSET_METADATA: PASS")
+          PYCHECK
+          mkdir -m 0700 "$scratch/download"
+          gh release download "$RELEASE_TAG" --dir "$scratch/download"
+          for file in "$archive" "$bundle" dist/SHA256SUMS; do
+            name="$(basename "$file")"
+            [[ -f "$scratch/download/$name" ]] || exit 10
+            cmp -s "$file" "$scratch/download/$name" || {
+              echo "ERROR: draft source asset byte mismatch: $name" >&2
+              exit 11
+            }
+          done
+          echo "DRAFT_SOURCE_UPLOAD_BYTE_PARITY: PASS"
+
+      - name: Publish verified GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false
+          gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' | grep -qx false
+          echo "VERIFIED_GITHUB_RELEASE_PUBLISHED: PASS"

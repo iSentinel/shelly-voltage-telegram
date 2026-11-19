@@ -95,7 +95,12 @@ class SourceReleaseCIGateTests(unittest.TestCase):
             'archive="dist/shelly-voltage-telegram-$version.tar.gz"',
             RELEASE,
         )
-        self.assertIn('"$archive" "$archive.sigstore.json"', RELEASE)
+        self.assertIn('bundle="$archive.sigstore.json"', RELEASE)
+        self.assertIn(
+            'gh release upload "$RELEASE_TAG" "$archive" "$bundle" '
+            "dist/SHA256SUMS",
+            RELEASE,
+        )
         self.assertNotIn("dist/shelly-voltage-telegram-*.tar.gz", RELEASE)
 
     def test_source_signing_before_public_release(self) -> None:
@@ -153,6 +158,28 @@ class SourceReleaseCIGateTests(unittest.TestCase):
         self.assertIn("source release blocked", step)
         self.assertNotIn("continue-on-error:", step)
         self.assertNotIn("--insecure-ignore-tlog", step)
+
+    def test_draft_assets_verified_before_release_publication(self) -> None:
+        """A draft needs all exact signed bytes before publication."""
+        created = RELEASE.index("Create GitHub Release")
+        uploaded = RELEASE.index("Upload and verify draft source assets")
+        published = RELEASE.index("Publish verified GitHub Release")
+        self.assertLess(created, uploaded)
+        self.assertLess(uploaded, published)
+        self.assertIn(
+            'gh release create "$RELEASE_TAG" \\',
+            RELEASE[created:uploaded],
+        )
+        self.assertIn("--draft --verify-tag", RELEASE[created:uploaded])
+        self.assertIn("gh release download", RELEASE[uploaded:published])
+        self.assertIn("DRAFT_SOURCE_ASSET_METADATA: PASS", RELEASE)
+        self.assertIn("DRAFT_SOURCE_UPLOAD_BYTE_PARITY: PASS", RELEASE)
+        self.assertIn("cmp -s", RELEASE[uploaded:published])
+        self.assertIn(
+            'gh release edit "$RELEASE_TAG" --draft=false',
+            RELEASE[published:],
+        )
+        self.assertNotIn("--clobber", RELEASE[created:])
 
     def test_failed_matrix_cannot_be_bypassed(self) -> None:
         """No failure-tolerant escape from the source publication gate."""
