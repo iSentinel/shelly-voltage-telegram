@@ -271,22 +271,53 @@ def assess(
     }
 
 
+def supervisor_cutover_blockers(
+    installed: str, effective: dict[str, str], restart_policy: str
+) -> list[str]:
+    """Treat the legacy owner as a blocker, even with Docker restart=no."""
+    lines = parse_service(installed)
+    reasons = []
+    if (
+        "--recover" in lines.get("ExecStartPre", "")
+        or "--recover" in effective["ExecStartPre"]
+    ):
+        reasons.append("CUTOVER_LEGACY_AUTO_RECOVER_UNSAFE")
+    if lines.get("Type") == "oneshot" or effective["Type"] == "oneshot":
+        reasons.append("CUTOVER_ONESHOT_COMPOSE_OWNER_STILL_ACTIVE")
+    if (
+        "supervised-container.py" not in lines.get("ExecStart", "")
+        or "supervised-container.py" not in effective["ExecStart"]
+    ):
+        reasons.append("CUTOVER_SUPERVISOR_NOT_EFFECTIVE")
+    if restart_policy != "no":
+        reasons.append("CUTOVER_DOCKER_RESTART_NOT_DISABLED")
+    return reasons
+
+
 def read_live_report(args: argparse.Namespace) -> dict:
     """Combine source files, Docker ownership and effective systemd state."""
 
+    installed = unit_text(args.installed_unit)
+    source = unit_text(args.source_unit)
+    restart_policy, running = inspect_restart_policy(args.container)
     report = assess(
-        unit_text(args.installed_unit),
-        unit_text(args.source_unit),
+        installed,
+        source,
         pending_status(args.pending_marker),
-        *inspect_restart_policy(args.container),
+        restart_policy,
+        running,
     )
-    reasons = effective_issues(
-        inspect_systemd_service(args.unit_name), args.installed_unit
-    )
+    effective = inspect_systemd_service(args.unit_name)
+    reasons = effective_issues(effective, args.installed_unit)
+    if getattr(args, "for_supervisor_cutover", False):
+        reasons += supervisor_cutover_blockers(
+            installed, effective, restart_policy
+        )
     report["reasons"].extend(reasons)
     if reasons:
         report["status"] = "BLOCKED"
     report["effective_systemd_inspected"] = True
+    report["supervisor_cutover_authorized"] = False
     return report
 
 
@@ -300,6 +331,11 @@ def main() -> int:
     parser.add_argument("--container", default="shelly-voltage-bot")
     parser.add_argument(
         "--unit-name", default="shelly-voltage-compose.service"
+    )
+    parser.add_argument(
+        "--for-supervisor-cutover",
+        action="store_true",
+        help="Block old auto-recovery or competing restart owners.",
     )
     parser.add_argument("--jsonl", action="store_true")
     args = parser.parse_args()

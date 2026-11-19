@@ -241,6 +241,37 @@ class BootOwnerAuditTests(unittest.TestCase):
             AUDIT.EXPECTED_RECOVER,
         )
 
+    def test_legacy_recover_blocks_supervisor_even_with_restart_no(self):
+        """Restart=no alone cannot retire the old automatic DB recovery."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        reasons = AUDIT.supervisor_cutover_blockers(UNIT, fields, "no")
+        self.assertIn("CUTOVER_LEGACY_AUTO_RECOVER_UNSAFE", reasons)
+        self.assertIn("CUTOVER_ONESHOT_COMPOSE_OWNER_STILL_ACTIVE", reasons)
+        self.assertIn("CUTOVER_SUPERVISOR_NOT_EFFECTIVE", reasons)
+        self.assertNotIn("CUTOVER_DOCKER_RESTART_NOT_DISABLED", reasons)
+
+    def test_supervisor_audit_rejects_independent_docker_restart(self):
+        """Both startup owners must be retired before any cutover."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        reasons = AUDIT.supervisor_cutover_blockers(
+            UNIT, fields, "unless-stopped"
+        )
+        self.assertIn("CUTOVER_DOCKER_RESTART_NOT_DISABLED", reasons)
+
+    def test_supervisor_audit_detects_loaded_legacy_hook(self):
+        """A safer unit file cannot hide the old loaded recovery command."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        source = UNIT.replace(AUDIT.EXPECTED_RECOVER, "/bin/true")
+        reasons = AUDIT.supervisor_cutover_blockers(source, fields, "no")
+        self.assertIn("CUTOVER_LEGACY_AUTO_RECOVER_UNSAFE", reasons)
+
+    def test_supervisor_audit_detects_loaded_oneshot_owner(self):
+        """systemd's effective type matters even if source says simple."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        source = UNIT.replace("Type=oneshot", "Type=simple")
+        reasons = AUDIT.supervisor_cutover_blockers(source, fields, "no")
+        self.assertIn("CUTOVER_ONESHOT_COMPOSE_OWNER_STILL_ACTIVE", reasons)
+
     def test_effective_dropins_are_never_silently_ignored(self):
         """An unexpected loaded drop-in changes the effective boot plan."""
 
