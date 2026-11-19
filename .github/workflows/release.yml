@@ -105,12 +105,14 @@ jobs:
         shell: bash
         env:
           SOURCE_TAG: ${{ steps.tag.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.ci.outputs.tested_commit }}
         run: |
           set -euo pipefail
           version="$(tr -d '\r\n' < VERSION)"
           archive="dist/shelly-voltage-telegram-$version.tar.gz"
           bundle="$archive.sigstore.json"
           [[ "$GITHUB_REF" == "refs/tags/$SOURCE_TAG" ]] || exit 6
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]] || exit 6
           [[ -s "$archive" ]] || exit 7
           cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
           cosign sign-blob --yes --bundle "$bundle" "$archive"
@@ -119,6 +121,9 @@ jobs:
           cosign verify-blob --bundle "$bundle" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-sha "$SOURCE_COMMIT" \
+            --certificate-github-workflow-ref "refs/tags/$SOURCE_TAG" \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
             "$archive"
           echo "SIGNED SOURCE ARCHIVE BUNDLE: PASS"
 

@@ -61,6 +61,21 @@ class SourceReleaseCIGateTests(unittest.TestCase):
         )
         self.assertIn("cosign sign-blob --yes --bundle", RELEASE)
         self.assertIn("cosign verify-blob --bundle", RELEASE)
+        self.assertIn(
+            "SOURCE_COMMIT: ${{ needs.ci.outputs.tested_commit }}",
+            RELEASE,
+        )
+        self.assertIn(
+            '--certificate-github-workflow-sha "$SOURCE_COMMIT"', RELEASE
+        )
+        self.assertIn(
+            '--certificate-github-workflow-ref "refs/tags/$SOURCE_TAG"',
+            RELEASE,
+        )
+        self.assertIn(
+            '--certificate-github-workflow-repository "$GITHUB_REPOSITORY"',
+            RELEASE,
+        )
         self.assertIn("--certificate-identity", RELEASE)
         self.assertIn("--certificate-oidc-issuer", RELEASE)
         self.assertIn("https://token.actions.githubusercontent.com", RELEASE)

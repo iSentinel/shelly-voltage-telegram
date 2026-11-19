@@ -70,6 +70,7 @@ validate_inputs() {
         scripts/supervised-container.py scripts/fenced-newest-rescue.py
         scripts/stage-guarded-update.py
         scripts/verify-source-release-bundle.py
+        scripts/verify-signed-release-pair.py
     )
     for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {

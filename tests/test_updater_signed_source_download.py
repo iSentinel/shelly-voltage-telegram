@@ -59,6 +59,8 @@ class UpdaterSourceDownloadTests(unittest.TestCase):
             "Dockerfile",
             "compose.yaml",
             "scripts/backup.sh",
+            "scripts/verify-source-release-bundle.py",
+            "scripts/verify-signed-release-pair.py",
         }
         with tarfile.open(self.archive, "w:gz") as bundle:
             for name in sorted(source):

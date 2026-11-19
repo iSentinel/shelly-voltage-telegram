@@ -196,7 +196,43 @@ class SignedSourceBundleTests(unittest.TestCase):
             invocation,
         )
         self.assertIn(CHECK.ISSUER, invocation)
+        self.assertIn("--certificate-github-workflow-ref", invocation)
+        self.assertIn("--certificate-github-workflow-repository", invocation)
         self.assertNotIn("--insecure-ignore-tlog", invocation)
+
+    def test_explicit_git_commit_is_certificate_bound(self) -> None:
+        """A source tag alone cannot replace exact commit provenance."""
+        args = self.args()
+        args.expected_commit = "a" * 40
+        with (
+            patch.object(
+                CHECK, "trusted_cosign", return_value="/usr/local/bin/cosign"
+            ),
+            patch.object(
+                CHECK.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0),
+            ) as command,
+        ):
+            result = CHECK.verify(args)
+        invocation = command.call_args.args[0]
+        self.assertIn("--certificate-github-workflow-sha", invocation)
+        self.assertIn("a" * 40, invocation)
+        self.assertTrue(result["source_commit_bound"])
+        self.assertFalse(result["release_authorized"])
+
+    def test_invalid_commit_is_blocked_before_cosign(self) -> None:
+        """Malformed commit identity is never allowed into Sigstore policy."""
+        args = self.args()
+        args.expected_commit = "refs/heads/main"
+        with (
+            patch.object(CHECK, "verify_signature") as signature,
+            self.assertRaisesRegex(
+                CHECK.SourceBlocked, "SOURCE_EXPECTED_COMMIT_INVALID"
+            ),
+        ):
+            CHECK.verify(args)
+        signature.assert_not_called()
 
     def test_invalid_signature_is_blocking(self) -> None:
         """A rejected bundle must not silently degrade to SHA256-only."""

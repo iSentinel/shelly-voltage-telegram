@@ -23,6 +23,8 @@ REQUIRED = {
     "Dockerfile",
     "compose.yaml",
     "scripts/backup.sh",
+    "scripts/verify-source-release-bundle.py",
+    "scripts/verify-signed-release-pair.py",
 }
 MAX_FILE_BYTES = 512 * 1024 * 1024
 MAX_TOTAL_BYTES = 600 * 1024 * 1024
@@ -52,6 +54,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--bundle", required=True, type=Path)
     parser.add_argument("--sha256sums", required=True, type=Path)
+    parser.add_argument(
+        "--expected-commit",
+        default="",
+        help="Require exact Git SHA in signed GitHub workflow certificate.",
+    )
     parser.add_argument("--jsonl", action="store_true")
     return parser.parse_args()
 
@@ -77,6 +84,9 @@ def validate_paths(args: argparse.Namespace) -> None:
     """Require one exact immutable archive, bundle and checksum set."""
     if not VERSION.fullmatch(args.version):
         raise SourceBlocked("SOURCE_VERSION_INVALID")
+    commit = getattr(args, "expected_commit", "")
+    if commit and not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise SourceBlocked("SOURCE_EXPECTED_COMMIT_INVALID")
     expected = f"shelly-voltage-telegram-{args.version}.tar.gz"
     if (
         args.archive.name != expected
@@ -202,23 +212,31 @@ def trusted_cosign() -> str:
 
 
 def verify_signature(args: argparse.Namespace) -> None:
-    """Check the exact tag-ref GitHub release identity and Sigstore bundle."""
+    """Check the tagged GitHub workflow, SHA and trusted Sigstore bundle."""
     identity = (
         "https://github.com/iSentinel/shelly-voltage-telegram/"
         f".github/workflows/release.yml@refs/tags/v{args.version}"
     )
+    command = [
+        trusted_cosign(),
+        "verify-blob",
+        "--bundle",
+        str(args.bundle),
+        "--certificate-identity",
+        identity,
+        "--certificate-oidc-issuer",
+        ISSUER,
+        "--certificate-github-workflow-ref",
+        f"refs/tags/v{args.version}",
+        "--certificate-github-workflow-repository",
+        "iSentinel/shelly-voltage-telegram",
+    ]
+    commit = getattr(args, "expected_commit", "")
+    if commit:
+        command.extend(["--certificate-github-workflow-sha", commit])
+    command.append(str(args.archive))
     result = subprocess.run(
-        [
-            trusted_cosign(),
-            "verify-blob",
-            "--bundle",
-            str(args.bundle),
-            "--certificate-identity",
-            identity,
-            "--certificate-oidc-issuer",
-            ISSUER,
-            str(args.archive),
-        ],
+        command,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=90,
@@ -239,6 +257,7 @@ def verify(args: argparse.Namespace) -> dict:
         "version": args.version,
         "signed_source_verified": True,
         "source_sha256_verified": True,
+        "source_commit_bound": bool(getattr(args, "expected_commit", "")),
         "release_authorized": False,
         "production_modified": False,
     }
