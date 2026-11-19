@@ -110,6 +110,16 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertNotIn("startsWith(inputs.image_tag, 'v')", text)
 
+    def test_public_oci_signature_must_verify_after_signing(self):
+        """The tag build must reject signatures invisible to public clients."""
+        image = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
+        self.assertLess(
+            image.index("Sign versioned image by digest"),
+            image.index("Verify published release signature anonymously"),
+        )
+        self.assertIn('DOCKER_CONFIG="$anonymous_config" cosign verify', image)
+        self.assertIn("PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS", image)
+
     def test_release_requires_public_version_promotion(self):
         """Final publication must explicitly promote RELEASE_VERSION."""
         text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")

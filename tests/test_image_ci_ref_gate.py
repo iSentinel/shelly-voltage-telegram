@@ -63,6 +63,50 @@ class ImageCISourceGateTests(unittest.TestCase):
         self.assertIn("python3 scripts/image_release_policy.py", IMAGE)
         self.assertIn("cosign sign --yes", IMAGE)
 
+    def test_signed_image_is_reverified_anonymously(self) -> None:
+        """Successful signing alone cannot mean a public verified release."""
+        sign = IMAGE.index("Sign versioned image by digest")
+        verify = IMAGE.index("Verify published release signature anonymously")
+        self.assertLess(sign, verify)
+        section = IMAGE[verify:]
+        self.assertIn(
+            'DOCKER_CONFIG="$anonymous_config" cosign verify', section
+        )
+        self.assertIn(
+            "--certificate-oidc-issuer "
+            '"https://token.actions.githubusercontent.com"',
+            section,
+        )
+        self.assertIn('--certificate-identity "$identity"', section)
+        self.assertIn(
+            '--certificate-github-workflow-sha "$IMAGE_COMMIT"', section
+        )
+        self.assertIn(
+            '--certificate-github-workflow-ref "$GITHUB_REF"', section
+        )
+        self.assertIn(
+            '--certificate-github-workflow-repository "$GITHUB_REPOSITORY"',
+            section,
+        )
+        self.assertIn("trap 'rm -rf -- \"$anonymous_config\"' EXIT", section)
+        self.assertNotIn("--insecure-ignore-tlog", section)
+        self.assertNotIn("continue-on-error:", section)
+        self.assertNotIn("|| true", section)
+
+    def test_anonymous_verification_is_tag_only(self) -> None:
+        """Manual and branch image builds must not impersonate a release."""
+        section = IMAGE.split(
+            "      - name: Verify published release signature anonymously", 1
+        )[1]
+        self.assertIn(
+            "if: github.event_name == 'push' && "
+            "startsWith(github.ref, 'refs/tags/v')",
+            section,
+        )
+        self.assertIn("IMAGE_COMMIT: ${{ steps.source.outputs.sha }}", section)
+        self.assertIn('[[ "$GITHUB_REF" == refs/tags/v* ]]', section)
+        self.assertIn('[[ "$IMAGE_COMMIT" =~ ^[0-9a-f]{40}$ ]]', section)
+
     def test_no_insecure_always_or_ignore_failure(self) -> None:
         """A failed source-CI gate must never be bypassed."""
         self.assertNotRegex(IMAGE, r"(?m)^\s*continue-on-error:")

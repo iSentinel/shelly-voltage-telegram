@@ -149,3 +149,29 @@ jobs:
           }
           image_name="ghcr.io/${IMAGE_REPOSITORY,,}"
           cosign sign --yes "${image_name}@${IMAGE_DIGEST}"
+
+      - name: Verify published release signature anonymously
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_COMMIT: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 4
+          [[ "$IMAGE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 5
+          [[ "$GITHUB_REF" == refs/tags/v* ]] || exit 6
+          image_name="ghcr.io/${IMAGE_REPOSITORY,,}"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/image.yml@$GITHUB_REF"
+          anonymous_config="$(mktemp -d)"
+          trap 'rm -rf -- "$anonymous_config"' EXIT
+          cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
+          DOCKER_CONFIG="$anonymous_config" cosign verify \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-sha "$IMAGE_COMMIT" \
+            --certificate-github-workflow-ref "$GITHUB_REF" \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            "${image_name}@${IMAGE_DIGEST}"
+          echo "PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS"
