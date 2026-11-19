@@ -87,6 +87,39 @@ class PairedRescuePreflightTests(unittest.TestCase):
         self.assertFalse(result["new_oci_signature_verified"])
         self.assertTrue(result["sqlite_wal_photo_parity"])
 
+    def test_verified_mode_requires_both_signatures_and_remains_qa(
+        self,
+    ) -> None:
+        """Two proofs do not permit deployment through the QA tool."""
+        self.args.verify_signatures = True
+        with (
+            self.mocked(),
+            patch.object(MODULE, "verify_old_new_signatures") as verify,
+        ):
+            result = MODULE.evaluate(self.args)
+        verify.assert_called_once()
+        self.assertEqual(result["status"], "PASS_QA_SIGNED_OCI_AND_WAL_ONLY")
+        self.assertTrue(result["old_oci_signature_verified"])
+        self.assertTrue(result["new_oci_signature_verified"])
+        self.assertFalse(result["release_authorized"])
+        self.assertFalse(result["rollback_authorized"])
+
+    def test_verified_mode_missing_cosign_never_degrades_to_identity(
+        self,
+    ) -> None:
+        """Explicit signed mode cannot silently become SHA256-only."""
+        self.args.verify_signatures = True
+        with (
+            self.mocked(),
+            patch.object(
+                MODULE,
+                "verify_old_new_signatures",
+                side_effect=MODULE.PairBlocked("QA_COSIGN_UNAVAILABLE"),
+            ),
+            self.assertRaisesRegex(MODULE.PairBlocked, "COSIGN_UNAVAILABLE"),
+        ):
+            MODULE.evaluate(self.args)
+
     def test_mismatched_old_pair_target_refused(self) -> None:
         """The old transition must target the installed new version."""
         with (

@@ -7,7 +7,10 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sqlite3
+import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,6 +50,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--container", required=True)
     parser.add_argument("--token", required=True)
     parser.add_argument("--jsonl", action="store_true")
+    parser.add_argument(
+        "--verify-signatures",
+        action="store_true",
+        help="Explicit read-only network Cosign check for both OCI digests.",
+    )
     return parser.parse_args()
 
 
@@ -63,6 +71,108 @@ def private_qa_path(path: Path) -> None:
         raise PairBlocked("QA_SIGNED_PATH_INVALID")
     if any(part in ("..", ".") for part in relative.parts):
         raise PairBlocked("QA_SIGNED_PATH_INVALID")
+
+
+def trusted_cosign() -> str:
+    """Require a protected root-owned Cosign v3 executable."""
+    executable = Path("/usr/local/bin/cosign")
+    for member in (executable, *executable.parents):
+        try:
+            info = member.lstat()
+        except OSError as exc:
+            raise PairBlocked("QA_COSIGN_UNAVAILABLE") from exc
+        valid = (
+            stat.S_ISREG(info.st_mode)
+            if member == executable
+            else stat.S_ISDIR(info.st_mode)
+        )
+        if not valid or info.st_uid != 0 or info.st_mode & 0o022:
+            raise PairBlocked("QA_COSIGN_PATH_UNSAFE")
+    if not os.access(executable, os.X_OK):
+        raise PairBlocked("QA_COSIGN_UNAVAILABLE")
+    try:
+        result = subprocess.run(
+            [str(executable), "version"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PairBlocked("QA_COSIGN_UNAVAILABLE") from exc
+    match = re.search(
+        r"(?m)^GitVersion:\s*v?([0-9]+)\.",
+        result.stdout + result.stderr,
+    )
+    if result.returncode or match is None or int(match.group(1)) < 3:
+        raise PairBlocked("QA_COSIGN_VERSION_UNSUPPORTED")
+    return str(executable)
+
+
+def verify_oci_signature(version: str, digest: str, cosign: str) -> None:
+    """Verify an exact immutable image against the trusted GitHub workflow."""
+    if not PAIR.VERSION.fullmatch(version) or not PAIR.DIGEST.fullmatch(
+        digest
+    ):
+        raise PairBlocked("QA_SIGNED_OCI_IDENTITY_INVALID")
+    identity = (
+        "https://github.com/iSentinel/shelly-voltage-telegram/"
+        f".github/workflows/image.yml@refs/tags/v{version}"
+    )
+    command = [
+        cosign,
+        "verify",
+        "--certificate-identity",
+        identity,
+        "--certificate-oidc-issuer",
+        "https://token.actions.githubusercontent.com",
+        PAIR.IMAGE + digest,
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=70,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PairBlocked("QA_OCI_SIGNATURE_UNAVAILABLE") from exc
+    if result.returncode:
+        raise PairBlocked("QA_OCI_SIGNATURE_UNVERIFIED")
+
+
+def verify_old_new_signatures(
+    source_version: str, signed: Path, target: str, image: str
+) -> None:
+    """Demand two Cosign successes, never a digest or tag guess."""
+    cosign = trusted_cosign()
+    old_version, old_digest = PAIR.receipt_identity(signed)
+    if old_version != source_version:
+        raise PairBlocked("QA_OLD_SIGNED_PAIR_CHANGED")
+    verify_oci_signature(old_version, old_digest, cosign)
+    verify_oci_signature(target, image.removeprefix(PAIR.IMAGE), cosign)
+
+
+def qa_report(old_pair: dict, target: str, image: str, signed: bool) -> dict:
+    """Provide evidence without granting any production authorization."""
+    return {
+        "status": (
+            "PASS_QA_SIGNED_OCI_AND_WAL_ONLY"
+            if signed
+            else "PASS_QA_IDENTITY_AND_WAL_ONLY"
+        ),
+        "old_version": old_pair["source_version"],
+        "new_version": target,
+        "old_digest_suffix": old_pair["old_digest_suffix"],
+        "new_digest_suffix": image[-12:],
+        "sqlite_wal_photo_parity": True,
+        "old_oci_signature_verified": signed,
+        "new_oci_signature_verified": signed,
+        "release_authorized": False,
+        "rollback_authorized": False,
+        "production_modified": False,
+    }
 
 
 def evaluate(args: argparse.Namespace) -> dict:
@@ -91,19 +201,12 @@ def evaluate(args: argparse.Namespace) -> dict:
     image = OWNER.verify_receipt(args.new_receipt, args.new_version)
     if not image.startswith(OWNER.IMAGE + "sha256:"):
         raise PairBlocked("QA_PAIR_NEW_IMAGE_INVALID")
-    return {
-        "status": "PASS_QA_IDENTITY_AND_WAL_ONLY",
-        "old_version": old_pair["source_version"],
-        "new_version": target,
-        "old_digest_suffix": old_pair["old_digest_suffix"],
-        "new_digest_suffix": image[-12:],
-        "sqlite_wal_photo_parity": True,
-        "old_oci_signature_verified": False,
-        "new_oci_signature_verified": False,
-        "release_authorized": False,
-        "rollback_authorized": False,
-        "production_modified": False,
-    }
+    signed = getattr(args, "verify_signatures", False)
+    if signed:
+        verify_old_new_signatures(
+            old_pair["source_version"], args.signed_snapshot, target, image
+        )
+    return qa_report(old_pair, target, image, signed)
 
 
 def main() -> int:
@@ -118,7 +221,7 @@ def main() -> int:
     if args.jsonl:
         print(json.dumps(result, separators=(",", ":")))
     else:
-        print("PASS: QA identity and WAL/PHOTO parity only")
+        print(f"PASS: {result['status']} (never deployment authorization)")
     return 0
 
 

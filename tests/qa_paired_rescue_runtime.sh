@@ -226,6 +226,25 @@ assert proof["old_oci_signature_verified"] is False
 assert proof["new_oci_signature_verified"] is False
 print("REAL_QA_OLD_NEW_PAIR_AND_WAL_PHOTO_COHERENCE_PASS")
 PYREPORT
+test ! -x /usr/local/bin/cosign || {
+ echo "FAIL: QA no-Cosign fixture expects missing executable" >&2
+ exit 5
+}
+set +e
+python3 "$ROOT/scripts/qa-paired-rescue-preflight.py" \
+ --source-snapshot "$PAIR_ROOT/upgrades" \
+ --signed-snapshot "$PAIR_ROOT/20261118T015250Z-0.5.25-hw" \
+ --new-receipt "$PAIR_ROOT/new-deployed.json" \
+ --new-version "$PAIR_ROOT/RELEASE_VERSION" \
+ "$@" --verify-signatures >"$OUT/no-cosign.log" 2>&1
+signature_rc=$?
+set -e
+test "$signature_rc" -eq 3
+grep -q QA_COSIGN_UNAVAILABLE "$OUT/no-cosign.log"
+test -f "$FENCE/.svt-update-pending"
+test -s "$output"
+python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --inspect
+echo MISSING_COSIGN_DENIED_NO_QA_HISTORY_LOSS
 printf "0.5.26-hw\\n" >"$PAIR_ROOT/RELEASE_VERSION"
 set +e
 python3 "$ROOT/scripts/qa-paired-rescue-preflight.py" \
