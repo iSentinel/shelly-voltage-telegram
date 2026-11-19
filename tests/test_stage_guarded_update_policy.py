@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -24,7 +25,10 @@ class GuardedUpdatePolicyTests(unittest.TestCase):
     """Prove only a private, stopped, offline QA writer is eligible."""
 
     def setUp(self) -> None:
-        """Use synthetic paths with no production file access."""
+        """Use synthetic paths and restore global env after every QA test."""
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
         self.args = argparse.Namespace(
             qa_only=True,
             container="svt-qa-check",
