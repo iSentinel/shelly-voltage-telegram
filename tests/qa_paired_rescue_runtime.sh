@@ -43,6 +43,7 @@ mkdir -m 0700 "$DATA" "$OUT"
 chown 10001:10001 "$DATA"
 seed="$(cat <<'PY'
 from pathlib import Path
+from contextlib import closing
 from app import Storage
 from writer_fence import writer_lease
 path=Path('/data/history.sqlite3')
@@ -51,10 +52,18 @@ with writer_lease(path):
  store.initialize()
  store.set_meta('telegram_setting_meter_type','pro3em')
  store.set_meta('telegram_status_media_identity','photo:QA-STAGED')
+ store.set_meta('telegram_status_message_id','202')
+ assert store.reserve_text_post()
+ with closing(store.connect()) as db, db:
+  db.execute(
+   'INSERT INTO telegram_status_cleanup '
+   '(chat_id,message_id,needs_unpin,retry_at) VALUES(?,?,?,?)',
+   ('-100999',101,1,1300.0)
+  )
  store.add_phases(1000.0,{
   'L1':(219.,50.,1.),'L2':(220.,50.,1.),'L3':(221.,50.,1.)
  })
-print('QA_SOURCE_SEED_PASS',flush=True)
+print('QA_SOURCE_SEED_WITH_TELEGRAM_PENDING_AND_CLEANUP_PASS',flush=True)
 PY
 )"
 docker run --rm --name svt-qa-stage-seed-20261119 \
@@ -169,7 +178,17 @@ with closing(sqlite3.connect(sys.argv[1])) as live:
   phases=dict(copy.execute("SELECT phase,count(*) FROM measurements GROUP BY phase"))
   assert set(phases)=={"L1","L2","L3"} and len(set(phases.values()))==1
   assert copy.execute("SELECT value FROM meta WHERE key='telegram_status_media_identity'").fetchone()[0]=="photo:QA-STAGED"
+  intent=copy.execute(
+   "SELECT value FROM meta WHERE key='telegram_legacy_text_confirm_pending'"
+  ).fetchone()
+  assert intent and intent[0].startswith("send:")
+  queue=copy.execute(
+   "SELECT chat_id,message_id,needs_unpin,retry_at "
+   "FROM telegram_status_cleanup ORDER BY message_id"
+  ).fetchall()
+  assert queue==[("-100999",101,1,1300.0)]
   print("STAGED_FULL_HISTORY_PARITY",phases)
+  print("STAGED_TELEGRAM_PENDING_SEND_AND_CLEANUP_PARITY_PASS")
 with open(sys.argv[3],encoding='utf-8') as f:
  r=json.load(f)
 assert r["status"]=="QA_ONLY_RESCUE_STAGED"
@@ -205,6 +224,27 @@ grep -q SVT_QA_RESCUE_HISTORY_MISMATCH "$OUT/tampered-db.log"
 test ! -e "$output.qa.json"
 test -f "$FENCE/.svt-update-pending"
 echo MODIFIED_L3_HISTORY_BLOCKED_FROM_RECOVERY
+mv -f "$OUT/verified-original.sqlite3" "$output"
+cp "$output" "$OUT/verified-original.sqlite3"
+python3 - "$output" <<'PYQUEUE'
+import sqlite3
+import sys
+with sqlite3.connect(sys.argv[1]) as db:
+ db.execute(
+  "UPDATE telegram_status_cleanup SET needs_unpin=0 "
+  "WHERE chat_id=? AND message_id=?",
+  ("-100999",101)
+ )
+PYQUEUE
+set +e
+python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --recover-receipt  >"$OUT/tampered-telegram-queue.log" 2>&1
+queue_rc=$?
+set -e
+test "$queue_rc" -eq 3
+grep -q SVT_QA_RESCUE_HISTORY_MISMATCH "$OUT/tampered-telegram-queue.log"
+test ! -e "$output.qa.json"
+test -f "$FENCE/.svt-update-pending"
+echo TAMPERED_TELEGRAM_CLEANUP_INTENT_BLOCKED
 mv -f "$OUT/verified-original.sqlite3" "$output"
 python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --recover-receipt
 test -s "$output.qa.json"
@@ -480,9 +520,19 @@ while time.monotonic() < deadline:
         photo = live.execute(
             "SELECT value FROM meta WHERE key='telegram_status_media_identity'"
         ).fetchone()
+        pending = live.execute(
+            "SELECT value FROM meta "
+            "WHERE key='telegram_legacy_text_confirm_pending'"
+        ).fetchone()
+        queued = live.execute(
+            "SELECT chat_id,message_id,needs_unpin,retry_at "
+            "FROM telegram_status_cleanup"
+        ).fetchall()
         integrity = live.execute("PRAGMA quick_check").fetchone()
     assert rows[:len(baseline)] == baseline
     assert photo == original_photo
+    assert pending and pending[0].startswith("send:")
+    assert queued == [("-100999",101,1,1300.0)]
     assert integrity == ("ok",)
     assert set(phases) == {"L1", "L2", "L3"}
     assert len(set(phases.values())) == 1
