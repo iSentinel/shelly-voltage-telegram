@@ -267,6 +267,27 @@ expect_coordinator_killed() {
     echo "QA_COORDINATOR_SIGKILL_$stage:PENDING_RETAINED"
 }
 
+direct_start_must_fail_while_pending() {
+    local name="$1" snapshot="$2" running code
+    [[ -f "$FENCE/.svt-update-pending" ]]
+    [[ "$(docker inspect "$name" --format '{{.State.Running}}')" == false ]]
+    docker start "$name" >/dev/null
+    running=true
+    for _ in $(seq 1 80); do
+        running="$(docker inspect "$name" --format '{{.State.Running}}')"
+        [[ "$running" == false ]] && break
+        sleep .10
+    done
+    [[ "$running" == false ]] || {
+        echo "FAIL: UNFENCED_DIRECT_START_RUNNING" >&2
+        return 3
+    }
+    code="$(docker inspect "$name" --format '{{.State.ExitCode}}')"
+    [[ "$code" -ne 0 ]]
+    verify_history "$snapshot" stable
+    echo "DIRECT_DOCKER_START_DENIED_BY_SQLITE_PENDING_FENCE"
+}
+
 if [[ "$MODE" == actor-forward ]]; then
     fault_actor forward
 elif [[ "$MODE" == actor-reverse ]]; then
@@ -309,6 +330,7 @@ fi
 supervise_once "$NEW_NAME" | grep -qx SKIP_PENDING
 [[ "$(docker inspect "$NEW_NAME" --format '{{.State.Running}}')" == false ]]
 echo "FORWARD_IMAGE_START_REFUSED_WHILE_PENDING"
+direct_start_must_fail_while_pending "$NEW_NAME" "$RESCUE/old-latest.sqlite3"
 clear_marker "$TOKEN_NEXT"
 supervise_once "$NEW_NAME"
 verify_history "$RESCUE/old-latest.sqlite3" grow
@@ -334,6 +356,7 @@ if [[ "$MODE" == crash ]]; then
 fi
 supervise_once "$OLD_NAME" | grep -qx SKIP_PENDING
 echo "REVERSE_IMAGE_START_REFUSED_WHILE_PENDING"
+direct_start_must_fail_while_pending "$OLD_NAME" "$RESCUE/new-latest.sqlite3"
 clear_marker "$TOKEN_BACK"
 supervise_once "$OLD_NAME"
 verify_history "$RESCUE/new-latest.sqlite3" grow

@@ -41,6 +41,23 @@ class QaLocalImageSwitchPolicyTests(unittest.TestCase):
         self.assertIn('clear_marker "$TOKEN_NEXT"', CONTENT)
         self.assertIn('clear_marker "$TOKEN_BACK"', CONTENT)
 
+    def test_direct_docker_start_is_checked_against_pending_fence(
+        self,
+    ) -> None:
+        """Even a Docker bypass cannot write through pending SQLite."""
+        self.assertIn("direct_start_must_fail_while_pending()", CONTENT)
+        self.assertIn('docker start "$name" >/dev/null', CONTENT)
+        self.assertIn("UNFENCED_DIRECT_START_RUNNING", CONTENT)
+        self.assertIn(
+            "DIRECT_DOCKER_START_DENIED_BY_SQLITE_PENDING_FENCE", CONTENT
+        )
+        self.assertIn(
+            'direct_start_must_fail_while_pending "$NEW_NAME"', CONTENT
+        )
+        self.assertIn(
+            'direct_start_must_fail_while_pending "$OLD_NAME"', CONTENT
+        )
+
     def test_crash_recovery_mode_is_explicitly_disposable(self) -> None:
         """Kill only a child coordinator, never a Docker or host process."""
         for marker in (
