@@ -15,6 +15,7 @@ EXPECTED_RECOVER = (
     "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover"
 )
 EXPECTED_START = "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh"
+EXPECTED_RELOAD = EXPECTED_START
 EXPECTED_STOP = "/usr/bin/docker compose stop"
 
 
@@ -56,7 +57,13 @@ def parse_service(text: str) -> dict[str, str]:
         if "=" not in value:
             continue
         key, raw = value.split("=", 1)
-        if key in ("ExecStartPre", "ExecStart", "ExecStop", "Type"):
+        if key in (
+            "ExecStartPre",
+            "ExecStart",
+            "ExecStop",
+            "ExecReload",
+            "Type",
+        ):
             if key in result:
                 raise Blocked("SERVICE_UNIT_DUPLICATED_DIRECTIVE")
             result[key] = raw.strip()
@@ -120,6 +127,7 @@ SYSTEMD_KEYS = (
     "ExecStartPre",
     "ExecStart",
     "ExecStop",
+    "ExecReload",
 )
 
 
@@ -213,6 +221,11 @@ def effective_issues(fields: dict[str, str], installed: Path) -> list[str]:
     ):
         if effective_exec(fields[key]) != expected:
             issues.append(reason)
+    if (
+        fields["ExecReload"].strip()
+        and effective_exec(fields["ExecReload"]) != EXPECTED_RELOAD
+    ):
+        issues.append("BOOT_EFFECTIVE_RELOAD_CHANGED")
     return issues
 
 
@@ -228,6 +241,8 @@ def unit_issues(installed: str, source: str) -> list[str]:
         issues.append("BOOT_START_PATH_UNEXPECTED")
     if live.get("ExecStop") != EXPECTED_STOP:
         issues.append("BOOT_STOP_PATH_UNEXPECTED")
+    if live.get("ExecReload") not in (None, EXPECTED_RELOAD):
+        issues.append("BOOT_RELOAD_PATH_UNEXPECTED")
     if live.get("Type") != "oneshot":
         issues.append("BOOT_SERVICE_TYPE_UNEXPECTED")
     if live != repo:
@@ -289,6 +304,8 @@ def supervisor_cutover_blockers(
         or "supervised-container.py" not in effective["ExecStart"]
     ):
         reasons.append("CUTOVER_SUPERVISOR_NOT_EFFECTIVE")
+    if lines.get("ExecReload") or effective["ExecReload"].strip():
+        reasons.append("CUTOVER_LEGACY_RELOAD_OWNER_STILL_ACTIVE")
     if restart_policy != "no":
         reasons.append("CUTOVER_DOCKER_RESTART_NOT_DISABLED")
     return reasons

@@ -24,6 +24,7 @@ Type=oneshot
 ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover
 ExecStart=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
 ExecStop=/usr/bin/docker compose stop
+ExecReload=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
 [Install]
 WantedBy=multi-user.target
 """
@@ -42,6 +43,9 @@ SYSTEMD_SHOW = (
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
             "ExecStop={ path=/usr/bin/docker ; "
             "argv[]=/usr/bin/docker compose stop ; "
+            "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "ExecReload={ path=/bin/bash ; "
+            "argv[]=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh ; "
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
             "LoadState=loaded",
             "ActiveState=active",
@@ -271,6 +275,39 @@ class BootOwnerAuditTests(unittest.TestCase):
         source = UNIT.replace("Type=oneshot", "Type=simple")
         reasons = AUDIT.supervisor_cutover_blockers(source, fields, "no")
         self.assertIn("CUTOVER_ONESHOT_COMPOSE_OWNER_STILL_ACTIVE", reasons)
+
+    def test_legacy_reload_blocks_supervisor_cutover(self):
+        """Reload is a second route to old Compose startup."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        reasons = AUDIT.supervisor_cutover_blockers(UNIT, fields, "no")
+        self.assertIn("CUTOVER_LEGACY_RELOAD_OWNER_STILL_ACTIVE", reasons)
+
+    def test_loaded_reload_remains_blocked_after_unit_file_edit(self):
+        """Removing source ExecReload alone cannot alter loaded systemd."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        source = UNIT.replace("ExecReload=" + AUDIT.EXPECTED_RELOAD, "")
+        reasons = AUDIT.supervisor_cutover_blockers(source, fields, "no")
+        self.assertIn("CUTOVER_LEGACY_RELOAD_OWNER_STILL_ACTIVE", reasons)
+
+    def test_unexpected_reload_is_refused_in_static_audit(self):
+        """An additional reload entrypoint cannot hide in service files."""
+        source = UNIT.replace(
+            "ExecReload=" + AUDIT.EXPECTED_RELOAD,
+            "ExecReload=/bin/bash /tmp/unknown.sh",
+        )
+        self.assert_blocked("BOOT_RELOAD_PATH_UNEXPECTED", installed=source)
+
+    def test_effective_reload_path_drift_is_refused(self):
+        """The loaded path is checked independently of the unit file."""
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        fields["ExecReload"] = fields["ExecStop"]
+        self.assertIn(
+            "BOOT_EFFECTIVE_RELOAD_CHANGED",
+            AUDIT.effective_issues(
+                fields,
+                Path("/etc/systemd/system/shelly-voltage-compose.service"),
+            ),
+        )
 
     def test_effective_dropins_are_never_silently_ignored(self):
         """An unexpected loaded drop-in changes the effective boot plan."""
