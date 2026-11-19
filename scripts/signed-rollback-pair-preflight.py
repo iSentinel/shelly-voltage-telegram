@@ -11,11 +11,14 @@ import re
 import stat
 import subprocess
 import tarfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
+MAX_SOURCE_MEMBERS = 20000
+MAX_SOURCE_BYTES = 600 * 1024 * 1024
+MAX_SOURCE_MEMBER_BYTES = 512 * 1024 * 1024
 
 
 class Blocked(ValueError):
@@ -81,13 +84,41 @@ def checksum_matches(path: Path) -> None:
         raise Blocked("SNAPSHOT_CHECKSUM_MISMATCH")
 
 
+def safe_source_member(
+    entry: tarfile.TarInfo, seen: set[str], count: int, total: int
+) -> None:
+    """Reject dangerous, duplicate or oversized source archive entries."""
+    parts = PurePosixPath(entry.name).parts
+    name = str(PurePosixPath(entry.name))
+    if (
+        entry.name.startswith("/")
+        or ".." in parts
+        or not (entry.isfile() or entry.isdir())
+        or entry.mode & 0o6000
+        or entry.size < 0
+        or entry.size > MAX_SOURCE_MEMBER_BYTES
+        or count > MAX_SOURCE_MEMBERS
+        or total > MAX_SOURCE_BYTES
+    ):
+        raise Blocked("SOURCE_ARCHIVE_MEMBER_UNSAFE")
+    if name in seen:
+        raise Blocked("SOURCE_ARCHIVE_MEMBER_DUPLICATE")
+    seen.add(name)
+
+
 def source_versions(archive: Path) -> str:
-    """Inspect version markers in tar members without extracting sources."""
+    """Inspect every member and version marker without unpacking files."""
 
     versions: dict[str, str] = {}
+    seen: set[str] = set()
+    count = 0
+    total = 0
     try:
         with tarfile.open(archive, "r:gz") as bundle:
             for entry in bundle:
+                count += 1
+                total += entry.size
+                safe_source_member(entry, seen, count, total)
                 if entry.name not in ("./VERSION", "./RELEASE_VERSION"):
                     continue
                 if entry.name in versions or not entry.isfile():

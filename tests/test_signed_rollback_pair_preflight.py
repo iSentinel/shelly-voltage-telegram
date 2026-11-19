@@ -72,6 +72,24 @@ class SignedPairPreflightTests(unittest.TestCase):
             archive.write_bytes(b"synthetic-db-archive")
             add_checksum(archive)
 
+    def replace_archive_with_entry(
+        self, entry: tarfile.TarInfo, data: bytes | None = None
+    ) -> None:
+        """Add one adversarial TAR member to a self-checksummed fixture."""
+        archive = self.source / "source.tar.gz"
+        with tarfile.open(archive, "w:gz") as bundle:
+            for marker in ("VERSION", "RELEASE_VERSION"):
+                content = (OLD + "\n").encode("ascii")
+                info = tarfile.TarInfo("./" + marker)
+                info.size = len(content)
+                bundle.addfile(info, io.BytesIO(content))
+            if data is not None:
+                entry.size = len(data)
+            bundle.addfile(
+                entry, io.BytesIO(data) if data is not None else None
+            )
+        add_checksum(archive)
+
     def write_receipt(self, version: str, digest: str) -> None:
         """Set a private signed pair fixture."""
 
@@ -236,6 +254,44 @@ class SignedPairPreflightTests(unittest.TestCase):
         with (self.source / "source.tar.gz").open("ab") as stream:
             stream.write(b"bad")
         self.blocked("SNAPSHOT_CHECKSUM_MISMATCH")
+
+    def test_source_tar_traversal_rejected(self):
+        """Signed pair identity cannot accept a parent-directory entry."""
+        self.replace_archive_with_entry(
+            tarfile.TarInfo("../outside.txt"), b"disposable"
+        )
+        self.blocked("SOURCE_ARCHIVE_MEMBER_UNSAFE")
+
+    def test_source_tar_absolute_path_rejected(self):
+        """Archive identity check refuses absolute member paths."""
+        self.replace_archive_with_entry(
+            tarfile.TarInfo("/etc/disposable.txt"), b"disposable"
+        )
+        self.blocked("SOURCE_ARCHIVE_MEMBER_UNSAFE")
+
+    def test_source_tar_symlink_rejected(self):
+        """A TAR symlink is invalid even when SHA256 sidecar agrees."""
+        entry = tarfile.TarInfo("./linked")
+        entry.type = tarfile.SYMTYPE
+        entry.linkname = "/etc/hostname"
+        self.replace_archive_with_entry(entry)
+        self.blocked("SOURCE_ARCHIVE_MEMBER_UNSAFE")
+
+    def test_source_tar_duplicate_canonical_path_rejected(self):
+        """VERSION and ./VERSION cannot bypass duplicate-path checks."""
+        self.replace_archive_with_entry(
+            tarfile.TarInfo("VERSION"), (OLD + "\n").encode("ascii")
+        )
+        self.blocked("SOURCE_ARCHIVE_MEMBER_DUPLICATE")
+
+    def test_source_tar_oversized_member_header_refused(self):
+        """Oversized members are blocked before tarfile extraction."""
+        entry = tarfile.TarInfo("./large")
+        entry.size = MODULE.MAX_SOURCE_MEMBER_BYTES + 1
+        with self.assertRaisesRegex(
+            MODULE.Blocked, "SOURCE_ARCHIVE_MEMBER_UNSAFE"
+        ):
+            MODULE.safe_source_member(entry, set(), 1, entry.size)
 
     def test_missing_archive_checksum(self):
         """No source backup is accepted without a checksum."""
