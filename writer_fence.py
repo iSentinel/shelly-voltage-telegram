@@ -104,6 +104,17 @@ def transaction_gate(path: Path) -> Iterator[None]:
 
 
 @contextmanager
+def quiescent_writer_lease(path: Path) -> Iterator[None]:
+    """Give the updater exclusive ownership only after the writer exits."""
+    fd = _lock_file(fence_directory(path) / ".svt-owner.lock")
+    try:
+        _take_lock(fd, 0.0)
+        yield
+    finally:
+        os.close(fd)
+
+
+@contextmanager
 def writer_lease(path: Path) -> Iterator[None]:
     """Allow only one monitoring process to own a database at a time."""
     fd = _lock_file(fence_directory(path) / ".svt-owner.lock")

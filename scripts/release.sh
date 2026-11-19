@@ -66,6 +66,8 @@ validate_inputs() {
         telegram_i18n.py notification_features.py Dockerfile
         dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_schedule_periods.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_card_v5.py telegram_uk_bitmap.py telegram_smooth_type.py telegram_smooth_bitmap.py
         compose.yaml requirements.txt README.md scripts/graphic-emergency-restore.py
+        scripts/prepare-writer-fence.py scripts/writer-fence-marker.py
+        scripts/supervised-container.py scripts/fenced-newest-rescue.py
     )
     for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {

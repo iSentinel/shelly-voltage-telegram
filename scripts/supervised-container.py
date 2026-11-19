@@ -193,7 +193,11 @@ def main() -> int:
         signal.signal(signal.SIGINT, on_signal)
         return supervise(args.container, args.database, args.once)
     except (BootBlocked, WriterFenceError, OSError, ValueError) as exc:
-        code = str(exc) if isinstance(exc, ValueError) else type(exc).__name__
+        code = (
+            str(exc)
+            if isinstance(exc, (ValueError, WriterFenceError))
+            else type(exc).__name__
+        )
         print(f"FAIL: {code}", file=sys.stderr)
         return 3
 
