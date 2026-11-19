@@ -23,7 +23,14 @@ permissions:
   id-token: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
   build:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Validate manual inputs
@@ -44,10 +51,10 @@ jobs:
               exit 3
             }
           fi
-      - name: Check out requested ref
+      - name: Check out CI-tested immutable commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ needs.ci.outputs.tested_commit }}
           fetch-depth: 0
       - name: Validate signed image release policy
         shell: bash
@@ -69,9 +76,14 @@ jobs:
         shell: bash
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
+          TESTED_SHA: ${{ needs.ci.outputs.tested_commit }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ && "$sha" == "$TESTED_SHA" ]] || {
+            echo "ERROR: image source differs from CI-tested commit" >&2
+            exit 5
+          }
           short_sha="$(git rev-parse --short=7 HEAD)"
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             version="${IMAGE_TAG:-manual-${short_sha}}"
