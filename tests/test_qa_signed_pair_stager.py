@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,6 +59,11 @@ class QaPairReceiptStagerTests(unittest.TestCase):
         preflight = patch.object(STAGE, "verify_qa_rescue")
         preflight.start()
         self.addCleanup(preflight.stop)
+        seal = patch.object(
+            STAGE, "sealed_pending_receipt", return_value=nullcontext()
+        )
+        seal.start()
+        self.addCleanup(seal.stop)
         temp = tempfile.TemporaryDirectory(prefix="svt-qa-pair-stage-")
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
@@ -190,6 +196,23 @@ class QaPairReceiptStagerTests(unittest.TestCase):
             STAGE.stage_release(self.args, self.output)
         self.assertEqual(calls, ["signed_pair", "rescue_pending"])
         self.assertTrue((self.output / "deployed.json").exists())
+
+    def test_final_commit_uses_sealed_pending_guard(self) -> None:
+        """Never publish a deployed receipt outside the shared locks."""
+        with (
+            patch.object(STAGE.PAIR, "verify", return_value=self.evidence()),
+            patch.object(
+                STAGE,
+                "sealed_pending_receipt",
+                side_effect=STAGE.StageBlocked("STAGE_PENDING_TOKEN_CHANGED"),
+            ) as seal,
+            self.assertRaisesRegex(
+                STAGE.StageBlocked, "STAGE_PENDING_TOKEN_CHANGED"
+            ),
+        ):
+            STAGE.stage_release(self.args, self.output)
+        seal.assert_called_once()
+        self.assertFalse((self.output / "deployed.json").exists())
 
     def test_real_verifier_error_leaves_no_boot_receipt(self) -> None:
         """Missing signatures must not be replaced by an unsigned receipt."""

@@ -309,6 +309,31 @@ owner_spec.loader.exec_module(owner)
 owner.require_pair_proof(receipt, commit)
 owner.verify_paired_source_archive(receipt, staged)
 assert (Path(fence) / ".svt-update-pending").exists()
+import os
+import subprocess
+import time
+environment = os.environ.copy()
+environment["SVT_WRITER_FENCE_DIR"] = fence
+with module.sealed_pending_receipt(args):
+    contender = subprocess.Popen(
+        [
+            sys.executable,
+            str(root / "scripts/writer-fence-marker.py"),
+            "clear", "--database", db, "--token", token,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+    )
+    try:
+        time.sleep(0.35)
+        assert contender.poll() is None, "clear bypassed transaction lock"
+    finally:
+        if contender.poll() is None:
+            contender.terminate()
+        contender.wait(timeout=5)
+assert (Path(fence) / ".svt-update-pending").exists()
+print("CONCURRENT_PENDING_CLEAR_BLOCKED_BY_SEALED_RECEIPT_LOCK")
 print("JOINED_REAL_WAL_PHOTO_PENDING_AND_MOCK_SOURCE_PAIR_PASS")
 print("JOINED_TRANSACTION_TOKEN_MATCHED_PASS")
 PYJOIN

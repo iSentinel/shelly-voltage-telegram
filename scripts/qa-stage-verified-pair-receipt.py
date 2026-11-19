@@ -13,7 +13,14 @@ import shutil
 import socket
 import stat
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from writer_fence import (  # noqa: E402
+    quiescent_writer_lease,
+    update_gate,
+)
 
 STAGE_ROOT = Path("/var/lib/svt-qa-verified-pair-20261119")
 MAX_ARCHIVE = 512 * 1024 * 1024
@@ -74,6 +81,17 @@ def require_isolated_root() -> None:
         raise StageBlocked("STAGE_EXISTING_OUTPUT_REFUSED")
 
 
+def qa_rescue_module():
+    """Load the pinned WAL/PHOTO checker, never a mutable caller import."""
+    file = Path(__file__).with_name("stage-guarded-update.py")
+    spec = importlib.util.spec_from_file_location("svt_joined_qa_rescue", file)
+    if spec is None or spec.loader is None:
+        raise StageBlocked("STAGE_RESCUE_VERIFIER_UNAVAILABLE")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def verify_qa_rescue(args: argparse.Namespace) -> None:
     """Require same-token pending and complete newest WAL/PHOTO under QA."""
     if not TOKEN.fullmatch(args.token):
@@ -81,17 +99,57 @@ def verify_qa_rescue(args: argparse.Namespace) -> None:
     for key in ("container", "database", "fence_dir", "output"):
         if getattr(args, key, None) is None:
             raise StageBlocked("STAGE_QA_RESCUE_ARGUMENT_MISSING")
-    file = Path(__file__).with_name("stage-guarded-update.py")
-    spec = importlib.util.spec_from_file_location("svt_joined_qa_rescue", file)
-    if spec is None or spec.loader is None:
-        raise StageBlocked("STAGE_RESCUE_VERIFIER_UNAVAILABLE")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = qa_rescue_module()
     args.qa_only = True
     module.check_paths(args)
     info = module.inspect_container(args.container)
     module.check_container(info, args)
     module.inspect_stage(args, info)
+
+
+def check_locked_pending(args: argparse.Namespace) -> None:
+    """Read the exact root marker while the common transaction lock is held."""
+    path = args.fence_dir / ".svt-update-pending"
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != 0
+            or info.st_nlink != 1
+            or not 0 < info.st_size <= 128
+        ):
+            raise StageBlocked("STAGE_PENDING_MARKER_UNSAFE")
+        if os.read(fd, 129).decode("ascii").strip() != args.token:
+            raise StageBlocked("STAGE_PENDING_TOKEN_CHANGED")
+    finally:
+        os.close(fd)
+
+
+@contextmanager
+def sealed_pending_receipt(args: argparse.Namespace):
+    """Hold owner and update locks through receipt commit, including fsync."""
+    if not TOKEN.fullmatch(args.token):
+        raise StageBlocked("STAGE_TRANSACTION_TOKEN_INVALID")
+    previous = os.environ.get("SVT_WRITER_FENCE_DIR")
+    os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
+    try:
+        with (
+            quiescent_writer_lease(args.database),
+            update_gate(args.database),
+        ):
+            check_locked_pending(args)
+            checker = qa_rescue_module()
+            if checker.database_digest(args.database) != (
+                checker.database_digest(args.output)
+            ):
+                raise StageBlocked("STAGE_RESCUE_HISTORY_CHANGED")
+            yield
+    finally:
+        if previous is None:
+            os.environ.pop("SVT_WRITER_FENCE_DIR", None)
+        else:
+            os.environ["SVT_WRITER_FENCE_DIR"] = previous
 
 
 def copy_private(source: Path, target: Path, size_limit: int) -> None:
@@ -204,7 +262,8 @@ def stage_release(args: argparse.Namespace, directory: Path) -> dict:
     evidence = PAIR.verify(copied)
     verify_qa_rescue(args)
     record = record_for_stage(copied, evidence)
-    publish_private_receipt(directory, record)
+    with sealed_pending_receipt(args):
+        publish_private_receipt(directory, record)
     return {
         "status": "PASS_QA_PAIR_RECEIPT_STAGED",
         "release_authorized": False,
