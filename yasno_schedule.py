@@ -8,7 +8,7 @@ import re
 import stat
 import urllib.request
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -91,6 +91,18 @@ def validate_day(record: object, now: datetime) -> str:
     return schedule_slots(record.get("slots"))
 
 
+def current_day_bars(record: dict, now: datetime) -> str:
+    """Accept published tomorrow only during a one-day API rollover."""
+    try:
+        return validate_day(record.get("today"), now)
+    except ValueError as error:
+        if str(error) != "schedule date differs from today":
+            raise
+    yesterday = now.astimezone(KYIV) - timedelta(days=1)
+    validate_day(record.get("today"), yesterday)
+    return validate_day(record.get("tomorrow"), now)
+
+
 def parse_schedule(
     data: object, group: str, now: datetime, retrieved_at: datetime
 ) -> YasnoDay:
@@ -112,7 +124,7 @@ def parse_schedule(
     age = (now - published).total_seconds()
     if not 0 <= age <= MAX_PUBLICATION_AGE_S:
         raise ValueError("YASNO publication timestamp stale or invalid")
-    bars = validate_day(record.get("today"), now)
+    bars = current_day_bars(record, now)
     return YasnoDay(
         group,
         now.astimezone(KYIV).date().isoformat(),

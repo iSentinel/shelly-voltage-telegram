@@ -14,6 +14,7 @@ from PIL import Image
 
 from telegram_card_png import HEIGHT, WIDTH, render_card_png
 from telegram_card_v5 import (
+    CARD_TEXT,
     PAST_COLORS,
     Painter,
     font,
@@ -110,6 +111,19 @@ class GraphicV5Tests(unittest.TestCase):
         report, _ = self.render(payload)
         self.assertEqual(report["status"], "stale")
         self.assertFalse(report["live_voltage_visible"])
+
+    def test_missing_schedule_never_claims_no_outages(self):
+        """An unavailable provider schedule is not a green forecast."""
+        expected = {
+            "uk": "Графік тимчасово недоступний",
+            "ru": "График временно недоступен",
+            "en": "Schedule temporarily unavailable",
+        }
+        for language, message in expected.items():
+            with self.subTest(language=language):
+                self.assertEqual(CARD_TEXT[language]["no_forecast"], message)
+                self.assertNotIn("відключень немає", message.lower())
+                self.assertNotIn("отключений нет", message.lower())
 
     def test_expired_forecast_has_no_valid_slots(self):
         """A previous day's YASNO cache must be hidden from v5."""

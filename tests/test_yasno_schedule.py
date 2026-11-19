@@ -63,6 +63,64 @@ class YasnoAdapterTests(unittest.TestCase):
             Y.outage_windows(result.bars), ["04:00–11:30", "14:30–22:00"]
         )
 
+    def test_midnight_rollover_uses_published_new_day(self):
+        """New-day tomorrow may be used if today's provider date lags."""
+        before = datetime(2026, 11, 19, 23, 45, tzinfo=KYIV)
+        midnight = datetime(2026, 11, 20, 0, 1, tzinfo=KYIV)
+        data = response(before)
+        old = list(data["10.1"]["today"]["slots"])
+        new = data["10.1"]["tomorrow"]
+        new["status"] = "ScheduleApplies"
+        new["slots"] = [
+            {"start": 0, "end": 660, "type": "NotPlanned"},
+            {"start": 660, "end": 960, "type": "Definite"},
+            {"start": 960, "end": 1260, "type": "NotPlanned"},
+            {"start": 1260, "end": 1440, "type": "Definite"},
+        ]
+        result = Y.parse_schedule(
+            data, "10.1", midnight, midnight - timedelta(seconds=25)
+        )
+        self.assertEqual(result.day, "2026-11-20")
+        self.assertEqual(
+            Y.outage_windows(result.bars),
+            ["11:00–16:00", "21:00–24:00"],
+        )
+        self.assertNotEqual(Y.schedule_slots(old), result.bars)
+
+    def test_unpublished_tomorrow_remains_unavailable(self):
+        """No published next-day record means no invented forecast."""
+        before = datetime(2026, 11, 19, 23, 45, tzinfo=KYIV)
+        midnight = datetime(2026, 11, 20, 0, 1, tzinfo=KYIV)
+        with self.assertRaisesRegex(ValueError, "not published"):
+            Y.parse_schedule(
+                response(before),
+                "10.1",
+                midnight,
+                midnight - timedelta(seconds=25),
+            )
+
+    def test_rollover_rejects_two_day_old_or_malformed_today(self):
+        """Adjacent published days and valid previous slots are required."""
+        midnight = datetime(2026, 11, 20, 0, 1, tzinfo=KYIV)
+        for earlier in (18, 19):
+            with self.subTest(previous_day=earlier):
+                before = datetime(2026, 11, earlier, 23, 45, tzinfo=KYIV)
+                data = response(before)
+                next_day = data["10.1"]["tomorrow"]
+                next_day["status"] = "ScheduleApplies"
+                next_day["slots"] = [
+                    dict(slot) for slot in data["10.1"]["today"]["slots"]
+                ]
+                if earlier == 19:
+                    data["10.1"]["today"]["slots"][0]["type"] = "Unknown"
+                with self.assertRaises(ValueError):
+                    Y.parse_schedule(
+                        data,
+                        "10.1",
+                        midnight,
+                        midnight - timedelta(seconds=25),
+                    )
+
     def test_waiting_for_schedule_is_not_no_outages(self):
         """An unpublished day must not become a green timeline."""
 
