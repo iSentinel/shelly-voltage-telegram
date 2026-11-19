@@ -1,0 +1,24 @@
+# Source-only systemd candidate, NOT installed as a .service file.
+# Do not enable this alongside shelly-voltage-compose.service.
+# Activation requires a signed paired source/image and separate Owner Approval.
+[Unit]
+Description=Shelly signed single-owner supervisor (candidate only)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/shelly-voltage
+Environment=SVT_SUPERVISOR_OVERLAY=/opt/shelly-voltage/deploy/compose.supervised-candidate.yml
+ExecStartPre=/usr/bin/python3 /opt/shelly-voltage/scripts/prepare-writer-fence.py --directory /var/lib/shelly-voltage-fence --uid 10001
+ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh --create-only
+ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/supervised-container.py --container shelly-voltage-bot --database /var/lib/shelly-voltage/voltage.sqlite3 --fence-dir /var/lib/shelly-voltage-fence --receipt /var/lib/shelly-voltage-updater/deployed.json
+ExecStop=/usr/bin/docker stop -t 20 shelly-voltage-bot
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -33,6 +33,7 @@ class StartComposeYasnoTests(unittest.TestCase):
         docker.chmod(0o700)
         self.overlay = self.root / "yasno.yaml"
         self.updater = self.root / "updater.yaml"
+        self.supervisor = self.root / "supervisor.yaml"
 
     def run_script(self, *args):
         """Invoke the real script with an offline fake Docker command."""
@@ -41,6 +42,9 @@ class StartComposeYasnoTests(unittest.TestCase):
             SVT_ROOT=str(self.app),
             SVT_YASNO_READER_OVERLAY=str(self.overlay),
             SVT_UPDATE_OVERRIDE=str(self.updater),
+            SVT_SUPERVISOR_OVERLAY=(
+                str(self.supervisor) if self.supervisor.exists() else ""
+            ),
             COMPOSE_CALLS=str(self.calls),
             PATH=str(self.mockbin) + os.pathsep + env["PATH"],
         )
@@ -61,6 +65,87 @@ class StartComposeYasnoTests(unittest.TestCase):
         """Create a private owner-controlled overlay fixture."""
         self.overlay.write_text("services: {}\n")
         self.overlay.chmod(0o600)
+
+    def enable_supervisor(self):
+        """Create a private candidate supervisor layer for offline tests."""
+        self.supervisor.write_text(
+            'services:\n  shelly-voltage:\n    restart: "no"\n'
+        )
+        self.supervisor.chmod(0o600)
+
+    def test_create_only_requires_signed_pin_and_supervisor(self):
+        """Never create an unfenced or unpinned runtime."""
+        result, calls = self.run_script("--create-only")
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
+        self.enable_supervisor()
+        result, calls = self.run_script("--create-only")
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
+
+    def test_create_only_does_not_start_bot(self):
+        """A signed precreated container still requires the supervisor."""
+        self.enable_supervisor()
+        self.updater.write_text("services: {}\n")
+        result, calls = self.run_script("--create-only")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        layers = [
+            "compose",
+            "-f",
+            str(self.app / "compose.yaml"),
+            "-f",
+            str(self.updater),
+            "-f",
+            str(self.supervisor),
+        ]
+        self.assertEqual(
+            calls,
+            [
+                layers + ["config", "-q"],
+                layers + ["create", "--no-build", "--no-recreate"],
+            ],
+        )
+        self.assertFalse(any("up" in row for row in calls))
+
+    def test_supervisor_refuses_unsupervised_up(self):
+        """A protected overlay may never be run with the normal up path."""
+        self.enable_supervisor()
+        self.updater.write_text("services: {}\n")
+        for args in ((), ("--build",)):
+            result, calls = self.run_script(*args)
+            self.assertEqual(result.returncode, 3)
+            self.assertEqual(calls, [])
+
+    def test_supervisor_follows_signed_pin_precedes_yasno(self):
+        """The opt-in read-only YASNO reader stays the final overlay."""
+        self.enable_supervisor()
+        self.enable()
+        self.updater.write_text("services: {}\n")
+        result, calls = self.run_script("--create-only")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[0][-2:], ["config", "-q"])
+        order = calls[0]
+        self.assertLess(
+            order.index(str(self.updater)),
+            order.index(str(self.supervisor)),
+        )
+        self.assertLess(
+            order.index(str(self.supervisor)),
+            order.index(str(self.overlay)),
+        )
+        self.assertEqual(
+            calls[1][-3:], ["create", "--no-build", "--no-recreate"]
+        )
+
+    def test_supervisor_symlink_fails_before_docker(self):
+        """A linked candidate layer cannot supply Docker configuration."""
+        destination = self.root / "unsafe-candidate.yaml"
+        destination.write_text("services: {}\n")
+        self.supervisor.symlink_to(destination)
+        self.updater.write_text("services: {}\n")
+        result, calls = self.run_script("--create-only")
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(calls, [])
 
     def test_no_overlay_keeps_original_base_service(self):
         """Do not enable forecast by merely installing this version."""

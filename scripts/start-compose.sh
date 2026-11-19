@@ -5,9 +5,10 @@ set -euo pipefail
 ROOT="$(printenv SVT_ROOT || printf /opt/shelly-voltage)"
 OVERRIDE="$(printenv SVT_UPDATE_OVERRIDE || printf /var/lib/shelly-voltage-updater/override.yaml)"
 YASNO_OVERLAY="$(printenv SVT_YASNO_READER_OVERLAY || printf /etc/shelly-voltage/yasno-reader.yaml)"
+SUPERVISOR_OVERLAY="$(printenv SVT_SUPERVISOR_OVERLAY || true)"
 
 usage() {
-    echo "Usage: start-compose.sh [--build|-h|--help]"
+    echo "Usage: start-compose.sh [--build|--create-only|-h|--help]"
     echo "Optional YASNO overlay must be an owner-controlled private file."
 }
 
@@ -47,15 +48,11 @@ validate_yasno_overlay() {
 }
 
 compose_cmd() {
-    if [[ "$pinned" == true && "$has_yasno" == true ]]; then
-        docker compose -f "$ROOT/compose.yaml" -f "$OVERRIDE" -f "$YASNO_OVERLAY" "$@"
-    elif [[ "$pinned" == true ]]; then
-        docker compose -f "$ROOT/compose.yaml" -f "$OVERRIDE" "$@"
-    elif [[ "$has_yasno" == true ]]; then
-        docker compose -f "$ROOT/compose.yaml" -f "$YASNO_OVERLAY" "$@"
-    else
-        docker compose -f "$ROOT/compose.yaml" "$@"
-    fi
+    local -a layers=(-f "$ROOT/compose.yaml")
+    [[ "$pinned" == true ]] && layers+=(-f "$OVERRIDE")
+    [[ "$has_supervisor" == true ]] && layers+=(-f "$SUPERVISOR_OVERLAY")
+    [[ "$has_yasno" == true ]] && layers+=(-f "$YASNO_OVERLAY")
+    docker compose "${layers[@]}" "$@"
 }
 
 compose_prepare() {
@@ -63,8 +60,13 @@ compose_prepare() {
     local build="$1"
     pinned=false
     has_yasno=false
+    has_supervisor=false
     if [[ "$build" == false && -f "$OVERRIDE" ]]; then
         pinned=true
+    fi
+    if [[ -n "$SUPERVISOR_OVERLAY" ]]; then
+        validate_yasno_overlay "$SUPERVISOR_OVERLAY"
+        has_supervisor=true
     fi
     if [[ -e "$YASNO_OVERLAY" || -L "$YASNO_OVERLAY" ]]; then
         validate_yasno_overlay "$YASNO_OVERLAY"
@@ -73,10 +75,11 @@ compose_prepare() {
 }
 
 start_compose_main() {
-    local build=false
+    local build=false create_only=false
     if [[ $# -gt 0 ]]; then
         case "$1" in
             --build) build=true ;;
+            --create-only) create_only=true ;;
             -h|--help) usage; return 0 ;;
             *) usage >&2; return 2 ;;
         esac
@@ -84,6 +87,19 @@ start_compose_main() {
     [[ $# -le 1 ]] || { usage >&2; return 2; }
 
     compose_prepare "$build"
+    if [[ "$has_supervisor" == true && "$create_only" != true ]]; then
+        echo "FAIL: supervisor must own startup; use --create-only" >&2
+        return 3
+    fi
+    if [[ "$create_only" == true ]]; then
+        if [[ "$pinned" != true || "$has_supervisor" != true ]]; then
+            echo "FAIL: create-only needs a signed pin and supervisor overlay" >&2
+            return 3
+        fi
+        compose_cmd config -q
+        compose_cmd create --no-build --no-recreate
+        return
+    fi
     compose_cmd config -q
     if [[ "$build" == true ]]; then
         compose_cmd up -d --build

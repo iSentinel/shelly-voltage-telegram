@@ -1,0 +1,59 @@
+# Issues 340/422/431: sole-owner Compose startup candidate
+
+Date: 2026-11-19. Status: SOURCE-ONLY; NO PRODUCTION DEPLOYMENT.
+
+## Background
+
+Production LXC110 still uses an independent Docker restart policy
+unless-stopped, and its installed systemd unit invokes the old
+apply-update.sh --recover path. That path can restore old SQLite
+history after new three-phase readings have been written.
+
+The candidate single-owner flow is root-protected fence provision,
+Compose create without start, exact pinned image/receipt check,
+supervised startup under the pending gate, then explicit controlled
+stop before a newest-history WAL/PHOTO rescue.
+
+## Source-only changes
+
+- deploy/compose.supervised-candidate.yml overrides restart:no,
+  configures SVT_WRITER_FENCE_DIR=/run/svt-fence and adds the
+  root-owned shared /var/lib/shelly-voltage-fence bind mount.
+- deploy/shelly-voltage-supervised.candidate.unit describes future
+  sole-owner startup. Its .unit extension intentionally prevents
+  automatic installation as an active .service by existing packaging.
+- scripts/start-compose.sh --create-only requires an existing signed
+  pin overlay and a trusted supervisor overlay. It calls Compose
+  config then create --no-build --no-recreate and never up.
+- Setting SVT_SUPERVISOR_OVERLAY forbids ordinary Compose up or
+  --build, so the script cannot bypass the sole-owner path.
+- Signed pin, supervisor and optional read-only YASNO layering are
+  ordered deterministically; YASNO remains the final layer.
+
+## Evidence from isolated LXC114
+
+- Synthetic Docker Compose config: restart=no, protected fence mount,
+  preserved /data, immutable-shaped image digest, read-only rootfs.
+- Candidate systemd syntax verified by systemd-analyze using a
+  disposable .service copy; no service was installed/enabled.
+- 19/19 start-compose unit tests passed, including pin and supervisor
+  requirements, create-only no-up, overlay-order, symlink rejection
+  and ordinary unsupervised start refusal.
+- A real networkless, nonroot QA Compose create produced a stopped
+  container with Docker restart policy no. An independent supervisor
+  --once then returned start success.
+- The more extensive synthetic Pro3EM application boot test DID NOT
+  pass: QA worker exited 1 before tables or measurements appeared.
+  Joined L1/L2/L3 acceptance must therefore stay BLOCKED.
+- A Gateway SSH timeout temporarily interrupted the diagnostics;
+  connectivity was later restored.
+
+## Release blockers
+
+This candidate does not yet integrate the real signed updater and
+rollback, exact version-paired OCI/source receipt, full latest WAL
+and PHOTO history restoration, nor a completed joined crash/reboot
+test. The source-only unit must NOT be enabled together with the
+currently active production unit. No source/image cutover, GitHub
+push or Telegram action is approved. Keep LXC110 unchanged while
+electricity is OFF and the meter is unavailable.
