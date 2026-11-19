@@ -145,6 +145,11 @@ class SourceReleaseCIGateTests(unittest.TestCase):
         self.assertIn(
             "timeout 90 python3 scripts/verify-published-image.py", step
         )
+        self.assertIn("OCI release tag changed after signature check", step)
+        self.assertIn(
+            "OCI release tag unavailable after signature check", step
+        )
+        self.assertIn('[[ "$final_digest" != "$verified" ]]', step)
         self.assertIn("source release blocked", step)
         self.assertNotIn("continue-on-error:", step)
         self.assertNotIn("--insecure-ignore-tlog", step)

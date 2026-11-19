@@ -166,6 +166,14 @@ jobs:
             sleep 10
           done
           [[ "$verified" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 8
+          if ! final_digest="$(timeout 45 python3 scripts/qa-public-oci-tag-index.py --tag "$SOURCE_TAG" 2>/dev/null)"; then
+            echo "ERROR: OCI release tag unavailable after signature check" >&2
+            exit 9
+          fi
+          if [[ "$final_digest" != "$verified" ]]; then
+            echo "ERROR: OCI release tag changed after signature check" >&2
+            exit 9
+          fi
           echo "SIGNED SOURCE AND PUBLIC OCI PAIR READY: $verified"
 
       - name: Create GitHub Release

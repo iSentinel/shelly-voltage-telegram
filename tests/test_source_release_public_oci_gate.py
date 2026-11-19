@@ -18,8 +18,18 @@ SCRIPT = "\n".join(line[10:] for line in BODY.splitlines()) + "\n"
 MOCKS = """python3() {
   case "$1" in
     scripts/qa-public-oci-tag-index.py)
+      echo tag >> "$MOCK_TAG_LOG"
+      tag_count="$(wc -l < "$MOCK_TAG_LOG")"
       if [ "$MOCK_TAG_EXIT" -ne 0 ]; then return "$MOCK_TAG_EXIT"; fi
-      echo "$MOCK_DIGEST"; return 0 ;;
+      if [ "$tag_count" -ge 2 ] && [ "$MOCK_FINAL_TAG_EXIT" -ne 0 ]; then
+        return "$MOCK_FINAL_TAG_EXIT"
+      fi
+      if [ "$tag_count" -ge 2 ] && [ -n "$MOCK_FINAL_DIGEST" ]; then
+        echo "$MOCK_FINAL_DIGEST"
+      else
+        echo "$MOCK_DIGEST"
+      fi
+      return 0 ;;
     scripts/verify-published-image.py)
       echo metadata >> "$MOCK_LOG"
       return "$MOCK_METADATA_EXIT" ;;
@@ -66,6 +76,8 @@ class SourcePublicOciGateTests(unittest.TestCase):
         ref: str = "refs/tags/v0.5.26-hw",
         commit: str = "a" * 40,
         timeout_cmd: str = "",
+        final_digest: str = "",
+        final_tag_exit: int = 0,
     ) -> subprocess.CompletedProcess:
         """Run actual workflow shell with all registry commands intercepted."""
         env = dict(
@@ -80,6 +92,9 @@ class SourcePublicOciGateTests(unittest.TestCase):
             MOCK_METADATA_EXIT=str(metadata_exit),
             MOCK_TAG_EXIT=str(tag_exit),
             MOCK_TIMEOUT_CMD=timeout_cmd,
+            MOCK_TAG_LOG=str(self.root / "tags"),
+            MOCK_FINAL_DIGEST=final_digest,
+            MOCK_FINAL_TAG_EXIT=str(final_tag_exit),
         )
         return subprocess.run(
             ["bash"],
@@ -111,6 +126,31 @@ class SourcePublicOciGateTests(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(), ["signature", "metadata"]
         )
+
+    def test_release_tag_stays_pinned_at_publication(self) -> None:
+        """Recheck the GHCR tag after proving signed index metadata."""
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            (self.root / "tags").read_text().splitlines(), ["tag", "tag"]
+        )
+
+    def test_mutated_tag_blocks_after_all_proofs_pass(self) -> None:
+        """A replaced OCI index cannot be accepted after verification."""
+        result = self.run_gate(final_digest="sha256:" + "c" * 64)
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn("tag changed after signature check", result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines(), ["signature", "metadata"]
+        )
+        self.assertNotIn("PAIR READY", result.stdout)
+
+    def test_disappearing_tag_blocks_after_signature_pass(self) -> None:
+        """A deleted OCI release ref must stop publication immediately."""
+        result = self.run_gate(final_tag_exit=3)
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn("tag unavailable after signature check", result.stderr)
+        self.assertNotIn("PAIR READY", result.stdout)
 
     def test_missing_public_signature_never_publishes(self) -> None:
         """After 12 refusals the release must remain blocked."""
