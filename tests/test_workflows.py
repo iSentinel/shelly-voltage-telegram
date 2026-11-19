@@ -119,6 +119,7 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn('DOCKER_CONFIG="$anonymous_config" cosign verify', image)
         self.assertIn("PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS", image)
+        self.assertIn("ERROR: public OCI signature not verifiable", image)
 
     def test_release_requires_public_version_promotion(self):
         """Final publication must explicitly promote RELEASE_VERSION."""

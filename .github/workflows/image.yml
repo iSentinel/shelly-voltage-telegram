@@ -167,11 +167,21 @@ jobs:
           anonymous_config="$(mktemp -d)"
           trap 'rm -rf -- "$anonymous_config"' EXIT
           cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
-          DOCKER_CONFIG="$anonymous_config" cosign verify \
-            --certificate-identity "$identity" \
-            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-            --certificate-github-workflow-sha "$IMAGE_COMMIT" \
-            --certificate-github-workflow-ref "$GITHUB_REF" \
-            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
-            "${image_name}@${IMAGE_DIGEST}"
+          for attempt in 1 2 3; do
+            if DOCKER_CONFIG="$anonymous_config" cosign verify \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --certificate-github-workflow-sha "$IMAGE_COMMIT" \
+              --certificate-github-workflow-ref "$GITHUB_REF" \
+              --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+              "${image_name}@${IMAGE_DIGEST}" >"$anonymous_config/verify.out" 2>"$anonymous_config/verify.err"; then
+              break
+            fi
+            if (( attempt == 3 )); then
+              echo "ERROR: public OCI signature not verifiable" >&2
+              sed -n "1,10p" "$anonymous_config/verify.err" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
           echo "PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS"
