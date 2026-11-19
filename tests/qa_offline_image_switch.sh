@@ -3,7 +3,7 @@
 set -euo pipefail
 
 if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
-    echo "Usage: bash tests/qa_offline_image_switch.sh [--qa-crash-recovery]"
+    echo "Usage: qa_offline_image_switch.sh [--qa-crash-recovery|--qa-reboot-prepare|--qa-reboot-forward|--qa-reboot-reverse|--qa-reboot-cleanup]"
     echo "Run as root in disconnected LXC114 only; unsigned local images."
     exit 0
 fi
@@ -13,6 +13,10 @@ if [[ $# -eq 1 ]]; then
         --qa-crash-recovery) MODE=crash ;;
         --qa-actor-forward) MODE=actor-forward ;;
         --qa-actor-reverse) MODE=actor-reverse ;;
+        --qa-reboot-prepare) MODE=reboot-prepare ;;
+        --qa-reboot-forward) MODE=reboot-forward ;;
+        --qa-reboot-reverse) MODE=reboot-reverse ;;
+        --qa-reboot-cleanup) MODE=reboot-cleanup ;;
         *) echo "FAIL: QA_ARGUMENT_INVALID" >&2; exit 2 ;;
     esac
 fi
@@ -287,6 +291,101 @@ direct_start_must_fail_while_pending() {
     verify_history "$snapshot" stable
     echo "DIRECT_DOCKER_START_DENIED_BY_SQLITE_PENDING_FENCE"
 }
+
+require_reboot_fixture() {
+    [[ -f "$DB" && -d "$RESCUE" && -d "$FENCE" ]]
+    [[ -f "$RESCUE/image-ids" ]]
+    local old_id new_id
+    read -r old_id new_id <"$RESCUE/image-ids"
+    [[ "$old_id" != "$new_id" ]]
+    [[ "$(docker image inspect "$OLD_IMAGE" --format '{{.Id}}')" == "$old_id" ]]
+    [[ "$(docker image inspect "$NEW_IMAGE" --format '{{.Id}}')" == "$new_id" ]]
+    [[ "$(docker inspect "$OLD_NAME" --format '{{.Image}}')" == "$old_id" ]]
+    [[ "$(docker inspect "$NEW_NAME" --format '{{.Image}}')" == "$new_id" ]]
+    [[ "$(docker inspect "$OLD_NAME" --format '{{.HostConfig.RestartPolicy.Name}}')" == no ]]
+    [[ "$(docker inspect "$NEW_NAME" --format '{{.HostConfig.RestartPolicy.Name}}')" == no ]]
+}
+
+require_new_boot_id() {
+    local slot="$1"
+    [[ -s "$RESCUE/$slot" ]]
+    [[ "$(cat /proc/sys/kernel/random/boot_id)" != "$(cat "$RESCUE/$slot")" ]] || {
+        echo "FAIL: QA_GUEST_BOOT_ID_DID_NOT_CHANGE" >&2
+        return 3
+    }
+    [[ -z "$(docker ps --filter name=svt-qa-local-switch- --format '{{.Names}}')" ]]
+}
+
+prepare_persistent_reboot() {
+    guard_clean
+    python3 "$ROOT/scripts/prepare-writer-fence.py"       --directory "$FENCE" --uid 10001
+    mkdir -m 0700 "$DATA" "$RESCUE"
+    chown 10001:10001 "$DATA"
+    build_images
+    seed
+    local code old_id new_id
+    code="$(writer_code)"
+    create_writer "$OLD_NAME" "$OLD_IMAGE" "$code"
+    create_writer "$NEW_NAME" "$NEW_IMAGE" "$code"
+    old_id="$(docker image inspect "$OLD_IMAGE" --format '{{.Id}}')"
+    new_id="$(docker image inspect "$NEW_IMAGE" --format '{{.Id}}')"
+    printf "%s %s\n" "$old_id" "$new_id" >"$RESCUE/image-ids"
+    supervise_once "$OLD_NAME"
+    sleep .8
+    publish_marker "$TOKEN_NEXT"
+    docker stop -t 5 "$OLD_NAME" >/dev/null
+    rescue "$RESCUE/old-latest.sqlite3"
+    verify_history "$RESCUE/old-latest.sqlite3" stable
+    cat /proc/sys/kernel/random/boot_id >"$RESCUE/boot-before-forward"
+    echo "QA_REBOOT_FORWARD_PREPARED_PENDING"
+}
+
+resume_persistent_forward() {
+    require_reboot_fixture
+    require_new_boot_id boot-before-forward
+    [[ "$(cat "$FENCE/.svt-update-pending")" == "$TOKEN_NEXT" ]]
+    verify_history "$RESCUE/old-latest.sqlite3" stable
+    supervise_once "$NEW_NAME" | grep -qx SKIP_PENDING
+    direct_start_must_fail_while_pending "$NEW_NAME" "$RESCUE/old-latest.sqlite3"
+    clear_marker "$TOKEN_NEXT"
+    supervise_once "$NEW_NAME"
+    verify_history "$RESCUE/old-latest.sqlite3" grow
+    publish_marker "$TOKEN_BACK"
+    docker stop -t 5 "$NEW_NAME" >/dev/null
+    rescue "$RESCUE/new-latest.sqlite3"
+    verify_history "$RESCUE/new-latest.sqlite3" stable
+    cat /proc/sys/kernel/random/boot_id >"$RESCUE/boot-before-reverse"
+    echo "QA_REBOOT_FORWARD_IMAGE_SWITCH_AND_REVERSE_PREPARED_PASS"
+}
+
+resume_persistent_reverse() {
+    require_reboot_fixture
+    require_new_boot_id boot-before-reverse
+    [[ "$(cat "$FENCE/.svt-update-pending")" == "$TOKEN_BACK" ]]
+    verify_history "$RESCUE/new-latest.sqlite3" stable
+    supervise_once "$OLD_NAME" | grep -qx SKIP_PENDING
+    direct_start_must_fail_while_pending "$OLD_NAME" "$RESCUE/new-latest.sqlite3"
+    clear_marker "$TOKEN_BACK"
+    supervise_once "$OLD_NAME"
+    verify_history "$RESCUE/new-latest.sqlite3" grow
+    echo "QA_REBOOT_REVERSE_IMAGE_SWITCH_AND_TELEGRAM_PASS"
+    cleanup
+}
+
+if [[ "$MODE" == reboot-prepare ]]; then
+    prepare_persistent_reboot
+    exit 0
+elif [[ "$MODE" == reboot-forward ]]; then
+    resume_persistent_forward
+    exit 0
+elif [[ "$MODE" == reboot-reverse ]]; then
+    resume_persistent_reverse
+    exit 0
+elif [[ "$MODE" == reboot-cleanup ]]; then
+    cleanup
+    echo "QA_PERSISTENT_REBOOT_FIXTURE_CLEANED"
+    exit 0
+fi
 
 if [[ "$MODE" == actor-forward ]]; then
     fault_actor forward

@@ -35,7 +35,7 @@ class QaLocalImageSwitchPolicyTests(unittest.TestCase):
         """Block writer activation before forward and reverse clearance."""
         self.assertIn("TOKEN_NEXT=qa-local-switch-forward-", CONTENT)
         self.assertIn("TOKEN_BACK=qa-local-switch-back-", CONTENT)
-        self.assertEqual(CONTENT.count("SKIP_PENDING"), 2)
+        self.assertGreaterEqual(CONTENT.count("SKIP_PENDING"), 2)
         self.assertIn("FORWARD_IMAGE_START_REFUSED_WHILE_PENDING", CONTENT)
         self.assertIn("REVERSE_IMAGE_START_REFUSED_WHILE_PENDING", CONTENT)
         self.assertIn('clear_marker "$TOKEN_NEXT"', CONTENT)
@@ -75,6 +75,25 @@ class QaLocalImageSwitchPolicyTests(unittest.TestCase):
                 self.assertIn(marker, CONTENT)
         self.assertNotIn("pct reboot", CONTENT)
         self.assertNotIn("systemctl restart", CONTENT)
+
+    def test_real_guest_reboot_modes_enforce_boot_and_image_identity(
+        self,
+    ) -> None:
+        """Both reboot boundaries must preserve exact old/new image IDs."""
+        for token in (
+            "--qa-reboot-prepare",
+            "--qa-reboot-forward",
+            "--qa-reboot-reverse",
+            "--qa-reboot-cleanup",
+            "boot-before-forward",
+            "boot-before-reverse",
+            "QA_GUEST_BOOT_ID_DID_NOT_CHANGE",
+            '[[ "$old_id" != "$new_id" ]]',
+            "QA_REBOOT_FORWARD_IMAGE_SWITCH_AND_REVERSE_PREPARED_PASS",
+            "QA_REBOOT_REVERSE_IMAGE_SWITCH_AND_TELEGRAM_PASS",
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, CONTENT)
 
     def test_full_history_and_telegram_metadata_checked(self) -> None:
         """No synthetic source switch may erase pending Telegram intents."""
