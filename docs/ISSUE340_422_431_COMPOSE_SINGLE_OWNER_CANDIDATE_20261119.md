@@ -71,3 +71,34 @@ Checks: 27 targeted source-only unit tests PASS; 168 joined selected
 tests PASS on isolated LXC114 Docker; Ruff 0.14.2 and maintainability
 PASS. The separate real Compose-created Pro3EM worker failure remains
 unresolved and cannot be counted as a passing boot acceptance.
+
+## Signed receipt/source version pairing, 2026-11-19
+
+The source-only supervisor now requires a root-controlled
+RELEASE_VERSION marker under protected parent directories and a
+matching version field in the root-private deployed.json receipt.
+The receipt version must conform to the supported immutable release
+format, and its OCI sha256 digest must match the image configured
+on the already-created, stopped Docker container.
+
+This is only a *local identity consistency* check: it does not
+verify the Cosign signature itself, attest an entire source tree,
+nor authorize a deployment, update or rollback.
+
+Real isolated root-owned file QA on LXC114:
+- Exact 0600 source marker / 0600 private receipt / pinned image
+  matched successfully, followed by a successful repeat after
+  restoring original files.
+- Wrong source version, substituted image digest, group/world
+  writable source marker, exposed receipt and symlinked marker
+  were all rejected before Docker start.
+- New supervisor policy unit tests 11/11 PASS.
+- 172 selected combined offline QA regression tests PASS in
+  networkless nonroot Docker, Ruff0.14.2 and maintainability PASS.
+- Real production source marker and receipt versions were examined
+  read-only, both at 0.5.25-hw with 0600 root-owned permissions.
+- Production remained offline, old image and systemd unchanged.
+
+The next acceptance gate remains real joined Compose-created
+three-phase writer startup, then signed old/new OCI/source promotion
+and crash-safe newest WAL/PHOTO recovery under one update fence.

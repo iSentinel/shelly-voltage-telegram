@@ -23,6 +23,7 @@ from writer_fence import (  # noqa: E402
 
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw\Z")
 STOP = False
 
 
@@ -37,6 +38,7 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument("--database", required=True, type=Path)
     parser.add_argument("--fence-dir", required=True, type=Path)
     parser.add_argument("--receipt", type=Path)
+    parser.add_argument("--source-version", type=Path)
     parser.add_argument("--qa-offline", action="store_true")
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
@@ -67,7 +69,41 @@ def inspect(name: str) -> dict:
     return items[0]
 
 
-def verify_receipt(path: Path | None) -> str:
+def source_version(path: Path | None) -> str:
+    """Read a root-controlled source version without following symlinks."""
+    if path is None or not path.is_absolute():
+        raise BootBlocked("SVT_SOURCE_VERSION_PATH_INVALID")
+    for part in (path, *path.parents):
+        info = part.lstat()
+        if info.st_uid != 0 or info.st_mode & 0o022:
+            raise BootBlocked("SVT_SOURCE_VERSION_PATH_UNSAFE")
+        if part == path:
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise BootBlocked("SVT_SOURCE_VERSION_PATH_UNSAFE")
+            if not 0 < info.st_size <= 128:
+                raise BootBlocked("SVT_SOURCE_VERSION_INVALID")
+        elif not stat.S_ISDIR(info.st_mode):
+            raise BootBlocked("SVT_SOURCE_VERSION_PATH_UNSAFE")
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as source:
+        version = source.read(129).decode("ascii").strip()
+    if not VERSION.fullmatch(version):
+        raise BootBlocked("SVT_SOURCE_VERSION_INVALID")
+    return version
+
+
+def require_version_pair(record: dict, version: str) -> None:
+    """Require the receipt version to match the installed source."""
+    receipt_version = record.get("version")
+    if not isinstance(receipt_version, str) or not VERSION.fullmatch(
+        receipt_version
+    ):
+        raise BootBlocked("SVT_RECEIPT_VERSION_INVALID")
+    if receipt_version != version:
+        raise BootBlocked("SVT_SOURCE_SIGNED_VERSION_MISMATCH")
+
+
+def verify_receipt(path: Path | None, source: Path | None) -> str:
     """Require a private, single-linked signed release identity file."""
     if path is None:
         raise BootBlocked("SVT_SIGNED_RECEIPT_MISSING")
@@ -82,6 +118,7 @@ def verify_receipt(path: Path | None) -> str:
     record = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(record, dict):
         raise BootBlocked("SVT_SIGNED_RECEIPT_INVALID")
+    require_version_pair(record, source_version(source))
     digest = record.get("digest", "")
     if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
         raise BootBlocked("SVT_SIGNED_RECEIPT_INVALID")
@@ -110,7 +147,9 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")
         if info["HostConfig"].get("NetworkMode") != "none":
             raise BootBlocked("SVT_QA_NETWORK_UNSAFE")
-    elif info.get("Config", {}).get("Image") != verify_receipt(args.receipt):
+    elif info.get("Config", {}).get("Image") != verify_receipt(
+        args.receipt, args.source_version
+    ):
         raise BootBlocked("SVT_SIGNED_IMAGE_RECEIPT_MISMATCH")
 
 

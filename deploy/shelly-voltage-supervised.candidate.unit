@@ -13,7 +13,7 @@ WorkingDirectory=/opt/shelly-voltage
 Environment=SVT_SUPERVISOR_OVERLAY=/opt/shelly-voltage/deploy/compose.supervised-candidate.yml
 ExecStartPre=/usr/bin/python3 /opt/shelly-voltage/scripts/prepare-writer-fence.py --directory /var/lib/shelly-voltage-fence --uid 10001
 ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh --create-only
-ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/supervised-container.py --container shelly-voltage-bot --database /var/lib/shelly-voltage/voltage.sqlite3 --fence-dir /var/lib/shelly-voltage-fence --receipt /var/lib/shelly-voltage-updater/deployed.json
+ExecStart=/usr/bin/python3 /opt/shelly-voltage/scripts/supervised-container.py --container shelly-voltage-bot --database /var/lib/shelly-voltage/voltage.sqlite3 --fence-dir /var/lib/shelly-voltage-fence --receipt /var/lib/shelly-voltage-updater/deployed.json --source-version /opt/shelly-voltage/RELEASE_VERSION
 ExecStop=/usr/bin/docker stop -t 20 shelly-voltage-bot
 Restart=on-failure
 RestartSec=3

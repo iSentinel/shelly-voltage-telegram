@@ -33,6 +33,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             database=self.db,
             fence_dir=self.root / "secure",
             receipt=None,
+            source_version=None,
             qa_offline=True,
             once=True,
         )
@@ -89,6 +90,46 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         self.args.container = "shelly-voltage-bot"
         with self.assertRaisesRegex(SUPERVISOR.BootBlocked, "QA_CONTAINER"):
             SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_version_pair_requires_exact_match(self) -> None:
+        """A valid digest cannot authorize a different source release."""
+        record = {"version": "0.5.25-hw", "digest": "sha256:" + "a" * 64}
+        SUPERVISOR.require_version_pair(record, "0.5.25-hw")
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "SOURCE_SIGNED_VERSION_MISMATCH"
+        ):
+            SUPERVISOR.require_version_pair(record, "0.5.24-hw")
+
+    def test_version_pair_refuses_unknown_and_mutable_versions(self) -> None:
+        """No missing, mutable or malformed source/receipt versions."""
+        for version in (None, "latest", "0.5.25", "0.5.25-hw+dirty"):
+            with (
+                self.subTest(version=version),
+                self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "RECEIPT_VERSION_INVALID"
+                ),
+            ):
+                SUPERVISOR.require_version_pair(
+                    {"version": version}, "0.5.25-hw"
+                )
+
+    def test_missing_source_version_file_fails_closed(self) -> None:
+        """The runtime cannot invent a version for a missing source file."""
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "SOURCE_VERSION_PATH_INVALID"
+        ):
+            SUPERVISOR.source_version(None)
+
+    def test_linked_source_version_refused(self) -> None:
+        """A symbolic source marker cannot be used as a signed identity."""
+        target = self.root / "release-version.txt"
+        target.write_text("0.5.25-hw\n")
+        linked = self.root / "RELEASE_VERSION"
+        linked.symlink_to(target)
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "SOURCE_VERSION_PATH_UNSAFE"
+        ):
+            SUPERVISOR.source_version(linked)
 
     def test_signed_image_receipt_must_match(self) -> None:
         """Production candidate cannot start a substituted image."""
