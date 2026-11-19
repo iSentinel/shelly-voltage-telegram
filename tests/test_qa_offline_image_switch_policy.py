@@ -41,6 +41,24 @@ class QaLocalImageSwitchPolicyTests(unittest.TestCase):
         self.assertIn('clear_marker "$TOKEN_NEXT"', CONTENT)
         self.assertIn('clear_marker "$TOKEN_BACK"', CONTENT)
 
+    def test_crash_recovery_mode_is_explicitly_disposable(self) -> None:
+        """Kill only a child coordinator, never a Docker or host process."""
+        for marker in (
+            "--qa-crash-recovery",
+            "--qa-actor-forward",
+            "--qa-actor-reverse",
+            'kill -KILL "$BASHPID"',
+            "QA_COORDINATOR_SIGKILL_",
+            "QA_COORDINATOR_PREPARED_",
+            '[[ "$rc" -ne 137 ]]',
+            "FORWARD_WRONG_TOKEN_CLEAR_DENIED",
+            "REVERSE_WRONG_TOKEN_CLEAR_DENIED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, CONTENT)
+        self.assertNotIn("pct reboot", CONTENT)
+        self.assertNotIn("systemctl restart", CONTENT)
+
     def test_full_history_and_telegram_metadata_checked(self) -> None:
         """No synthetic source switch may erase pending Telegram intents."""
         for value in (

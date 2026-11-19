@@ -3,11 +3,20 @@
 set -euo pipefail
 
 if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
-    echo "Usage: bash tests/qa_offline_image_switch.sh"
+    echo "Usage: bash tests/qa_offline_image_switch.sh [--qa-crash-recovery]"
     echo "Run as root in disconnected LXC114 only; unsigned local images."
     exit 0
 fi
-[[ $# -eq 0 && "$EUID" -eq 0 &&
+MODE=normal
+if [[ $# -eq 1 ]]; then
+    case "$1" in
+        --qa-crash-recovery) MODE=crash ;;
+        --qa-actor-forward) MODE=actor-forward ;;
+        --qa-actor-reverse) MODE=actor-reverse ;;
+        *) echo "FAIL: QA_ARGUMENT_INVALID" >&2; exit 2 ;;
+    esac
+fi
+[[ $# -le 1 && "$EUID" -eq 0 &&
    "$(hostname)" == shelly-docker-reboot-qa ]] || {
     echo "FAIL: DISCONNECTED_ROOT_QA_ONLY" >&2
     exit 3
@@ -215,6 +224,55 @@ while True:
 PYVERIFY
 }
 
+publish_marker() {
+    local token="$1"
+    SVT_WRITER_FENCE_DIR="$FENCE" python3 "$ROOT/scripts/writer-fence-marker.py"       publish --database "$DB" --token "$token"
+}
+
+fault_actor() {
+    local stage="$1"
+    [[ -f "$DB" && -d "$FENCE" && -d "$RESCUE" ]] || {
+        echo "FAIL: QA_ACTOR_FIXTURE_MISSING" >&2
+        return 3
+    }
+    if [[ "$stage" == forward ]]; then
+        [[ "$(docker inspect "$OLD_NAME" --format '{{.State.Running}}')" == true ]]
+        [[ ! -e "$RESCUE/old-latest.sqlite3" ]]
+        publish_marker "$TOKEN_NEXT"
+        docker stop -t 5 "$OLD_NAME" >/dev/null
+        rescue "$RESCUE/old-latest.sqlite3"
+    else
+        [[ "$(docker inspect "$NEW_NAME" --format '{{.State.Running}}')" == true ]]
+        [[ ! -e "$RESCUE/new-latest.sqlite3" ]]
+        publish_marker "$TOKEN_BACK"
+        docker stop -t 5 "$NEW_NAME" >/dev/null
+        rescue "$RESCUE/new-latest.sqlite3"
+    fi
+    echo "QA_COORDINATOR_PREPARED_$stage" >&2
+    kill -KILL "$BASHPID"
+}
+
+expect_coordinator_killed() {
+    local stage="$1" rc
+    set +e
+    bash "$ROOT/tests/qa_offline_image_switch.sh" "--qa-actor-$stage"       >"$RESCUE/fault-$stage.log" 2>&1
+    rc=$?
+    set -e
+    if [[ "$rc" -ne 137 ]]; then
+        echo "FAIL: QA_COORDINATOR_EXIT_$stage rc=$rc" >&2
+        cat "$RESCUE/fault-$stage.log" >&2
+        return 3
+    fi
+    grep -q "QA_COORDINATOR_PREPARED_$stage" "$RESCUE/fault-$stage.log"
+    echo "QA_COORDINATOR_SIGKILL_$stage:PENDING_RETAINED"
+}
+
+if [[ "$MODE" == actor-forward ]]; then
+    fault_actor forward
+elif [[ "$MODE" == actor-reverse ]]; then
+    fault_actor reverse
+fi
+
 guard_clean
 trap cleanup EXIT
 python3 "$ROOT/scripts/prepare-writer-fence.py" \
@@ -228,12 +286,25 @@ create_writer "$OLD_NAME" "$OLD_IMAGE" "$code"
 create_writer "$NEW_NAME" "$NEW_IMAGE" "$code"
 supervise_once "$OLD_NAME"
 sleep .8
-SVT_WRITER_FENCE_DIR="$FENCE" python3 \
- "$ROOT/scripts/writer-fence-marker.py" publish \
- --database "$DB" --token "$TOKEN_NEXT"
-docker stop -t 5 "$OLD_NAME" >/dev/null
-rescue "$RESCUE/old-latest.sqlite3"
+if [[ "$MODE" == crash ]]; then
+    expect_coordinator_killed forward
+    [[ -f "$FENCE/.svt-update-pending" ]]
+    [[ -s "$RESCUE/old-latest.sqlite3" ]]
+else
+    publish_marker "$TOKEN_NEXT"
+    docker stop -t 5 "$OLD_NAME" >/dev/null
+    rescue "$RESCUE/old-latest.sqlite3"
+fi
 verify_history "$RESCUE/old-latest.sqlite3" stable
+if [[ "$MODE" == crash ]]; then
+    set +e
+    clear_marker qa-unauthorized-forward >/dev/null 2>&1
+    wrong_token_rc=$?
+    set -e
+    [[ "$wrong_token_rc" -eq 3 ]]
+    [[ -f "$FENCE/.svt-update-pending" ]]
+    echo "FORWARD_WRONG_TOKEN_CLEAR_DENIED"
+fi
 [[ "$(docker inspect "$OLD_NAME" --format '{{.State.Running}}')" == false ]]
 supervise_once "$NEW_NAME" | grep -qx SKIP_PENDING
 [[ "$(docker inspect "$NEW_NAME" --format '{{.State.Running}}')" == false ]]
@@ -242,12 +313,25 @@ clear_marker "$TOKEN_NEXT"
 supervise_once "$NEW_NAME"
 verify_history "$RESCUE/old-latest.sqlite3" grow
 echo "ACTUAL_LOCAL_IMAGE_ID_CHANGED_AND_HISTORY_PRESERVED"
-SVT_WRITER_FENCE_DIR="$FENCE" python3 \
- "$ROOT/scripts/writer-fence-marker.py" publish \
- --database "$DB" --token "$TOKEN_BACK"
-docker stop -t 5 "$NEW_NAME" >/dev/null
-rescue "$RESCUE/new-latest.sqlite3"
+if [[ "$MODE" == crash ]]; then
+    expect_coordinator_killed reverse
+    [[ -f "$FENCE/.svt-update-pending" ]]
+    [[ -s "$RESCUE/new-latest.sqlite3" ]]
+else
+    publish_marker "$TOKEN_BACK"
+    docker stop -t 5 "$NEW_NAME" >/dev/null
+    rescue "$RESCUE/new-latest.sqlite3"
+fi
 verify_history "$RESCUE/new-latest.sqlite3" stable
+if [[ "$MODE" == crash ]]; then
+    set +e
+    clear_marker qa-unauthorized-reverse >/dev/null 2>&1
+    wrong_token_rc=$?
+    set -e
+    [[ "$wrong_token_rc" -eq 3 ]]
+    [[ -f "$FENCE/.svt-update-pending" ]]
+    echo "REVERSE_WRONG_TOKEN_CLEAR_DENIED"
+fi
 supervise_once "$OLD_NAME" | grep -qx SKIP_PENDING
 echo "REVERSE_IMAGE_START_REFUSED_WHILE_PENDING"
 clear_marker "$TOKEN_BACK"
