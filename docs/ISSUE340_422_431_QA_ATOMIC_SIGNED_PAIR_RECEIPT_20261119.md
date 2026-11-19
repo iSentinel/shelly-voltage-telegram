@@ -85,3 +85,21 @@ candidate .unit based on synthetic fixture results.
 
 The first two commands cannot install an image or write production.
 The --qa-stage flag is restricted to the isolated LXC114 guest.
+
+## 2026-11-19: actual disposable process SIGKILL acceptance
+
+The QA stager now includes a real subprocess crash test, not only a
+simulated Python exception. It starts a separate Python interpreter,
+stages source TAR/bundle/checksums, and pauses at the exact independent
+signature-verification entry checkpoint. The QA test sends SIGKILL
+only to that disposable subprocess, confirms exit -SIGKILL, and proves:
+
+- Private source archive copy survived the process death.
+- Final deployed.json receipt was NOT created.
+- The existing incomplete directory blocks re-entry and overwrite.
+- No Docker, Telegram, production SQLite or systemd owner was touched.
+
+Run python3 -m unittest -q test_qa_signed_pair_stager.
+The targeted suite now has 9/9 PASS; Ruff0.14.2 and quality gate PASS.
+The success path still mocks cryptographic proof; no real new signed
+source+OCI release has been published or authenticated by this test.

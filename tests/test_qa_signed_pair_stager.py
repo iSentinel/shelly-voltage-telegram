@@ -6,8 +6,12 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import signal
 import stat
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -23,6 +27,26 @@ SPEC.loader.exec_module(STAGE)
 VERSION = "0.5.26-hw"
 COMMIT = "a" * 40
 DIGEST = "sha256:" + "b" * 64
+
+
+CHILD_SOURCE = """
+import argparse, importlib.util, sys, time
+from pathlib import Path
+script, folder, out, marker = map(Path, sys.argv[1:])
+spec = importlib.util.spec_from_file_location("isolated_qa_stager", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+name = "shelly-voltage-telegram-0.5.26-hw.tar.gz"
+args = argparse.Namespace(
+    version="0.5.26-hw", commit="a" * 40, digest="sha256:" + "b" * 64,
+    archive=folder / name, bundle=folder / (name + ".sigstore.json"),
+    sha256sums=folder / "SHA256SUMS")
+def paused_verifier(_):
+    marker.write_text("copied")
+    time.sleep(60)
+module.PAIR.verify = paused_verifier
+module.stage_release(args, out)
+"""
 
 
 class QaPairReceiptStagerTests(unittest.TestCase):
@@ -167,6 +191,41 @@ class QaPairReceiptStagerTests(unittest.TestCase):
         with self.assertRaisesRegex(STAGE.StageBlocked, "STAGE_INPUT_UNSAFE"):
             STAGE.stage_release(self.args, self.output)
         self.assertFalse((self.output / "deployed.json").exists())
+
+    def test_sigkill_before_final_receipt_keeps_stage_unapproved(self) -> None:
+        """An updater crash after copying assets cannot publish approval."""
+        marker = self.root / "verifier-entered"
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                CHILD_SOURCE,
+                str(SCRIPT),
+                str(self.args.archive.parent),
+                str(self.output),
+                str(marker),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while not marker.exists() and time.monotonic() < deadline:
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+            self.assertTrue(marker.exists(), "QA verifier was never entered")
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.wait(timeout=5)
+        self.assertEqual(proc.returncode, -signal.SIGKILL)
+        self.assertTrue((self.output / self.args.archive.name).exists())
+        self.assertFalse((self.output / "deployed.json").exists())
+        with self.assertRaisesRegex(
+            STAGE.StageBlocked, "STAGE_EXISTING_OUTPUT_REFUSED"
+        ):
+            STAGE.stage_release(self.args, self.output)
 
     def test_qa_only_host_guard(self) -> None:
         """Never stage on the Proxmox host or in a production guest."""
