@@ -90,3 +90,47 @@ Run the complete self-cleaning QA acceptance inside LXC114 only:
 
     bash tests/qa_paired_rescue_runtime.sh --help
     bash tests/qa_paired_rescue_runtime.sh
+
+## Actual LXC114 guest reboot with joined pending/OCI/source/WAL fixture
+
+Date: 2026-11-19. The reusable isolated
+tests/qa_paired_rescue_reboot.sh supports --help and
+prepare|verify|cleanup; all actions require the exact disposable
+LXC114 hostname and root. The fixture has no network, real
+Shelly access, Telegram credentials or production volumes.
+
+- prepare created a complete synthetic three-phase SQLite with
+  saved pro3em/PHOTO identity and a networkless UID10001 writer.
+  The guarded QA stage published root-owned pending, stopped the
+  writer, captured its newest WAL, and validated a private old/new
+  OCI/source identity-only fixture. Docker was restart:no.
+- Proxmox pct reboot 114 restarted only the QA guest. Guest boot ID
+  changed from 4376912b-7551-4d9e-ad56-dacad51796c3 to
+  48bb2a6f-7161-4f01-af7b-bc78559d6bc3.
+- After guest reboot, root pending remained durable, Docker stayed
+  stopped with restart:no, source/OCI identity-only QA preflight
+  still passed and all 6 committed L1/L2/L3 measurements and
+  PHOTO identity survived without any added rows.
+- Exact token clear followed by sole-supervisor startup PASS.
+  SQLite history grew from 6 to 9 (a complete three-phase cycle)
+  with quick_check OK and saved PHOTO preserved.
+- The test cleaned the QA container, root pending, private pair
+  fixture, temporary backup and source DB. Docker daemon remained
+  active; LXC110 was not rebooted.
+- Post-reboot quality gate PASS (Ruff0.14.2), 34 focused update
+  and rollback compatibility tests PASS. Source-only QA release
+  archive SHA256SUMS verified and the preflight and both reusable
+  QA runtime scripts were included. Nothing was published/signed.
+
+This is not a production updater SIGKILL test and does not prove
+Cosign cryptographic provenance, exact new OCI/source signature,
+rollback of a live database, or Python3.11/3.12 CI. Those remain
+required prior to a separately approved production cutover.
+
+Example QA setup and acceptance commands (LXC114 only):
+
+    bash tests/qa_paired_rescue_reboot.sh --help
+    bash tests/qa_paired_rescue_reboot.sh prepare
+    # Reboot only disposable LXC114 from the Proxmox QA host.
+    bash tests/qa_paired_rescue_reboot.sh verify
+    bash tests/qa_paired_rescue_reboot.sh cleanup
