@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: qa_paired_rescue_reboot.sh prepare|verify|cleanup|-h|--help"
+    echo "Usage: qa_paired_rescue_reboot.sh prepare|verify|prepare-fault|verify-fault|cleanup|-h|--help"
     echo "Only on LXC114. Never connects to a real meter or Telegram."
 }
 if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
@@ -11,7 +11,8 @@ if [[ $# -eq 1 && ( "$1" == -h || "$1" == --help ) ]]; then
     exit 0
 fi
 [[ $# -eq 1 ]] || { usage >&2; exit 2; }
-[[ "$1" == prepare || "$1" == verify || "$1" == cleanup ]] || {
+[[ "$1" == prepare || "$1" == verify || "$1" == cleanup ||
+   "$1" == prepare-fault || "$1" == verify-fault ]] || {
     usage >&2
     exit 2
 }
@@ -87,6 +88,10 @@ prepare() {
     create_writer
     docker start "$NAME" >/dev/null
     sleep 1
+    if [[ "${1:-}" == fault ]]; then
+        prepare_fault_boundary
+        return
+    fi
     python3 "$ROOT/scripts/stage-guarded-update.py" \
       --qa-only --container "$NAME" --database "$DB" \
       --fence-dir "$FENCE" --output "$RESCUE" --token "$TOKEN"
@@ -96,6 +101,78 @@ prepare() {
     [[ "$(docker inspect "$NAME" --format '{{.State.Running}}')" == false ]]
     [[ -e "$FENCE/.svt-update-pending" ]]
     echo "PENDING_RESCUE_BEFORE_GUEST_REBOOT_PASS"
+}
+
+prepare_fault_boundary() {
+    # Inject a controlled application exception before writing QA receipt.
+    set +e
+    python3 - "$ROOT/scripts/stage-guarded-update.py" \
+      --qa-only --container "$NAME" --database "$DB" \
+      --fence-dir "$FENCE" --output "$RESCUE" \
+      --token "$TOKEN" <<'PYFAULT'
+import importlib.util
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1])
+sys.argv = [str(script), *sys.argv[2:]]
+spec = importlib.util.spec_from_file_location("svt_qa_fault_updater", script)
+assert spec is not None and spec.loader is not None
+updater = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(updater)
+
+
+def reject_receipt(_args):
+    """Test a controlled failure after backup but before the QA receipt."""
+    raise updater.StageBlocked("SVT_QA_INJECTED_RECEIPT_FAILURE")
+
+
+updater.persist_receipt = reject_receipt
+raise SystemExit(updater.main())
+PYFAULT
+    status=$?
+    set -e
+    [[ "$status" -eq 3 ]] || {
+        echo "FAIL: injected receipt failure did not return 3" >&2
+        return 6
+    }
+    [[ -s "$RESCUE" && ! -e "$RESCUE.qa.json" ]]
+    [[ -e "$FENCE/.svt-update-pending" ]]
+    [[ "$(docker inspect "$NAME" --format '{{.State.Running}}')" == false ]]
+    row_count >"$OUTPUT/row-count-before"
+    echo "CONTROLLED_FAILURE_AFTER_RESCUE_FAIL_CLOSED_PASS"
+}
+
+verify_fault_boundary() {
+    [[ -s "$RESCUE" && ! -e "$RESCUE.qa.json" ]]
+    [[ -e "$FENCE/.svt-update-pending" ]]
+    [[ "$(docker inspect "$NAME" --format '{{.State.Running}}')" == false ]]
+    local before after
+    before="$(cat "$OUTPUT/row-count-before")"
+    [[ "$(row_count)" == "$before" ]]
+    python3 "$ROOT/scripts/stage-guarded-update.py" \
+      --qa-only --container "$NAME" --database "$DB" \
+      --fence-dir "$FENCE" --output "$RESCUE" --token "$TOKEN" \
+      --recover-receipt
+    paired_proof >"$OUTPUT/proof-recovered.jsonl"
+    [[ "$(row_count)" == "$before" ]]
+    [[ -e "$FENCE/.svt-update-pending" ]]
+    echo "FAULT_RECEIPT_RECONSTRUCTION_AND_PAIR_PARITY_PASS"
+    SVT_WRITER_FENCE_DIR="$FENCE" python3 \
+      "$ROOT/scripts/writer-fence-marker.py" clear \
+      --database "$DB" --token "$TOKEN"
+    python3 "$ROOT/scripts/supervised-container.py" \
+      --container "$NAME" --database "$DB" \
+      --fence-dir "$FENCE" --qa-offline --once
+    after="$before"
+    for _ in $(seq 1 80); do
+        after="$(row_count)"
+        (( after > before )) && break
+        sleep .2
+    done
+    (( after > before )) || return 5
+    echo "FAULT_RECOVERY_THREE_PHASE_PASS before=$before after=$after"
+    cleanup
 }
 
 seed_history() {
@@ -209,5 +286,7 @@ PY
 case "$1" in
     prepare) prepare ;;
     verify) verify ;;
+    prepare-fault) prepare fault ;;
+    verify-fault) verify_fault_boundary ;;
     cleanup) cleanup ;;
 esac

@@ -134,3 +134,34 @@ Example QA setup and acceptance commands (LXC114 only):
     # Reboot only disposable LXC114 from the Proxmox QA host.
     bash tests/qa_paired_rescue_reboot.sh verify
     bash tests/qa_paired_rescue_reboot.sh cleanup
+
+## Controlled receipt-write failure and recovery (2026-11-19)
+
+The reusable tests/qa_paired_rescue_reboot.sh now also supports
+prepare-fault and verify-fault. The injected error is a normal,
+controlled Python exception immediately after the newest SQLite/WAL
+rescue and before the private QA receipt is written.
+
+Actual LXC114 acceptance:
+- The disposable guarded updater returned code 3 with an explicit
+  injected receipt failure; pending was retained, synthetic Docker
+  writer was stopped, the newest rescue was intact, receipt absent.
+- The recovery path refused to resume the writer first. It
+  reconstructed only the missing private QA receipt after checking
+  complete latest SQLite parity (L1/L2/L3) and PHOTO identity.
+- The combined old/new OCI/source identity-only preflight then passed
+  with the same pending marker; no signed release or rollback
+  permission was granted.
+- Exact pending token clear and sole-supervisor startup succeeded;
+  synthetic SQLite history grew from 6 to 9, an equal three-phase
+  cycle with no loss of previous data.
+- All disposable test resources cleaned, no real network or live
+  database was accessed.
+- Full selected offline regression 195/195 PASS, Ruff0.14.2 and
+  project maintainability PASS.
+
+A separate real updater-process SIGKILL attempt was not executed
+because the connection tool's safety restrictions blocked it.
+This controlled-exception test is not equivalent to abrupt process
+termination, power loss, crash or live signed rollback acceptance.
+Keep the SIGKILL and full integrated release gates open.
