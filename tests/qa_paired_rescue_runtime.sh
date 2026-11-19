@@ -20,6 +20,7 @@ FENCE=/var/lib/svt-qa-fence-20261119
 DATA=/var/tmp/svt-qa-update-stage-20261119
 OUT=/var/lib/svt-qa-stage-output-20261119
 PAIR_ROOT=/var/lib/svt-qa-paired-proof-20261119
+JOINED_ROOT=/var/lib/svt-qa-verified-pair-20261119
 NAME=svt-qa-update-stage-20261119
 TOKEN=qa-offline-stage-20261119
 IMAGE=svt-qa-verified-local:0.5.21-hw
@@ -32,7 +33,7 @@ cleanup() {
       "$ROOT/scripts/writer-fence-marker.py" clear \
       --database "$db" --token "$TOKEN" >/dev/null 2>&1 || true
   fi
-  rm -rf -- "$DATA" "$OUT" "$PAIR_ROOT"
+  rm -rf -- "$DATA" "$OUT" "$PAIR_ROOT" "$JOINED_ROOT"
 }
 trap cleanup EXIT
 test ! -e "$FENCE/.svt-update-pending"
@@ -235,6 +236,82 @@ echo FORGED_RECEIPT_HASH_BLOCKED
 mv -f "$OUT/qa-receipt-good" "$output.qa.json"
 python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --inspect
 echo REAL_RECEIPT_RESTORED_PASS
+test ! -e "$JOINED_ROOT"
+python3 - "$ROOT" "$db" "$FENCE" "$output" "$NAME" "$TOKEN" <<'PYJOIN'
+"""Join real writer pending/WAL/PHOTO to synthetic paired proof only."""
+import argparse
+import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+root, db, fence, rescue, container, token = sys.argv[1:]
+root = Path(root)
+script = root / "scripts/qa-stage-verified-pair-receipt.py"
+spec = importlib.util.spec_from_file_location("qa_joined_pair", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+version = "0.5.26-hw"
+commit = "a" * 40
+digest = "sha256:" + "b" * 64
+staged = module.STAGE_ROOT
+assets = Path(rescue).parent / "qa-joined-assets"
+assets.mkdir(mode=0o700)
+name = f"shelly-voltage-telegram-{version}.tar.gz"
+archive = assets / name
+archive.write_bytes(b"qa-unsigned-synthetic-source-not-for-release")
+bundle = assets / (name + ".sigstore.json")
+bundle.write_text('{"mock_signature":true}\n')
+sums = assets / "SHA256SUMS"
+sums.write_text(f"{hashlib.sha256(archive.read_bytes()).hexdigest()}  {name}\n")
+args = argparse.Namespace(
+    version=version, commit=commit, digest=digest,
+    archive=archive, bundle=bundle, sha256sums=sums, token=token,
+    qa_only=True, container=container, database=Path(db),
+    fence_dir=Path(fence), output=Path(rescue)
+)
+module.require_isolated_root()
+original = args.token
+args.token = "qa-wrong-joined-token"
+try:
+    module.verify_qa_rescue(args)
+except ValueError as err:
+    assert "SVT_QA_PENDING_TOKEN_MISMATCH" in str(err), str(err)
+else:
+    raise AssertionError("wrong pending token admitted")
+assert not staged.exists()
+args.token = original
+module.verify_qa_rescue(args)
+def fake_signed_pair(_copied):
+    return {
+        "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
+        "version": version, "commit": commit,
+        "digest_suffix": digest[-12:],
+        "source_signature_verified": True,
+        "oci_signature_verified": True,
+        "oci_attestations_verified": True,
+        "release_authorized": False,
+        "rollback_authorized": False,
+    }
+module.PAIR.verify = fake_signed_pair
+result = module.stage_release(args, staged)
+assert result["status"] == "PASS_QA_PAIR_RECEIPT_STAGED"
+receipt = json.loads((staged / "deployed.json").read_text())
+assert receipt["transaction_token"] == token
+assert receipt["source_commit"] == commit
+assert receipt["source_sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
+from importlib import util
+owner_script = root / "scripts/supervised-container.py"
+owner_spec = util.spec_from_file_location("qa_joined_owner", owner_script)
+owner = util.module_from_spec(owner_spec)
+owner_spec.loader.exec_module(owner)
+owner.require_pair_proof(receipt, commit)
+owner.verify_paired_source_archive(receipt, staged)
+assert (Path(fence) / ".svt-update-pending").exists()
+print("JOINED_REAL_WAL_PHOTO_PENDING_AND_MOCK_SOURCE_PAIR_PASS")
+print("JOINED_TRANSACTION_TOKEN_MATCHED_PASS")
+PYJOIN
 test ! -e "$PAIR_ROOT"
 python3 "$ROOT/tests/qa_paired_rescue_fixture.py" "$PAIR_ROOT"
 python3 "$ROOT/scripts/qa-paired-rescue-preflight.py" \

@@ -27,6 +27,7 @@ DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+TRANSACTION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,95}\Z")
 STOP = False
 
 
@@ -159,6 +160,11 @@ def require_pair_proof(record: dict, image_revision: object) -> None:
         raise BootBlocked("SVT_PAIRED_COMMIT_INVALID")
     if not isinstance(source_sha, str) or not SHA256.fullmatch(source_sha):
         raise BootBlocked("SVT_PAIRED_SOURCE_SHA256_INVALID")
+    transaction = record.get("transaction_token")
+    if not isinstance(transaction, str) or not TRANSACTION.fullmatch(
+        transaction
+    ):
+        raise BootBlocked("SVT_PAIRED_TRANSACTION_MISSING")
     if image_revision != commit:
         raise BootBlocked("SVT_PAIRED_OCI_REVISION_MISMATCH")
     if record.get("pair_status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY":

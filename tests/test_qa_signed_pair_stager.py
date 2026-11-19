@@ -24,6 +24,7 @@ SPEC = importlib.util.spec_from_file_location("qa_pair_stager", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 STAGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(STAGE)
+REAL_RESCUE_PREFLIGHT = STAGE.verify_qa_rescue
 VERSION = "0.5.26-hw"
 COMMIT = "a" * 40
 DIGEST = "sha256:" + "b" * 64
@@ -40,7 +41,7 @@ name = "shelly-voltage-telegram-0.5.26-hw.tar.gz"
 args = argparse.Namespace(
     version="0.5.26-hw", commit="a" * 40, digest="sha256:" + "b" * 64,
     archive=folder / name, bundle=folder / (name + ".sigstore.json"),
-    sha256sums=folder / "SHA256SUMS")
+    sha256sums=folder / "SHA256SUMS", token="qa-subprocess-token")
 def paused_verifier(_):
     marker.write_text("copied")
     time.sleep(60)
@@ -54,6 +55,9 @@ class QaPairReceiptStagerTests(unittest.TestCase):
 
     def setUp(self) -> None:
         """Make three source fixtures, never using live release files."""
+        preflight = patch.object(STAGE, "verify_qa_rescue")
+        preflight.start()
+        self.addCleanup(preflight.stop)
         temp = tempfile.TemporaryDirectory(prefix="svt-qa-pair-stage-")
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
@@ -75,6 +79,7 @@ class QaPairReceiptStagerTests(unittest.TestCase):
             bundle=bundle,
             sha256sums=sums,
             qa_stage=True,
+            token="qa-test-verified-pair-20261119",
             dry_run=False,
             jsonl=False,
         )
@@ -144,6 +149,47 @@ class QaPairReceiptStagerTests(unittest.TestCase):
             ):
                 STAGE.stage_release(self.args, output)
             self.assertFalse((output / "deployed.json").exists())
+
+    def test_lost_pending_after_signature_cannot_publish_receipt(self) -> None:
+        """A removed marker after proof must block final receipt creation."""
+        with (
+            patch.object(
+                STAGE.PAIR, "verify", return_value=self.evidence()
+            ) as verify,
+            patch.object(
+                STAGE,
+                "verify_qa_rescue",
+                side_effect=STAGE.StageBlocked(
+                    "SVT_QA_PENDING_TOKEN_MISMATCH"
+                ),
+            ) as pending,
+            self.assertRaisesRegex(
+                STAGE.StageBlocked, "SVT_QA_PENDING_TOKEN_MISMATCH"
+            ),
+        ):
+            STAGE.stage_release(self.args, self.output)
+        verify.assert_called_once()
+        pending.assert_called_once()
+        self.assertFalse((self.output / "deployed.json").exists())
+
+    def test_signature_is_checked_before_pending_reconfirmation(self) -> None:
+        """The final pending check follows crypto and precedes receipt."""
+        calls = []
+
+        def crypto(_):
+            calls.append("signed_pair")
+            return self.evidence()
+
+        def pending(_):
+            calls.append("rescue_pending")
+
+        with (
+            patch.object(STAGE.PAIR, "verify", side_effect=crypto),
+            patch.object(STAGE, "verify_qa_rescue", side_effect=pending),
+        ):
+            STAGE.stage_release(self.args, self.output)
+        self.assertEqual(calls, ["signed_pair", "rescue_pending"])
+        self.assertTrue((self.output / "deployed.json").exists())
 
     def test_real_verifier_error_leaves_no_boot_receipt(self) -> None:
         """Missing signatures must not be replaced by an unsigned receipt."""
@@ -226,6 +272,23 @@ class QaPairReceiptStagerTests(unittest.TestCase):
             STAGE.StageBlocked, "STAGE_EXISTING_OUTPUT_REFUSED"
         ):
             STAGE.stage_release(self.args, self.output)
+
+    def test_receipt_binds_same_pending_transaction_token(self) -> None:
+        """The staged release receipt must name the guarded SQLite update."""
+        with patch.object(STAGE.PAIR, "verify", return_value=self.evidence()):
+            STAGE.stage_release(self.args, self.output)
+        receipt = json.loads((self.output / "deployed.json").read_text())
+        self.assertEqual(receipt["transaction_token"], self.args.token)
+
+    def test_invalid_or_missing_transaction_token_is_refused(self) -> None:
+        """Never commit a source pair without its pending rescue token."""
+        for token in ("", "other-transaction", "qa-bad/slash"):
+            with self.subTest(token=token):
+                self.args.token = token
+                with self.assertRaisesRegex(
+                    STAGE.StageBlocked, "STAGE_TRANSACTION_TOKEN_INVALID"
+                ):
+                    REAL_RESCUE_PREFLIGHT(self.args)
 
     def test_qa_only_host_guard(self) -> None:
         """Never stage on the Proxmox host or in a production guest."""

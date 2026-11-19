@@ -51,6 +51,7 @@ try:
         "digest": digest,
         "source_commit": commit,
         "source_sha256": hashlib.sha256(release.read_bytes()).hexdigest(),
+        "transaction_token": "qa-paired-receipt-20261119",
         "pair_status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
         "source_signature_verified": True,
         "oci_signature_verified": True,

@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import socket
 import stat
@@ -34,6 +35,7 @@ def pair_verifier():
 
 
 PAIR = pair_verifier()
+TOKEN = re.compile(r"qa-[a-zA-Z0-9_.-]{1,90}\Z")
 
 
 def arguments() -> argparse.Namespace:
@@ -48,6 +50,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--bundle", required=True, type=Path)
     parser.add_argument("--sha256sums", required=True, type=Path)
+    parser.add_argument("--container")
+    parser.add_argument("--database", type=Path)
+    parser.add_argument("--fence-dir", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--token", default="")
     parser.add_argument("--jsonl", action="store_true")
     return parser.parse_args()
 
@@ -65,6 +72,26 @@ def require_isolated_root() -> None:
         raise StageBlocked("STAGE_PARENT_UNSAFE")
     if STAGE_ROOT.exists() or STAGE_ROOT.is_symlink():
         raise StageBlocked("STAGE_EXISTING_OUTPUT_REFUSED")
+
+
+def verify_qa_rescue(args: argparse.Namespace) -> None:
+    """Require same-token pending and complete newest WAL/PHOTO under QA."""
+    if not TOKEN.fullmatch(args.token):
+        raise StageBlocked("STAGE_TRANSACTION_TOKEN_INVALID")
+    for key in ("container", "database", "fence_dir", "output"):
+        if getattr(args, key, None) is None:
+            raise StageBlocked("STAGE_QA_RESCUE_ARGUMENT_MISSING")
+    file = Path(__file__).with_name("stage-guarded-update.py")
+    spec = importlib.util.spec_from_file_location("svt_joined_qa_rescue", file)
+    if spec is None or spec.loader is None:
+        raise StageBlocked("STAGE_RESCUE_VERIFIER_UNAVAILABLE")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    args.qa_only = True
+    module.check_paths(args)
+    info = module.inspect_container(args.container)
+    module.check_container(info, args)
+    module.inspect_stage(args, info)
 
 
 def copy_private(source: Path, target: Path, size_limit: int) -> None:
@@ -133,6 +160,7 @@ def record_for_stage(args: argparse.Namespace, evidence: dict) -> dict:
         "digest": args.digest,
         "source_commit": args.commit,
         "source_sha256": source_sha,
+        "transaction_token": args.token,
         "pair_status": evidence["status"],
         "source_signature_verified": True,
         "oci_signature_verified": True,
@@ -172,7 +200,9 @@ def stage_release(args: argparse.Namespace, directory: Path) -> dict:
     copy_private(args.sha256sums, directory / "SHA256SUMS", 16384)
     sync_directory(directory)
     copied = staged_arguments(args, directory)
+    copied.token = args.token
     evidence = PAIR.verify(copied)
+    verify_qa_rescue(args)
     record = record_for_stage(copied, evidence)
     publish_private_receipt(directory, record)
     return {
@@ -190,6 +220,7 @@ def main() -> int:
         PAIR.verify_inputs(args)
         if args.qa_stage:
             require_isolated_root()
+            verify_qa_rescue(args)
             report = stage_release(args, STAGE_ROOT)
         else:
             report = PAIR.verify(args)

@@ -125,6 +125,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             "digest": "sha256:" + "b" * 64,
             "source_commit": "a" * 40,
             "source_sha256": "c" * 64,
+            "transaction_token": "qa-supervisor-pair-test",
             "pair_status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
             "source_signature_verified": True,
             "oci_signature_verified": True,
@@ -146,6 +147,20 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 record = self.pair_record()
                 record.pop(missing)
                 with self.assertRaises(SUPERVISOR.BootBlocked):
+                    SUPERVISOR.require_pair_proof(record, "a" * 40)
+
+    def test_paired_receipt_requires_a_guarded_transaction_token(self) -> None:
+        """A source pair without durable transaction identity fails boot."""
+        for value in (None, "", "qa-slashed/token", "x"):
+            with self.subTest(value=value):
+                record = self.pair_record()
+                if value is None:
+                    record.pop("transaction_token")
+                else:
+                    record["transaction_token"] = value
+                with self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "PAIRED_TRANSACTION_MISSING"
+                ):
                     SUPERVISOR.require_pair_proof(record, "a" * 40)
 
     def test_paired_receipt_rejects_forged_boolean_flags(self) -> None:
