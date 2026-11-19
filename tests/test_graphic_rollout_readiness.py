@@ -25,6 +25,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / (
 FILES = (
     "VERSION",
     "app.py",
+    "writer_fence.py",
     "Dockerfile",
     "compose.yaml",
     "requirements.txt",
