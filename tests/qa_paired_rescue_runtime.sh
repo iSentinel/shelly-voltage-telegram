@@ -118,7 +118,37 @@ python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --dry-run
 test "$(docker inspect "$NAME" --format '{{.State.Running}}')" = true
 test ! -e "$FENCE/.svt-update-pending"
 echo NONINVASIVE_DRY_RUN_PASS
-python3 "$ROOT/scripts/stage-guarded-update.py" "$@"
+# Exercise actual updater SIGKILL boundaries; never kill Docker or systemd.
+expect_updater_sigkill() {
+  local label="$1" rc
+  shift
+  set +e
+  python3 "$ROOT/scripts/stage-guarded-update.py" "$@" \
+    >"$OUT/crash-$label.log" 2>&1
+  rc=$?
+  set -e
+  test "$rc" -eq 137 || {
+    echo "FAIL: expected QA self-SIGKILL at $label, rc=$rc" >&2
+    exit 9
+  }
+  test -e "$FENCE/.svt-update-pending"
+  echo "REAL_UPDATER_SIGKILL_$label:PENDING_RETAINED"
+}
+expect_updater_sigkill pending "$@" --qa-crash-at pending
+test ! -e "$output"
+expect_updater_sigkill writer_stopped "$@" \
+  --resume-pending --qa-crash-at writer-stopped
+test ! -e "$output"
+test "$(docker inspect "$NAME" --format '{{.State.Running}}')" = false
+expect_updater_sigkill rescue_written "$@" \
+  --resume-pending --qa-crash-at rescue-written
+test -s "$output"
+test ! -e "$output.qa.json"
+expect_updater_sigkill receipt_written "$@" \
+  --resume-pending --qa-crash-at receipt-written
+test -s "$output.qa.json"
+python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --resume-pending
+echo REAL_SIGKILL_RECOVERY_WITHOUT_OLD_DB_RESTORE_PASS
 test -s "$output"
 test -s "$output.qa.json"
 test "$(docker inspect "$NAME" --format '{{.State.Running}}')" = false
@@ -292,3 +322,76 @@ set -e
 test "$rc" -eq 3
 echo REENTRY_REFUSED_WHILE_PENDING
 echo QA_ONLY_STOP_PENDING_RESCUE_TRANSACTION_PASS
+
+# A crashed QA update must never clear pending without explicit acceptance.
+python3 "$ROOT/scripts/stage-guarded-update.py" "$@" --inspect
+set +e
+SVT_WRITER_FENCE_DIR="$FENCE" python3 \
+  "$ROOT/scripts/writer-fence-marker.py" clear \
+  --database "$db" --token qa-wrong-transaction \
+  >"$OUT/wrong-clear.log" 2>&1
+wrong_rc=$?
+set -e
+test "$wrong_rc" -eq 3
+test -e "$FENCE/.svt-update-pending"
+echo WRONG_CLEAR_TOKEN_CANNOT_RELEASE_WRITER
+python3 "$ROOT/scripts/supervised-container.py" \
+  --container "$NAME" --database "$db" --fence-dir "$FENCE" \
+  --qa-offline --once >"$OUT/pending-supervisor.log"
+grep -q SKIP_PENDING "$OUT/pending-supervisor.log"
+test "$(docker inspect "$NAME" --format '{{.State.Running}}')" = false
+echo PENDING_STOPS_SUPERVISOR_AFTER_UPDATER_SIGKILL
+
+# Resume the SAME offline QA image; this is not a signed image promotion.
+SVT_WRITER_FENCE_DIR="$FENCE" python3 \
+  "$ROOT/scripts/writer-fence-marker.py" clear \
+  --database "$db" --token "$TOKEN"
+python3 "$ROOT/scripts/supervised-container.py" \
+  --container "$NAME" --database "$db" --fence-dir "$FENCE" \
+  --qa-offline --once
+python3 - "$db" "$output" <<'PYREPLAY'
+import sqlite3
+import sys
+import time
+from contextlib import closing
+
+live_path, backup_path = sys.argv[1:]
+with closing(sqlite3.connect(backup_path)) as backup:
+    baseline = backup.execute(
+        "SELECT * FROM measurements ORDER BY id"
+    ).fetchall()
+    original_photo = backup.execute(
+        "SELECT value FROM meta WHERE key='telegram_status_media_identity'"
+    ).fetchone()
+assert original_photo == ("photo:QA-STAGED",)
+deadline = time.monotonic() + 22
+while time.monotonic() < deadline:
+    with closing(sqlite3.connect(
+        f"file:{live_path}?mode=ro", uri=True, timeout=5
+    )) as live:
+        rows = live.execute(
+            "SELECT * FROM measurements ORDER BY id"
+        ).fetchall()
+        phases = dict(live.execute(
+            "SELECT phase,count(*) FROM measurements GROUP BY phase"
+        ))
+        photo = live.execute(
+            "SELECT value FROM meta WHERE key='telegram_status_media_identity'"
+        ).fetchone()
+        integrity = live.execute("PRAGMA quick_check").fetchone()
+    assert rows[:len(baseline)] == baseline
+    assert photo == original_photo
+    assert integrity == ("ok",)
+    assert set(phases) == {"L1", "L2", "L3"}
+    assert len(set(phases.values())) == 1
+    if len(rows) > len(baseline):
+        print("POST_SIGKILL_REPLAY_FULL_OLD_HISTORY_PASS", flush=True)
+        print("POST_SIGKILL_L1_L2_L3_NEW_CYCLES", phases, flush=True)
+        break
+    time.sleep(0.2)
+else:
+    raise SystemExit("FAIL: QA writer did not resume after marker clear")
+PYREPLAY
+test ! -e "$FENCE/.svt-update-pending"
+docker stop "$NAME" >/dev/null
+echo QA_SIGKILL_RESUME_SAME_IMAGE_AND_PHOTO_PASS

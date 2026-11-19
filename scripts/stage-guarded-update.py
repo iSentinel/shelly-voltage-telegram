@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import sqlite3
 import stat
 import subprocess
@@ -46,6 +47,17 @@ def arguments() -> argparse.Namespace:
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--inspect", action="store_true")
     mode.add_argument("--recover-receipt", action="store_true")
+    mode.add_argument("--resume-pending", action="store_true")
+    parser.add_argument(
+        "--qa-crash-at",
+        choices=(
+            "pending",
+            "writer-stopped",
+            "rescue-written",
+            "receipt-written",
+        ),
+        help="LXC114-only self SIGKILL fault injection after checkpoint.",
+    )
     return parser.parse_args()
 
 
@@ -119,6 +131,13 @@ def check_container(info: dict, args: argparse.Namespace) -> None:
         raise StageBlocked("SVT_QA_FENCE_ENV_MISMATCH")
 
 
+def require_private_output_dir(path: Path) -> None:
+    """Require a private root-owned rescue directory before writer stop."""
+    info = path.parent.stat()
+    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
+        raise StageBlocked("SVT_QA_OUTPUT_NOT_PRIVATE")
+
+
 def check_state(args: argparse.Namespace) -> None:
     """Validate root-controlled fence, storage and output permissions."""
     os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
@@ -126,9 +145,7 @@ def check_state(args: argparse.Namespace) -> None:
         raise StageBlocked("SVT_QA_FENCE_MISMATCH")
     if args.database.is_symlink() or not args.database.is_file():
         raise StageBlocked("SVT_QA_DATABASE_MISSING")
-    root = args.output.parent.stat()
-    if root.st_uid != 0 or stat.S_IMODE(root.st_mode) != 0o700:
-        raise StageBlocked("SVT_QA_OUTPUT_NOT_PRIVATE")
+    require_private_output_dir(args.output)
     if args.output.exists() or args.output.is_symlink():
         raise StageBlocked("SVT_QA_RESCUE_ALREADY_EXISTS")
     marker = args.fence_dir / ".svt-update-pending"
@@ -317,9 +334,7 @@ def recover_receipt(args: argparse.Namespace, info: dict) -> None:
         raise StageBlocked("SVT_QA_WRITER_RUNNING")
     os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
     fence_directory(args.database)
-    root = args.output.parent.stat()
-    if root.st_uid != 0 or stat.S_IMODE(root.st_mode) != 0o700:
-        raise StageBlocked("SVT_QA_OUTPUT_NOT_PRIVATE")
+    require_private_output_dir(args.output)
     receipt = args.output.with_name(args.output.name + ".qa.json")
     if receipt.exists() or receipt.is_symlink():
         raise StageBlocked("SVT_QA_RECEIPT_ALREADY_EXISTS")
@@ -330,6 +345,37 @@ def recover_receipt(args: argparse.Namespace, info: dict) -> None:
         persist_receipt(args)
 
 
+def qa_checkpoint(args: argparse.Namespace, checkpoint: str) -> None:
+    """Kill only the current disposable QA updater process if requested."""
+    if args.qa_crash_at == checkpoint:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+
+def resume_pending(args: argparse.Namespace, info: dict) -> None:
+    """Resume a killed QA stage without discarding the current database."""
+    os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
+    if fence_directory(args.database) != args.fence_dir:
+        raise StageBlocked("SVT_QA_FENCE_MISMATCH")
+    read_pending_token(args)
+    require_private_output_dir(args.output)
+    if info.get("State", {}).get("Running") is True:
+        stop_writer(args)
+    qa_checkpoint(args, "writer-stopped")
+    if args.output.exists() or args.output.is_symlink():
+        check_rescue_file(args.output)
+        with quiescent_writer_lease(args.database):
+            read_pending_token(args)
+            validate_staged_history(args)
+    else:
+        rescue_newest(args)
+    qa_checkpoint(args, "rescue-written")
+    receipt = args.output.with_name(args.output.name + ".qa.json")
+    if not receipt.exists() and not receipt.is_symlink():
+        persist_receipt(args)
+    qa_checkpoint(args, "receipt-written")
+    inspect_stage(args, inspect_container(args.container))
+
+
 def inspect_stage(args: argparse.Namespace, info: dict) -> None:
     """Revalidate pending, stopped writer, backup and QA receipt."""
     if info.get("State", {}).get("Running") is not False:
@@ -338,9 +384,7 @@ def inspect_stage(args: argparse.Namespace, info: dict) -> None:
     if fence_directory(args.database) != args.fence_dir:
         raise StageBlocked("SVT_QA_FENCE_MISMATCH")
     read_pending_token(args)
-    root = args.output.parent.stat()
-    if root.st_uid != 0 or stat.S_IMODE(root.st_mode) != 0o700:
-        raise StageBlocked("SVT_QA_OUTPUT_NOT_PRIVATE")
+    require_private_output_dir(args.output)
     receipt = read_private_receipt(
         args.output.with_name(args.output.name + ".qa.json")
     )
@@ -367,7 +411,7 @@ def report_failure(
     """Keep a published marker and report a stable fail-closed reason."""
     state = (
         "PENDING_UNCHANGED"
-        if args.inspect or args.recover_receipt
+        if args.inspect or args.recover_receipt or args.resume_pending
         else "PENDING_RETAINED"
         if published
         else "NO_CHANGES"
@@ -381,6 +425,40 @@ def report_failure(
     return 3
 
 
+def existing_mode(args: argparse.Namespace, info: dict) -> bool:
+    """Handle read-only and pending-resume modes before a new marker."""
+    if args.qa_crash_at and (
+        args.dry_run or args.inspect or args.recover_receipt
+    ):
+        raise StageBlocked("SVT_QA_CRASH_MODE_INVALID")
+    if args.resume_pending and args.qa_crash_at == "pending":
+        raise StageBlocked("SVT_QA_CRASH_MODE_INVALID")
+    if args.inspect:
+        inspect_stage(args, info)
+        print("INSPECT PASS: pending, stopped writer, WAL and PHOTO match")
+    elif args.resume_pending:
+        resume_pending(args, info)
+        print("RESUME PASS: newest SQLite/WAL/PHOTO, pending retained")
+    elif args.recover_receipt:
+        recover_receipt(args, info)
+        inspect_stage(args, info)
+        print("RECOVER-RECEIPT PASS: SHA256 verified; pending retained")
+    else:
+        return False
+    return True
+
+
+def stage_after_marker(args: argparse.Namespace) -> None:
+    """Stop only the QA writer and capture durable newest WAL/PHOTO data."""
+    qa_checkpoint(args, "pending")
+    stop_writer(args)
+    qa_checkpoint(args, "writer-stopped")
+    rescue_newest(args)
+    qa_checkpoint(args, "rescue-written")
+    persist_receipt(args)
+    qa_checkpoint(args, "receipt-written")
+
+
 def main() -> int:
     """Retain the marker after failures; never clear it implicitly."""
     args = arguments()
@@ -389,14 +467,7 @@ def main() -> int:
         check_paths(args)
         info = inspect_container(args.container)
         check_container(info, args)
-        if args.inspect:
-            inspect_stage(args, info)
-            print("INSPECT PASS: pending, stopped writer, WAL and PHOTO match")
-            return 0
-        if args.recover_receipt:
-            recover_receipt(args, info)
-            inspect_stage(args, info)
-            print("RECOVER-RECEIPT PASS: SHA256 verified; pending retained")
+        if existing_mode(args, info):
             return 0
         check_state(args)
         if args.dry_run:
@@ -404,9 +475,7 @@ def main() -> int:
             return 0
         marker_action("publish", args)
         published = True
-        stop_writer(args)
-        rescue_newest(args)
-        persist_receipt(args)
+        stage_after_marker(args)
     except (
         OSError,
         ValueError,
