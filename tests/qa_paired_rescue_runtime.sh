@@ -475,7 +475,9 @@ python3 "$ROOT/scripts/qa-paired-rescue-preflight.py" \
  --signed-snapshot "$PAIR_ROOT/20261118T015250Z-0.5.25-hw" \
  --new-receipt "$PAIR_ROOT/new-deployed.json" \
  --new-version "$PAIR_ROOT/RELEASE_VERSION" \
- "$@" --verify-signatures >"$OUT/no-cosign.log" 2>&1
+ "$@" --old-commit "$(printf 'a%.0s' {1..40})" \
+ --new-commit "$(printf 'b%.0s' {1..40})" \
+ --verify-signatures >"$OUT/no-cosign.log" 2>&1
 signature_rc=$?
 set -e
 test "$signature_rc" -eq 3

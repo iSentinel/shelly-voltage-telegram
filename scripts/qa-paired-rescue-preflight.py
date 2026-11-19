@@ -51,6 +51,16 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--token", required=True)
     parser.add_argument("--jsonl", action="store_true")
     parser.add_argument(
+        "--old-commit",
+        default="",
+        help="Exact old Git SHA, required for old/new OCI signatures.",
+    )
+    parser.add_argument(
+        "--new-commit",
+        default="",
+        help="Exact target Git SHA, must match protected paired receipt.",
+    )
+    parser.add_argument(
         "--verify-signatures",
         action="store_true",
         help="Explicit read-only network Cosign check for both OCI digests.",
@@ -109,25 +119,42 @@ def trusted_cosign() -> str:
     return str(executable)
 
 
-def verify_oci_signature(version: str, digest: str, cosign: str) -> None:
-    """Verify an exact immutable image against the trusted GitHub workflow."""
-    if not PAIR.VERSION.fullmatch(version) or not PAIR.DIGEST.fullmatch(
-        digest
+def oci_signature_command(
+    version: str, digest: str, cosign: str, commit: str
+) -> list[str]:
+    """Bind each OCI Cosign certificate to the exact immutable SHA."""
+    if (
+        not PAIR.VERSION.fullmatch(version)
+        or not PAIR.DIGEST.fullmatch(digest)
+        or not OWNER.COMMIT.fullmatch(commit)
     ):
         raise PairBlocked("QA_SIGNED_OCI_IDENTITY_INVALID")
     identity = (
         "https://github.com/iSentinel/shelly-voltage-telegram/"
         f".github/workflows/image.yml@refs/tags/v{version}"
     )
-    command = [
+    return [
         cosign,
         "verify",
         "--certificate-identity",
         identity,
         "--certificate-oidc-issuer",
         "https://token.actions.githubusercontent.com",
+        "--certificate-github-workflow-sha",
+        commit,
+        "--certificate-github-workflow-ref",
+        f"refs/tags/v{version}",
+        "--certificate-github-workflow-repository",
+        "iSentinel/shelly-voltage-telegram",
         PAIR.IMAGE + digest,
     ]
+
+
+def verify_oci_signature(
+    version: str, digest: str, cosign: str, commit: str
+) -> None:
+    """Require a publicly verifiable exact Git SHA for one OCI index."""
+    command = oci_signature_command(version, digest, cosign, commit)
     try:
         result = subprocess.run(
             command,
@@ -143,15 +170,22 @@ def verify_oci_signature(version: str, digest: str, cosign: str) -> None:
 
 
 def verify_old_new_signatures(
-    source_version: str, signed: Path, target: str, image: str
+    source_version: str,
+    signed: Path,
+    target: str,
+    image: str,
+    old_commit: str,
+    new_commit: str,
 ) -> None:
-    """Demand two Cosign successes, never a digest or tag guess."""
+    """Demand two exact-SHA Cosign successes without a loose fallback."""
     cosign = trusted_cosign()
     old_version, old_digest = PAIR.receipt_identity(signed)
     if old_version != source_version:
         raise PairBlocked("QA_OLD_SIGNED_PAIR_CHANGED")
-    verify_oci_signature(old_version, old_digest, cosign)
-    verify_oci_signature(target, image.removeprefix(PAIR.IMAGE), cosign)
+    verify_oci_signature(old_version, old_digest, cosign, old_commit)
+    verify_oci_signature(
+        target, image.removeprefix(PAIR.IMAGE), cosign, new_commit
+    )
 
 
 def qa_report(old_pair: dict, target: str, image: str, signed: bool) -> dict:
@@ -173,6 +207,29 @@ def qa_report(old_pair: dict, target: str, image: str, signed: bool) -> dict:
         "rollback_authorized": False,
         "production_modified": False,
     }
+
+
+def check_signed_commits(
+    args: argparse.Namespace, old_pair: dict, target: str, image: str
+) -> None:
+    """Reject absent commits or a new commit not bound to the receipt."""
+    old_commit = getattr(args, "old_commit", "")
+    new_commit = getattr(args, "new_commit", "")
+    if not OWNER.COMMIT.fullmatch(old_commit) or not OWNER.COMMIT.fullmatch(
+        new_commit
+    ):
+        raise PairBlocked("QA_SIGNED_SOURCE_COMMITS_REQUIRED")
+    record = STAGE.read_private_receipt(args.new_receipt)
+    if record.get("source_commit") != new_commit:
+        raise PairBlocked("QA_NEW_COMMIT_RECEIPT_MISMATCH")
+    verify_old_new_signatures(
+        old_pair["source_version"],
+        args.signed_snapshot,
+        target,
+        image,
+        old_commit,
+        new_commit,
+    )
 
 
 def evaluate(args: argparse.Namespace) -> dict:
@@ -203,9 +260,7 @@ def evaluate(args: argparse.Namespace) -> dict:
         raise PairBlocked("QA_PAIR_NEW_IMAGE_INVALID")
     signed = getattr(args, "verify_signatures", False)
     if signed:
-        verify_old_new_signatures(
-            old_pair["source_version"], args.signed_snapshot, target, image
-        )
+        check_signed_commits(args, old_pair, target, image)
     return qa_report(old_pair, target, image, signed)
 
 

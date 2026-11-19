@@ -66,7 +66,13 @@ def write_new(folder: Path) -> None:
     version.write_text(NEW + "\n")
     version.chmod(0o600)
     receipt.write_text(
-        json.dumps({"version": NEW, "digest": "sha256:" + "b" * 64})
+        json.dumps(
+            {
+                "version": NEW,
+                "digest": "sha256:" + "b" * 64,
+                "source_commit": "b" * 40,
+            }
+        )
     )
     receipt.chmod(0o600)
 

@@ -181,9 +181,12 @@ def receipt_identity(snapshot: Path) -> tuple[str, str]:
     return old, digest
 
 
-def verify_old_signature(version: str, digest: str) -> bool:
-    """Verify the old immutable image against the trusted release workflow."""
-
+def verify_old_signature(
+    version: str, digest: str, expected_commit: str
+) -> bool:
+    """Check the exact old OCI Git SHA, tag and repository certificate."""
+    if not re.fullmatch(r"[0-9a-f]{40}", expected_commit):
+        raise Blocked("OLD_IMAGE_CERT_COMMIT_REQUIRED")
     identity = (
         "https://github.com/iSentinel/shelly-voltage-telegram/"
         ".github/workflows/image.yml@refs/tags/v" + version
@@ -195,6 +198,12 @@ def verify_old_signature(version: str, digest: str) -> bool:
         identity,
         "--certificate-oidc-issuer",
         "https://token.actions.githubusercontent.com",
+        "--certificate-github-workflow-sha",
+        expected_commit,
+        "--certificate-github-workflow-ref",
+        f"refs/tags/v{version}",
+        "--certificate-github-workflow-repository",
+        "iSentinel/shelly-voltage-telegram",
         IMAGE + digest,
     ]
     try:
@@ -222,8 +231,32 @@ def check_sqlite_archives(source: Path, signed: Path) -> None:
         checksum_matches(archives[0])
 
 
+def pair_report(old: str, target: str, digest: str, signed: bool) -> dict:
+    """Return snapshot evidence, never deployment or rollback permission."""
+    status = (
+        "PASS_PAIR_SIGNED_IDENTITY_ONLY"
+        if signed
+        else "PASS_PAIR_IDENTITY_ONLY"
+    )
+    return {
+        "status": status,
+        "source_version": old,
+        "target_version": target,
+        "old_digest_suffix": digest[-12:],
+        "archives_sha256_checked": True,
+        "signature_verified": signed,
+        "sqlite_restore_verified": False,
+        "production_modified": False,
+        "release_authorized": False,
+        "rollback_authorized": False,
+    }
+
+
 def check_pair(
-    source: Path, signed: Path, verify_signature: bool = False
+    source: Path,
+    signed: Path,
+    verify_signature: bool = False,
+    expected_commit: str = "",
 ) -> dict:
     """Check a version-paired old source and OCI digest without restoring."""
 
@@ -243,29 +276,15 @@ def check_pair(
         raise Blocked("SIGNED_SNAPSHOT_TARGET_MISMATCH")
     check_sqlite_archives(source, signed)
     signature_verified = (
-        verify_old_signature(old, digest) if verify_signature else False
+        verify_old_signature(old, digest, expected_commit)
+        if verify_signature
+        else False
     )
-    return {
-        "status": (
-            "PASS_PAIR_SIGNED_IDENTITY_ONLY"
-            if signature_verified
-            else "PASS_PAIR_IDENTITY_ONLY"
-        ),
-        "source_version": old,
-        "target_version": target,
-        "old_digest_suffix": digest[-12:],
-        "archives_sha256_checked": True,
-        "signature_verified": signature_verified,
-        "sqlite_restore_verified": False,
-        "production_modified": False,
-        "release_authorized": False,
-        "rollback_authorized": False,
-    }
+    return pair_report(old, target, digest, signature_verified)
 
 
-def main() -> int:
-    """Run a read-only preflight; return 0 for identity and 2 for blocked."""
-
+def arguments() -> argparse.Namespace:
+    """Parse explicit read-only rollback paths and an optional source SHA."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-snapshot", required=True, type=Path)
     parser.add_argument("--signed-snapshot", required=True, type=Path)
@@ -274,13 +293,25 @@ def main() -> int:
         action="store_true",
         help="Read-only Cosign check against the pinned old OCI digest.",
     )
+    parser.add_argument(
+        "--expected-commit",
+        default="",
+        help="Exact old Git SHA required when checking the Cosign signature.",
+    )
     parser.add_argument("--jsonl", action="store_true")
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main() -> int:
+    """Run a read-only preflight; return 0 for identity and 2 for blocked."""
+
+    args = arguments()
     try:
         report = check_pair(
             args.source_snapshot,
             args.signed_snapshot,
             verify_signature=args.verify_signature,
+            expected_commit=args.expected_commit,
         )
     except (Blocked, OSError) as exc:
         report = {

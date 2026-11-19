@@ -20,6 +20,8 @@ OLD = "0.5.24-hw"
 NEW = "0.5.25-hw"
 OLD_DIGEST = "sha256:" + "a" * 64
 NEW_DIGEST = "sha256:" + "b" * 64
+OLD_SHA = "a" * 40
+NEW_SHA = "b" * 40
 
 
 class QAPairCosignTests(unittest.TestCase):
@@ -33,7 +35,7 @@ class QAPairCosignTests(unittest.TestCase):
             return_value=subprocess.CompletedProcess([], 0),
         ) as execute:
             MODULE.verify_oci_signature(
-                OLD, OLD_DIGEST, "/usr/local/bin/cosign"
+                OLD, OLD_DIGEST, "/usr/local/bin/cosign", OLD_SHA
             )
         invocation = execute.call_args.args[0]
         self.assertEqual(invocation[:2], ["/usr/local/bin/cosign", "verify"])
@@ -46,6 +48,15 @@ class QAPairCosignTests(unittest.TestCase):
             "https://token.actions.githubusercontent.com", invocation
         )
         self.assertEqual(invocation[-1], MODULE.PAIR.IMAGE + OLD_DIGEST)
+        for flag, expected in {
+            "--certificate-github-workflow-sha": OLD_SHA,
+            "--certificate-github-workflow-ref": "refs/tags/v" + OLD,
+            "--certificate-github-workflow-repository": (
+                "iSentinel/shelly-voltage-telegram"
+            ),
+        }.items():
+            self.assertIn(flag, invocation)
+            self.assertEqual(invocation[invocation.index(flag) + 1], expected)
 
     def test_old_and_new_verifications_are_both_required(self):
         """Both old and new OCI proofs must pass independently."""
@@ -63,10 +74,14 @@ class QAPairCosignTests(unittest.TestCase):
                 Path("/var/lib/svt-qa-old"),
                 NEW,
                 MODULE.PAIR.IMAGE + NEW_DIGEST,
+                OLD_SHA,
+                NEW_SHA,
             )
         self.assertEqual(verify.call_count, 2)
-        self.assertEqual(verify.call_args_list[0].args[:2], (OLD, OLD_DIGEST))
-        self.assertEqual(verify.call_args_list[1].args[:2], (NEW, NEW_DIGEST))
+        self.assertEqual(verify.call_args_list[0].args[::3], (OLD, OLD_SHA))
+        self.assertEqual(verify.call_args_list[1].args[::3], (NEW, NEW_SHA))
+        self.assertEqual(verify.call_args_list[0].args[1], OLD_DIGEST)
+        self.assertEqual(verify.call_args_list[1].args[1], NEW_DIGEST)
 
     def test_second_signature_failure_blocks_transaction(self):
         """A signed old image does not validate an unsigned new image."""
@@ -92,6 +107,8 @@ class QAPairCosignTests(unittest.TestCase):
                 Path("/var/lib/svt-qa-old"),
                 NEW,
                 MODULE.PAIR.IMAGE + NEW_DIGEST,
+                OLD_SHA,
+                NEW_SHA,
             )
 
     def test_changed_old_receipt_blocks_before_cosign(self):
@@ -115,6 +132,8 @@ class QAPairCosignTests(unittest.TestCase):
                 Path("/var/lib/svt-qa-old"),
                 NEW,
                 MODULE.PAIR.IMAGE + NEW_DIGEST,
+                OLD_SHA,
+                NEW_SHA,
             )
         verify.assert_not_called()
 
@@ -129,8 +148,21 @@ class QAPairCosignTests(unittest.TestCase):
             self.assertRaisesRegex(MODULE.PairBlocked, "SIGNATURE_UNVERIFIED"),
         ):
             MODULE.verify_oci_signature(
-                NEW, NEW_DIGEST, "/usr/local/bin/cosign"
+                NEW, NEW_DIGEST, "/usr/local/bin/cosign", NEW_SHA
             )
+
+    def test_wrong_git_commit_blocks_before_cosign(self):
+        """Unsigned or mutable source SHA cannot claim signed status."""
+        with (
+            patch.object(MODULE.subprocess, "run") as command,
+            self.assertRaisesRegex(
+                MODULE.PairBlocked, "QA_SIGNED_OCI_IDENTITY_INVALID"
+            ),
+        ):
+            MODULE.verify_oci_signature(
+                NEW, NEW_DIGEST, "/usr/local/bin/cosign", "refs/heads/main"
+            )
+        command.assert_not_called()
 
     def test_cosign_timeout_blocks(self):
         """An unavailable remote transparency lookup cannot be a pass."""
@@ -145,7 +177,7 @@ class QAPairCosignTests(unittest.TestCase):
             ),
         ):
             MODULE.verify_oci_signature(
-                NEW, NEW_DIGEST, "/usr/local/bin/cosign"
+                NEW, NEW_DIGEST, "/usr/local/bin/cosign", NEW_SHA
             )
 
     def test_missing_cosign_is_not_silent_fallback(self):
@@ -170,7 +202,7 @@ class QAPairCosignTests(unittest.TestCase):
                 self.assertRaisesRegex(MODULE.PairBlocked, "IDENTITY_INVALID"),
             ):
                 MODULE.verify_oci_signature(
-                    version, digest, "/usr/local/bin/cosign"
+                    version, digest, "/usr/local/bin/cosign", OLD_SHA
                 )
 
 

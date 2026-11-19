@@ -25,6 +25,7 @@ SPEC.loader.exec_module(MODULE)
 OLD = "0.5.24-hw"
 NEW = "0.5.25-hw"
 DIGEST = "sha256:" + "a" * 64
+OLD_SHA = "c" * 40
 
 
 def write_archive(path: Path, version: str) -> None:
@@ -129,7 +130,10 @@ class SignedPairPreflightTests(unittest.TestCase):
             MODULE.subprocess, "run", return_value=result
         ) as call:
             report = MODULE.check_pair(
-                self.source, self.signed, verify_signature=True
+                self.source,
+                self.signed,
+                verify_signature=True,
+                expected_commit=OLD_SHA,
             )
         self.assertEqual(report["status"], "PASS_PAIR_SIGNED_IDENTITY_ONLY")
         self.assertTrue(report["signature_verified"])
@@ -145,6 +149,39 @@ class SignedPairPreflightTests(unittest.TestCase):
         )
         self.assertEqual(args[-1].split("@")[-1], DIGEST)
 
+    def test_old_oci_signature_requires_exact_source_commit(self):
+        """A versioned rollback tag alone is not immutable source proof."""
+        with (
+            patch.object(MODULE.subprocess, "run") as command,
+            self.assertRaisesRegex(
+                MODULE.Blocked, "OLD_IMAGE_CERT_COMMIT_REQUIRED"
+            ),
+        ):
+            MODULE.check_pair(self.source, self.signed, verify_signature=True)
+        command.assert_not_called()
+
+    def test_old_oci_cert_claims_are_bound_to_rollback_git_sha(self):
+        """The actual Cosign command includes exact SHA, ref and repo."""
+        with patch.object(
+            MODULE.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as execute:
+            MODULE.verify_old_signature(OLD, DIGEST, OLD_SHA)
+        command = execute.call_args.args[0]
+        expected = {
+            "--certificate-github-workflow-sha": OLD_SHA,
+            "--certificate-github-workflow-ref": "refs/tags/v" + OLD,
+            "--certificate-github-workflow-repository": (
+                "iSentinel/shelly-voltage-telegram"
+            ),
+        }
+        for flag, value in expected.items():
+            with self.subTest(flag=flag):
+                self.assertIn(flag, command)
+                self.assertEqual(command[command.index(flag) + 1], value)
+        self.assertEqual(command[-1], MODULE.IMAGE + DIGEST)
+
     def test_invalid_cosign_signature_fails_closed(self):
         """Never label a rejected old signature as a recovery candidate."""
 
@@ -155,7 +192,12 @@ class SignedPairPreflightTests(unittest.TestCase):
                 MODULE.Blocked, "OLD_IMAGE_SIGNATURE_UNVERIFIED"
             ),
         ):
-            MODULE.check_pair(self.source, self.signed, verify_signature=True)
+            MODULE.check_pair(
+                self.source,
+                self.signed,
+                verify_signature=True,
+                expected_commit=OLD_SHA,
+            )
 
     def test_cosign_timeout_fails_closed(self):
         """No release endorsement follows a timeout of signature checks."""
@@ -170,7 +212,12 @@ class SignedPairPreflightTests(unittest.TestCase):
                 MODULE.Blocked, "OLD_IMAGE_SIGNATURE_UNAVAILABLE"
             ),
         ):
-            MODULE.check_pair(self.source, self.signed, verify_signature=True)
+            MODULE.check_pair(
+                self.source,
+                self.signed,
+                verify_signature=True,
+                expected_commit=OLD_SHA,
+            )
 
     def test_missing_deployed_receipt(self):
         """No version guess from a source archive is allowed."""

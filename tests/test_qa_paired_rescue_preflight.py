@@ -37,6 +37,8 @@ class PairedRescuePreflightTests(unittest.TestCase):
             output=Path("/var/lib/svt-qa-proof-rescue/newest.sqlite3"),
             container="svt-qa-proof",
             token="qa-proof",
+            old_commit="a" * 40,
+            new_commit="b" * 40,
             jsonl=True,
         )
         self.old = {
@@ -53,6 +55,11 @@ class PairedRescuePreflightTests(unittest.TestCase):
             patch.object(MODULE.STAGE, "inspect_container", return_value={}),
             patch.object(MODULE.STAGE, "check_container"),
             patch.object(MODULE.STAGE, "inspect_stage"),
+            patch.object(
+                MODULE.STAGE,
+                "read_private_receipt",
+                return_value={"source_commit": "b" * 40},
+            ),
             patch.object(MODULE.PAIR, "check_pair", return_value=self.old),
             patch.object(
                 MODULE.OWNER,
@@ -119,6 +126,34 @@ class PairedRescuePreflightTests(unittest.TestCase):
             self.assertRaisesRegex(MODULE.PairBlocked, "COSIGN_UNAVAILABLE"),
         ):
             MODULE.evaluate(self.args)
+
+    def test_signed_mode_requires_both_exact_git_shas(self) -> None:
+        """Version-only signed QA does not certify Git source provenance."""
+        self.args.verify_signatures = True
+        self.args.old_commit = ""
+        with (
+            self.mocked(),
+            patch.object(MODULE, "verify_old_new_signatures") as signed,
+            self.assertRaisesRegex(
+                MODULE.PairBlocked, "QA_SIGNED_SOURCE_COMMITS_REQUIRED"
+            ),
+        ):
+            MODULE.evaluate(self.args)
+        signed.assert_not_called()
+
+    def test_signed_mode_new_commit_must_match_private_receipt(self) -> None:
+        """Even a valid tag SHA cannot override mismatching paired source."""
+        self.args.verify_signatures = True
+        self.args.new_commit = "c" * 40
+        with (
+            self.mocked(),
+            patch.object(MODULE, "verify_old_new_signatures") as signed,
+            self.assertRaisesRegex(
+                MODULE.PairBlocked, "QA_NEW_COMMIT_RECEIPT_MISMATCH"
+            ),
+        ):
+            MODULE.evaluate(self.args)
+        signed.assert_not_called()
 
     def test_mismatched_old_pair_target_refused(self) -> None:
         """The old transition must target the installed new version."""
