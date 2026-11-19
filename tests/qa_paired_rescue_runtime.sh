@@ -21,6 +21,7 @@ DATA=/var/tmp/svt-qa-update-stage-20261119
 OUT=/var/lib/svt-qa-stage-output-20261119
 PAIR_ROOT=/var/lib/svt-qa-paired-proof-20261119
 JOINED_ROOT=/var/lib/svt-qa-verified-pair-20261119
+CUTOVER_ROOT=/var/lib/svt-qa-cutover-proof-20261119
 NAME=svt-qa-update-stage-20261119
 TOKEN=qa-offline-stage-20261119
 IMAGE=svt-qa-verified-local:0.5.21-hw
@@ -33,7 +34,7 @@ cleanup() {
       "$ROOT/scripts/writer-fence-marker.py" clear \
       --database "$db" --token "$TOKEN" >/dev/null 2>&1 || true
   fi
-  rm -rf -- "$DATA" "$OUT" "$PAIR_ROOT" "$JOINED_ROOT"
+  rm -rf -- "$DATA" "$OUT" "$PAIR_ROOT" "$JOINED_ROOT" "$CUTOVER_ROOT"
 }
 trap cleanup EXIT
 test ! -e "$FENCE/.svt-update-pending"
@@ -398,6 +399,72 @@ assert proof["old_oci_signature_verified"] is False
 assert proof["new_oci_signature_verified"] is False
 print("REAL_QA_OLD_NEW_PAIR_AND_WAL_PHOTO_COHERENCE_PASS")
 PYREPORT
+test ! -e "$CUTOVER_ROOT"
+python3 - "$ROOT" "$CUTOVER_ROOT" <<'PYCUTOVERFIX'
+"""Create independent 0.5.25 to 0.5.26 source/OCI QA fixture."""
+import importlib.util
+import sys
+from pathlib import Path
+code=Path(sys.argv[1])/ "tests/qa_paired_rescue_fixture.py"
+spec=importlib.util.spec_from_file_location("qa_cutover_pair_fixture",code)
+fixture=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixture)
+root=Path(sys.argv[2])
+fixture.OLD="0.5.25-hw"
+fixture.NEW="0.5.26-hw"
+root.mkdir(mode=0o700)
+fixture.write_source(root/"upgrades")
+fixture.write_signed(root/"20261118T015250Z-0.5.26-hw")
+fixture.write_new(root)
+print("INDEPENDENT_QA_OLD_NEW_VERSION_PAIR_READY")
+PYCUTOVERFIX
+cutover_commit="$(printf 'a%.0s' {1..40})"
+set +e
+python3 "$ROOT/scripts/qa-cutover-readiness-preflight.py" \
+ --source-snapshot "$CUTOVER_ROOT/upgrades" \
+ --signed-snapshot "$CUTOVER_ROOT/20261118T015250Z-0.5.26-hw" \
+ --new-receipt "$JOINED_ROOT/deployed.json" \
+ --new-version "$CUTOVER_ROOT/RELEASE_VERSION" \
+ --source-archive-dir "$JOINED_ROOT" \
+ --target-commit "$cutover_commit" \
+ "$@" --jsonl >"$OUT/qa-cutover-coherence.jsonl"
+cutover_rc=$?
+set -e
+if test "$cutover_rc" -ne 0; then
+  echo "QA_CUTOVER_PREFLIGHT_FAILED_RC=$cutover_rc" >&2
+  cat "$OUT/qa-cutover-coherence.jsonl" >&2
+  exit "$cutover_rc"
+fi
+python3 - "$OUT/qa-cutover-coherence.jsonl" <<'PYCUTOVER'
+import json
+import sys
+from pathlib import Path
+report=json.loads(Path(sys.argv[1]).read_text())
+assert report["status"]=="PASS_QA_CUTOVER_COHERENCE_ONLY"
+assert report["old_version"]=="0.5.25-hw"
+assert report["new_version"]=="0.5.26-hw"
+assert report["pending_token_matched"] is True
+assert report["sqlite_wal_photo_parity"] is True
+assert report["paired_receipt_consistent"] is True
+assert report["source_signature_reverified"] is False
+assert report["image_actually_changed"] is False
+assert report["release_authorized"] is False
+print("REAL_QA_CUTOVER_PENDING_RESCUE_PAIR_COHERENCE_PASS")
+PYCUTOVER
+set +e
+python3 "$ROOT/scripts/qa-cutover-readiness-preflight.py" \
+ --source-snapshot "$CUTOVER_ROOT/upgrades" \
+ --signed-snapshot "$CUTOVER_ROOT/20261118T015250Z-0.5.26-hw" \
+ --new-receipt "$JOINED_ROOT/deployed.json" \
+ --new-version "$CUTOVER_ROOT/RELEASE_VERSION" \
+ --source-archive-dir "$JOINED_ROOT" \
+ --target-commit "refs/heads/main" \
+ "$@" >"$OUT/qa-cutover-invalid-sha.log" 2>&1
+bad_sha_rc=$?
+set -e
+test "$bad_sha_rc" -eq 3
+test -e "$FENCE/.svt-update-pending"
+echo REAL_QA_CUTOVER_MUTABLE_COMMIT_BLOCKED
 test ! -x /usr/local/bin/cosign || {
  echo "FAIL: QA no-Cosign fixture expects missing executable" >&2
  exit 5
