@@ -64,6 +64,17 @@ def _transaction_fd(path: Path, timeout: float = 5.0) -> int:
 
 
 @contextmanager
+def update_gate(path: Path) -> Iterator[None]:
+    """Allow an updater to inspect pending state under the database lock."""
+    fd = _lock_file(path.parent / ".svt-transaction.lock")
+    try:
+        _take_lock(fd, 5.0)
+        yield
+    finally:
+        os.close(fd)
+
+
+@contextmanager
 def transaction_gate(path: Path) -> Iterator[None]:
     """Hold the same transaction gate used by database connections."""
     fd = _transaction_fd(path)

@@ -74,3 +74,24 @@ Date: 2026-11-19. Status: QA ONLY / NOT OWNER APPROVED / NOT DEPLOYED.
    systemd watchdog and the complete update/recovery protocol.
 4. Validate real LXC114 Docker restart/reboot A/B, full CI and
    signed release evidence before requesting production approval.
+
+## 2026-11-19 next stage: shared updater marker primitive
+
+- Added update_gate(path) to writer_fence.py; unlike a normal
+  Storage connection it can inspect an already published marker
+  while holding exactly the same transaction lock inode.
+- scripts/writer-fence-marker.py provides publish/clear/status,
+  bounded token syntax and stable exit codes. A new marker is
+  fsync'd and linked without overwriting another transaction;
+  the containing directory is synced. Existing marker/symlink/
+  hardlink conflicts refuse changes. Clearing requires exact token.
+- The CLI is a QA-only source primitive. The production updater
+  and its private pending-update token are NOT wired to this CLI.
+  No release authorization, live source change or OTA follows.
+- Isolated LXC114 4/4 new marker CLI tests PASS; with all joined
+  tests selected, 121/121 PASS. Ruff0.14.2 and maintainability
+  PASS. No network, credentials or live SQLite mounts were used.
+- NEXT: integrate this marker atomically into actual apply-update
+  and rollback flows alongside a sole supervisor and latest WAL/
+  PHOTO rescue; reject incomplete change and demand separate
+  exact-head Owner Approval. Do not activate this partial code.
