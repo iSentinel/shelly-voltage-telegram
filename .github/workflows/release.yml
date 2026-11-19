@@ -15,7 +15,14 @@ permissions:
   contents: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   release:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - name: Resolve tag
@@ -40,10 +47,17 @@ jobs:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
-      - name: Validate tag matches VERSION
+      - name: Validate tag matches VERSION and CI-tested commit
         shell: bash
+        env:
+          TESTED_SHA: ${{ needs.ci.outputs.tested_commit }}
         run: |
           set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ && "$sha" == "$TESTED_SHA" ]] || {
+            echo "ERROR: source release differs from CI-tested commit" >&2
+            exit 5
+          }
           tag='${{ steps.tag.outputs.tag }}'
           version="$(tr -d '\r\n' < VERSION)"
           release_version="$(tr -d '\r\n' < RELEASE_VERSION)"
