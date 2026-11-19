@@ -121,6 +121,46 @@ class YasnoAdapterTests(unittest.TestCase):
                         midnight - timedelta(seconds=25),
                     )
 
+    def test_midnight_rollover_across_kyiv_dst_transitions(self):
+        """Civil date matching stays correct at both DST change weekends."""
+        for month, day in ((3, 29), (10, 25)):
+            with self.subTest(month=month, day=day):
+                midnight = datetime(2026, month, day, 0, 1, tzinfo=KYIV)
+                before = midnight - timedelta(minutes=16)
+                data = response(before)
+                tomorrow = data["10.1"]["tomorrow"]
+                tomorrow["status"] = "ScheduleApplies"
+                tomorrow["slots"] = [
+                    dict(item) for item in data["10.1"]["today"]["slots"]
+                ]
+                day_result = Y.parse_schedule(
+                    data,
+                    "10.1",
+                    midnight,
+                    midnight - timedelta(seconds=20),
+                )
+                self.assertEqual(day_result.day, midnight.date().isoformat())
+                self.assertEqual(len(day_result.bars), 48)
+
+    def test_rollover_rejects_wrong_tomorrow_timezone(self):
+        """A UTC midnight is not Kyiv midnight on the new civil day."""
+        before = datetime(2026, 11, 19, 23, 45, tzinfo=KYIV)
+        midnight = datetime(2026, 11, 20, 0, 1, tzinfo=KYIV)
+        data = response(before)
+        tomorrow = data["10.1"]["tomorrow"]
+        tomorrow["status"] = "ScheduleApplies"
+        tomorrow["slots"] = [
+            dict(item) for item in data["10.1"]["today"]["slots"]
+        ]
+        tomorrow["date"] = "2026-11-20T00:00:00+00:00"
+        with self.assertRaisesRegex(ValueError, "Kyiv midnight"):
+            Y.parse_schedule(
+                data,
+                "10.1",
+                midnight,
+                midnight - timedelta(seconds=20),
+            )
+
     def test_waiting_for_schedule_is_not_no_outages(self):
         """An unpublished day must not become a green timeline."""
 
