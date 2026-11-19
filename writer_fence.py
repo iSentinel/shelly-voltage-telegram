@@ -16,6 +16,25 @@ class WriterFenceError(RuntimeError):
     """An unsafe competing writer or update prevented database access."""
 
 
+def fence_directory(path: Path) -> Path:
+    """Use a root-protected fence mount when explicitly configured."""
+    configured = os.environ.get("SVT_WRITER_FENCE_DIR", "")
+    if not configured:
+        return path.parent
+    directory = Path(configured)
+    if not directory.is_absolute() or directory == path.parent:
+        raise WriterFenceError("SVT_FENCE_DIR_INVALID")
+    for part in (*reversed(directory.parents), directory):
+        info = part.lstat()
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != 0
+            or info.st_mode & 0o022
+        ):
+            raise WriterFenceError("SVT_FENCE_DIR_UNSAFE")
+    return directory
+
+
 def _lock_file(path: Path) -> int:
     """Open only a regular, singly-linked lock inode."""
     fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -53,10 +72,10 @@ def _check_pending(directory: Path) -> None:
 
 def _transaction_fd(path: Path, timeout: float = 5.0) -> int:
     """Check the update marker while holding the shared transaction gate."""
-    fd = _lock_file(path.parent / ".svt-transaction.lock")
+    fd = _lock_file(fence_directory(path) / ".svt-transaction.lock")
     try:
         _take_lock(fd, timeout)
-        _check_pending(path.parent)
+        _check_pending(fence_directory(path))
         return fd
     except BaseException:
         os.close(fd)
@@ -66,7 +85,7 @@ def _transaction_fd(path: Path, timeout: float = 5.0) -> int:
 @contextmanager
 def update_gate(path: Path) -> Iterator[None]:
     """Allow an updater to inspect pending state under the database lock."""
-    fd = _lock_file(path.parent / ".svt-transaction.lock")
+    fd = _lock_file(fence_directory(path) / ".svt-transaction.lock")
     try:
         _take_lock(fd, 5.0)
         yield
@@ -87,7 +106,7 @@ def transaction_gate(path: Path) -> Iterator[None]:
 @contextmanager
 def writer_lease(path: Path) -> Iterator[None]:
     """Allow only one monitoring process to own a database at a time."""
-    fd = _lock_file(path.parent / ".svt-owner.lock")
+    fd = _lock_file(fence_directory(path) / ".svt-owner.lock")
     try:
         _take_lock(fd, 0.0)
         with transaction_gate(path):

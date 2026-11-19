@@ -12,7 +12,11 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from writer_fence import WriterFenceError, update_gate  # noqa: E402
+from writer_fence import (  # noqa: E402
+    WriterFenceError,
+    fence_directory,
+    update_gate,
+)
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}\Z")
 
@@ -96,7 +100,7 @@ def main() -> int:
         print("FAIL: INVALID_TOKEN", file=sys.stderr)
         return 2
     try:
-        marker = args.database.parent / ".svt-update-pending"
+        marker = fence_directory(args.database) / ".svt-update-pending"
         with update_gate(args.database):
             if args.action == "publish":
                 publish(marker, args.token)

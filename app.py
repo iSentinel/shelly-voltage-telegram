@@ -7471,6 +7471,8 @@ def main() -> int:
         return telegram_channel_rights_check(cfg)
     install_signals()
     try:
+        if not os.getenv("SVT_WRITER_FENCE_DIR"):
+            raise WriterFenceError("SVT_FENCE_DIR_REQUIRED")
         with writer_lease(cfg.database_path):
             Monitor(cfg).run()
     except WriterFenceError as exc:
