@@ -34,6 +34,15 @@ cosign() {
   fi
   return 99
 }
+timeout() {
+  duration="$1"
+  shift
+  if [ "$MOCK_TIMEOUT_CMD" = "$1" ]; then
+    echo "timeout-$duration" >> "$MOCK_LOG"
+    return 124
+  fi
+  "$@"
+}
 sleep() { :; }
 """
 
@@ -56,6 +65,7 @@ class SourcePublicOciGateTests(unittest.TestCase):
         digest: str = "sha256:" + "b" * 64,
         ref: str = "refs/tags/v0.5.26-hw",
         commit: str = "a" * 40,
+        timeout_cmd: str = "",
     ) -> subprocess.CompletedProcess:
         """Run actual workflow shell with all registry commands intercepted."""
         env = dict(
@@ -69,6 +79,7 @@ class SourcePublicOciGateTests(unittest.TestCase):
             MOCK_SIGNATURE_EXIT=str(signature_exit),
             MOCK_METADATA_EXIT=str(metadata_exit),
             MOCK_TAG_EXIT=str(tag_exit),
+            MOCK_TIMEOUT_CMD=timeout_cmd,
         )
         return subprocess.run(
             ["bash"],
@@ -116,6 +127,24 @@ class SourcePublicOciGateTests(unittest.TestCase):
         self.assertEqual(
             self.log.read_text().splitlines(),
             ["signature", "metadata"] * 12,
+        )
+        self.assertNotIn("PAIR READY", result.stdout)
+
+    def test_timed_out_cosign_verification_blocks_publication(self) -> None:
+        """A hung signature lookup must not yield a synthetic release GO."""
+        result = self.run_gate(timeout_cmd="cosign")
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines(), ["timeout-70"] * 12
+        )
+        self.assertNotIn("PAIR READY", result.stdout)
+
+    def test_timed_out_oci_lookup_blocks_publication(self) -> None:
+        """An unresponsive registry must not fall back to another tag."""
+        result = self.run_gate(timeout_cmd="python3")
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertEqual(
+            self.log.read_text().splitlines(), ["timeout-45"] * 12
         )
         self.assertNotIn("PAIR READY", result.stdout)
 

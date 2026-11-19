@@ -128,7 +128,9 @@ class SourceReleaseCIGateTests(unittest.TestCase):
         step = RELEASE[gate:publish]
         self.assertIn("scripts/qa-public-oci-tag-index.py", step)
         self.assertIn("scripts/verify-published-image.py", step)
-        self.assertIn('DOCKER_CONFIG="$anonymous_config" cosign verify', step)
+        self.assertIn(
+            'DOCKER_CONFIG="$anonymous_config" timeout 70 cosign verify', step
+        )
         self.assertIn(
             '--certificate-github-workflow-sha "$SOURCE_COMMIT"', step
         )
@@ -136,6 +138,12 @@ class SourceReleaseCIGateTests(unittest.TestCase):
             "--certificate-oidc-issuer "
             '"https://token.actions.githubusercontent.com"',
             step,
+        )
+        self.assertIn(
+            "timeout 45 python3 scripts/qa-public-oci-tag-index.py", step
+        )
+        self.assertIn(
+            "timeout 90 python3 scripts/verify-published-image.py", step
         )
         self.assertIn("source release blocked", step)
         self.assertNotIn("continue-on-error:", step)

@@ -143,16 +143,16 @@ jobs:
           cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
           verified=""
           for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            if digest="$(python3 scripts/qa-public-oci-tag-index.py --tag "$SOURCE_TAG" 2>/dev/null)"; then
+            if digest="$(timeout 45 python3 scripts/qa-public-oci-tag-index.py --tag "$SOURCE_TAG" 2>/dev/null)"; then
               if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] && \
-                DOCKER_CONFIG="$anonymous_config" cosign verify \
+                DOCKER_CONFIG="$anonymous_config" timeout 70 cosign verify \
                   --certificate-identity "$identity" \
                   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
                   --certificate-github-workflow-sha "$SOURCE_COMMIT" \
                   --certificate-github-workflow-ref "$GITHUB_REF" \
                   --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
                   "${image}@${digest}" >"$anonymous_config/verify.out" 2>"$anonymous_config/verify.err"; then
-                if python3 scripts/verify-published-image.py \
+                if timeout 90 python3 scripts/verify-published-image.py \
                   --digest "$digest" --commit "$SOURCE_COMMIT"; then
                   verified="$digest"
                   break
