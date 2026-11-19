@@ -132,7 +132,62 @@ class SignedReleasePairTests(unittest.TestCase):
         )
         self.assertEqual(command[-1], PAIR.IMAGE + DIGEST)
         self.assertIn(PAIR.SOURCE.ISSUER, command)
+        expected_claims = {
+            "--certificate-github-workflow-sha": COMMIT,
+            "--certificate-github-workflow-ref": "refs/tags/v" + VERSION,
+            "--certificate-github-workflow-repository": (
+                "iSentinel/shelly-voltage-telegram"
+            ),
+        }
+        for flag, value in expected_claims.items():
+            with self.subTest(flag=flag):
+                self.assertIn(flag, command)
+                self.assertEqual(command[command.index(flag) + 1], value)
         self.assertNotIn("--insecure-ignore-tlog", command)
+
+    def test_oci_signature_uses_exact_requested_sha(self) -> None:
+        """A different release SHA must change the Cosign certificate gate."""
+        args = self.args()
+        args.commit = "c" * 40
+        with (
+            patch.object(
+                PAIR.SOURCE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
+            patch.object(
+                PAIR.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0),
+            ) as execute,
+        ):
+            PAIR.verify_image_signature(args)
+        command = execute.call_args.args[0]
+        self.assertEqual(
+            command[command.index("--certificate-github-workflow-sha") + 1],
+            args.commit,
+        )
+        self.assertNotIn(COMMIT, command)
+
+    def test_oci_signature_has_no_weak_identity_fallback(self) -> None:
+        """A failed exact identity check must block, not retry loosely."""
+        with (
+            patch.object(
+                PAIR.SOURCE,
+                "trusted_cosign",
+                return_value="/usr/local/bin/cosign",
+            ),
+            patch.object(
+                PAIR.subprocess,
+                "run",
+                return_value=subprocess.CompletedProcess([], 1),
+            ) as execute,
+            self.assertRaisesRegex(
+                PAIR.PairBlocked, "PAIR_OCI_SIGNATURE_UNVERIFIED"
+            ),
+        ):
+            PAIR.verify_image_signature(self.args())
+        execute.assert_called_once()
 
     def test_oci_signature_rejection_blocks_pair(self) -> None:
         """Even a valid source cannot bypass a failed Cosign OCI proof."""

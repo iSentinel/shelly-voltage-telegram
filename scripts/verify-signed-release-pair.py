@@ -72,6 +72,12 @@ def verify_image_signature(args: argparse.Namespace) -> None:
         identity,
         "--certificate-oidc-issuer",
         SOURCE.ISSUER,
+        "--certificate-github-workflow-sha",
+        args.commit,
+        "--certificate-github-workflow-ref",
+        f"refs/tags/v{args.version}",
+        "--certificate-github-workflow-repository",
+        "iSentinel/shelly-voltage-telegram",
         IMAGE + args.digest,
     ]
     result = subprocess.run(
