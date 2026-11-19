@@ -392,7 +392,20 @@ start_service() {
     exit 1
 }
 
+legacy_supervisor_guard() {
+    case "${1:-}" in
+        -h|--help) return 0 ;;
+    esac
+    if [[ -n "${SVT_SUPERVISOR_OVERLAY:-}" ||
+          -n "${SVT_WRITER_FENCE_DIR:-}" ||
+          -e /var/lib/shelly-voltage-fence/.svt-owner.lock ]]; then
+        echo "ERROR: legacy rollback blocked with protected sole owner" >&2
+        return 3
+    fi
+}
+
 main() {
+    legacy_supervisor_guard "$@" || return 3
     parse_args "$@"
     require_root
     preflight_source_target

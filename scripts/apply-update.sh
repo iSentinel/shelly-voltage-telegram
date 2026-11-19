@@ -163,6 +163,7 @@ wait_healthy() {
 }
 
 start_stack() {
+    legacy_supervisor_guard || return 3
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
@@ -187,6 +188,7 @@ mark_pending() {
 }
 
 recover_pending() {
+    legacy_supervisor_guard || return 3
     local token
     [[ -f "$PENDING_FILE" ]] || return 0
     token="$(cat "$PENDING_FILE")"
@@ -214,6 +216,7 @@ recover_pending() {
 }
 
 restore_snapshot_database() {
+    legacy_supervisor_guard || return 3
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
     [[ -n "$backup" ]] || return 1
@@ -269,6 +272,7 @@ rollback() {
 }
 
 activate() {
+    legacy_supervisor_guard || return 3
     local digest="$1" tmp
     tmp="$(mktemp "$STATE/.override.XXXXXX")"
     printf 'services:\n  shelly-voltage:\n    image: %s@%s\n' \
@@ -298,7 +302,20 @@ os.replace(name, destination)
 PY
 }
 
+legacy_supervisor_guard() {
+    case "${1:-}" in
+        -h|--help) return 0 ;;
+    esac
+    if [[ -n "${SVT_SUPERVISOR_OVERLAY:-}" ||
+          -n "${SVT_WRITER_FENCE_DIR:-}" ||
+          -e /var/lib/shelly-voltage-fence/.svt-owner.lock ]]; then
+        echo "FAIL: legacy updater blocked with protected sole owner" >&2
+        return 3
+    fi
+}
+
 main() {
+    legacy_supervisor_guard "$@" || return 3
     if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
         [[ $EUID -eq 0 ]] || return 2
         mkdir -p "$STATE"
