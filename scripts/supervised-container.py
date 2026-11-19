@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,8 @@ from writer_fence import (  # noqa: E402
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw\Z")
+COMMIT = re.compile(r"[0-9a-f]{40}\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 STOP = False
 
 
@@ -39,6 +42,8 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument("--fence-dir", required=True, type=Path)
     parser.add_argument("--receipt", type=Path)
     parser.add_argument("--source-version", type=Path)
+    parser.add_argument("--require-pair-receipt", action="store_true")
+    parser.add_argument("--source-archive-dir", type=Path)
     parser.add_argument("--qa-offline", action="store_true")
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
@@ -103,16 +108,88 @@ def require_version_pair(record: dict, version: str) -> None:
         raise BootBlocked("SVT_SOURCE_SIGNED_VERSION_MISMATCH")
 
 
-def verify_receipt(path: Path | None, source: Path | None) -> str:
+def require_root_ancestors(path: Path) -> None:
+    """Reject non-root-controlled parents and symbolic directory links."""
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise BootBlocked("SVT_SIGNED_RECEIPT_PATH_INVALID")
+    for parent in path.parents:
+        info = parent.lstat()
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != 0
+            or info.st_mode & 0o022
+        ):
+            raise BootBlocked("SVT_SIGNED_RECEIPT_PARENT_UNSAFE")
+
+
+def verify_paired_source_archive(record: dict, directory: Path) -> None:
+    """Bind the private original source bytes to the trusted pair receipt."""
+    if not isinstance(directory, Path) or not directory.is_absolute():
+        raise BootBlocked("SVT_PAIRED_SOURCE_DIR_INVALID")
+    require_root_ancestors(directory)
+    info = directory.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != 0
+        or stat.S_IMODE(info.st_mode) != 0o700
+    ):
+        raise BootBlocked("SVT_PAIRED_SOURCE_DIR_UNSAFE")
+    name = f"shelly-voltage-telegram-{record['version']}.tar.gz"
+    path = directory / name
+    file_info = path.lstat()
+    if (
+        not stat.S_ISREG(file_info.st_mode)
+        or file_info.st_uid != 0
+        or file_info.st_nlink != 1
+        or stat.S_IMODE(file_info.st_mode) != 0o600
+        or not 0 < file_info.st_size <= 512 * 1024 * 1024
+    ):
+        raise BootBlocked("SVT_PAIRED_SOURCE_ARCHIVE_UNSAFE")
+    with path.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if digest != record["source_sha256"]:
+        raise BootBlocked("SVT_PAIRED_SOURCE_ARCHIVE_MISMATCH")
+
+
+def require_pair_proof(record: dict, image_revision: object) -> None:
+    """Match a root-owned paired proof with the signed OCI source revision."""
+    commit = record.get("source_commit")
+    source_sha = record.get("source_sha256")
+    if not isinstance(commit, str) or not COMMIT.fullmatch(commit):
+        raise BootBlocked("SVT_PAIRED_COMMIT_INVALID")
+    if not isinstance(source_sha, str) or not SHA256.fullmatch(source_sha):
+        raise BootBlocked("SVT_PAIRED_SOURCE_SHA256_INVALID")
+    if image_revision != commit:
+        raise BootBlocked("SVT_PAIRED_OCI_REVISION_MISMATCH")
+    if record.get("pair_status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY":
+        raise BootBlocked("SVT_PAIRED_PROOF_MISSING")
+    for key in (
+        "source_signature_verified",
+        "oci_signature_verified",
+        "oci_attestations_verified",
+    ):
+        if record.get(key) is not True:
+            raise BootBlocked("SVT_PAIRED_PROOF_INCOMPLETE")
+
+
+def verify_receipt(
+    path: Path | None,
+    source: Path | None,
+    require_pair: bool = False,
+    image_revision: object = None,
+    source_archive_dir: Path | None = None,
+) -> str:
     """Require a private, single-linked signed release identity file."""
     if path is None:
         raise BootBlocked("SVT_SIGNED_RECEIPT_MISSING")
+    require_root_ancestors(path)
     info = path.lstat()
     if (
         not stat.S_ISREG(info.st_mode)
         or info.st_uid != 0
         or info.st_nlink != 1
         or stat.S_IMODE(info.st_mode) != 0o600
+        or not 0 < info.st_size <= 4096
     ):
         raise BootBlocked("SVT_SIGNED_RECEIPT_UNSAFE")
     record = json.loads(path.read_text(encoding="utf-8"))
@@ -122,7 +199,23 @@ def verify_receipt(path: Path | None, source: Path | None) -> str:
     digest = record.get("digest", "")
     if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
         raise BootBlocked("SVT_SIGNED_RECEIPT_INVALID")
+    if require_pair:
+        require_pair_proof(record, image_revision)
+        if source_archive_dir is None:
+            raise BootBlocked("SVT_PAIRED_SOURCE_DIR_MISSING")
+        verify_paired_source_archive(record, source_archive_dir)
     return IMAGE + digest
+
+
+def image_revision(info: dict) -> object:
+    """Read the immutable Docker revision label without assuming its type."""
+    config = info.get("Config")
+    if not isinstance(config, dict):
+        return None
+    labels = config.get("Labels")
+    if not isinstance(labels, dict):
+        return None
+    return labels.get("org.opencontainers.image.revision")
 
 
 def validate_container(info: dict, args: argparse.Namespace) -> None:
@@ -148,7 +241,11 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
         if info["HostConfig"].get("NetworkMode") != "none":
             raise BootBlocked("SVT_QA_NETWORK_UNSAFE")
     elif info.get("Config", {}).get("Image") != verify_receipt(
-        args.receipt, args.source_version
+        args.receipt,
+        args.source_version,
+        getattr(args, "require_pair_receipt", False),
+        image_revision(info),
+        getattr(args, "source_archive_dir", None),
     ):
         raise BootBlocked("SVT_SIGNED_IMAGE_RECEIPT_MISMATCH")
 

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts/supervised-container.py"
@@ -34,6 +37,8 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             fence_dir=self.root / "secure",
             receipt=None,
             source_version=None,
+            require_pair_receipt=False,
+            source_archive_dir=None,
             qa_offline=True,
             once=True,
         )
@@ -112,6 +117,151 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 SUPERVISOR.require_version_pair(
                     {"version": version}, "0.5.25-hw"
                 )
+
+    def pair_record(self) -> dict:
+        """Build a synthetic cryptographic pair receipt for policy tests."""
+        return {
+            "version": "0.5.26-hw",
+            "digest": "sha256:" + "b" * 64,
+            "source_commit": "a" * 40,
+            "source_sha256": "c" * 64,
+            "pair_status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
+            "source_signature_verified": True,
+            "oci_signature_verified": True,
+            "oci_attestations_verified": True,
+        }
+
+    def test_paired_receipt_binds_exact_image_revision(self) -> None:
+        """The candidate refuses an image built from another source SHA."""
+        SUPERVISOR.require_pair_proof(self.pair_record(), "a" * 40)
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "PAIRED_OCI_REVISION_MISMATCH"
+        ):
+            SUPERVISOR.require_pair_proof(self.pair_record(), "d" * 40)
+
+    def test_paired_receipt_rejects_missing_source_commit(self) -> None:
+        """A valid image digest cannot replace signed source provenance."""
+        for missing in ("source_commit", "source_sha256"):
+            with self.subTest(missing=missing):
+                record = self.pair_record()
+                record.pop(missing)
+                with self.assertRaises(SUPERVISOR.BootBlocked):
+                    SUPERVISOR.require_pair_proof(record, "a" * 40)
+
+    def test_paired_receipt_rejects_forged_boolean_flags(self) -> None:
+        """No truthy integer or absent proof may bypass release checks."""
+        for key in (
+            "source_signature_verified",
+            "oci_signature_verified",
+            "oci_attestations_verified",
+        ):
+            with self.subTest(key=key):
+                record = self.pair_record()
+                record[key] = 1
+                with self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "PAIRED_PROOF_INCOMPLETE"
+                ):
+                    SUPERVISOR.require_pair_proof(record, "a" * 40)
+
+    def test_paired_receipt_requires_exact_proof_status(self) -> None:
+        """A SHA-only receipt is not the signed source+OCI pair proof."""
+        record = self.pair_record()
+        record["pair_status"] = "PASS_QA_IDENTITY_AND_WAL_ONLY"
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "PAIRED_PROOF_MISSING"
+        ):
+            SUPERVISOR.require_pair_proof(record, "a" * 40)
+
+    def mock_root_receipt(self, record: dict):
+        """Simulate root-owned mode0600 metadata without privileged files."""
+        content = json.dumps(record)
+        source = Mock()
+        source.lstat.return_value = SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o600,
+            st_uid=0,
+            st_nlink=1,
+            st_size=len(content),
+        )
+        source.read_text.return_value = content
+        return source
+
+    def test_actual_candidate_checks_complete_paired_receipt(self) -> None:
+        """Require root-only receipt and immutable Docker revision at boot."""
+        self.args.qa_offline = False
+        self.args.require_pair_receipt = True
+        self.args.receipt = self.mock_root_receipt(self.pair_record())
+        self.info["Config"]["Image"] = (
+            "ghcr.io/isentinel/shelly-voltage-telegram@sha256:" + "b" * 64
+        )
+        self.info["Config"]["Labels"] = {
+            "org.opencontainers.image.revision": "a" * 40
+        }
+        self.args.source_archive_dir = self.root / "source"
+        with (
+            patch.object(
+                SUPERVISOR, "source_version", return_value="0.5.26-hw"
+            ),
+            patch.object(SUPERVISOR, "require_root_ancestors"),
+            patch.object(SUPERVISOR, "verify_paired_source_archive"),
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_candidate_rejects_old_digest_only_receipt(self) -> None:
+        """A running service must not infer paired proof from old metadata."""
+        self.args.qa_offline = False
+        self.args.require_pair_receipt = True
+        record = {"version": "0.5.26-hw", "digest": "sha256:" + "b" * 64}
+        self.args.receipt = self.mock_root_receipt(record)
+        self.info["Config"]["Image"] = (
+            "ghcr.io/isentinel/shelly-voltage-telegram@sha256:" + "b" * 64
+        )
+        self.info["Config"]["Labels"] = {
+            "org.opencontainers.image.revision": "a" * 40
+        }
+        with (
+            patch.object(
+                SUPERVISOR, "source_version", return_value="0.5.26-hw"
+            ),
+            patch.object(SUPERVISOR, "require_root_ancestors"),
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "SVT_PAIRED_COMMIT_INVALID"
+            ),
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_paired_candidate_requires_persisted_source_archive(self) -> None:
+        """A digest and source receipt cannot replace the original tarball."""
+        self.args.qa_offline = False
+        self.args.require_pair_receipt = True
+        self.args.receipt = self.mock_root_receipt(self.pair_record())
+        self.info["Config"]["Image"] = SUPERVISOR.IMAGE + "sha256:" + "b" * 64
+        self.info["Config"]["Labels"] = {
+            "org.opencontainers.image.revision": "a" * 40
+        }
+        with (
+            patch.object(
+                SUPERVISOR, "source_version", return_value="0.5.26-hw"
+            ),
+            patch.object(SUPERVISOR, "require_root_ancestors"),
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "PAIRED_SOURCE_DIR_MISSING"
+            ),
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_missing_image_revision_fails_closed(self) -> None:
+        """No OCI source revision label means no source/OCI identity."""
+        for value in (None, {}, {"Labels": None}):
+            with self.subTest(value=value):
+                self.assertIsNone(SUPERVISOR.image_revision({"Config": value}))
+
+    def test_world_writable_receipt_parent_is_rejected(self) -> None:
+        """A receipt under /tmp cannot be a trusted deployment proof."""
+        path = self.root / "receipt.json"
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "SIGNED_RECEIPT_PARENT_UNSAFE"
+        ):
+            SUPERVISOR.require_root_ancestors(path)
 
     def test_missing_source_version_file_fails_closed(self) -> None:
         """The runtime cannot invent a version for a missing source file."""
