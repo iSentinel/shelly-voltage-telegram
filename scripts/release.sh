@@ -69,6 +69,7 @@ validate_inputs() {
         scripts/prepare-writer-fence.py scripts/writer-fence-marker.py
         scripts/supervised-container.py scripts/fenced-newest-rescue.py
         scripts/stage-guarded-update.py
+        scripts/verify-source-release-bundle.py
     )
     for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {

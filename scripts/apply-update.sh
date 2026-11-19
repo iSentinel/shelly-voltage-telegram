@@ -118,13 +118,14 @@ verify_source_archive() {
     local base="https://github.com/iSentinel/shelly-voltage-telegram/releases/download/v$VERSION"
     curl -fsSL --retry 2 --max-time 75 "$base/$archive" -o "$dir/$archive"
     curl -fsSL --retry 2 --max-time 30 "$base/SHA256SUMS" -o "$dir/SHA256SUMS"
-    awk -v file="$archive" '$2 == file {print $1 "  " $2}' \
-        "$dir/SHA256SUMS" > "$dir/SELECTED.SHA256"
-    [[ $(wc -l < "$dir/SELECTED.SHA256") -eq 1 ]] || {
-        echo "FAIL: release archive checksum missing or repeated" >&2
-        return 1
-    }
-    (cd "$dir" && sha256sum -c SELECTED.SHA256)
+    # A public SHA256 file is not a cryptographic source signature.
+    curl -fsSL --retry 2 --max-time 30 \
+        "$base/$archive.sigstore.json" -o "$dir/$archive.sigstore.json"
+    python3 "$ROOT/scripts/verify-source-release-bundle.py" \
+        --version "$VERSION" \
+        --archive "$dir/$archive" \
+        --bundle "$dir/$archive.sigstore.json" \
+        --sha256sums "$dir/SHA256SUMS"
 }
 
 snapshot() {

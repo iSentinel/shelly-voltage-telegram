@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   ci:
@@ -59,6 +60,10 @@ jobs:
             exit 5
           }
           tag='${{ steps.tag.outputs.tag }}'
+          [[ "$GITHUB_REF" == "refs/tags/$tag" ]] || {
+            echo "ERROR: source signing requires the exact tag event ref" >&2
+            exit 6
+          }
           version="$(tr -d '\r\n' < VERSION)"
           release_version="$(tr -d '\r\n' < RELEASE_VERSION)"
           [[ "$tag" == "v$version" ]] || {
@@ -93,6 +98,30 @@ jobs:
             exit 4
           }
 
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign and verify immutable source bundle
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
+          bundle="$archive.sigstore.json"
+          [[ "$GITHUB_REF" == "refs/tags/$SOURCE_TAG" ]] || exit 6
+          [[ -s "$archive" ]] || exit 7
+          cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
+          cosign sign-blob --yes --bundle "$bundle" "$archive"
+          [[ -s "$bundle" ]] || exit 8
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$SOURCE_TAG"
+          cosign verify-blob --bundle "$bundle" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          echo "SIGNED SOURCE ARCHIVE BUNDLE: PASS"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,8 +133,10 @@ jobs:
             echo "ERROR: GitHub Release $RELEASE_TAG already exists" >&2
             exit 5
           fi
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
           gh release create "$RELEASE_TAG" \
-            dist/shelly-voltage-telegram-*.tar.gz \
+            "$archive" "$archive.sigstore.json" \
             dist/SHA256SUMS \
             --verify-tag \
             --title "$RELEASE_TAG" \
