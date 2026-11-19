@@ -116,6 +116,31 @@ class SourceReleaseCIGateTests(unittest.TestCase):
             )[1].split("      - name: Create GitHub Release")[0],
         )
 
+    def test_source_publication_waits_for_signed_public_oci(self) -> None:
+        """A green source build alone may not publish a partial release."""
+        source = RELEASE.index("Sign and verify immutable source bundle")
+        gate = RELEASE.index(
+            "Check public signed OCI before source publication"
+        )
+        publish = RELEASE.index("Create GitHub Release")
+        self.assertLess(source, gate)
+        self.assertLess(gate, publish)
+        step = RELEASE[gate:publish]
+        self.assertIn("scripts/qa-public-oci-tag-index.py", step)
+        self.assertIn("scripts/verify-published-image.py", step)
+        self.assertIn('DOCKER_CONFIG="$anonymous_config" cosign verify', step)
+        self.assertIn(
+            '--certificate-github-workflow-sha "$SOURCE_COMMIT"', step
+        )
+        self.assertIn(
+            "--certificate-oidc-issuer "
+            '"https://token.actions.githubusercontent.com"',
+            step,
+        )
+        self.assertIn("source release blocked", step)
+        self.assertNotIn("continue-on-error:", step)
+        self.assertNotIn("--insecure-ignore-tlog", step)
+
     def test_failed_matrix_cannot_be_bypassed(self) -> None:
         """No failure-tolerant escape from the source publication gate."""
         self.assertNotIn("continue-on-error:", RELEASE)
