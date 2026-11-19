@@ -7,6 +7,7 @@ import importlib.util
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -130,7 +131,7 @@ class GuardedUpdatePolicyTests(unittest.TestCase):
             db_path = Path(temp) / "isolated.sqlite3"
             self.create_fixture(db_path)
             original = STAGE.database_digest(db_path)
-            with sqlite3.connect(db_path) as db:
+            with closing(sqlite3.connect(db_path)) as db, db:
                 db.execute(
                     "UPDATE meta SET value=? WHERE key=?",
                     ("photo:FORGED", "telegram_status_media_identity"),
@@ -139,7 +140,7 @@ class GuardedUpdatePolicyTests(unittest.TestCase):
 
     def create_fixture(self, path: Path) -> None:
         """Construct one standalone three-phase history with saved PHOTO."""
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.executescript(
                 "CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);"
                 "CREATE TABLE measurements("
