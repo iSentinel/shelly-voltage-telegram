@@ -102,3 +102,37 @@ Real isolated root-owned file QA on LXC114:
 The next acceptance gate remains real joined Compose-created
 three-phase writer startup, then signed old/new OCI/source promotion
 and crash-safe newest WAL/PHOTO recovery under one update fence.
+
+## Joined QA writer boot accepted — 2026-11-19
+
+The previously unresolved application failure was caused by the
+*test harness*, not by the joined application: its polling connection
+called ordinary sqlite3.connect() before the writer had created the
+database, creating a root-owned empty file. The unprivileged UID10001
+worker then received "attempt to write a readonly database" at WAL
+initialization. The test also initially imported the old /app/app.py
+instead of the source under /src. Both errors were fixed in the
+disposable QA harness: working_dir=/src and read-only SQLite URI
+mode=ro for the observer.
+
+The reusable source-only tests/qa_compose_supervisor_runtime.sh
+requires the exact disposable LXC114 hostname and root, has --help,
+uses no network and no real Shelly or Telegram credentials, builds
+only synthetic 3-phase readings, and cleans its container and files.
+
+A real LXC114 joined acceptance now PASS:
+- Shared root-controlled fence preflight succeeded.
+- Compose create-only produced a STOPPED container with restart=no.
+- Sole supervisor started the source runtime; L1/L2/L3 committed
+  with equal row counts and SQLite quick_check=ok.
+- Root published a pending marker. The supervisor refused startup.
+- Root cleared the exact token. Sole supervisor restarted the writer.
+- Total history grew from 3 to 102 records, with complete equal
+  phase counts, preserved Telegram PHOTO marker, and quick_check=ok.
+- Temporary Docker container was removed, private test directory
+  deleted and root marker cleared.
+
+This closes only the synthetic *runtime QA acceptance* blocker.
+It does NOT validate the production signed image, updater/rollback
+cutover, Cosign cryptographic verification or live service startup.
+No production changes or new image publication occurred.
