@@ -136,3 +136,25 @@ This closes only the synthetic *runtime QA acceptance* blocker.
 It does NOT validate the production signed image, updater/rollback
 cutover, Cosign cryptographic verification or live service startup.
 No production changes or new image publication occurred.
+
+## Source-only dual-owner cutover protection
+
+The candidate systemd unit now declares
+Conflicts=shelly-voltage-compose.service and orders itself after the
+old service in the systemd dependency graph. This is a defensive
+blueprint only: installing/enabling the unit before verifying that
+the original service is disabled remains prohibited.
+
+Five structural policy tests and disposable systemd-analyze syntax
+verification PASS on LXC114. The complete selected offline test
+suite is 182/182 PASS, Ruff0.14.2 and maintainability PASS.
+QA-only source release archive SHA256SUMS and included guarded
+components PASS. No production systemd unit was installed, loaded,
+restarted or enabled. No signed OCI release was created.
+
+Before an Owner Approval can authorize a production cutover, the
+actual apply-update.sh/rollback.sh must participate in the same
+durable pending/owner/newest-WAL-and-PHOTO transaction, and signed
+old/new source/OCI pairs must be verified against exact source
+version and digest. Both startup and rollback must survive real
+SIGKILL/reboot boundaries with complete L1/L2/L3 data parity.

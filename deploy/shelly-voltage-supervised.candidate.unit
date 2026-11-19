@@ -4,7 +4,8 @@
 [Unit]
 Description=Shelly signed single-owner supervisor (candidate only)
 Requires=docker.service
-After=docker.service network-online.target
+Conflicts=shelly-voltage-compose.service
+After=docker.service network-online.target shelly-voltage-compose.service
 Wants=network-online.target
 
 [Service]
