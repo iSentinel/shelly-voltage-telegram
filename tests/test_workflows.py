@@ -25,6 +25,19 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn("scripts/check-quality.py", quality)
 
+    def test_font_dependency_retries_fail_closed(self):
+        """Transient apt mirrors must not bypass required visual fonts."""
+        text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("for attempt in 1 2 3", text)
+        self.assertIn("Acquire::Retries=2", text)
+        self.assertIn("Acquire::http::Timeout=20", text)
+        self.assertIn("Acquire::https::Timeout=20", text)
+        self.assertIn("fonts-inter fonts-noto-core", text)
+        self.assertIn('grep -qx "install ok installed"', text)
+        self.assertIn("required v5 fonts unavailable", text)
+        self.assertNotIn("continue-on-error: true", text)
+        self.assertNotIn("fonts-inter fonts-noto-core || true", text)
+
     def test_ci_syntax_checks_shared_quality_gate(self):
         """CI must syntax-check the shared shell quality gate."""
 
