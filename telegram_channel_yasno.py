@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 
 from telegram_schedule_periods import format_schedule_rows
 from yasno_cache import read_verified_cache
-from yasno_schedule import clock_for_slot, parse_schedule
+from yasno_schedule import (
+    YasnoEmergency,
+    clock_for_slot,
+    emergency_text,
+    parse_provider_state,
+)
 
 MESSAGES = {
     "uk": (
@@ -92,8 +97,14 @@ def append_yasno_forecast(
     clock = now or datetime.now(timezone.utc)
     try:
         payload, timestamp = read_verified_cache(path)
-        result = parse_schedule(payload, group, clock, timestamp)
-        section = forecast_section(result.group, result.bars, language)
+        result = parse_provider_state(payload, group, clock, timestamp)
+        if isinstance(result, YasnoEmergency):
+            section = (
+                f"🗓 YASNO · {emergency_text(language)}\n"
+                f"ℹ️ {MESSAGES.get(language, MESSAGES['uk'])[5]}"
+            )
+        else:
+            section = forecast_section(result.group, result.bars, language)
     except (ValueError, OSError, KeyError, TypeError):
         section = f"🗓 YASNO: {MESSAGES.get(language, MESSAGES['uk'])[4]}"
     combined = status + "\n\n" + section

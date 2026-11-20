@@ -57,7 +57,8 @@ from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
 from writer_fence import WriterFenceError, fenced_connect, writer_lease
 from yasno_cache import read_verified_cache as read_yasno_verified_cache
-from yasno_schedule import parse_schedule as parse_yasno_schedule
+from yasno_schedule import YasnoEmergency
+from yasno_schedule import parse_provider_state as parse_yasno_schedule
 from yasno_schedule import read_cached as read_yasno_cache
 
 
@@ -2285,13 +2286,17 @@ def cached_yasno_preview_args(now: float | None = None) -> dict | None:
             datetime.fromtimestamp(clock, ZoneInfo("UTC")),
             fetched_at,
         )
-        return {
+        args = {
             "group": result.group,
-            "bars": result.bars,
             "day": result.day,
             "forecast_updated": result.retrieved_at,
             "forecast_source": "yasno",
         }
+        if isinstance(result, YasnoEmergency):
+            args["forecast_notice"] = "emergency"
+        else:
+            args["bars"] = result.bars
+        return args
     except (ValueError, OSError, KeyError, TypeError):
         return None
 

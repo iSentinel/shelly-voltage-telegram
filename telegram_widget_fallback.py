@@ -10,7 +10,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from outage_data_ua import windows
-from telegram_widget_data import MIN_VISIBLE_VOLTAGE
+from telegram_widget_data import MIN_VISIBLE_VOLTAGE, valid_emergency_notice
+from yasno_schedule import emergency_text
 
 KYIV = ZoneInfo("Europe/Kyiv")
 WORDS = {
@@ -30,6 +31,7 @@ WORDS = {
         "В",
         "Гц",
         "Джерело",
+        emergency_text("uk"),
     ),
     "ru": (
         "Напряжение",
@@ -47,6 +49,7 @@ WORDS = {
         "В",
         "Гц",
         "Источник",
+        emergency_text("ru"),
     ),
     "en": (
         "Voltage",
@@ -64,6 +67,7 @@ WORDS = {
         "V",
         "Hz",
         "Source",
+        emergency_text("en"),
     ),
 }
 
@@ -132,6 +136,8 @@ def valid_forecast(data: dict, now: float) -> bool:
     """Prevent old schedules from appearing as current captions."""
 
     bars = data.get("b")
+    if "n" in data:
+        return False
     if not isinstance(bars, str) or not re.fullmatch("[OX?]{48}", bars):
         return False
     updated, expires = data.get("u"), data.get("e")
@@ -153,6 +159,8 @@ def forecast_lines(
 ) -> list[str]:
     """Show only a bounded list of certain and tentative outage windows."""
 
+    if valid_emergency_notice(data, now):
+        return [f"🗓 YASNO · {words[15]}", words[11] + " (Shelly)."]
     if not valid_forecast(data, now):
         return []
     group = data.get("g")

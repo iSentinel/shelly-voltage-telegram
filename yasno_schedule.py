@@ -36,6 +36,30 @@ class YasnoDay:
     status: str = "ScheduleApplies"
 
 
+@dataclass(frozen=True)
+class YasnoEmergency:
+    """Provider cancellation of planned intervals, never physical telemetry."""
+
+    group: str
+    day: str
+    published_at: float
+    retrieved_at: float
+    source: str = "yasno-kyiv-dtek"
+    status: str = "EmergencyShutdowns"
+
+
+EMERGENCY_TEXT = {
+    "uk": "Аварійні відключення: плановий графік не діє",
+    "ru": "Аварийные отключения: плановый график не действует",
+    "en": "Emergency shutdowns: planned schedule suspended",
+}
+
+
+def emergency_text(language: str) -> str:
+    """Return a source-status label, not a measured power claim."""
+    return EMERGENCY_TEXT.get(language, EMERGENCY_TEXT["uk"])
+
+
 def parse_timestamp(value: object) -> datetime:
     """Only accept an ISO timestamp with an explicit time-zone offset."""
 
@@ -75,19 +99,23 @@ def schedule_slots(slots: object) -> str:
     return bars
 
 
-def validate_day(record: object, now: datetime) -> str:
-    """Check Kyiv calendar day and a published applicable schedule."""
-
-    if not isinstance(record, dict):
-        raise ValueError("schedule day missing")
-    if record.get("status") != "ScheduleApplies":
-        raise ValueError("schedule not published or not applicable")
+def validate_day_date(record: dict, now: datetime) -> None:
+    """Require the current calendar date at Kyiv midnight."""
     timestamp = parse_timestamp(record.get("date"))
     local = timestamp.astimezone(KYIV)
     if local.time().replace(tzinfo=None).isoformat() != "00:00:00":
         raise ValueError("schedule date is not Kyiv midnight")
     if local.date() != now.astimezone(KYIV).date():
         raise ValueError("schedule date differs from today")
+
+
+def validate_day(record: object, now: datetime) -> str:
+    """Check Kyiv calendar day and a published applicable schedule."""
+    if not isinstance(record, dict):
+        raise ValueError("schedule day missing")
+    if record.get("status") != "ScheduleApplies":
+        raise ValueError("schedule not published or not applicable")
+    validate_day_date(record, now)
     return schedule_slots(record.get("slots"))
 
 
@@ -103,11 +131,10 @@ def current_day_bars(record: dict, now: datetime) -> str:
     return validate_day(record.get("tomorrow"), now)
 
 
-def parse_schedule(
+def validated_record(
     data: object, group: str, now: datetime, retrieved_at: datetime
-) -> YasnoDay:
-    """Fail closed on invalid YASNO response and stale fetch metadata."""
-
+) -> tuple[dict, datetime]:
+    """Validate provider identity, group, capture and publication freshness."""
     if now.tzinfo is None or retrieved_at.tzinfo is None:
         raise ValueError("timezone-aware times required")
     if not re.fullmatch(r"\d{1,2}\.\d", group):
@@ -124,11 +151,41 @@ def parse_schedule(
     age = (now - published).total_seconds()
     if not 0 <= age <= MAX_PUBLICATION_AGE_S:
         raise ValueError("YASNO publication timestamp stale or invalid")
+    return record, published
+
+
+def parse_schedule(
+    data: object, group: str, now: datetime, retrieved_at: datetime
+) -> YasnoDay:
+    """Accept only published interval schedules for consumers of bars."""
+    record, published = validated_record(data, group, now, retrieved_at)
     bars = current_day_bars(record, now)
     return YasnoDay(
         group,
         now.astimezone(KYIV).date().isoformat(),
         bars,
+        published.timestamp(),
+        retrieved_at.timestamp(),
+    )
+
+
+def parse_provider_state(
+    data: object, group: str, now: datetime, retrieved_at: datetime
+) -> YasnoDay | YasnoEmergency:
+    """Accept only a valid plan or an explicit, current emergency notice."""
+    record, published = validated_record(data, group, now, retrieved_at)
+    today = record.get("today")
+    if (
+        not isinstance(today, dict)
+        or today.get("status") != "EmergencyShutdowns"
+    ):
+        return parse_schedule(data, group, now, retrieved_at)
+    validate_day_date(today, now)
+    if today.get("slots") != []:
+        raise ValueError("emergency notice must not contain schedule slots")
+    return YasnoEmergency(
+        group,
+        now.astimezone(KYIV).date().isoformat(),
         published.timestamp(),
         retrieved_at.timestamp(),
     )
