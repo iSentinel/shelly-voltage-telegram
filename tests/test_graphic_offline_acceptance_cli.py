@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from test_yasno_schedule import response
@@ -113,6 +115,62 @@ class OfflineAcceptanceCliTests(unittest.TestCase):
         self.assertTrue(
             self.output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
         )
+
+    def set_three_phase(self, l2="offline", l3="offline"):
+        """Supply a real-shaped blackout snapshot with historic telemetry."""
+        health = json.loads(self.health.read_text())
+        health["line_labels"] = ["L1", "L2", "L3"]
+        health["phases"] = {
+            "L1": dict(health, line_labels=None),
+            "L2": dict(health, connectivity=l2, voltage=221.3),
+            "L3": dict(health, connectivity=l3, voltage=223.4),
+        }
+        self.health.write_text(json.dumps(health))
+
+    def test_three_phase_blackout_verified(self):
+        """All three offline columns and a fresh forecast are required."""
+        self.set_three_phase()
+        self.set_verified()
+        with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v5"}):
+            result = self.check("--verified-yasno-cache", str(self.verified))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        record = json.loads(result.stdout)
+        self.assertEqual(record["verified_phases"], ["L1", "L2", "L3"])
+        self.assertFalse(record["live_voltage_visible"])
+        self.assertTrue(record["forecast_visible"])
+        self.assertFalse(record["telegram_sent"])
+
+    def test_partial_outage_never_passes_blackout(self):
+        """A secondary phase online or unknown is not a full blackout."""
+        for state in ("online", "unknown", "stale"):
+            with self.subTest(state=state):
+                self.set_health("offline")
+                self.set_three_phase(l2=state)
+                with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v5"}):
+                    result = self.check()
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("PHASE_NOT_OFFLINE", result.stdout)
+                self.assertFalse(self.output.exists())
+
+    def test_incomplete_three_phase_topology_is_rejected(self):
+        """Missing phase cannot fall back to a single-phase PASS."""
+        self.set_three_phase()
+        health = json.loads(self.health.read_text())
+        del health["phases"]["L3"]
+        self.health.write_text(json.dumps(health))
+        with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v5"}):
+            result = self.check()
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("PHASE_TOPOLOGY_INVALID", result.stdout)
+
+    def test_v4_cannot_certify_three_phase_blackout(self):
+        """The legacy renderer cannot certify secondary phase visibility."""
+        self.set_three_phase()
+        with patch.dict(os.environ, {"TELEGRAM_GRAPHIC_STYLE": "v4"}):
+            result = self.check()
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("THREE_PHASE_STYLE_REQUIRED", result.stdout)
+        self.assertFalse(self.output.exists())
 
     def test_forecast_does_not_invent_live_voltage(self):
         """A green YASNO forecast is independent of Shelly connectivity."""

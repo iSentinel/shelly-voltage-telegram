@@ -92,6 +92,52 @@ def verified_forecast(cache: Path, clock: float, group: str) -> dict:
     }
 
 
+def offline_phases(health: dict) -> dict | None:
+    """Require all configured phases to be disconnected."""
+    labels = health.get("line_labels")
+    raw = health.get("phases")
+    secondary = isinstance(raw, dict) and bool({"L2", "L3"} & set(raw))
+    if labels == ["L1", "L2", "L3"] or secondary:
+        if (
+            labels != ["L1", "L2", "L3"]
+            or not isinstance(raw, dict)
+            or set(raw) != {"L1", "L2", "L3"}
+            or any(not isinstance(row, dict) for row in raw.values())
+        ):
+            raise AcceptanceError("PHASE_TOPOLOGY_INVALID")
+        if any(row.get("connectivity") != "offline" for row in raw.values()):
+            raise AcceptanceError("PHASE_NOT_OFFLINE")
+        return {phase: raw[phase] for phase in ("L2", "L3")}
+    if labels not in (None, ["L"], ["L1"]):
+        raise AcceptanceError("PHASE_TOPOLOGY_INVALID")
+    if raw is not None and (
+        not isinstance(raw, dict)
+        or set(raw) != {"L1"}
+        or not isinstance(raw["L1"], dict)
+    ):
+        raise AcceptanceError("PHASE_TOPOLOGY_INVALID")
+    if raw is not None and raw["L1"].get("connectivity") != "offline":
+        raise AcceptanceError("PHASE_NOT_OFFLINE")
+    return None
+
+
+def verify_offline_state(state: dict, three_phase: bool) -> None:
+    """Refuse any live fields or incomplete phases in a blackout payload."""
+    rows = [state]
+    if three_phase:
+        phases = state.get("p")
+        if not isinstance(phases, dict) or set(phases) != {"L2", "L3"}:
+            raise AcceptanceError("PHASE_TOPOLOGY_INVALID")
+        rows.extend(phases.values())
+    if any(
+        not isinstance(row, dict)
+        or row.get("s") != "offline"
+        or any(name in row for name in ("v", "f", "t"))
+        for row in rows
+    ):
+        raise AcceptanceError("LIVE_DATA_LEAK")
+
+
 def widget_state(args: argparse.Namespace, clock: float) -> dict:
     """Encode an offline-only widget with optional verified YASNO forecast."""
 
@@ -104,6 +150,9 @@ def widget_state(args: argparse.Namespace, clock: float) -> dict:
     if health.get("connectivity") != "offline":
         raise AcceptanceError("NOT_OFFLINE")
     options = {"group": args.group, "now": clock, "language": "uk"}
+    phases = offline_phases(health)
+    if phases is not None:
+        options["phases"] = phases
     if args.verified_yasno_cache:
         options.update(
             verified_forecast(args.verified_yasno_cache, clock, args.group)
@@ -122,10 +171,7 @@ def widget_state(args: argparse.Namespace, clock: float) -> dict:
         state = json.loads(widget_public_data(health, **options))
     except (ValueError, TypeError) as exc:
         raise AcceptanceError("STATE_INVALID") from exc
-    if state.get("s") != "offline" or any(
-        name in state for name in ("v", "f", "t")
-    ):
-        raise AcceptanceError("LIVE_DATA_LEAK")
+    verify_offline_state(state, phases is not None)
     return state
 
 
@@ -184,6 +230,8 @@ def accept(args: argparse.Namespace) -> dict:
     if not math.isfinite(clock) or clock <= 0:
         raise AcceptanceError("CLOCK_INVALID")
     state = widget_state(args, clock)
+    if "p" in state and os.getenv("TELEGRAM_GRAPHIC_STYLE", "v4") != "v5":
+        raise AcceptanceError("THREE_PHASE_STYLE_REQUIRED")
     if linked_path(args.output) or not args.output.parent.is_dir():
         raise AcceptanceError("OUTPUT_UNSAFE")
     root = str(Path(__file__).resolve().parents[1])
@@ -198,10 +246,17 @@ def accept(args: argparse.Namespace) -> dict:
         result = render_card_png(state, image, now=clock)
         image.chmod(0o600)
         verify_png(image, result)
+        if "p" in state and (
+            result.get("style") != "v5"
+            or result.get("phases")
+            != {"L1": "offline", "L2": "offline", "L3": "offline"}
+        ):
+            raise AcceptanceError("PHASE_RENDER_INVALID")
         action = deliver_png(image, args.output)
     return {
         "status": "PASS",
         "live_voltage_visible": False,
+        "verified_phases": ["L1", "L2", "L3"] if "p" in state else ["L"],
         "forecast_visible": result["forecast_visible"],
         "image_size": "960x800",
         "output_action": action,
