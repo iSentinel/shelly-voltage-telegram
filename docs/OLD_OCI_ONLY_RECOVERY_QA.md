@@ -52,3 +52,31 @@ A positive probe establishes only item 1 and **still** has
 `release_authorized=false` and `rollback_authorized=false`.
 Never retrofit a signature by uploading a different unsigned source
 under the old release name. Keep production unchanged.
+
+## Read-only self-contained image mount evidence
+
+A separate `scripts/qa-image-runtime-mount-audit.py` examines **only**
+the bounded JSON array exported from `docker inspect --format '{{json
+.Mounts}}'`. It rejects application-code bind mounts, unexpected
+mounts, writable secrets, missing/wrong database mounts, source path
+substitution and duplicate destinations. An old image-only rollback
+cannot be described as code-self-contained unless the actual runtime
+layout is independently checked.
+
+For the current live image, only export a sanitized mounts array, never
+the full inspect output (which can include environment variables):
+
+~~~bash
+umask 077
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+docker inspect shelly-voltage-bot --format '{{json .Mounts}}' > "$tmpdir/mounts.json"
+python3 scripts/qa-image-runtime-mount-audit.py --qa-only \
+  --mounts-json "$tmpdir/mounts.json" --jsonl
+~~~
+
+Use a private temporary directory and remove the file after the check.
+This structural proof does **not** authenticate the OCI digest, the
+host paths, a saved release receipt or the newest database. It can pass
+while the separate old OCI signature check is blocked. Both reports
+retain `rollback_authorized=false`.
