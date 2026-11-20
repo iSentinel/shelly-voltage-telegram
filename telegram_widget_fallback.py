@@ -200,8 +200,13 @@ def widget_fallback_text(
         raise ValueError("unsupported caption language")
     clock = time.time() if now is None else now
     lines = ["⚡ Shelly"]
-    lines.extend(measured_lines(data, clock, WORDS[lang]))
-    lines.extend(secondary_phase_lines(data, clock, WORDS[lang]))
+    primary = measured_lines(data, clock, WORDS[lang])
+    secondary = secondary_phase_lines(data, clock, WORDS[lang])
+    # A valid three-phase state needs an explicit primary phase label.
+    if secondary:
+        primary = [f"L1 · {line}" for line in primary]
+    lines.extend(primary)
+    lines.extend(secondary)
     lines.extend(forecast_lines(data, clock, WORDS[lang]))
     caption = "\n".join(lines)
     if len(caption) > 1024:

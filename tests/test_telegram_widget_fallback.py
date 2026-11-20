@@ -130,6 +130,82 @@ class FallbackCaptionTests(unittest.TestCase):
         self.assertIn("L2: —", caption)
         self.assertIn("L3: 176.2 В", caption)
 
+    def test_three_phase_primary_label_in_all_languages(self):
+        """Label the primary voltage and frequency as L1, not aggregate."""
+        for language in ("uk", "ru", "en"):
+            with self.subTest(language=language):
+                health = {
+                    "connectivity": "online",
+                    "last_success": NOW - 1,
+                    "voltage": 221.8,
+                    "frequency": 50.0,
+                }
+                payload = widget_public_data(
+                    health,
+                    now=NOW,
+                    language=language,
+                    phases={
+                        "L2": dict(health, voltage=222.0),
+                        "L3": dict(health, voltage=212.9),
+                    },
+                )
+                caption = widget_fallback_text(payload, now=NOW)
+                primary = [
+                    line
+                    for line in caption.splitlines()
+                    if line.startswith("L1 · ")
+                ]
+                self.assertEqual(len(primary), 2)
+                self.assertIn("221.8", primary[0])
+                self.assertIn("50.0", primary[1])
+                self.assertIn("L2: 222.0", caption)
+                self.assertIn("L3: 212.9", caption)
+
+    def test_offline_primary_label_with_live_secondary(self):
+        """Identify an unavailable L1 without hiding other phases."""
+        state = {
+            "schema": 1,
+            "s": "offline",
+            "l": "en",
+            "v": 225.3,
+            "f": 50.0,
+            "t": NOW - 1,
+            "p": {
+                "L2": {"s": "online", "v": 221.1, "t": NOW - 1},
+                "L3": {"s": "offline"},
+            },
+        }
+        caption = widget_fallback_text(json.dumps(state), now=NOW)
+        self.assertIn("L1 · 🔴 Disconnected", caption)
+        self.assertIn("L2: 221.1", caption)
+        self.assertIn("L3: —", caption)
+        self.assertNotIn("225.3", caption)
+
+    def test_single_phase_caption_stays_unlabelled(self):
+        """Do not invent a three-phase topology for single-phase meters."""
+        state = {
+            "schema": 1,
+            "s": "online",
+            "l": "en",
+            "v": 220.1,
+            "f": 50.0,
+            "t": NOW - 1,
+        }
+        caption = widget_fallback_text(json.dumps(state), now=NOW)
+        self.assertNotIn("L1", caption)
+        self.assertIn("Voltage: 220.1 V", caption)
+
+    def test_malformed_secondary_does_not_imply_topology(self):
+        """Malformed phase data cannot justify relabelling a meter."""
+        state = {
+            "schema": 1,
+            "s": "offline",
+            "l": "en",
+            "p": {"L2": {}, "L3": None},
+        }
+        caption = widget_fallback_text(json.dumps(state), now=NOW)
+        self.assertNotIn("L1", caption)
+
     def test_invalid_voltage_and_frequency_rejected(self):
         """Accept only numeric, finite readings with sensible ranges."""
 
