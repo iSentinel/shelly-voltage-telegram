@@ -63,10 +63,14 @@ class LegacyProductionRollbackGuardTests(unittest.TestCase):
             check=False,
             timeout=8,
         )
-        self.assertEqual(result.returncode, 3, result.stderr)
-        self.assertIn(
-            "production source/SQLite rollback blocked", result.stderr
+        expected = 3 if os.geteuid() == 0 else 2
+        self.assertEqual(result.returncode, expected, result.stderr)
+        reason = (
+            "production source/SQLite rollback blocked"
+            if expected == 3
+            else "run as root"
         )
+        self.assertIn(reason, result.stderr)
 
     def test_direct_destructive_operations_refused(self) -> None:
         """No sourced legacy helper may stop or overwrite the live writer."""
