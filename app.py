@@ -2267,7 +2267,7 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
-def cached_yasno_preview_args() -> dict | None:
+def cached_yasno_preview_args(now: float | None = None) -> dict | None:
     """Read a configured local YASNO cache; never make a network request."""
 
     trusted = os.getenv("YASNO_TRUSTED_CACHE_FILE")
@@ -2278,8 +2278,12 @@ def cached_yasno_preview_args() -> dict | None:
     try:
         reader = read_yasno_verified_cache if trusted else read_yasno_cache
         data, fetched_at = reader(path)
+        clock = time.time() if now is None else now
         result = parse_yasno_schedule(
-            data, group, datetime.now(ZoneInfo("UTC")), fetched_at
+            data,
+            group,
+            datetime.fromtimestamp(clock, ZoneInfo("UTC")),
+            fetched_at,
         )
         return {
             "group": result.group,
@@ -2292,7 +2296,7 @@ def cached_yasno_preview_args() -> dict | None:
         return None
 
 
-def cached_community_preview_args() -> dict:
+def cached_community_preview_args(now: float | None = None) -> dict:
     """Use an independently labelled community cache only if valid."""
 
     path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
@@ -2302,7 +2306,13 @@ def cached_community_preview_args() -> dict:
         return {}
     try:
         cache = read_snapshot(path)
-        bars, day, updated = slots_from_community(cache, region, group)
+        clock = time.time() if now is None else now
+        bars, day, updated = slots_from_community(
+            cache,
+            region,
+            group,
+            now=datetime.fromtimestamp(clock, ZoneInfo("UTC")),
+        )
         return {
             "group": group,
             "bars": bars,
@@ -2325,10 +2335,13 @@ def private_widget_preview_text(monitor: Monitor) -> str:
                 phase: monitor.phase_states[phase].snapshot()
                 for phase in ("L2", "L3")
             }
-    forecast = cached_yasno_preview_args() or cached_community_preview_args()
+    clock = time.time()
+    forecast = cached_yasno_preview_args(
+        clock
+    ) or cached_community_preview_args(clock)
     return widget_fallback_text(
         widget_public_data(
-            reading, language=language, phases=phases, **forecast
+            reading, language=language, phases=phases, now=clock, **forecast
         )
     )
 
@@ -2375,13 +2388,15 @@ def private_graphic_preview_state(monitor: Monitor) -> str:
             monitor.warning_high,
             monitor.critical_high,
         )
-    forecast = cached_yasno_preview_args() or {}
+    clock = time.time()
+    forecast = cached_yasno_preview_args(clock) or {}
     return widget_public_data(
         snapshot,
         language=language,
         phases=phases or None,
         max_sample_age=max_age,
         voltage_limits=limits,
+        now=clock,
         **forecast,
     )
 
