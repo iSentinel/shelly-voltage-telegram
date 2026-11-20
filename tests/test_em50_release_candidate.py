@@ -27,8 +27,8 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_promotion_markers_are_equal(self):
         """The approved release must have matching stable version files."""
 
-        self.assertEqual(version("VERSION"), "0.5.25-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.25-hw")
+        self.assertEqual(version("VERSION"), "0.5.26-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.26-hw")
         self.assertEqual(version("LIVE_VERSION"), "0.5.6-hw")
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
@@ -39,7 +39,7 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
             mock.patch.object(policy, "tag_commit", return_value="a" * 40),
             mock.patch.object(policy, "current_commit", return_value="a" * 40),
         ):
-            policy.validate("push", "refs/tags/v0.5.25-hw", "", "", ROOT)
+            policy.validate("push", "refs/tags/v0.5.26-hw", "", "", ROOT)
             with self.assertRaisesRegex(ValueError, "tag differs"):
                 policy.validate("push", "refs/tags/v0.5.24-hw", "", "", ROOT)
 
@@ -62,8 +62,8 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_published_marker_is_the_exact_release_target(self):
         """Stable and candidate markers may match only on release."""
 
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.25-hw")
-        self.assertEqual(version("VERSION"), "0.5.25-hw")
+        self.assertEqual(version("RELEASE_VERSION"), "0.5.26-hw")
+        self.assertEqual(version("VERSION"), "0.5.26-hw")
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""
