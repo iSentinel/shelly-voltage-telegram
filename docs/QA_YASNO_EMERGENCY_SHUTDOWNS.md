@@ -54,3 +54,21 @@ Owner Approval and protected cutover. No production file, database,
 cache, Telegram status or service is changed by this work, apart from
 the explicit ROADMAP checkpoint. Do not use the emergency incident
 to bypass the required signed release gates.
+
+## Expired official emergency and private community fallback
+
+If a checksum-verified cache contained a valid emergency at retrieval
+and the notice belongs to the current Kyiv day, its expiration removes
+the visible notice and all timelines. It does not silently reactivate an
+unofficial plan in the private widget caption. Fresh physical readings
+are independent. A newer independently validated official plan may
+restore intervals. Historical suppression is scoped to that civil day;
+ordinary stale forecasts retain the existing labelled community
+fallback, and corrupt or legacy unsealed data cannot establish this
+verified emergency history. Public graphic and channel forecasts do
+not use the community fallback.
+
+Six offline tests cover exact expiry, current notice, restored
+official schedule, tomorrow, ordinary stale forecast and corrupt
+checksum. No change to the sealed cache format or producer/handoff
+permissions.

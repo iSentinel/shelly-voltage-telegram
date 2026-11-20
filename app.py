@@ -2268,8 +2268,22 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
+def same_day_emergency_history(
+    data: dict, group: str, fetched_at: datetime, now: datetime
+) -> bool:
+    """Use a once-valid notice only to suppress conflicting fallback plans."""
+    if fetched_at > now:
+        return False
+    try:
+        previous = parse_yasno_schedule(data, group, fetched_at, fetched_at)
+    except (ValueError, TypeError, KeyError):
+        return False
+    current_day = now.astimezone(ZoneInfo("Europe/Kyiv")).date().isoformat()
+    return isinstance(previous, YasnoEmergency) and previous.day == current_day
+
+
 def cached_yasno_preview_args(now: float | None = None) -> dict | None:
-    """Read a configured local YASNO cache; never make a network request."""
+    """Read local YASNO; a truthy no-plan result inhibits unsafe fallback."""
 
     trusted = os.getenv("YASNO_TRUSTED_CACHE_FILE")
     path = trusted or os.getenv("YASNO_CACHE_FILE")
@@ -2280,25 +2294,29 @@ def cached_yasno_preview_args(now: float | None = None) -> dict | None:
         reader = read_yasno_verified_cache if trusted else read_yasno_cache
         data, fetched_at = reader(path)
         clock = time.time() if now is None else now
-        result = parse_yasno_schedule(
-            data,
-            group,
-            datetime.fromtimestamp(clock, ZoneInfo("UTC")),
-            fetched_at,
-        )
-        args = {
-            "group": result.group,
-            "day": result.day,
-            "forecast_updated": result.retrieved_at,
-            "forecast_source": "yasno",
-        }
-        if isinstance(result, YasnoEmergency):
-            args["forecast_notice"] = "emergency"
-        else:
-            args["bars"] = result.bars
-        return args
+        current = datetime.fromtimestamp(clock, ZoneInfo("UTC"))
     except (ValueError, OSError, KeyError, TypeError):
         return None
+    try:
+        result = parse_yasno_schedule(data, group, current, fetched_at)
+    except (ValueError, OSError, KeyError, TypeError):
+        if trusted and same_day_emergency_history(
+            data, group, fetched_at, current
+        ):
+            # Retain neither obsolete notice nor bars; block fallback only.
+            return {"group": group, "forecast_source": "yasno"}
+        return None
+    args = {
+        "group": result.group,
+        "day": result.day,
+        "forecast_updated": result.retrieved_at,
+        "forecast_source": "yasno",
+    }
+    if isinstance(result, YasnoEmergency):
+        args["forecast_notice"] = "emergency"
+    else:
+        args["bars"] = result.bars
+    return args
 
 
 def cached_community_preview_args(now: float | None = None) -> dict:
