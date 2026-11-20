@@ -94,12 +94,8 @@ class LegacyProductionRewindGuardTests(unittest.TestCase):
             check=False,
             timeout=8,
         )
-        expected = 3 if os.geteuid() == 0 else 2
-        self.assertEqual(result.returncode, expected, result.stderr)
-        reason = (
-            "production SQLite rewind" if expected == 3 else "root required"
-        )
-        self.assertIn(reason, result.stderr)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn("production SQLite rewind", result.stderr)
 
     def test_production_relative_segments_are_normalized(self) -> None:
         """Aliases with a parent hop cannot bypass the default DB guard."""

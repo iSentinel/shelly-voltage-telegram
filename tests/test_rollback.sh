@@ -688,8 +688,8 @@ fi
 exec /usr/bin/gzip "$@"
 MOCK_FAILED_GZIP
 chmod 0755 "$TMP/mock-bin/gzip"
-if PATH="$TMP/mock-bin:$PATH" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
-    bash -c '
+if PATH="$TMP/mock-bin:$PATH" SVT_ROOT="$TARGET" \
+    DATABASE_PATH="$DB_DIR/voltage.sqlite3" bash -c '
         set -euo pipefail
         source <(sed '\''$d'\'' "$1")
         SNAPSHOT="$2"
