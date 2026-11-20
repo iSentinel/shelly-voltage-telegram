@@ -389,6 +389,16 @@ An invalid snapshot or marker fails closed and keeps the pending state for
 manual recovery. The earliest post-failure rescue database is preserved on
 repeated recovery attempts.
 
+The private deployment receipt is the source for public version status.
+After activation commits, the updater replaces public `deployed.json`
+atomically. Exit code 4 means activation completed but the updater could
+not confirm the committed state or synchronize the public receipt. Use
+`apply-update.sh --sync-public-version` to retry only publication after
+checking the reported error. This command refuses to run while recovery
+is pending. Startup also retries publication from the committed receipt.
+A public status error after commit leaves the active image and SQLite in
+place.
+
 Boot recovery was additionally tested through three real, controlled
 reboots of disposable LXC 111: an interrupted update was restored, a malformed
 pending marker blocked startup, and a corrupted backup checksum blocked
