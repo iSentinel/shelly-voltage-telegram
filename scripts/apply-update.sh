@@ -25,8 +25,8 @@ usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
        apply-update.sh --recover  (systemd boot recovery only)
-Root-only, explicitly approved update of a published, signed GHCR image.
-Never runs automatically; refuse when Shelly is offline or an outage is open.
+Legacy root-only QA updater; production SQLite rewinds are blocked.
+Production updates require a signed sole-writer WAL/PHOTO-safe cutover.
 Requires cosign, docker compose, Python 3 and flock.
 EOF
 }
@@ -188,10 +188,26 @@ mark_pending() {
     sync -f "$STATE"
 }
 
+legacy_production_db_guard() {
+    local canonical
+    canonical="$(readlink -m -- "$DB")" || {
+        echo "FAIL: legacy production SQLite path unresolved" >&2
+        return 3
+    }
+    case "$canonical" in
+        /var/lib/shelly-voltage/*)
+            echo "FAIL: legacy production SQLite rewind/activation blocked" >&2
+            echo "Use a signed sole-writer WAL/PHOTO-preserving cutover." >&2
+            return 3
+            ;;
+    esac
+}
+
 recover_pending() {
     legacy_supervisor_guard || return 3
     local token
     [[ -f "$PENDING_FILE" ]] || return 0
+    legacy_production_db_guard || return 3
     token="$(cat "$PENDING_FILE")"
     if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
         echo "FAIL: invalid pending update marker" >&2
@@ -218,6 +234,7 @@ recover_pending() {
 
 restore_snapshot_database() {
     legacy_supervisor_guard || return 3
+    legacy_production_db_guard || return 3
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
     [[ -n "$backup" ]] || return 1
@@ -274,6 +291,7 @@ rollback() {
 
 activate() {
     legacy_supervisor_guard || return 3
+    legacy_production_db_guard || return 3
     local digest="$1" tmp
     tmp="$(mktemp "$STATE/.override.XXXXXX")"
     printf 'services:\n  shelly-voltage:\n    image: %s@%s\n' \
@@ -326,6 +344,9 @@ main() {
         return
     fi
     parse_args "$@"
+    if [[ "$DRY_RUN" != true ]]; then
+        legacy_production_db_guard || return 3
+    fi
     requirements
     preflight
     python3 "$ROOT/scripts/github_update.py" guard \
