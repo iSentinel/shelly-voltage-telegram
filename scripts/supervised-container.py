@@ -256,21 +256,37 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
         raise BootBlocked("SVT_SIGNED_IMAGE_RECEIPT_MISMATCH")
 
 
+def _pending_under_gate(database: Path) -> bool:
+    """Inspect protected pending inode under an already-held update lock."""
+    marker = fence_directory(database) / ".svt-update-pending"
+    try:
+        info = marker.lstat()
+    except FileNotFoundError:
+        return False
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink != 1
+        or info.st_uid != 0
+    ):
+        raise BootBlocked("SVT_PENDING_MARKER_UNSAFE")
+    return True
+
+
 def pending(database: Path) -> bool:
-    """Reject unsafe marker types while holding the shared update gate."""
+    """Read the protected pending marker while holding the update gate."""
     with update_gate(database):
-        marker = fence_directory(database) / ".svt-update-pending"
-        try:
-            info = marker.lstat()
-        except FileNotFoundError:
+        return _pending_under_gate(database)
+
+
+def start_if_clear(name: str, database: Path) -> bool:
+    """Hold one transaction lock across pending check and Docker start."""
+    with update_gate(database):
+        if _pending_under_gate(database):
             return False
-        if (
-            not stat.S_ISREG(info.st_mode)
-            or info.st_nlink != 1
-            or info.st_uid != 0
-        ):
-            raise BootBlocked("SVT_PENDING_MARKER_UNSAFE")
-        return True
+        started = docker("start", name)
+        if started.returncode:
+            raise BootBlocked("SVT_DOCKER_START_FAILED")
+    return True
 
 
 def wait_container(name: str) -> int:
@@ -296,12 +312,9 @@ def supervise(name: str, database: Path, once: bool) -> int:
     """Restart only after a shared-gate check; stop on any pending update."""
     attempts = 0
     while not STOP:
-        if pending(database):
+        if not start_if_clear(name, database):
             print("SKIP_PENDING")
             return 0
-        started = docker("start", name)
-        if started.returncode:
-            raise BootBlocked("SVT_DOCKER_START_FAILED")
         print("SUPERVISED_START_PASS", flush=True)
         if once:
             return 0

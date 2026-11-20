@@ -8,6 +8,7 @@ import json
 import os
 import stat
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -308,6 +309,85 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             ),
         ):
             SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_start_and_pending_check_share_one_transaction_gate(self):
+        """Updater cannot publish pending between check and Docker start."""
+        attempting = threading.Event()
+        acquired = threading.Event()
+        thread = None
+
+        def updater():
+            attempting.set()
+            with SUPERVISOR.update_gate(self.db):
+                acquired.set()
+
+        def docker_start(*args):
+            nonlocal thread
+            self.assertEqual(args, ("start", self.args.container))
+            thread = threading.Thread(target=updater, daemon=True)
+            thread.start()
+            self.assertTrue(attempting.wait(1))
+            self.assertFalse(acquired.wait(0.08))
+            return SimpleNamespace(returncode=0)
+
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "docker", side_effect=docker_start),
+        ):
+            self.assertTrue(
+                SUPERVISOR.start_if_clear(self.args.container, self.db)
+            )
+        self.assertIsNotNone(thread)
+        thread.join(timeout=2)
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(acquired.is_set())
+
+    def test_pending_prevents_docker_start_while_gate_is_owned(self):
+        """Refuse any Docker call when pending is already published."""
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(
+                SUPERVISOR,
+                "_pending_under_gate",
+                return_value=True,
+            ),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+        ):
+            started = SUPERVISOR.start_if_clear(self.args.container, self.db)
+        self.assertFalse(started)
+        docker_call.assert_not_called()
+
+    def test_failed_docker_start_does_not_claim_supervisor_success(self):
+        """A nonzero Docker exit must never be a successful writer start."""
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(
+                SUPERVISOR, "_pending_under_gate", return_value=False
+            ),
+            patch.object(
+                SUPERVISOR,
+                "docker",
+                return_value=SimpleNamespace(returncode=1),
+            ),
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "SVT_DOCKER_START_FAILED"
+            ),
+        ):
+            SUPERVISOR.start_if_clear(self.args.container, self.db)
+
+    def test_symlink_pending_rejected_before_docker_start(self):
+        """Even a dangling marker blocks a new owner before Docker."""
+        marker = self.root / ".svt-update-pending"
+        marker.symlink_to(self.root / "missing-pending")
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "SVT_PENDING_MARKER_UNSAFE"
+            ),
+        ):
+            SUPERVISOR.start_if_clear(self.args.container, self.db)
+        docker_call.assert_not_called()
 
     def test_dangling_symlink_pending_marker_fails_closed(self) -> None:
         """A missing symlink target is not equivalent to a clear marker."""
