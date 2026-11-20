@@ -24,6 +24,7 @@ jobs:
       test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   release:
     needs: ci
+    environment: shelly-release-approval
     runs-on: ubuntu-latest
     steps:
       - name: Resolve tag
@@ -74,6 +75,26 @@ jobs:
             echo "ERROR: RELEASE_VERSION=$release_version must match VERSION=$version" >&2
             exit 4
           }
+
+      - name: Verify protected GitHub release controls
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/rulesets?includes_parents=true" --jq ".[].id" | while read -r id; do
+            gh api "repos/$GITHUB_REPOSITORY/rulesets/$id"
+          done | jq -s . > "$scratch/rulesets.json"
+          gh api "repos/$GITHUB_REPOSITORY/environments" > "$scratch/environments.json"
+          python3 scripts/qa-release-tag-protection.py --qa-only\
+            --version "$(cat VERSION)"\
+            --commit "$(git rev-parse HEAD)"\
+            --rulesets-json "$scratch/rulesets.json"\
+            --environments-json "$scratch/environments.json"\
+            --workflows-dir "$GITHUB_WORKSPACE/.github/workflows" --jsonl
 
       - name: Build reproducible source assets
         shell: bash

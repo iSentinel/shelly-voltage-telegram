@@ -13,6 +13,10 @@ VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw\Z")
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 TAG_REFS = {"refs/tags/v*", "~ALL"}
 ENVIRONMENT = "shelly-release-approval"
+IMAGE_ENVIRONMENT_EXPR = (
+    "$" + "{{ github.ref_type == 'tag' "
+    "&& 'shelly-release-approval' || 'ci-image-build' }}"
+)
 ENV_CANDIDATES = ("release.yml", "image.yml")
 
 
@@ -117,6 +121,12 @@ def protected_job(path: Path, name: str) -> bool:
     segment = body[job.end() :]
     if next_job is not None:
         segment = segment[: next_job.start()]
+    if (
+        name == "build"
+        and f"    environment: {IMAGE_ENVIRONMENT_EXPR}"
+        in segment.splitlines()
+    ):
+        return True
     return bool(
         re.search(
             rf"(?m)^    environment:\s*{re.escape(ENVIRONMENT)}\s*$",

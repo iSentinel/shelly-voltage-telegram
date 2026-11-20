@@ -31,6 +31,7 @@ jobs:
       test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
   build:
     needs: ci
+    environment: ${{ github.ref_type == 'tag' && 'shelly-release-approval' || 'ci-image-build' }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate manual inputs
@@ -70,6 +71,27 @@ jobs:
             --ref "$SOURCE_REF" \
             --build-ref "${BUILD_REF:-}" \
             --image-tag "${IMAGE_TAG:-}"
+
+      - name: Verify protected GitHub release controls
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/rulesets?includes_parents=true" --jq ".[].id" | while read -r id; do
+            gh api "repos/$GITHUB_REPOSITORY/rulesets/$id"
+          done | jq -s . > "$scratch/rulesets.json"
+          gh api "repos/$GITHUB_REPOSITORY/environments" > "$scratch/environments.json"
+          python3 scripts/qa-release-tag-protection.py --qa-only\
+            --version "$(cat VERSION)"\
+            --commit "$(git rev-parse HEAD)"\
+            --rulesets-json "$scratch/rulesets.json"\
+            --environments-json "$scratch/environments.json"\
+            --workflows-dir "$GITHUB_WORKSPACE/.github/workflows" --jsonl
 
       - name: Resolve checked-out source
         id: source

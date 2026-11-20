@@ -155,6 +155,33 @@ class ReleaseTagProtectionTests(unittest.TestCase):
             GUARD.evaluate(self.args)["missing_guards"],
         )
 
+    def test_reviewed_tag_conditional_image_environment(self) -> None:
+        """The exact tag-only reviewed environment is accepted."""
+        self.add_ruleset()
+        self.add_environment()
+        self.workflow("release.yml", "release", owner=True)
+        (self.workflows / "image.yml").write_text(
+            "jobs:\n  build:\n"
+            f"    environment: {GUARD.IMAGE_ENVIRONMENT_EXPR}\n"
+            "    runs-on: ubuntu-latest\n"
+        )
+        self.assertEqual(GUARD.evaluate(self.args)["missing_guards"], [])
+
+    def test_unrecognized_image_environment_expression_denied(self) -> None:
+        """A typo in a release context expression cannot pass QA."""
+        self.add_ruleset()
+        self.add_environment()
+        self.workflow("release.yml", "release", owner=True)
+        (self.workflows / "image.yml").write_text(
+            "jobs:\n  build:\n"
+            "    environment: ${{ github.ref_type == 'branch' "
+            "&& 'shelly-release-approval' || 'ci-image-build' }}\n"
+        )
+        self.assertIn(
+            "OCI_PUBLISH_JOB_NOT_OWNER_GATED",
+            GUARD.evaluate(self.args)["missing_guards"],
+        )
+
     def test_tag_rule_only_on_branch_is_insufficient(self) -> None:
         """Main-branch protection cannot control v* tag creation."""
         self.add_environment()
