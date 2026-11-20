@@ -230,76 +230,108 @@ mark_pending() {
     sync -f "$STATE"
 }
 
+recovery_file_is_safe() {
+    local mode
+    [[ -f "$1" && ! -L "$1" && -O "$1" ]] || return 1
+    [[ "$(stat -c %h -- "$1")" == 1 ]] || return 1
+    mode="$(stat -c %a -- "$1")" || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+verify_recovery_history() {
+    local archive manifest recorded actual
+    local -a archives=("$SNAPSHOT"/voltage-*.sqlite3.gz)
+    [[ ${#archives[@]} == 1 ]] || return 1
+    archive="${archives[0]}"
+    manifest="$archive.sha256"
+    recovery_file_is_safe "$archive" || return 1
+    recovery_file_is_safe "$manifest" || return 1
+    [[ "$(stat -c %s -- "$manifest")" -le 8192 ]] || return 1
+    [[ "$(stat -c %s -- "$archive")" -le 2147483648 ]] || return 1
+    recorded="$(cat -- "$manifest")" || return 1
+    actual="$(sha256sum -- "$archive")" || return 1
+    [[ "$recorded" == "$actual" ]] || return 1
+    /usr/bin/python3 -I -B "$ROOT/scripts/validate-sqlite-archive.py" \
+        --archive "$archive" --compare-db "$DB"
+}
+
+require_recovery_history() {
+    if ! verify_recovery_history; then
+        echo "FAIL: recovery archive does not match live SQLite or could not be verified; inspect pending update" >&2
+        return 1
+    fi
+}
+
+validate_recovery_snapshot() {
+    local directory file
+    for directory in "$STATE" "$STATE/snapshots" "$SNAPSHOT"; do
+        if [[ ! -d "$directory" || -L "$directory" || ! -O "$directory" ]] ||
+            [[ "$(stat -c %a -- "$directory")" != 700 ]]; then
+            echo "FAIL: recovery snapshot directory is unsafe" >&2
+            return 1
+        fi
+    done
+    for file in override.yaml deployed.json; do
+        if [[ -e "$SNAPSHOT/$file" || -L "$SNAPSHOT/$file" ]]; then
+            recovery_file_is_safe "$SNAPSHOT/$file" || return 1
+        fi
+    done
+}
+
+restore_recovery_receipt() {
+    local name="$1" temporary
+    if [[ ! -f "$SNAPSHOT/$name" ]]; then
+        rm -f -- "$STATE/$name"
+        return
+    fi
+    temporary="$(mktemp "$STATE/.receipt.XXXXXXXX")" || return 1
+    if ! install -m 0600 -- "$SNAPSHOT/$name" "$temporary" ||
+        ! mv -fT -- "$temporary" "$STATE/$name"; then
+        rm -f -- "$temporary"
+        return 1
+    fi
+}
+
 recover_pending() {
     local token
-    if [[ ! -f "$PENDING_FILE" ]]; then
+    if [[ ! -e "$PENDING_FILE" && ! -L "$PENDING_FILE" ]]; then
         # A previous update may have committed immediately before a shutdown.
         publish_committed_version || true
         return 0
     fi
-    token="$(cat "$PENDING_FILE")"
+    if ! recovery_file_is_safe "$PENDING_FILE" ||
+        [[ "$(stat -c %s -- "$PENDING_FILE")" -gt 128 ]]; then
+        echo "FAIL: unsafe pending update marker" >&2
+        return 1
+    fi
+    token="$(cat -- "$PENDING_FILE")" || return 1
     if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
         echo "FAIL: invalid pending update marker" >&2
         return 1
     fi
     SNAPSHOT="$STATE/snapshots/$token"
-    [[ -d "$SNAPSHOT" ]] || return 1
+    validate_recovery_snapshot || return 1
     echo "RECOVERY: interrupted update $token" >&2
+    # Compare before stopping Docker and recheck any commits made during stop.
+    require_recovery_history || return 1
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    if [[ -f "$SNAPSHOT/override.yaml" ]]; then
-        cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
-    else
-        rm -f "$STATE/override.yaml"
-    fi
-    if [[ -f "$SNAPSHOT/deployed.json" ]]; then
-        cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json"
-    else
-        rm -f "$STATE/deployed.json"
-    fi
-    restore_snapshot_database
-    rm -f "$PENDING_FILE" || return 1
-    # Status publication alone must never force another database restore.
+    require_recovery_history || return 1
+    restore_recovery_receipt override.yaml || return 1
+    restore_recovery_receipt deployed.json || return 1
+    require_recovery_history || return 1
+    # Persist the previous image selection before clearing the recovery journal.
+    sync -f "$STATE" || return 1
+    rm -f -- "$PENDING_FILE" || return 1
+    sync -f "$STATE" || return 1
+    # The committed receipt can be published again independently.
     publish_committed_version || true
 }
 
-restore_snapshot_database() {
-    local backup rescue temp
-    backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
-    [[ -n "$backup" ]] || return 1
-    sha256sum -c "$backup.sha256" || return 1
-    docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
-    if [[ -f "$DB" && ! -e "$rescue" ]]; then
-        python3 - "$DB" "$rescue" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-source = "file:" + sys.argv[1] + "?mode=ro"
-with closing(sqlite3.connect(source, uri=True)) as original:
-    with closing(sqlite3.connect(sys.argv[2])) as destination:
-        original.backup(destination)
-PY
-        chmod 0600 "$rescue"
+require_no_pending_recovery() {
+    if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+        echo "FAIL: update recovery is pending" >&2
+        return 3
     fi
-    temp="$(mktemp "${DB}.recovery.XXXXXXXX")"
-    if ! gzip -dc "$backup" > "$temp"; then
-        rm -f "$temp"
-        return 1
-    fi
-    python3 - "$temp" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-with closing(sqlite3.connect(sys.argv[1])) as db:
-    if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-        raise SystemExit("invalid rollback database")
-PY
-    chown --reference="$DB" "$temp"
-    chmod --reference="$DB" "$temp"
-    rm -f "$DB-wal" "$DB-shm"
-    mv -f "$temp" "$DB"
 }
 
 rollback() {
@@ -347,25 +379,29 @@ os.replace(name, destination)
 PY
 }
 
+run_recovery_command() {
+    [[ $EUID -eq 0 ]] || return 2
+    mkdir -p "$STATE"
+    exec 9>/run/lock/shelly-voltage-updater.lock
+    flock -w 120 9 || return 3
+    if [[ "$1" == "--recover" ]]; then
+        recover_pending
+        return
+    fi
+    require_no_pending_recovery || return $?
+    publish_committed_version
+}
+
 main() {
     if [[ $# -eq 1 && ( "$1" == "--recover" || "$1" == "--sync-public-version" ) ]]; then
-        [[ $EUID -eq 0 ]] || return 2
-        mkdir -p "$STATE"
-        exec 9>/run/lock/shelly-voltage-updater.lock
-        flock -w 120 9 || return 3
-        if [[ "$1" == "--recover" ]]; then
-            recover_pending
-            return
-        fi
-        if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
-            echo "FAIL: update recovery is pending" >&2
-            return 3
-        fi
-        publish_committed_version
+        run_recovery_command "$1"
         return
     fi
     parse_args "$@"
     requirements
+    if [[ "$DRY_RUN" == false ]]; then
+        require_no_pending_recovery || return $?
+    fi
     preflight
     python3 "$ROOT/scripts/github_update.py" guard \
         --root "$ROOT" --state "$STATE" --version "$VERSION"
