@@ -72,6 +72,9 @@ def tag_ruleset_ready(items: object) -> bool:
         if not all(isinstance(x, list) for x in (includes, excludes, rules)):
             continue
         types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
+        # Partial or bypassable policy is not verified tag control.
+        if item.get("bypass_actors") != []:
+            continue
         if (
             item.get("target") == "tag"
             and item.get("enforcement") == "active"

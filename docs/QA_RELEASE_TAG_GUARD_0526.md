@@ -15,6 +15,11 @@ This is an actual release **NO-GO**, not a request to bypass approval.
 JSON snapshots and workflow text. The report requires all of:
 
 1. An active GitHub **tag ruleset** restricting creation of v* tags.
+   The read-only QA audit requires an explicit empty bypass_actors
+   list in full ruleset details; always, exempt or an unknown
+   bypass policy fails closed until an owner-approved workflow can
+   independently verify a strictly scoped alternative. This is a
+   conservative QA check, not proof that tag creation is feasible.
    Configure owner-specific bypass/privileges explicitly; an active
    ruleset label alone does not prove human authorization.
 2. A GitHub environment `shelly-release-approval` with a required

@@ -70,6 +70,7 @@ class ReleaseTagProtectionTests(unittest.TestCase):
                 {
                     "target": "tag",
                     "enforcement": "active",
+                    "bypass_actors": [],
                     "conditions": {
                         "ref_name": {
                             "include": ["refs/tags/v*"],
@@ -202,6 +203,37 @@ class ReleaseTagProtectionTests(unittest.TestCase):
             "TAG_CREATION_RULESET_UNVERIFIED",
             GUARD.evaluate(self.args)["missing_guards"],
         )
+
+    def test_bypass_actor_can_never_be_implicit_owner_approval(self) -> None:
+        """An actor bypassing creation rules makes tag protection unproved."""
+        for mode in ("always", "exempt", "pull_request"):
+            with self.subTest(mode=mode):
+                self.add_ruleset()
+                data = json.loads(self.rules.read_text())
+                data[0]["bypass_actors"] = [
+                    {
+                        "actor_id": 22,
+                        "actor_type": "Team",
+                        "bypass_mode": mode,
+                    }
+                ]
+                self.save(self.rules, data)
+                self.assertFalse(GUARD.tag_ruleset_ready(data))
+
+    def test_missing_bypass_metadata_fails_closed(self) -> None:
+        """A partial GitHub API ruleset cannot prove non-bypassability."""
+        self.add_ruleset()
+        data = json.loads(self.rules.read_text())
+        del data[0]["bypass_actors"]
+        self.assertFalse(GUARD.tag_ruleset_ready(data))
+
+    def test_empty_explicit_bypass_list_is_reviewer_evidence_only(
+        self,
+    ) -> None:
+        """No bypass actors permits a ruleset claim, never release approval."""
+        self.add_ruleset()
+        data = json.loads(self.rules.read_text())
+        self.assertTrue(GUARD.tag_ruleset_ready(data))
 
     def test_non_active_ruleset_does_not_count(self) -> None:
         """A disabled rule is not release protection."""
