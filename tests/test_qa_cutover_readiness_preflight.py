@@ -17,6 +17,7 @@ assert SPEC is not None and SPEC.loader is not None
 CHECK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECK)
 COMMIT = "a" * 40
+OLD_COMMIT = "b" * 40
 OLD_DIGEST = "sha256:" + "1" * 64
 NEW_DIGEST = "sha256:" + "2" * 64
 
@@ -34,6 +35,8 @@ class QaCutoverReadinessTests(unittest.TestCase):
             new_version=Path("/var/lib/svt-qa-pair/RELEASE_VERSION"),
             source_archive_dir=CHECK.SOURCE_STAGE,
             target_commit=COMMIT,
+            old_commit="",
+            verify_signatures=False,
             container="svt-qa-disposable",
             database=Path("/var/tmp/svt-qa-data/voltage.sqlite3"),
             fence_dir=Path("/var/lib/svt-qa-fence"),
@@ -48,7 +51,10 @@ class QaCutoverReadinessTests(unittest.TestCase):
             "old_version": "0.5.25-hw",
             "new_version": "0.5.26-hw",
             "sqlite_wal_photo_parity": True,
+            "old_oci_signature_verified": False,
+            "new_oci_signature_verified": False,
             "release_authorized": False,
+            "rollback_authorized": False,
         }
 
     def receipt(self):
@@ -75,6 +81,116 @@ class QaCutoverReadinessTests(unittest.TestCase):
         self.assertFalse(result["image_actually_changed"])
         self.assertFalse(result["release_authorized"])
         self.assertFalse(result["rollback_authorized"])
+
+    def test_signed_cutover_rechecks_both_exact_git_shas(self) -> None:
+        """Only an explicit two-signature check can set signed QA claims."""
+        args = self.args()
+        args.verify_signatures = True
+        args.old_commit = OLD_COMMIT
+        evidence = dict(
+            self.baseline(),
+            status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
+            old_oci_signature_verified=True,
+            new_oci_signature_verified=True,
+        )
+        with (
+            patch.object(CHECK, "check_qa_boundary"),
+            patch.object(
+                CHECK.BASE, "evaluate", return_value=evidence
+            ) as verify,
+            patch.object(CHECK, "check_target", return_value=self.receipt()),
+        ):
+            result = CHECK.evaluate(args)
+        verify.assert_called_once()
+        self.assertEqual(args.new_commit, COMMIT)
+        self.assertEqual(args.old_commit, OLD_COMMIT)
+        self.assertEqual(
+            result["status"], "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
+        )
+        self.assertTrue(result["old_oci_signature_reverified"])
+        self.assertTrue(result["new_oci_signature_reverified"])
+        self.assertFalse(result["source_signature_reverified"])
+        self.assertFalse(result["release_authorized"])
+        self.assertFalse(result["rollback_authorized"])
+        self.assertFalse(result["image_actually_changed"])
+
+    def test_signed_mode_requires_old_git_sha_before_io(self) -> None:
+        """An old image tag without its source commit cannot claim proof."""
+        args = self.args()
+        args.verify_signatures = True
+        with (
+            patch.object(CHECK.os, "geteuid", return_value=0),
+            patch.object(
+                CHECK.socket,
+                "gethostname",
+                return_value="shelly-docker-reboot-qa",
+            ),
+            patch.object(CHECK.BASE, "evaluate") as verify,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_OLD_COMMIT_REQUIRED"
+            ),
+        ):
+            CHECK.evaluate(args)
+        verify.assert_not_called()
+
+    def test_unsigned_mode_rejects_silent_commit_credential(self) -> None:
+        """Supplying old SHA without requesting Cosign is ambiguous."""
+        args = self.args()
+        args.old_commit = OLD_COMMIT
+        with (
+            patch.object(CHECK.os, "geteuid", return_value=0),
+            patch.object(
+                CHECK.socket,
+                "gethostname",
+                return_value="shelly-docker-reboot-qa",
+            ),
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_SIGNATURES_NOT_REQUESTED"
+            ),
+        ):
+            CHECK.check_qa_boundary(args)
+
+    def test_fake_signed_base_with_missing_oci_proof_refused(self) -> None:
+        """A signed-looking status without both Cosign results is blocked."""
+        args = self.args()
+        args.verify_signatures = True
+        args.old_commit = OLD_COMMIT
+        evidence = dict(
+            self.baseline(),
+            status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
+            old_oci_signature_verified=True,
+            new_oci_signature_verified=False,
+        )
+        with (
+            patch.object(CHECK, "check_qa_boundary"),
+            patch.object(CHECK.BASE, "evaluate", return_value=evidence),
+            patch.object(CHECK, "check_target") as target,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_OCI_PROOF_INCOMPLETE"
+            ),
+        ):
+            CHECK.evaluate(args)
+        target.assert_not_called()
+
+    def test_identity_only_cannot_borrow_signed_status(self) -> None:
+        """Signed-only evidence in unsigned mode is a hard policy conflict."""
+        args = self.args()
+        evidence = dict(
+            self.baseline(),
+            status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
+            old_oci_signature_verified=True,
+            new_oci_signature_verified=True,
+        )
+        with (
+            patch.object(CHECK, "check_qa_boundary"),
+            patch.object(CHECK.BASE, "evaluate", return_value=evidence),
+            patch.object(CHECK, "check_target") as target,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_BASE_PROOF_INCOMPLETE"
+            ),
+        ):
+            CHECK.evaluate(args)
+        target.assert_not_called()
 
     def test_wrong_host_refuses_source_receipt_evaluation(self) -> None:
         """Only an isolated QA guest may inspect a future cutover."""

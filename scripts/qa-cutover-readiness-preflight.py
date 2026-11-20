@@ -47,6 +47,16 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--new-version", required=True, type=Path)
     parser.add_argument("--source-archive-dir", required=True, type=Path)
     parser.add_argument("--target-commit", required=True)
+    parser.add_argument(
+        "--verify-signatures",
+        action="store_true",
+        help="Explicitly verify both old/new OCI signatures in isolated QA.",
+    )
+    parser.add_argument(
+        "--old-commit",
+        default="",
+        help="Exact old Git SHA required with --verify-signatures.",
+    )
     parser.add_argument("--container", required=True)
     parser.add_argument("--database", required=True, type=Path)
     parser.add_argument("--fence-dir", required=True, type=Path)
@@ -71,6 +81,12 @@ def check_qa_boundary(args: argparse.Namespace) -> None:
         raise CutoverBlocked("QA_CUTOVER_SOURCE_RECEIPT_PATH_INVALID")
     if not OWNER.COMMIT.fullmatch(args.target_commit):
         raise CutoverBlocked("QA_CUTOVER_TARGET_COMMIT_INVALID")
+    signed = getattr(args, "verify_signatures", False)
+    old_commit = getattr(args, "old_commit", "")
+    if signed and not OWNER.COMMIT.fullmatch(old_commit):
+        raise CutoverBlocked("QA_CUTOVER_OLD_COMMIT_REQUIRED")
+    if not signed and old_commit:
+        raise CutoverBlocked("QA_CUTOVER_SIGNATURES_NOT_REQUESTED")
 
 
 def check_target(args: argparse.Namespace, baseline: dict) -> dict:
@@ -95,19 +111,40 @@ def check_target(args: argparse.Namespace, baseline: dict) -> dict:
     return record
 
 
+def check_base_proof(base: dict, signed: bool) -> None:
+    """Do not confuse identity-only and exact-SHA OCI signed reports."""
+    expected = (
+        "PASS_QA_SIGNED_OCI_AND_WAL_ONLY"
+        if signed
+        else "PASS_QA_IDENTITY_AND_WAL_ONLY"
+    )
+    if (
+        base.get("status") != expected
+        or base.get("sqlite_wal_photo_parity") is not True
+        or base.get("release_authorized") is not False
+        or base.get("rollback_authorized") is not False
+    ):
+        raise CutoverBlocked("QA_CUTOVER_BASE_PROOF_INCOMPLETE")
+    for key in ("old_oci_signature_verified", "new_oci_signature_verified"):
+        if base.get(key) is not signed:
+            raise CutoverBlocked("QA_CUTOVER_OCI_PROOF_INCOMPLETE")
+
+
 def evaluate(args: argparse.Namespace) -> dict:
     """Match the stopped writer and pending rescue to the release pair."""
     check_qa_boundary(args)
+    signed = getattr(args, "verify_signatures", False)
+    if signed:
+        args.new_commit = args.target_commit
     base = BASE.evaluate(args)
-    if (
-        base.get("status") != "PASS_QA_IDENTITY_AND_WAL_ONLY"
-        or base.get("sqlite_wal_photo_parity") is not True
-        or base.get("release_authorized") is not False
-    ):
-        raise CutoverBlocked("QA_CUTOVER_BASE_PROOF_INCOMPLETE")
+    check_base_proof(base, signed)
     target = check_target(args, base)
     return {
-        "status": "PASS_QA_CUTOVER_COHERENCE_ONLY",
+        "status": (
+            "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
+            if signed
+            else "PASS_QA_CUTOVER_COHERENCE_ONLY"
+        ),
         "old_version": base["old_version"],
         "new_version": base["new_version"],
         "target_commit": target["source_commit"],
@@ -116,7 +153,9 @@ def evaluate(args: argparse.Namespace) -> dict:
         "source_archive_sha256_matched": True,
         "paired_receipt_consistent": True,
         "source_signature_reverified": False,
-        "oci_signature_reverified": False,
+        "old_oci_signature_reverified": signed,
+        "new_oci_signature_reverified": signed,
+        "oci_signature_reverified": signed,
         "image_actually_changed": False,
         "release_authorized": False,
         "rollback_authorized": False,
