@@ -38,3 +38,18 @@ Example read-only QA command using future genuine signed candidate files:
 Never run legacy apply-update.sh --recover or restore older SQLite.
 The production bot remains on the verified healthy runtime while these
 release gates are incomplete.
+
+## Crash evidence: committed WAL and Telegram pending state
+
+The synthetic regression in tests/test_qa_forward_wal_pending_sigkill.py
+uses the actual fenced-newest-rescue.backup_consistently implementation
+with a real uncheckpointed SQLite WAL. A separate disposable process
+is killed using SIGKILL after fsync of the rescue and after fsync of
+its synthetic SHA receipt. The tests compare full logical SQLite
+digests, all three phase rows, stored PHOTO identity, both pending
+Telegram send markers and the cleanup retry queue. A later live
+measurement makes a prior rescue stale; no old snapshot is installed.
+
+This is **not** a successful real Docker handoff, Telegram API test,
+hypervisor reboot or power-loss durability test. The synthetic QA
+scripts cannot authorize a live cutover and do not contact Shelly.
