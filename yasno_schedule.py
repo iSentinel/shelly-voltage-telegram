@@ -119,16 +119,39 @@ def validate_day(record: object, now: datetime) -> str:
     return schedule_slots(record.get("slots"))
 
 
-def current_day_bars(record: dict, now: datetime) -> str:
-    """Accept published tomorrow only during a one-day API rollover."""
+def day_bars_or_emergency(record: object, now: datetime) -> str | None:
+    """Validate a dated record; None means explicit emergency, never green."""
+    if (
+        isinstance(record, dict)
+        and record.get("status") == "EmergencyShutdowns"
+    ):
+        validate_day_date(record, now)
+        if record.get("slots") != []:
+            raise ValueError(
+                "emergency notice must not contain schedule slots"
+            )
+        return None
+    return validate_day(record, now)
+
+
+def current_day_state(record: dict, now: datetime) -> str | None:
+    """Require valid adjacent dated records during the API midnight lag."""
     try:
-        return validate_day(record.get("today"), now)
+        return day_bars_or_emergency(record.get("today"), now)
     except ValueError as error:
         if str(error) != "schedule date differs from today":
             raise
     yesterday = now.astimezone(KYIV) - timedelta(days=1)
-    validate_day(record.get("today"), yesterday)
-    return validate_day(record.get("tomorrow"), now)
+    day_bars_or_emergency(record.get("today"), yesterday)
+    return day_bars_or_emergency(record.get("tomorrow"), now)
+
+
+def current_day_bars(record: dict, now: datetime) -> str:
+    """Only return a plan, never represent emergency as an empty timeline."""
+    bars = current_day_state(record, now)
+    if bars is None:
+        raise ValueError("schedule not published or not applicable")
+    return bars
 
 
 def validated_record(
@@ -172,22 +195,16 @@ def parse_schedule(
 def parse_provider_state(
     data: object, group: str, now: datetime, retrieved_at: datetime
 ) -> YasnoDay | YasnoEmergency:
-    """Accept only a valid plan or an explicit, current emergency notice."""
+    """Accept a current plan or explicit emergency, including date rollover."""
     record, published = validated_record(data, group, now, retrieved_at)
-    today = record.get("today")
-    if (
-        not isinstance(today, dict)
-        or today.get("status") != "EmergencyShutdowns"
-    ):
-        return parse_schedule(data, group, now, retrieved_at)
-    validate_day_date(today, now)
-    if today.get("slots") != []:
-        raise ValueError("emergency notice must not contain schedule slots")
-    return YasnoEmergency(
-        group,
-        now.astimezone(KYIV).date().isoformat(),
-        published.timestamp(),
-        retrieved_at.timestamp(),
+    bars = current_day_state(record, now)
+    day = now.astimezone(KYIV).date().isoformat()
+    if bars is None:
+        return YasnoEmergency(
+            group, day, published.timestamp(), retrieved_at.timestamp()
+        )
+    return YasnoDay(
+        group, day, bars, published.timestamp(), retrieved_at.timestamp()
     )
 
 
