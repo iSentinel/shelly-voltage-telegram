@@ -21,6 +21,35 @@ public-data payload, plain-text private caption, and HTML preview.
 - The widget sandbox HTML size is 9256 bytes raw, 3430 bytes zlib9.
   Limits: 32768 raw, 4096 zlib. Public data remains <=1024 bytes.
 
+## Meter switch and online card check
+
+Before switching a running installation to a Pro 3EM or Pro 3EM-3CT63,
+compare the planned environment with the saved Telegram meter choice.
+Run this read-only check before stopping the service.
+
+```bash
+python3 scripts/meter-cutover-runtime-guard.py \
+  --env-file /path/to/planned.env \
+  --db /var/lib/shelly-voltage/voltage.sqlite3 \
+  --expected-meter pro3em
+```
+
+Resolve a reported mismatch before applying the switch. The guard reads
+the saved choice with the same spelling requirements as the bot and
+returns exit code 2 if the effective model cannot be verified.
+
+After the three-phase meter is ready, save the local `/health` response
+and run the v5 PNG check.
+
+```bash
+TELEGRAM_GRAPHIC_STYLE=v5 python3 scripts/graphic-online-acceptance.py \
+  --health-file /path/to/health.json --output /path/to/status.png
+```
+
+The result must list L1, L2 and L3. Stale, incomplete or inconsistent
+measurements cause the check to fail before publishing a preview file.
+This command renders a local file without sending a Telegram message.
+
 ## Offline acceptance
 
 ```bash
