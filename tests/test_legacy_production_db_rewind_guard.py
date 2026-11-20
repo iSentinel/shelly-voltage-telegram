@@ -29,6 +29,9 @@ class LegacyProductionRewindGuardTests(unittest.TestCase):
         self.env = dict(os.environ)
         self.env.pop("SVT_SUPERVISOR_OVERLAY", None)
         self.env.pop("SVT_WRITER_FENCE_DIR", None)
+        # Explicitly bind the subprocess to the production-path guard.
+        # Other unittest modules may set DATABASE_PATH for QA fixtures.
+        self.env["DATABASE_PATH"] = PRODUCTION_DB
 
     def sourced(
         self, action: str, database: str

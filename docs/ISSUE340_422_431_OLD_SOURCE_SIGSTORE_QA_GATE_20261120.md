@@ -74,3 +74,20 @@ The production legacy --recover, Docker restart=unless-stopped,
 newest WAL+PHOTO recovery, hard-interruption and supervised
 single-writer acceptance gates still apply. Owner Approval in
 principle is not approval to bypass these technical gates.
+
+## Complete matrix follow-up: isolate the database path in an old QA test
+
+The initial LXC114 combined 590-test run exposed a preexisting
+environment dependency in the separate legacy production updater
+test: it inherited DATABASE_PATH from the process test environment,
+so root-required could be returned for an unrelated QA database
+before the tested live path was evaluated. Its setUp now explicitly
+pins DATABASE_PATH to the canonical production value for that
+purely read-only, guaranteed-to-refuse command test. No production
+SQLite file is opened or modified.
+
+36/36 focused updater, rollback and signed old/new source tests
+PASS with this isolated environment. The original GitHub Actions
+run 44649120368 for old source gate commit 1316420 completed
+SUCCESS for Python3.11/3.12/3.13. A fresh exact-SHA CI run is
+required for the additional test-harness isolation change.
