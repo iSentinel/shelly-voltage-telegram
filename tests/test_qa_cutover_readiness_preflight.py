@@ -62,7 +62,54 @@ class QaCutoverReadinessTests(unittest.TestCase):
         return {
             "transaction_token": self.args().token,
             "source_commit": COMMIT,
+            "version": "0.5.26-hw",
+            "digest": NEW_DIGEST,
         }
+
+    def source_pair_proof(self):
+        """A complete synthetic source-Sigstore and OCI result."""
+        return {
+            "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
+            "version": "0.5.26-hw",
+            "commit": COMMIT,
+            "digest_suffix": NEW_DIGEST[-12:],
+            "source_signature_verified": True,
+            "oci_signature_verified": True,
+            "oci_attestations_verified": True,
+            "release_authorized": False,
+            "rollback_authorized": False,
+        }
+
+    def assert_signed_report(self, result, args, source_verify) -> None:
+        """Inspect exact source paths and independent signature flags."""
+        source_verify.assert_called_once()
+        exact = source_verify.call_args.args[0]
+        self.assertEqual(
+            (exact.commit, exact.digest, exact.bundle.name),
+            (
+                COMMIT,
+                NEW_DIGEST,
+                "shelly-voltage-telegram-0.5.26-hw.tar.gz.sigstore.json",
+            ),
+        )
+        self.assertEqual(
+            (args.new_commit, args.old_commit), (COMMIT, OLD_COMMIT)
+        )
+        self.assertEqual(
+            result["status"], "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
+        )
+        for key in (
+            "old_oci_signature_reverified",
+            "new_oci_signature_reverified",
+            "source_signature_reverified",
+        ):
+            self.assertTrue(result[key])
+        for key in (
+            "release_authorized",
+            "rollback_authorized",
+            "image_actually_changed",
+        ):
+            self.assertFalse(result[key])
 
     def test_combined_report_never_authorizes_release(self) -> None:
         """Matching pending and old/new pair is only QA coherence."""
@@ -83,7 +130,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
         self.assertFalse(result["rollback_authorized"])
 
     def test_signed_cutover_rechecks_both_exact_git_shas(self) -> None:
-        """Only an explicit two-signature check can set signed QA claims."""
+        """Reverify old/new OCI and new Sigstore before signed QA claims."""
         args = self.args()
         args.verify_signatures = True
         args.old_commit = OLD_COMMIT
@@ -95,24 +142,80 @@ class QaCutoverReadinessTests(unittest.TestCase):
         )
         with (
             patch.object(CHECK, "check_qa_boundary"),
-            patch.object(
-                CHECK.BASE, "evaluate", return_value=evidence
-            ) as verify,
+            patch.object(CHECK.BASE, "evaluate", return_value=evidence),
             patch.object(CHECK, "check_target", return_value=self.receipt()),
+            patch.object(
+                CHECK.SOURCE_PAIR,
+                "verify",
+                return_value=self.source_pair_proof(),
+            ) as source_verify,
         ):
             result = CHECK.evaluate(args)
-        verify.assert_called_once()
-        self.assertEqual(args.new_commit, COMMIT)
-        self.assertEqual(args.old_commit, OLD_COMMIT)
-        self.assertEqual(
-            result["status"], "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
+        self.assert_signed_report(result, args, source_verify)
+
+    def test_mismatched_staged_source_commit_blocks_before_cosign(
+        self,
+    ) -> None:
+        """Never reverify a TAR under a different source commit."""
+        args = self.args()
+        wrong = dict(self.receipt(), source_commit="c" * 40)
+        with (
+            patch.object(CHECK.SOURCE_PAIR, "verify") as verifier,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_NEW_PAIR_IDENTITY_INVALID"
+            ),
+        ):
+            CHECK.reverify_signed_new_pair(args, wrong)
+        verifier.assert_not_called()
+
+    def test_missing_source_sigstore_bundle_blocks_signed_cutover(
+        self,
+    ) -> None:
+        """Missing staged Sigstore bytes must block a signed QA report."""
+        args = self.args()
+        args.verify_signatures = True
+        args.old_commit = OLD_COMMIT
+        evidence = dict(
+            self.baseline(),
+            status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
+            old_oci_signature_verified=True,
+            new_oci_signature_verified=True,
         )
-        self.assertTrue(result["old_oci_signature_reverified"])
-        self.assertTrue(result["new_oci_signature_reverified"])
-        self.assertFalse(result["source_signature_reverified"])
-        self.assertFalse(result["release_authorized"])
-        self.assertFalse(result["rollback_authorized"])
-        self.assertFalse(result["image_actually_changed"])
+        with (
+            patch.object(CHECK, "check_qa_boundary"),
+            patch.object(CHECK.BASE, "evaluate", return_value=evidence),
+            patch.object(CHECK, "check_target", return_value=self.receipt()),
+            patch.object(
+                CHECK.SOURCE_PAIR,
+                "verify",
+                side_effect=ValueError("SOURCE_FILE_UNSAFE"),
+            ) as verifier,
+            self.assertRaisesRegex(ValueError, "SOURCE_FILE_UNSAFE"),
+        ):
+            CHECK.evaluate(args)
+        verifier.assert_called_once()
+
+    def test_incomplete_source_pair_result_blocks_signed_cutover(self) -> None:
+        """Signed-looking OCI evidence cannot hide unsigned source bytes."""
+        args = self.args()
+        bad = {
+            "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
+            "version": "0.5.26-hw",
+            "commit": COMMIT,
+            "digest_suffix": NEW_DIGEST[-12:],
+            "source_signature_verified": False,
+            "oci_signature_verified": True,
+            "oci_attestations_verified": True,
+            "release_authorized": False,
+            "rollback_authorized": False,
+        }
+        with (
+            patch.object(CHECK.SOURCE_PAIR, "verify", return_value=bad),
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_NEW_PAIR_PROOF_INCOMPLETE"
+            ),
+        ):
+            CHECK.reverify_signed_new_pair(args, self.receipt())
 
     def test_signed_mode_requires_old_git_sha_before_io(self) -> None:
         """An old image tag without its source commit cannot claim proof."""

@@ -9,7 +9,9 @@ import json
 import os
 import socket
 import sqlite3
+import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -35,6 +37,9 @@ BASE = helper("qa-paired-rescue-preflight.py", "svt_cutover_base")
 OWNER = BASE.OWNER
 STAGE = BASE.STAGE
 OLD = BASE.PAIR
+SOURCE_PAIR = helper(
+    "verify-signed-release-pair.py", "svt_cutover_signed_source_pair"
+)
 
 
 def arguments() -> argparse.Namespace:
@@ -130,6 +135,62 @@ def check_base_proof(base: dict, signed: bool) -> None:
             raise CutoverBlocked("QA_CUTOVER_OCI_PROOF_INCOMPLETE")
 
 
+def staged_pair_proof_args(
+    args: argparse.Namespace, record: dict
+) -> argparse.Namespace:
+    """Bind actual protected source bytes to exact release identity."""
+    version = record.get("version")
+    digest = record.get("digest")
+    commit = record.get("source_commit")
+    if (
+        not isinstance(version, str)
+        or not OWNER.VERSION.fullmatch(version)
+        or not isinstance(digest, str)
+        or not OWNER.DIGEST.fullmatch(digest)
+        or commit != args.target_commit
+    ):
+        raise CutoverBlocked("QA_CUTOVER_NEW_PAIR_IDENTITY_INVALID")
+    name = f"shelly-voltage-telegram-{version}.tar.gz"
+    return argparse.Namespace(
+        version=version,
+        commit=commit,
+        digest=digest,
+        archive=args.source_archive_dir / name,
+        bundle=args.source_archive_dir / (name + ".sigstore.json"),
+        sha256sums=args.source_archive_dir / "SHA256SUMS",
+    )
+
+
+def require_signed_source_pair_proof(
+    proof: dict, expected: argparse.Namespace
+):
+    """Refuse unsigned Sigstore or mismatching multiarch OCI evidence."""
+    if (
+        proof.get("status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY"
+        or proof.get("version") != expected.version
+        or proof.get("commit") != expected.commit
+        or proof.get("digest_suffix") != expected.digest[-12:]
+        or proof.get("release_authorized") is not False
+        or proof.get("rollback_authorized") is not False
+        or any(
+            proof.get(key) is not True
+            for key in (
+                "source_signature_verified",
+                "oci_signature_verified",
+                "oci_attestations_verified",
+            )
+        )
+    ):
+        raise CutoverBlocked("QA_CUTOVER_NEW_PAIR_PROOF_INCOMPLETE")
+
+
+def reverify_signed_new_pair(args: argparse.Namespace, record: dict) -> None:
+    """Reauthenticate the complete staged source and OCI before cutover."""
+    exact = staged_pair_proof_args(args, record)
+    proof = SOURCE_PAIR.verify(exact)
+    require_signed_source_pair_proof(proof, exact)
+
+
 def evaluate(args: argparse.Namespace) -> dict:
     """Match the stopped writer and pending rescue to the release pair."""
     check_qa_boundary(args)
@@ -139,6 +200,8 @@ def evaluate(args: argparse.Namespace) -> dict:
     base = BASE.evaluate(args)
     check_base_proof(base, signed)
     target = check_target(args, base)
+    if signed:
+        reverify_signed_new_pair(args, target)
     return {
         "status": (
             "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
@@ -152,7 +215,7 @@ def evaluate(args: argparse.Namespace) -> dict:
         "sqlite_wal_photo_parity": True,
         "source_archive_sha256_matched": True,
         "paired_receipt_consistent": True,
-        "source_signature_reverified": False,
+        "source_signature_reverified": signed,
         "old_oci_signature_reverified": signed,
         "new_oci_signature_reverified": signed,
         "oci_signature_reverified": signed,
@@ -168,7 +231,15 @@ def main() -> int:
     args = arguments()
     try:
         report = evaluate(args)
-    except (OSError, ValueError, sqlite3.Error, TypeError, KeyError) as exc:
+    except (
+        OSError,
+        ValueError,
+        sqlite3.Error,
+        TypeError,
+        KeyError,
+        subprocess.TimeoutExpired,
+        tarfile.TarError,
+    ) as exc:
         report = {
             "status": "BLOCKED",
             "reason": str(exc)
