@@ -15,16 +15,17 @@ This is an actual release **NO-GO**, not a request to bypass approval.
 JSON snapshots and workflow text. The report requires all of:
 
 1. An active GitHub **tag ruleset** restricting creation of v* tags.
-   The read-only QA audit requires an explicit empty bypass_actors
-   list in full ruleset details; always, exempt or an unknown
-   bypass policy fails closed until an owner-approved workflow can
-   independently verify a strictly scoped alternative. This is a
-   conservative QA check, not proof that tag creation is feasible.
+   On this public personal repository, the QA auditor requires
+   exactly one bypass actor: User GitHub ID 83760791 (iSentinel)
+   with bypass_mode=always so the sole owner can create a tag.
+   Team, application, unrestricted role, exempt, second actors,
+   unknown bypass metadata or empty bypass list are rejected.
+   This grants tag creation only, not release publication.
    Configure owner-specific bypass/privileges explicitly; an active
    ruleset label alone does not prove human authorization.
-2. A GitHub environment `shelly-release-approval` with a required
-   reviewer. Verify the sole-owner review workflow is usable rather
-   than assuming self-review settings or unsupported policies.
+2. A sole-owner approval environment `shelly-release-approval` with a required
+   reviewer matching owner ID 83760791, with prevent_self_review=false and can_admins_bypass=false.
+   GitHub must actually enforce a manual review on the tag workflow.
 3. Both the source release and signed OCI publication jobs gated by
    that reviewed environment, or a reviewed equivalent that prevents
    tag-triggered publication. A missing environment can be

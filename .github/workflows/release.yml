@@ -79,9 +79,10 @@ jobs:
       - name: Verify protected GitHub release controls
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_RULESET_READ_TOKEN }}
         run: |
           set -euo pipefail
+          : "${GH_TOKEN:?RELEASE_RULESET_READ_TOKEN required}"
           umask 077
           scratch="$(mktemp -d)"
           trap 'rm -rf -- "$scratch"' EXIT
@@ -89,9 +90,11 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/rulesets/$id"
           done | jq -s . > "$scratch/rulesets.json"
           gh api "repos/$GITHUB_REPOSITORY/environments" > "$scratch/environments.json"
+          gh api "repos/$GITHUB_REPOSITORY" > "$scratch/repo.json"
           python3 scripts/qa-release-tag-protection.py --qa-only\
             --version "$(cat VERSION)"\
             --commit "$(git rev-parse HEAD)"\
+            --repo-json "$scratch/repo.json"\
             --rulesets-json "$scratch/rulesets.json"\
             --environments-json "$scratch/environments.json"\
             --workflows-dir "$GITHUB_WORKSPACE/.github/workflows" --jsonl

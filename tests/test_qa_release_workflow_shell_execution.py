@@ -29,7 +29,11 @@ ruleset = {
     "id": 42,
     "target": "tag",
     "enforcement": "active",
-    "bypass_actors": [],
+    "bypass_actors": [{
+        "actor_id": 83760791,
+        "actor_type": "User",
+        "bypass_mode": "always",
+    }],
     "conditions": {
         "ref_name": {"include": ["refs/tags/v*"], "exclude": []}
     },
@@ -45,9 +49,13 @@ environment = {
     "total_count": 1,
     "environments": [{
         "name": "shelly-release-approval",
+        "can_admins_bypass": False,
         "protection_rules": [{
             "type": "required_reviewers",
-            "reviewers": [{"type": "User", "id": 123}],
+            "prevent_self_review": False,
+    "reviewers": [{
+        "type": "User", "reviewer": {"id": 83760791},
+    }],
         }],
     }],
 }
@@ -56,6 +64,14 @@ if resource.endswith("rulesets?includes_parents=true"):
         print(42)
 elif resource.endswith("rulesets/42"):
     print(json.dumps(ruleset))
+elif resource.endswith("/shelly-voltage-telegram"):
+    print(json.dumps({
+        "full_name": "iSentinel/shelly-voltage-telegram",
+        "private": False,
+        "owner": {
+            "login": "iSentinel", "id": 83760791, "type": "User",
+        },
+    }))
 elif resource.endswith("environments"):
     print(json.dumps({"total_count": 0, "environments": []}
                      if mode == "empty" else environment))
@@ -127,6 +143,8 @@ class WorkflowGuardShellTests(unittest.TestCase):
                 "GH_TOKEN": "synthetic-offline-only",
             }
         )
+        if mode == "no_token":
+            env["GH_TOKEN"] = ""
         return subprocess.run(
             ["bash", "-euo", "pipefail", "-c", shell_step(filename)],
             cwd=ROOT,
@@ -165,6 +183,13 @@ class WorkflowGuardShellTests(unittest.TestCase):
         for file in FILES:
             with self.subTest(file=file):
                 result = self.execute(file, "offline")
+                self.assertNotEqual(result.returncode, 0)
+
+    def test_missing_release_read_token_fails_closed(self) -> None:
+        """The protected owner API credential cannot be optional."""
+        for file in FILES:
+            with self.subTest(file=file):
+                result = self.execute(file, "no_token")
                 self.assertNotEqual(result.returncode, 0)
 
     def test_tag_bypass_actor_rejects_both_workflows(self) -> None:

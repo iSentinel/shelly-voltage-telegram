@@ -11,7 +11,8 @@ from pathlib import Path
 
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+-hw\Z")
 SHA = re.compile(r"[0-9a-f]{40}\Z")
-TAG_REFS = {"refs/tags/v*", "~ALL"}
+TAG_REFS = {"refs/tags/v*"}
+OWNER_ID = 83760791
 ENVIRONMENT = "shelly-release-approval"
 IMAGE_ENVIRONMENT_EXPR = (
     "$" + "{{ github.ref_type == 'tag' "
@@ -30,6 +31,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--qa-only", action="store_true", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--repo-json", required=True, type=Path)
     parser.add_argument("--rulesets-json", required=True, type=Path)
     parser.add_argument("--environments-json", required=True, type=Path)
     parser.add_argument("--workflows-dir", required=True, type=Path)
@@ -53,41 +55,89 @@ def read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def tag_ruleset_ready(items: object) -> bool:
-    """Require an active tag-creation restriction for every stable v* tag."""
+def repository_owner(data: object) -> int:
+    """Bind scope to the actual personal repository owner identity."""
+    if not isinstance(data, dict):
+        raise ProtectionBlocked("TAG_REPOSITORY_IDENTITY_INVALID")
+    owner = data.get("owner")
+    if (
+        data.get("full_name") != "iSentinel/shelly-voltage-telegram"
+        or data.get("private") is not False
+        or not isinstance(owner, dict)
+        or owner.get("login") != "iSentinel"
+        or owner.get("type") != "User"
+        or type(owner.get("id")) is not int
+        or owner["id"] != OWNER_ID
+    ):
+        raise ProtectionBlocked("TAG_REPOSITORY_OWNER_UNVERIFIED")
+    return owner["id"]
+
+
+def owner_bypass(item: dict, owner_id: int) -> bool:
+    """Allow only one traceable exact-owner tag creation bypass."""
+    bypass = item.get("bypass_actors")
+    if not isinstance(bypass, list) or len(bypass) != 1:
+        return False
+    return bypass[0] == {
+        "actor_id": owner_id,
+        "actor_type": "User",
+        "bypass_mode": "always",
+    }
+
+
+def tag_ruleset_ready(items: object, owner_id: int) -> bool:
+    """Require a protected v* namespace with usable owner-only creation."""
     if not isinstance(items, list):
         raise ProtectionBlocked("TAG_RULESETS_JSON_INVALID")
     for item in items:
         if not isinstance(item, dict):
             continue
-        conditions = item.get("conditions")
-        if not isinstance(conditions, dict):
-            continue
-        names = conditions.get("ref_name")
+        names = item.get("conditions")
+        names = names.get("ref_name") if isinstance(names, dict) else None
         if not isinstance(names, dict):
             continue
         includes = names.get("include")
-        excludes = names.get("exclude", [])
+        excludes = names.get("exclude")
         rules = item.get("rules")
         if not all(isinstance(x, list) for x in (includes, excludes, rules)):
             continue
         types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
-        # Partial or bypassable policy is not verified tag control.
-        if item.get("bypass_actors") != []:
-            continue
         if (
             item.get("target") == "tag"
             and item.get("enforcement") == "active"
-            and TAG_REFS.intersection(includes)
-            and not TAG_REFS.intersection(excludes)
+            and includes == ["refs/tags/v*"]
+            and excludes == []
             and "creation" in types
+            and owner_bypass(item, owner_id)
         ):
             return True
     return False
 
 
-def approved_environment(data: object) -> bool:
-    """Require at least one configured mandatory reviewer for publication."""
+def owner_reviewer(rule: dict, owner_id: int) -> bool:
+    """Demand a self-review-capable exact owner in a public repository."""
+    reviewers = rule.get("reviewers")
+    if (
+        rule.get("type") != "required_reviewers"
+        or rule.get("prevent_self_review") is not False
+        or not isinstance(reviewers, list)
+        or len(reviewers) != 1
+    ):
+        return False
+    candidate = reviewers[0]
+    if not isinstance(candidate, dict):
+        return False
+    reviewer = candidate.get("reviewer")
+    return bool(
+        candidate.get("type") == "User"
+        and isinstance(reviewer, dict)
+        and type(reviewer.get("id")) is int
+        and reviewer["id"] == owner_id
+    )
+
+
+def approved_environment(data: object, owner_id: int) -> bool:
+    """Require the correct owner as sole mandatory release job reviewer."""
     if not isinstance(data, dict):
         raise ProtectionBlocked("TAG_ENVIRONMENTS_JSON_INVALID")
     environments = data.get("environments")
@@ -97,18 +147,15 @@ def approved_environment(data: object) -> bool:
         if not isinstance(env, dict) or env.get("name") != ENVIRONMENT:
             continue
         rules = env.get("protection_rules")
+        if env.get("can_admins_bypass") is not False:
+            return False
         if not isinstance(rules, list):
             return False
-        for rule in rules:
-            if not isinstance(rule, dict):
-                continue
-            reviewers = rule.get("reviewers")
-            if (
-                rule.get("type") == "required_reviewers"
-                and isinstance(reviewers, list)
-                and len(reviewers) >= 1
-            ):
-                return True
+        return any(
+            owner_reviewer(rule, owner_id)
+            for rule in rules
+            if isinstance(rule, dict)
+        )
     return False
 
 
@@ -162,10 +209,11 @@ def evaluate(args: argparse.Namespace) -> dict:
         or not SHA.fullmatch(args.commit)
     ):
         raise ProtectionBlocked("TAG_QA_IDENTITY_INVALID")
+    owner_id = repository_owner(read_json(args.repo_json))
     rules = read_json(args.rulesets_json)
     environments = read_json(args.environments_json)
-    tags = tag_ruleset_ready(rules)
-    protected = approved_environment(environments)
+    tags = tag_ruleset_ready(rules, owner_id)
+    protected = approved_environment(environments, owner_id)
     base = args.workflows_dir
     if not base.is_absolute() or base.is_symlink() or not base.is_dir():
         raise ProtectionBlocked("TAG_WORKFLOW_DIRECTORY_UNSAFE")

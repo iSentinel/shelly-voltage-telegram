@@ -13,6 +13,20 @@ The owner review workflow must be usable for a sole-owner repo;
 a self-review prohibition could deadlock. This must be verified
 through a real owner-controlled GitHub Environment configuration.
 
+Single-owner release plan: REST read-only inspection verified that this
+public, personal repository belongs to account iSentinel, user ID
+83760791. A usable v* creation ruleset must have EXACTLY one User
+bypass for ID 83760791 with mode always (not exempt), rather than an
+empty bypass list that would prevent owner tag creation. A mandatory
+shelly-release-approval environment must require only the same owner
+as reviewer and explicitly set prevent_self_review=false, otherwise
+the single user who initiated the tag deployment may deadlock.
+The release environment must also set can_admins_bypass=false to prevent
+force-publishing past a required review. The bypass is only permission
+to create a tag; separate approval of
+the signing/upload job remains mandatory and approval of production
+activation remains a third distinct decision.
+
 Both tag publication jobs run `qa-release-tag-protection.py` BEFORE
 any source signing, OCI registry login, build/push or release upload.
 They fetch all repository/inherited rulesets with **full details**

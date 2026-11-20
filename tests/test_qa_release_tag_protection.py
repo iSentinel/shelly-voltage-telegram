@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+OWNER_ID = 83760791
 SPEC = importlib.util.spec_from_file_location(
     "svt_tag_guard_qa", ROOT / "scripts/qa-release-tag-protection.py"
 )
@@ -26,6 +27,7 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         owner = tempfile.TemporaryDirectory(prefix="svt-tag-qa-")
         self.addCleanup(owner.cleanup)
         root = Path(owner.name)
+        self.repo = root / "repo.json"
         self.rules = root / "rulesets.json"
         self.environments = root / "environments.json"
         self.workflows = root / "workflows"
@@ -34,11 +36,13 @@ class ReleaseTagProtectionTests(unittest.TestCase):
             qa_only=True,
             version="0.5.26-hw",
             commit="a" * 40,
+            repo_json=self.repo,
             rulesets_json=self.rules,
             environments_json=self.environments,
             workflows_dir=self.workflows,
             jsonl=True,
         )
+        self.make_owner_repo()
         self.save(self.rules, [])
         self.save(
             self.environments,
@@ -49,6 +53,21 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         )
         self.workflow("release.yml", "release", owner=False)
         self.workflow("image.yml", "build", owner=False)
+
+    def make_owner_repo(self) -> None:
+        """Create an exact-repo public owner identity fixture."""
+        self.save(
+            self.repo,
+            {
+                "full_name": "iSentinel/shelly-voltage-telegram",
+                "private": False,
+                "owner": {
+                    "login": "iSentinel",
+                    "type": "User",
+                    "id": OWNER_ID,
+                },
+            },
+        )
 
     def save(self, path: Path, contents: object) -> None:
         """Write a local GitHub API fixture with public-only values."""
@@ -70,7 +89,13 @@ class ReleaseTagProtectionTests(unittest.TestCase):
                 {
                     "target": "tag",
                     "enforcement": "active",
-                    "bypass_actors": [],
+                    "bypass_actors": [
+                        {
+                            "actor_id": OWNER_ID,
+                            "actor_type": "User",
+                            "bypass_mode": "always",
+                        }
+                    ],
                     "conditions": {
                         "ref_name": {
                             "include": ["refs/tags/v*"],
@@ -91,10 +116,17 @@ class ReleaseTagProtectionTests(unittest.TestCase):
                 "environments": [
                     {
                         "name": "shelly-release-approval",
+                        "can_admins_bypass": False,
                         "protection_rules": [
                             {
                                 "type": "required_reviewers",
-                                "reviewers": [{"type": "User", "id": 100}],
+                                "prevent_self_review": False,
+                                "reviewers": [
+                                    {
+                                        "type": "User",
+                                        "reviewer": {"id": OWNER_ID},
+                                    }
+                                ],
                             }
                         ],
                     }
@@ -218,22 +250,83 @@ class ReleaseTagProtectionTests(unittest.TestCase):
                     }
                 ]
                 self.save(self.rules, data)
-                self.assertFalse(GUARD.tag_ruleset_ready(data))
+                self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
 
     def test_missing_bypass_metadata_fails_closed(self) -> None:
         """A partial GitHub API ruleset cannot prove non-bypassability."""
         self.add_ruleset()
         data = json.loads(self.rules.read_text())
         del data[0]["bypass_actors"]
-        self.assertFalse(GUARD.tag_ruleset_ready(data))
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
 
-    def test_empty_explicit_bypass_list_is_reviewer_evidence_only(
-        self,
-    ) -> None:
-        """No bypass actors permits a ruleset claim, never release approval."""
+    def test_empty_bypass_list_locks_out_owner(self) -> None:
+        """A ruleset with no bypass forbids even owner tag creation."""
         self.add_ruleset()
         data = json.loads(self.rules.read_text())
-        self.assertTrue(GUARD.tag_ruleset_ready(data))
+        data[0]["bypass_actors"] = []
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
+
+    def test_wrong_owner_bypass_is_rejected(self) -> None:
+        """A tag-creating second actor does not satisfy the owner scope."""
+        self.add_ruleset()
+        data = json.loads(self.rules.read_text())
+        data[0]["bypass_actors"][0]["actor_id"] = OWNER_ID + 1
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
+
+    def test_owner_plus_unauthorized_actor_rejected(self) -> None:
+        """Only the one owner actor is allowed, without broad exceptions."""
+        self.add_ruleset()
+        data = json.loads(self.rules.read_text())
+        data[0]["bypass_actors"].append(
+            {
+                "actor_id": 1,
+                "actor_type": "Integration",
+                "bypass_mode": "always",
+            }
+        )
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
+
+    def test_reviewer_must_be_owner_and_allow_self_review(self) -> None:
+        """Sole-owner releases must not deadlock on self-review."""
+        self.add_environment()
+        data = json.loads(self.environments.read_text())
+        rule = data["environments"][0]["protection_rules"][0]
+        rule["prevent_self_review"] = True
+        self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
+        rule["prevent_self_review"] = False
+        rule["reviewers"][0]["reviewer"]["id"] = OWNER_ID + 1
+        self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
+        rule["reviewers"][0]["reviewer"]["id"] = OWNER_ID
+        self.assertTrue(GUARD.approved_environment(data, OWNER_ID))
+
+    def test_environment_admin_force_bypass_denied(self) -> None:
+        """A reviewer cannot be trusted if admins can force publication."""
+        self.add_environment()
+        data = json.loads(self.environments.read_text())
+        data["environments"][0]["can_admins_bypass"] = True
+        self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
+        del data["environments"][0]["can_admins_bypass"]
+        self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
+
+    def test_repo_owner_id_must_be_pinned(self) -> None:
+        """A forged self-consistent owner identity must not pass QA."""
+        data = json.loads(self.repo.read_text())
+        data["owner"]["id"] = OWNER_ID + 1
+        self.save(self.repo, data)
+        with self.assertRaisesRegex(
+            GUARD.ProtectionBlocked, "TAG_REPOSITORY_OWNER_UNVERIFIED"
+        ):
+            GUARD.evaluate(self.args)
+
+    def test_invalid_repo_identity_fails_closed(self) -> None:
+        """Repo owner proof must match a public personal repository."""
+        data = json.loads(self.repo.read_text())
+        data["owner"]["type"] = "Organization"
+        self.save(self.repo, data)
+        with self.assertRaisesRegex(
+            GUARD.ProtectionBlocked, "TAG_REPOSITORY_OWNER_UNVERIFIED"
+        ):
+            GUARD.evaluate(self.args)
 
     def test_non_active_ruleset_does_not_count(self) -> None:
         """A disabled rule is not release protection."""
@@ -241,7 +334,7 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         data = json.loads(self.rules.read_text())
         data[0]["enforcement"] = "disabled"
         self.save(self.rules, data)
-        self.assertFalse(GUARD.tag_ruleset_ready(data))
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
 
     def test_excluded_v_tags_cannot_be_claimed_as_protected(self) -> None:
         """An exclusion of all stable tags defeats a catch-all tag rule."""
@@ -249,7 +342,7 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         data = json.loads(self.rules.read_text())
         data[0]["conditions"]["ref_name"]["exclude"] = ["refs/tags/v*"]
         self.save(self.rules, data)
-        self.assertFalse(GUARD.tag_ruleset_ready(data))
+        self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
 
     def test_workflow_environment_must_be_in_publish_job(self) -> None:
         """An environment on a different job is not source protection."""

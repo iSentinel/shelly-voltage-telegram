@@ -65,12 +65,14 @@ class ReleaseWorkflowOwnerGateTests(unittest.TestCase):
         for file in (SOURCE, IMAGE):
             with self.subTest(file=file.name):
                 text = file.read_text()
+                self.assertIn("RELEASE_RULESET_READ_TOKEN", text)
                 self.assertIn(
                     "python3 scripts/qa-release-tag-protection.py",
                     text,
                 )
                 for argument in (
                     "--qa-only",
+                    "--repo-json",
                     "--rulesets-json",
                     "--environments-json",
                     "--workflows-dir",
