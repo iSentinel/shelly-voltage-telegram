@@ -25,9 +25,12 @@ usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
        apply-update.sh --recover  (systemd boot recovery only)
+       apply-update.sh --sync-public-version
 Root-only, explicitly approved update of a published, signed GHCR image.
 Never runs automatically; refuse when Shelly is offline or an outage is open.
 Requires cosign, docker compose, Python 3 and flock.
+Exit 4 after activation means the new image is active but its version status
+could not be confirmed. Retry only the version status with --sync-public-version.
 EOF
 }
 
@@ -167,11 +170,52 @@ start_stack() {
 }
 
 sync_public_version() {
-    mkdir -p "$PUBLIC_STATE"
-    if [[ -f "$STATE/deployed.json" ]]; then
-        install -m 0644 "$STATE/deployed.json" "$PUBLIC_STATE/deployed.json"
-    else
-        rm -f "$PUBLIC_STATE/deployed.json"
+    # The private deployment receipt is authoritative. Readers always see
+    # either the complete old receipt or the complete new receipt.
+    /usr/bin/python3 -I - "$STATE/deployed.json" "$PUBLIC_STATE" <<'PY'
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+
+def sync_directory(path):
+    """Persist file name changes in the containing directory."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+source, folder = map(Path, sys.argv[1:])
+destination = folder / "deployed.json"
+if not folder.is_dir():
+    folder.mkdir(parents=True, exist_ok=True)
+    sync_directory(folder.parent)
+if source.exists():
+    content = source.read_bytes()
+    with tempfile.NamedTemporaryFile(dir=folder, prefix=".deployed-",
+                                     delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(content)
+            os.fchmod(file.fileno(), 0o644)
+            file.flush()
+            os.fsync(file.fileno())
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+else:
+    destination.unlink(missing_ok=True)
+sync_directory(folder)
+PY
+}
+
+publish_committed_version() {
+    if ! sync_public_version; then
+        echo "FAIL: deployed version status could not be synchronized; retry --sync-public-version" >&2
+        return 4
     fi
 }
 
@@ -188,7 +232,11 @@ mark_pending() {
 
 recover_pending() {
     local token
-    [[ -f "$PENDING_FILE" ]] || return 0
+    if [[ ! -f "$PENDING_FILE" ]]; then
+        # A previous update may have committed immediately before a shutdown.
+        publish_committed_version || true
+        return 0
+    fi
     token="$(cat "$PENDING_FILE")"
     if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
         echo "FAIL: invalid pending update marker" >&2
@@ -209,8 +257,9 @@ recover_pending() {
         rm -f "$STATE/deployed.json"
     fi
     restore_snapshot_database
-    sync_public_version
-    rm -f "$PENDING_FILE"
+    rm -f "$PENDING_FILE" || return 1
+    # Status publication alone must never force another database restore.
+    publish_committed_version || true
 }
 
 restore_snapshot_database() {
@@ -299,12 +348,20 @@ PY
 }
 
 main() {
-    if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
+    if [[ $# -eq 1 && ( "$1" == "--recover" || "$1" == "--sync-public-version" ) ]]; then
         [[ $EUID -eq 0 ]] || return 2
         mkdir -p "$STATE"
         exec 9>/run/lock/shelly-voltage-updater.lock
         flock -w 120 9 || return 3
-        recover_pending
+        if [[ "$1" == "--recover" ]]; then
+            recover_pending
+            return
+        fi
+        if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+            echo "FAIL: update recovery is pending" >&2
+            return 3
+        fi
+        publish_committed_version
         return
     fi
     parse_args "$@"
@@ -332,7 +389,11 @@ main() {
     activate "$digest"
     rm -f "$PENDING_FILE"
     trap - ERR INT TERM
-    sync_public_version || echo "WARN: version status update failed" >&2
+    if ! sync -f "$STATE"; then
+        echo "FAIL: could not confirm the committed update state on disk" >&2
+        return 4
+    fi
+    publish_committed_version || return $?
     echo "UPDATE PASS: $VERSION"
 }
 

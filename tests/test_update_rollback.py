@@ -2,6 +2,7 @@
 
 import gzip
 import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -124,6 +125,78 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("DRY-RUN PASS", result.stdout)
         self.assertFalse(Path(capture.read_text().strip()).exists())
+
+    def apply_with_mock_activation(self, state, public):
+        """Run the real updater finalization with a synthetic activation."""
+
+        shell = """
+            source "$1"
+            requirements() { mkdir -p "$STATE"; }
+            preflight() { :; }
+            storage_preflight() { :; }
+            snapshot() { :; }
+            verify_image() { :; }
+            verify_source_archive() { :; }
+            docker() { :; }
+            python3() { if [[ "$2" == digest ]]; then echo test; fi; }
+            activate() {
+                echo test > "$PENDING_FILE"
+                printf '{"version":"0.5.25-hw"}' > "$STATE/deployed.json"
+            }
+            rollback() { echo 'UNEXPECTED ROLLBACK'; exit 19; }
+            main --version 0.5.25-hw
+        """
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                shell,
+                "bash",
+                str(ROOT / "scripts/apply-update.sh"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                **os.environ,
+                "SVT_UPDATE_STATE": str(state),
+                "SVT_PUBLIC_STATE": str(public),
+            },
+        )
+
+    def test_public_sync_failure_reports_partial_update(self):
+        """A healthy activation can succeed before public publication fails."""
+
+        state, public = self.root / "private", self.root / "public"
+        public.mkdir()
+        (public / "deployed.json").mkdir()
+        result = self.apply_with_mock_activation(state, public)
+        self.assertEqual(result.returncode, 4, result.stderr)
+        self.assertIn("retry --sync-public-version", result.stderr)
+        self.assertNotIn("UPDATE PASS", result.stdout)
+        self.assertNotIn("UNEXPECTED ROLLBACK", result.stdout)
+        self.assertFalse((state / "pending-update").exists())
+        self.assertEqual(
+            json.loads((state / "deployed.json").read_text())["version"],
+            "0.5.25-hw",
+        )
+        self.assertEqual(list(public.glob(".deployed-*")), [])
+
+    def test_success_requires_exact_public_receipt(self):
+        """Success follows publication of a complete readable receipt."""
+
+        state, public = self.root / "private", self.root / "public"
+        public.mkdir()
+        published = public / "deployed.json"
+        published.write_text('{"version":"0.5.24-hw"}')
+        result = self.apply_with_mock_activation(state, public)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("UPDATE PASS: 0.5.25-hw", result.stdout)
+        self.assertEqual(
+            published.read_bytes(), (state / "deployed.json").read_bytes()
+        )
+        self.assertEqual(published.stat().st_mode & 0o777, 0o644)
+        self.assertFalse((state / "pending-update").exists())
 
     def test_nested_failure_runs_rollback_handler(self):
         """An error in a nested health check must trigger recovery."""
