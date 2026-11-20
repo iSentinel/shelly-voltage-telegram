@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -177,8 +178,14 @@ class QaCutoverReadinessTests(unittest.TestCase):
                     self.source_pair_proof(),
                 ],
             ) as verify,
+            patch.object(
+                CHECK.SEALED,
+                "sealed_pending_receipt",
+                return_value=nullcontext(),
+            ) as sealed,
         ):
             result = CHECK.evaluate(args)
+        sealed.assert_called_once_with(args)
         self.assert_signed_report(result, args, verify)
 
     def test_mismatched_staged_source_commit_blocks_before_cosign(
@@ -250,6 +257,82 @@ class QaCutoverReadinessTests(unittest.TestCase):
             ),
         ):
             CHECK.reverify_signed_new_pair(args, self.receipt())
+
+    def test_final_signed_recheck_blocks_changed_pair_receipt(self):
+        """A changed receipt after network Cosign must not report PASS."""
+        args = self.signed_arguments()
+        replaced = dict(self.receipt(), transaction_token="qa-changed-token")
+        with (
+            patch.object(
+                CHECK.SEALED,
+                "sealed_pending_receipt",
+                return_value=nullcontext(),
+            ),
+            patch.object(
+                CHECK,
+                "check_target",
+                return_value=replaced,
+            ),
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_PAIR_RECEIPT_DRIFT"
+            ),
+        ):
+            CHECK.final_signed_pending_recheck(
+                args, self.baseline(), self.receipt()
+            )
+
+    def test_final_signed_recheck_blocks_missing_pending(self):
+        """A cleared marker during Cosign invalidates the staged WAL."""
+        args = self.signed_arguments()
+        with (
+            patch.object(
+                CHECK.SEALED,
+                "sealed_pending_receipt",
+                side_effect=ValueError("STAGE_PENDING_MARKER_UNSAFE"),
+            ),
+            patch.object(CHECK, "check_target") as target,
+            self.assertRaisesRegex(ValueError, "STAGE_PENDING_MARKER_UNSAFE"),
+        ):
+            CHECK.final_signed_pending_recheck(
+                args, self.baseline(), self.receipt()
+            )
+        target.assert_not_called()
+
+    def test_final_signed_recheck_blocks_changed_old_image(self):
+        """The final lock must also freeze prior rollback OCI identity."""
+        args = self.signed_arguments()
+        with (
+            patch.object(
+                CHECK.SEALED,
+                "sealed_pending_receipt",
+                return_value=nullcontext(),
+            ),
+            patch.object(CHECK, "check_target", return_value=self.receipt()),
+            patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", NEW_DIGEST),
+            ),
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_OLD_PAIR_IDENTITY_CHANGED"
+            ),
+        ):
+            CHECK.final_signed_pending_recheck(
+                args, self.baseline(), self.receipt()
+            )
+
+    def test_identity_only_never_enters_sealed_cryptographic_gate(self):
+        """Plain coherence reports must not imply a signed transaction."""
+        args = self.args()
+        with (
+            patch.object(CHECK, "check_qa_boundary"),
+            patch.object(CHECK.BASE, "evaluate", return_value=self.baseline()),
+            patch.object(CHECK, "check_target", return_value=self.receipt()),
+            patch.object(CHECK.SEALED, "sealed_pending_receipt") as sealed,
+        ):
+            outcome = CHECK.evaluate(args)
+        sealed.assert_not_called()
+        self.assertFalse(outcome["source_signature_reverified"])
 
     def test_signed_mode_needs_private_old_source_directory(self) -> None:
         """Missing old Sigstore cannot be silently treated as OCI-only."""

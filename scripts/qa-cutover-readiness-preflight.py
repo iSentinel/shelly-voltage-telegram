@@ -41,6 +41,9 @@ OLD = BASE.PAIR
 SOURCE_PAIR = helper(
     "verify-signed-release-pair.py", "svt_cutover_signed_source_pair"
 )
+SEALED = helper(
+    "qa-stage-verified-pair-receipt.py", "svt_cutover_sealed_pending"
+)
 
 
 def arguments() -> argparse.Namespace:
@@ -223,6 +226,21 @@ def reverify_signed_new_pair(args: argparse.Namespace, record: dict) -> None:
     require_signed_source_pair_proof(proof, exact)
 
 
+def final_signed_pending_recheck(
+    args: argparse.Namespace, base: dict, original: dict
+) -> None:
+    """Recheck newest WAL and receipts under both shared locks."""
+    with SEALED.sealed_pending_receipt(args):
+        actual = check_target(args, base)
+        if actual != original:
+            raise CutoverBlocked("QA_CUTOVER_PAIR_RECEIPT_DRIFT")
+        old_version, old_digest = OLD.receipt_identity(args.signed_snapshot)
+        if old_version != base.get("old_version") or old_digest[
+            -12:
+        ] != base.get("old_digest_suffix"):
+            raise CutoverBlocked("QA_CUTOVER_OLD_PAIR_IDENTITY_CHANGED")
+
+
 def evaluate(args: argparse.Namespace) -> dict:
     """Match the stopped writer and pending rescue to the release pair."""
     check_qa_boundary(args)
@@ -235,6 +253,7 @@ def evaluate(args: argparse.Namespace) -> dict:
     if signed:
         reverify_signed_old_pair(args, base)
         reverify_signed_new_pair(args, target)
+        final_signed_pending_recheck(args, base, target)
     return {
         "status": (
             "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
