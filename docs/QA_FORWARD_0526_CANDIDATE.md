@@ -25,3 +25,11 @@ modify the running bot without explicit Owner Approval and all gates:
 Current v0.5.25 old source TAR lacks Sigstore bundle, and the
 production OCI digest lacks publicly discoverable Cosign signature.
 That trust gap is NOT fixed by renaming or version-bumping source.
+
+## Artifact repeatability requirement
+
+Release archive modes must be deterministic across Git checkout and
+clean Git archive extraction, not merely repeatable in one workspace.
+All staged directories and executables use mode 0755; all
+nonexecutable public files use mode 0644. Do not package from an
+outdated QA copy; compare against a complete immutable Git SHA tree.

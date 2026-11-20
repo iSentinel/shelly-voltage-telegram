@@ -153,6 +153,14 @@ copy_public_tree() {
     chmod 0644 "$destination/.env.example"
 }
 
+normalize_public_modes() {
+    local destination="$1"
+    # Archive modes cannot depend on the checkout or extraction umask.
+    find "$destination" -type d -exec chmod 0755 {} +
+    find "$destination" -type f -perm /111 -exec chmod 0755 {} +
+    find "$destination" -type f ! -perm /111 -exec chmod 0644 {} +
+}
+
 write_file_manifest() {
     local destination="$1"
     (
@@ -161,6 +169,7 @@ write_file_manifest() {
             | LC_ALL=C sort -z \
             | xargs -0r sha256sum > FILES.SHA256
     )
+    chmod 0644 "$destination/FILES.SHA256"
 }
 
 assert_public_tree() {
@@ -265,6 +274,7 @@ main() {
     STAGE_DIR="$stage"
     trap cleanup EXIT
     copy_public_tree "$stage/$name"
+    normalize_public_modes "$stage/$name"
     assert_public_tree "$stage/$name"
     assert_no_deployment_identifiers "$stage/$name"
     write_file_manifest "$stage/$name"
