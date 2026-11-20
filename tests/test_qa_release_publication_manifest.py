@@ -24,7 +24,7 @@ def inputs(**changes) -> argparse.Namespace:
     """Use only synthetic, explicitly pinned source and archive identities."""
     data = {
         "qa_only": True,
-        "repo": Path("/root/svt-forward-qa-fixture"),
+        "repo": Path("/tmp/svt-forward-qa-fixture"),
         "version": "0.5.26-hw",
         "commit": "a" * 40,
         "archive": Path(
@@ -66,7 +66,7 @@ class SourceManifestTests(unittest.TestCase):
             patch.object(
                 QA,
                 "git",
-                side_effect=["/root/svt-forward-qa-fixture", "b" * 40],
+                side_effect=["/tmp/svt-forward-qa-fixture", "b" * 40],
             ),
             self.assertRaisesRegex(
                 QA.ManifestBlocked, "MANIFEST_GIT_SHA_MISMATCH"
@@ -82,7 +82,7 @@ class SourceManifestTests(unittest.TestCase):
                 QA,
                 "git",
                 side_effect=[
-                    "/root/svt-forward-qa-fixture",
+                    "/tmp/svt-forward-qa-fixture",
                     "a" * 40,
                     " M VERSION",
                 ],
