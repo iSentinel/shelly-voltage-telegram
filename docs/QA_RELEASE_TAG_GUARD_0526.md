@@ -45,9 +45,11 @@ Read-only Gateway example:
     umask 077
     gh api 'repos/iSentinel/shelly-voltage-telegram/rulesets?includes_parents=true' > /PRIVATE/rulesets.json
     gh api 'repos/iSentinel/shelly-voltage-telegram/environments' > /PRIVATE/environments.json
+    gh api 'repos/iSentinel/shelly-voltage-telegram' > /PRIVATE/repo.json
     python3 scripts/qa-release-tag-protection.py --qa-only \
       --version 0.5.26-hw \
       --commit add29de629f4b783f3e6a9635ef8d01ec3858d7a \
+      --repo-json /PRIVATE/repo.json \
       --rulesets-json /PRIVATE/rulesets.json \
       --environments-json /PRIVATE/environments.json \
       --workflows-dir /root/svt-postsign-acceptance-qa-20261120/.github/workflows --jsonl
@@ -56,3 +58,33 @@ The exported metadata is a snapshot, NOT independently authenticated.
 The tool only reports evidence; it never changes GitHub settings,
 creates tags, signs artifacts or deploys the bot. Every outcome has
 release_authorized=false and production_modified=false.
+
+
+## API visibility limitation (2026-11-20)
+
+Current GitHub REST documentation confirms that a repository tag ruleset
+supports a User bypass actor, but the GET ruleset endpoint omits
+bypass_actors when the caller lacks write access to that ruleset.
+A public repository GET /environments response example also does not
+show can_admins_bypass. That omission is not proof that administrator
+bypass is disabled.
+
+References:
+- https://docs.github.com/en/rest/repos/rules?apiVersion=2026-03-10#get-a-repository-ruleset
+- https://docs.github.com/en/rest/deployments/environments?apiVersion=2026-03-10#get-an-environment
+- https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+
+The guard now reports RULESET_BYPASS_METADATA_NOT_RETURNED and
+ENV_ADMIN_BYPASS_METADATA_NOT_RETURNED separately from the existing
+missing protection reasons. Either visibility issue blocks the audit,
+even if another matching ruleset passes. An explicit false is not
+inferred from a missing field. No administrative write token is
+introduced in the publishing jobs.
+
+A future owner-approved alternative can keep full administrative
+verification outside CI, bind the inspection to the exact release,
+and retain mandatory owner environment review. Before any implementation,
+verify which protected environment settings are exposed through the
+actual account API or UI. Do not configure permissions, modify stable
+publication jobs, or substitute a local JSON snapshot for real GitHub
+enforcement on the strength of this QA result.

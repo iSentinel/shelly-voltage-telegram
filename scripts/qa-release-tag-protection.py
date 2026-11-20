@@ -85,33 +85,53 @@ def owner_bypass(item: dict, owner_id: int) -> bool:
     }
 
 
+def matching_creation_rules(item: object) -> bool:
+    """Recognize the exact active stable-tag creation rule scope."""
+    if not isinstance(item, dict):
+        return False
+    names = item.get("conditions")
+    names = names.get("ref_name") if isinstance(names, dict) else None
+    if not isinstance(names, dict):
+        return False
+    rules = item.get("rules")
+    if not isinstance(rules, list):
+        return False
+    types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
+    return (
+        item.get("target") == "tag"
+        and item.get("enforcement") == "active"
+        and names.get("include") == ["refs/tags/v*"]
+        and names.get("exclude") == []
+        and "creation" in types
+    )
+
+
 def tag_ruleset_ready(items: object, owner_id: int) -> bool:
     """Require a protected v* namespace with usable owner-only creation."""
     if not isinstance(items, list):
         raise ProtectionBlocked("TAG_RULESETS_JSON_INVALID")
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        names = item.get("conditions")
-        names = names.get("ref_name") if isinstance(names, dict) else None
-        if not isinstance(names, dict):
-            continue
-        includes = names.get("include")
-        excludes = names.get("exclude")
-        rules = item.get("rules")
-        if not all(isinstance(x, list) for x in (includes, excludes, rules)):
-            continue
-        types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
+    return any(
+        matching_creation_rules(item) and owner_bypass(item, owner_id)
+        for item in items
+    )
+
+
+def visibility_issues(items: list, environments: dict) -> list[str]:
+    """Distinguish a redacted response from an explicitly unsafe setting."""
+    issues = []
+    if any(
+        matching_creation_rules(item) and "bypass_actors" not in item
+        for item in items
+    ):
+        issues.append("RULESET_BYPASS_METADATA_NOT_RETURNED")
+    for env in environments.get("environments", []):
         if (
-            item.get("target") == "tag"
-            and item.get("enforcement") == "active"
-            and includes == ["refs/tags/v*"]
-            and excludes == []
-            and "creation" in types
-            and owner_bypass(item, owner_id)
+            isinstance(env, dict)
+            and env.get("name") == ENVIRONMENT
+            and "can_admins_bypass" not in env
         ):
-            return True
-    return False
+            issues.append("ENV_ADMIN_BYPASS_METADATA_NOT_RETURNED")
+    return issues
 
 
 def owner_reviewer(rule: dict, owner_id: int) -> bool:
@@ -220,14 +240,18 @@ def evaluate(args: argparse.Namespace) -> dict:
     source = protected_job(base / "release.yml", "release")
     image = protected_job(base / "image.yml", "build")
     missing = missing_guards(tags, protected, source, image)
+    visibility = visibility_issues(rules, environments)
     status = (
-        "BLOCKED" if missing else "PASS_QA_GITHUB_GUARD_CONFIGURATION_ONLY"
+        "BLOCKED"
+        if missing or visibility
+        else "PASS_QA_GITHUB_GUARD_CONFIGURATION_ONLY"
     )
     return {
         "status": status,
         "version": args.version,
         "candidate_commit": args.commit,
         "missing_guards": missing,
+        "metadata_visibility_issues": visibility,
         "public_snapshot_independently_authenticated": False,
         "release_specific_owner_approval": False,
         "source_oci_signed": False,
@@ -261,6 +285,8 @@ def main() -> int:
         print("RELEASE TAG GUARD:", report["status"])
         if report.get("missing_guards"):
             print("missing:", ",".join(report["missing_guards"]))
+        if report.get("metadata_visibility_issues"):
+            print("metadata:", ",".join(report["metadata_visibility_issues"]))
     return 0 if report["status"].startswith("PASS_") else 3
 
 

@@ -153,6 +153,7 @@ class ReleaseTagProtectionTests(unittest.TestCase):
             result["status"], "PASS_QA_GITHUB_GUARD_CONFIGURATION_ONLY"
         )
         self.assertEqual(result["missing_guards"], [])
+        self.assertEqual(result["metadata_visibility_issues"], [])
         for key in (
             "public_snapshot_independently_authenticated",
             "release_specific_owner_approval",
@@ -258,6 +259,31 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         data = json.loads(self.rules.read_text())
         del data[0]["bypass_actors"]
         self.assertFalse(GUARD.tag_ruleset_ready(data, OWNER_ID))
+        self.save(self.rules, data)
+        report = GUARD.evaluate(self.args)
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn(
+            "RULESET_BYPASS_METADATA_NOT_RETURNED",
+            report["metadata_visibility_issues"],
+        )
+
+    def test_complete_rule_cannot_hide_second_redacted_rule(self) -> None:
+        """A visible rule cannot cover another rule with hidden metadata."""
+        self.add_ruleset()
+        self.add_environment()
+        for file, job in (("release.yml", "release"), ("image.yml", "build")):
+            self.workflow(file, job, owner=True)
+        data = json.loads(self.rules.read_text())
+        second = dict(data[0])
+        del second["bypass_actors"]
+        self.save(self.rules, [data[0], second])
+        result = GUARD.evaluate(self.args)
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertFalse(result["release_authorized"])
+        self.assertIn(
+            "RULESET_BYPASS_METADATA_NOT_RETURNED",
+            result["metadata_visibility_issues"],
+        )
 
     def test_empty_bypass_list_locks_out_owner(self) -> None:
         """A ruleset with no bypass forbids even owner tag creation."""
@@ -307,6 +333,13 @@ class ReleaseTagProtectionTests(unittest.TestCase):
         self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
         del data["environments"][0]["can_admins_bypass"]
         self.assertFalse(GUARD.approved_environment(data, OWNER_ID))
+        self.save(self.environments, data)
+        report = GUARD.evaluate(self.args)
+        self.assertEqual(report["status"], "BLOCKED")
+        self.assertIn(
+            "ENV_ADMIN_BYPASS_METADATA_NOT_RETURNED",
+            report["metadata_visibility_issues"],
+        )
 
     def test_repo_owner_id_must_be_pinned(self) -> None:
         """A forged self-consistent owner identity must not pass QA."""
