@@ -228,6 +228,9 @@ class EmergencyWidgetTests(unittest.TestCase):
             )
         )
         self.assertTrue(valid_emergency_notice(state, stamp))
+        self.assertIn(state["e"] - state["a"], (82800, 86400, 90000))
+        wrong_start = {**state, "a": state["a"] + 1}
+        self.assertFalse(valid_emergency_notice(wrong_start, stamp))
         self.assertFalse(valid_emergency_notice(state, stamp + 7201))
         expired = widget_fallback_text(json.dumps(state), now=stamp + 7201)
         self.assertNotIn("Emergency shutdowns", expired)

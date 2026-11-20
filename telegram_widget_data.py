@@ -72,6 +72,15 @@ def forecast_metadata(
     return {"d": day, "u": int(fresh), "e": round(expires), "src": source}
 
 
+def local_day_start(day: str) -> int:
+    """Give thin clients a Kyiv midnight epoch without timezone libraries."""
+    return int(
+        datetime.combine(
+            date.fromisoformat(day), dt_time.min, KYIV
+        ).timestamp()
+    )
+
+
 def forecast_state(
     bars: str | None,
     day: str | None,
@@ -84,7 +93,8 @@ def forecast_state(
     if notice is not None:
         if notice != "emergency" or source != "yasno" or bars is not None:
             raise ValueError("invalid or conflicting forecast notice")
-        return {"n": notice, **forecast_metadata(day, updated, now, source)}
+        meta = forecast_metadata(day, updated, now, source)
+        return {"n": notice, "a": local_day_start(meta["d"]), **meta}
     if bars is None:
         return {}
     if not isinstance(bars, str) or len(bars) != 48:
@@ -107,7 +117,9 @@ def valid_emergency_notice(state: dict, now: float) -> bool:
         meta = forecast_metadata(state.get("d"), state.get("u"), now, "yasno")
     except (ValueError, TypeError, OverflowError):
         return False
-    return state.get("e") == meta["e"]
+    return state.get("e") == meta["e"] and state.get("a") == local_day_start(
+        meta["d"]
+    )
 
 
 def widget_phase_states(
