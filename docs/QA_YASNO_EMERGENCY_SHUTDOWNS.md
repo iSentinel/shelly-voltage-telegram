@@ -72,3 +72,21 @@ Six offline tests cover exact expiry, current notice, restored
 official schedule, tomorrow, ordinary stale forecast and corrupt
 checksum. No change to the sealed cache format or producer/handoff
 permissions.
+
+## Post-restoration three-phase telemetry audit
+
+The existing read-only recovery auditor supports explicit three-phase
+incident IDs, in L1/L2/L3 order, without requiring a pre-restoration
+baseline. It verifies each latest closed incident and rejects unresolved
+older incidents, invalid samples and gaps over 90 seconds in the first
+15 minutes after restoration. Starts and ends must each agree within
+five seconds, intentionally restricting this mode to simultaneous
+three-phase incidents rather than unrelated per-phase failures.
+
+    python3 scripts/em50-posthoc-recovery-audit.py \
+      --db /var/lib/shelly-voltage/voltage.sqlite3 \
+      --incident-ids 39 40 41 --json
+
+A PASS is telemetry-only. It never certifies Telegram message content,
+signatures, release approval, or deployment. The legacy single-incident
+mode remains unchanged.
