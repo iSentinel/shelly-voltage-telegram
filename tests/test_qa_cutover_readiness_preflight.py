@@ -34,6 +34,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
             new_receipt=CHECK.SOURCE_STAGE / "deployed.json",
             new_version=Path("/var/lib/svt-qa-pair/RELEASE_VERSION"),
             source_archive_dir=CHECK.SOURCE_STAGE,
+            old_source_archive_dir=None,
             target_commit=COMMIT,
             old_commit="",
             verify_signatures=False,
@@ -50,6 +51,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
             "status": "PASS_QA_IDENTITY_AND_WAL_ONLY",
             "old_version": "0.5.25-hw",
             "new_version": "0.5.26-hw",
+            "old_digest_suffix": OLD_DIGEST[-12:],
             "sqlite_wal_photo_parity": True,
             "old_oci_signature_verified": False,
             "new_oci_signature_verified": False,
@@ -80,12 +82,34 @@ class QaCutoverReadinessTests(unittest.TestCase):
             "rollback_authorized": False,
         }
 
+    def old_source_pair_proof(self):
+        """Synthetic but exact old signed source and attested OCI identity."""
+        return dict(
+            self.source_pair_proof(),
+            version="0.5.25-hw",
+            commit=OLD_COMMIT,
+            digest_suffix=OLD_DIGEST[-12:],
+        )
+
+    def signed_arguments(self):
+        """Supply a strict old source QA slot for two signed release checks."""
+        args = self.args()
+        args.verify_signatures = True
+        args.old_commit = OLD_COMMIT
+        args.old_source_archive_dir = CHECK.OLD_SOURCE_STAGE
+        return args
+
     def assert_signed_report(self, result, args, source_verify) -> None:
-        """Inspect exact source paths and independent signature flags."""
-        source_verify.assert_called_once()
-        exact = source_verify.call_args.args[0]
+        """Check both exact signatures without asserting activation."""
+        self.assertEqual(source_verify.call_count, 2)
+        old, new = [call.args[0] for call in source_verify.call_args_list]
         self.assertEqual(
-            (exact.commit, exact.digest, exact.bundle.name),
+            (old.version, old.commit, old.digest),
+            ("0.5.25-hw", OLD_COMMIT, OLD_DIGEST),
+        )
+        self.assertEqual(old.archive.parent, CHECK.OLD_SOURCE_STAGE)
+        self.assertEqual(
+            (new.commit, new.digest, new.bundle.name),
             (
                 COMMIT,
                 NEW_DIGEST,
@@ -93,15 +117,13 @@ class QaCutoverReadinessTests(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            (args.new_commit, args.old_commit), (COMMIT, OLD_COMMIT)
-        )
-        self.assertEqual(
             result["status"], "PASS_QA_CUTOVER_SIGNED_OCI_COHERENCE_ONLY"
         )
         for key in (
+            "old_source_signature_reverified",
+            "new_source_signature_reverified",
             "old_oci_signature_reverified",
             "new_oci_signature_reverified",
-            "source_signature_reverified",
         ):
             self.assertTrue(result[key])
         for key in (
@@ -130,10 +152,8 @@ class QaCutoverReadinessTests(unittest.TestCase):
         self.assertFalse(result["rollback_authorized"])
 
     def test_signed_cutover_rechecks_both_exact_git_shas(self) -> None:
-        """Reverify old/new OCI and new Sigstore before signed QA claims."""
-        args = self.args()
-        args.verify_signatures = True
-        args.old_commit = OLD_COMMIT
+        """Verify both source Sigstore bundles and OCI against exact SHAs."""
+        args = self.signed_arguments()
         evidence = dict(
             self.baseline(),
             status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
@@ -145,13 +165,21 @@ class QaCutoverReadinessTests(unittest.TestCase):
             patch.object(CHECK.BASE, "evaluate", return_value=evidence),
             patch.object(CHECK, "check_target", return_value=self.receipt()),
             patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", OLD_DIGEST),
+            ),
+            patch.object(
                 CHECK.SOURCE_PAIR,
                 "verify",
-                return_value=self.source_pair_proof(),
-            ) as source_verify,
+                side_effect=[
+                    self.old_source_pair_proof(),
+                    self.source_pair_proof(),
+                ],
+            ) as verify,
         ):
             result = CHECK.evaluate(args)
-        self.assert_signed_report(result, args, source_verify)
+        self.assert_signed_report(result, args, verify)
 
     def test_mismatched_staged_source_commit_blocks_before_cosign(
         self,
@@ -172,9 +200,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
         self,
     ) -> None:
         """Missing staged Sigstore bytes must block a signed QA report."""
-        args = self.args()
-        args.verify_signatures = True
-        args.old_commit = OLD_COMMIT
+        args = self.signed_arguments()
         evidence = dict(
             self.baseline(),
             status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",
@@ -186,14 +212,22 @@ class QaCutoverReadinessTests(unittest.TestCase):
             patch.object(CHECK.BASE, "evaluate", return_value=evidence),
             patch.object(CHECK, "check_target", return_value=self.receipt()),
             patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", OLD_DIGEST),
+            ),
+            patch.object(
                 CHECK.SOURCE_PAIR,
                 "verify",
-                side_effect=ValueError("SOURCE_FILE_UNSAFE"),
+                side_effect=[
+                    self.old_source_pair_proof(),
+                    ValueError("SOURCE_FILE_UNSAFE"),
+                ],
             ) as verifier,
             self.assertRaisesRegex(ValueError, "SOURCE_FILE_UNSAFE"),
         ):
             CHECK.evaluate(args)
-        verifier.assert_called_once()
+        self.assertEqual(verifier.call_count, 2)
 
     def test_incomplete_source_pair_result_blocks_signed_cutover(self) -> None:
         """Signed-looking OCI evidence cannot hide unsigned source bytes."""
@@ -216,6 +250,86 @@ class QaCutoverReadinessTests(unittest.TestCase):
             ),
         ):
             CHECK.reverify_signed_new_pair(args, self.receipt())
+
+    def test_signed_mode_needs_private_old_source_directory(self) -> None:
+        """Missing old Sigstore cannot be silently treated as OCI-only."""
+        args = self.args()
+        args.verify_signatures = True
+        args.old_commit = OLD_COMMIT
+        with (
+            patch.object(CHECK.os, "geteuid", return_value=0),
+            patch.object(
+                CHECK.socket,
+                "gethostname",
+                return_value="shelly-docker-reboot-qa",
+            ),
+            patch.object(CHECK.BASE, "evaluate") as verify,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_OLD_SOURCE_STAGE_REQUIRED"
+            ),
+        ):
+            CHECK.evaluate(args)
+        verify.assert_not_called()
+
+    def test_old_unsigned_source_blocks_before_new_probe(self) -> None:
+        """A valid old OCI signature does not sign its source tarball."""
+        args = self.signed_arguments()
+        with (
+            patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", OLD_DIGEST),
+            ),
+            patch.object(
+                CHECK.SOURCE_PAIR,
+                "verify",
+                side_effect=ValueError("SOURCE_FILE_MISSING"),
+            ) as verifier,
+            self.assertRaisesRegex(ValueError, "SOURCE_FILE_MISSING"),
+        ):
+            CHECK.reverify_signed_old_pair(args, self.baseline())
+        verifier.assert_called_once()
+        self.assertEqual(
+            verifier.call_args.args[0].bundle.parent,
+            CHECK.OLD_SOURCE_STAGE,
+        )
+
+    def test_changed_old_oci_digest_blocks_source_proof(self) -> None:
+        """A changed protected rollback image invalidates old TAR identity."""
+        args = self.signed_arguments()
+        with (
+            patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", NEW_DIGEST),
+            ),
+            patch.object(CHECK.SOURCE_PAIR, "verify") as verifier,
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_OLD_PAIR_IDENTITY_CHANGED"
+            ),
+        ):
+            CHECK.reverify_signed_old_pair(args, self.baseline())
+        verifier.assert_not_called()
+
+    def test_old_source_incomplete_crypto_proof_fails_closed(self) -> None:
+        """A valid SHA256 is not a substitute for old Sigstore identity."""
+        args = self.signed_arguments()
+        forged = dict(
+            self.old_source_pair_proof(),
+            source_signature_verified=False,
+        )
+        with (
+            patch.object(
+                CHECK.OLD,
+                "receipt_identity",
+                return_value=("0.5.25-hw", OLD_DIGEST),
+            ),
+            patch.object(CHECK.SOURCE_PAIR, "verify", return_value=forged),
+            self.assertRaisesRegex(
+                CHECK.CutoverBlocked, "QA_CUTOVER_NEW_PAIR_PROOF_INCOMPLETE"
+            ),
+        ):
+            CHECK.reverify_signed_old_pair(args, self.baseline())
 
     def test_signed_mode_requires_old_git_sha_before_io(self) -> None:
         """An old image tag without its source commit cannot claim proof."""
@@ -255,9 +369,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
 
     def test_fake_signed_base_with_missing_oci_proof_refused(self) -> None:
         """A signed-looking status without both Cosign results is blocked."""
-        args = self.args()
-        args.verify_signatures = True
-        args.old_commit = OLD_COMMIT
+        args = self.signed_arguments()
         evidence = dict(
             self.baseline(),
             status="PASS_QA_SIGNED_OCI_AND_WAL_ONLY",

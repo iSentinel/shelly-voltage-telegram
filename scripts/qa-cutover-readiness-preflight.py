@@ -16,6 +16,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 SOURCE_STAGE = Path("/var/lib/svt-qa-verified-pair-20261119")
+OLD_SOURCE_STAGE = Path("/var/lib/svt-qa-old-source-20261120")
 
 
 class CutoverBlocked(ValueError):
@@ -51,6 +52,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--new-receipt", required=True, type=Path)
     parser.add_argument("--new-version", required=True, type=Path)
     parser.add_argument("--source-archive-dir", required=True, type=Path)
+    parser.add_argument(
+        "--old-source-archive-dir",
+        type=Path,
+        help="Protected old source Sigstore assets, required for signed QA.",
+    )
     parser.add_argument("--target-commit", required=True)
     parser.add_argument(
         "--verify-signatures",
@@ -92,6 +98,11 @@ def check_qa_boundary(args: argparse.Namespace) -> None:
         raise CutoverBlocked("QA_CUTOVER_OLD_COMMIT_REQUIRED")
     if not signed and old_commit:
         raise CutoverBlocked("QA_CUTOVER_SIGNATURES_NOT_REQUESTED")
+    old_directory = getattr(args, "old_source_archive_dir", None)
+    if signed and old_directory != OLD_SOURCE_STAGE:
+        raise CutoverBlocked("QA_CUTOVER_OLD_SOURCE_STAGE_REQUIRED")
+    if not signed and old_directory is not None:
+        raise CutoverBlocked("QA_CUTOVER_OLD_SOURCE_UNUSED")
 
 
 def check_target(args: argparse.Namespace, baseline: dict) -> dict:
@@ -184,6 +195,27 @@ def require_signed_source_pair_proof(
         raise CutoverBlocked("QA_CUTOVER_NEW_PAIR_PROOF_INCOMPLETE")
 
 
+def reverify_signed_old_pair(args: argparse.Namespace, base: dict) -> None:
+    """Require old source Sigstore + OCI at the same exact old Git SHA."""
+    version, digest = OLD.receipt_identity(args.signed_snapshot)
+    if version != base.get("old_version") or digest[-12:] != base.get(
+        "old_digest_suffix"
+    ):
+        raise CutoverBlocked("QA_CUTOVER_OLD_PAIR_IDENTITY_CHANGED")
+    old_args = argparse.Namespace(
+        source_archive_dir=args.old_source_archive_dir,
+        target_commit=args.old_commit,
+    )
+    identity = {
+        "version": version,
+        "digest": digest,
+        "source_commit": args.old_commit,
+    }
+    exact = staged_pair_proof_args(old_args, identity)
+    proof = SOURCE_PAIR.verify(exact)
+    require_signed_source_pair_proof(proof, exact)
+
+
 def reverify_signed_new_pair(args: argparse.Namespace, record: dict) -> None:
     """Reauthenticate the complete staged source and OCI before cutover."""
     exact = staged_pair_proof_args(args, record)
@@ -201,6 +233,7 @@ def evaluate(args: argparse.Namespace) -> dict:
     check_base_proof(base, signed)
     target = check_target(args, base)
     if signed:
+        reverify_signed_old_pair(args, base)
         reverify_signed_new_pair(args, target)
     return {
         "status": (
@@ -216,6 +249,8 @@ def evaluate(args: argparse.Namespace) -> dict:
         "source_archive_sha256_matched": True,
         "paired_receipt_consistent": True,
         "source_signature_reverified": signed,
+        "old_source_signature_reverified": signed,
+        "new_source_signature_reverified": signed,
         "old_oci_signature_reverified": signed,
         "new_oci_signature_reverified": signed,
         "oci_signature_reverified": signed,
