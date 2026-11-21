@@ -43,7 +43,9 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             qa_offline=True,
             once=True,
         )
+        self.identity = "a" * 64
         self.info = {
+            "Id": self.identity,
             "State": {"Running": False},
             "HostConfig": {
                 "RestartPolicy": {"Name": "no"},
@@ -323,7 +325,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
 
         def docker_start(*args):
             nonlocal thread
-            self.assertEqual(args, ("start", self.args.container))
+            self.assertEqual(args, ("start", self.identity))
             thread = threading.Thread(target=updater, daemon=True)
             thread.start()
             self.assertTrue(attempting.wait(1))
@@ -332,10 +334,11 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
 
         with (
             patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
             patch.object(SUPERVISOR, "docker", side_effect=docker_start),
         ):
             self.assertTrue(
-                SUPERVISOR.start_if_clear(self.args.container, self.db)
+                SUPERVISOR.start_if_clear(self.args, self.identity)
             )
         self.assertIsNotNone(thread)
         thread.join(timeout=2)
@@ -353,7 +356,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             ),
             patch.object(SUPERVISOR, "docker") as docker_call,
         ):
-            started = SUPERVISOR.start_if_clear(self.args.container, self.db)
+            started = SUPERVISOR.start_if_clear(self.args, self.identity)
         self.assertFalse(started)
         docker_call.assert_not_called()
 
@@ -364,6 +367,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             patch.object(
                 SUPERVISOR, "_pending_under_gate", return_value=False
             ),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
             patch.object(
                 SUPERVISOR,
                 "docker",
@@ -373,7 +377,46 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 SUPERVISOR.BootBlocked, "SVT_DOCKER_START_FAILED"
             ),
         ):
-            SUPERVISOR.start_if_clear(self.args.container, self.db)
+            SUPERVISOR.start_if_clear(self.args, self.identity)
+
+    def test_replaced_container_cannot_be_started(self):
+        """A recreated name is not the container approved at entry."""
+        replacement = dict(self.info, Id="b" * 64)
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=replacement),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "SVT_CONTAINER_ID_CHANGED"
+            ),
+        ):
+            SUPERVISOR.start_if_clear(self.args, self.identity)
+        docker_call.assert_not_called()
+
+    def test_restart_policy_drift_before_start_is_blocked(self):
+        """Revalidate the restart policy on subsequent starts as well."""
+        self.info["HostConfig"]["RestartPolicy"]["Name"] = "always"
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "RESTART_OWNER_UNFENCED"
+            ),
+        ):
+            SUPERVISOR.start_if_clear(self.args, self.identity)
+        docker_call.assert_not_called()
+
+    def test_invalid_immutable_container_id(self):
+        """A name, a shortened ID, or absent ID cannot be pinned."""
+        for value in ("name", "a" * 12, None):
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "SVT_CONTAINER_ID_INVALID"
+                ),
+            ):
+                SUPERVISOR.container_identity({"Id": value})
 
     def test_symlink_pending_rejected_before_docker_start(self):
         """Even a dangling marker blocks a new owner before Docker."""
@@ -386,7 +429,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 SUPERVISOR.BootBlocked, "SVT_PENDING_MARKER_UNSAFE"
             ),
         ):
-            SUPERVISOR.start_if_clear(self.args.container, self.db)
+            SUPERVISOR.start_if_clear(self.args, self.identity)
         docker_call.assert_not_called()
 
     def test_dangling_symlink_pending_marker_fails_closed(self) -> None:
