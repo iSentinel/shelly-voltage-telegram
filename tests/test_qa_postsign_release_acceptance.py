@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import tempfile
 import unittest
@@ -54,6 +55,7 @@ def signed_proof(values: argparse.Namespace) -> dict:
         "version": values.version,
         "commit": values.commit,
         "digest": values.digest,
+        "source_sha256": hashlib.sha256(b"synthetic-not-signed").hexdigest(),
         "digest_suffix": values.digest[-12:],
         "source_signature_verified": True,
         "oci_signature_verified": True,
@@ -198,6 +200,22 @@ class PostSignReleaseTests(unittest.TestCase):
             "production_modified",
         ):
             self.assertFalse(report[key])
+
+    def test_source_bytes_must_match_verified_hash(self) -> None:
+        """A changed archive or missing hash cannot imply signed bytes."""
+        with tempfile.TemporaryDirectory() as folder:
+            archive = Path(folder) / "public.tar.gz"
+            archive.write_bytes(b"changed-after-verification")
+            with (
+                patch.object(
+                    QA.INVENTORY, "check", side_effect=inventory_proof
+                ),
+                patch.object(QA.PAIR, "verify", side_effect=signed_proof),
+                self.assertRaisesRegex(
+                    QA.PostSignBlocked, "POSTSIGN_SOURCE_SHA256_MISMATCH"
+                ),
+            ):
+                QA.evaluate(args(archive=archive))
 
     def test_real_nonexistent_assets_never_pass(self) -> None:
         """Use actual inventory code with a missing release JSON."""

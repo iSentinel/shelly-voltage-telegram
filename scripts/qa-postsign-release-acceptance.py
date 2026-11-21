@@ -81,7 +81,7 @@ def require_inventory(args: argparse.Namespace) -> None:
         raise PostSignBlocked("POSTSIGN_INVENTORY_INCOMPLETE")
 
 
-def require_signed_pair(args: argparse.Namespace) -> None:
+def require_signed_pair(args: argparse.Namespace) -> str:
     """Call real signed source and OCI validators tied to one exact SHA."""
     try:
         proof = PAIR.verify(args)
@@ -111,15 +111,23 @@ def require_signed_pair(args: argparse.Namespace) -> None:
         or any(proof.get(key) is not True for key in required)
     ):
         raise PostSignBlocked("POSTSIGN_SIGNED_PAIR_INCOMPLETE")
+    source_sha = proof.get("source_sha256")
+    if not isinstance(source_sha, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", source_sha
+    ):
+        raise PostSignBlocked("POSTSIGN_SOURCE_SHA256_INVALID")
+    return source_sha
 
 
 def evaluate(args: argparse.Namespace) -> dict:
     """Join source/OCI proof; never return permission to deploy or publish."""
     require_identity(args)
     require_inventory(args)
-    require_signed_pair(args)
+    verified_sha = require_signed_pair(args)
     with args.archive.open("rb") as stream:
         source_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+    if source_sha256 != verified_sha:
+        raise PostSignBlocked("POSTSIGN_SOURCE_SHA256_MISMATCH")
     return {
         "status": "PASS_QA_POSTSIGN_PUBLIC_PAIR_EVIDENCE_ONLY",
         "version": args.version,
