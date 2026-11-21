@@ -353,6 +353,19 @@ def forecast_legend(painter: Painter) -> None:
         painter.text(x + 21, 577, caption, 21, TEXT, "medium")
 
 
+def strike_elapsed_half(
+    painter: Painter, left: int, y: int, half: int
+) -> None:
+    """Cross a completed half-hour in its exposed colored side."""
+    # The central hour label covers the inner part of each half.
+    x = left + (5 if half == 0 else 44)
+    painter.draw.line(
+        ((x * SCALE, (y + 28) * SCALE), ((x + 16) * SCALE, (y + 7) * SCALE)),
+        fill=MUTED,
+        width=3 * SCALE,
+    )
+
+
 def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
     """Render one labelled hour with both independent half-hour states."""
 
@@ -364,7 +377,9 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
         kind = bars[index]
         color = PAST_COLORS[kind] if index < current else SLOT_COLORS[kind]
         painter.rect((left, y, left + 65, y + 35), color, 5)
-        if index == current:
+        if index < current:
+            strike_elapsed_half(painter, left, y, half)
+        elif index == current:
             painter.rect(
                 (left + 1, y + 1, left + 64, y + 34),
                 None,

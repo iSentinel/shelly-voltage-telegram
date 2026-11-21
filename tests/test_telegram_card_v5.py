@@ -10,14 +10,18 @@ from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from PIL import Image
+from PIL import Image, ImageColor
 
 from telegram_card_png import HEIGHT, WIDTH, render_card_png
 from telegram_card_v5 import (
     CARD_TEXT,
+    MUTED,
     PAST_COLORS,
+    SCALE,
     Painter,
     font,
+    hourly_tile,
+    strike_elapsed_half,
     visible_periods,
 )
 
@@ -296,6 +300,62 @@ class GraphicV5Tests(unittest.TestCase):
         ]
         self.assertEqual(len(current), 1)
         self.assertEqual(current[0].args[1], (690, 494, 753, 527))
+
+    def test_every_completed_half_has_exactly_one_strike(self):
+        """Check all 48 current-slot positions including midnight."""
+        for current in range(48):
+            painter = Painter()
+            with patch(
+                "telegram_card_v5.strike_elapsed_half",
+                wraps=strike_elapsed_half,
+            ) as strike:
+                for hour in range(24):
+                    hourly_tile(painter, "OX?" * 16, hour, current)
+            expected = [
+                (
+                    64 + 140 * ((index // 2) % 6) + 65 * (index % 2),
+                    413 + 40 * (index // 12),
+                    index % 2,
+                )
+                for index in range(current)
+            ]
+            self.assertEqual(
+                [call.args[1:] for call in strike.call_args_list],
+                expected,
+            )
+
+    def test_strike_pixels_visible_on_both_halves(self):
+        """Check actual PNG pixels after the hour label is drawn."""
+        for kind in ("O", "X", "?"):
+            for half in (0, 1):
+                painter = Painter()
+                hourly_tile(painter, kind * 48, 0, 2)
+                painter.save(self.target)
+                x = 64 + 65 * half + (5 if half == 0 else 44)
+                with Image.open(self.target) as picture:
+                    stroke = picture.getpixel((x + 8, 431))
+                    color = picture.getpixel((x + 3, 421))
+                expected = ImageColor.getrgb(MUTED)
+                base = ImageColor.getrgb(PAST_COLORS[kind])
+                self.assertLessEqual(
+                    max(abs(a - b) for a, b in zip(stroke, expected)), 15
+                )
+                self.assertLessEqual(
+                    max(abs(a - b) for a, b in zip(color, base)), 15
+                )
+                self.assertGreater(sum(stroke) - sum(color), 100)
+
+    def test_current_and_future_pixels_have_no_strike(self):
+        """A half-hour becomes crossed only after its end."""
+        for current in (0, 1, 2):
+            painter = Painter()
+            hourly_tile(painter, "OX" * 24, 0, current)
+            for half in (0, 1):
+                x = 64 + 65 * half + (5 if half == 0 else 44)
+                pixel = painter.image.getpixel(((x + 8) * SCALE, 431 * SCALE))
+                self.assertEqual(
+                    pixel == ImageColor.getrgb(MUTED), half < current
+                )
 
     def labels_drawn(self, payload: dict) -> set[tuple[str, str]]:
         """Identify visible labels and colors from the real renderer."""
