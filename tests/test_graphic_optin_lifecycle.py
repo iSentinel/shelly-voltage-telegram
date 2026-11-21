@@ -284,6 +284,72 @@ class GraphicOptinLifecycleTests(unittest.TestCase):
         monitor.telegram.send_status_photo.assert_not_called()
         self.assertIn("telegram_graphic_publish_pending", state)
 
+    def test_matching_pending_photo_refresh_preserves_intent(self):
+        """A verified photo remains editable; no resend or rebind."""
+        initial = {
+            "telegram_status_message_id": "101",
+            "telegram_status_media_identity": "photo:-100123:101",
+            "telegram_graphic_publish_pending": "-100123:101",
+        }
+        monitor, state = self.make_monitor(initial)
+        for text in ("Offline", "Online"):
+            self.assertTrue(monitor.update_graphic_status(text))
+        self.assertEqual(monitor.telegram.edit_photo.call_count, 2)
+        self.assertFalse(monitor.publish_graphic_status("Grid"))
+        self.assertEqual(state, initial)
+        monitor.telegram.send_status_photo.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        monitor.storage.bind_status_post.assert_not_called()
+        monitor.ensure_status_pinned.assert_not_called()
+        monitor.delete_previous_voltage_status.assert_not_called()
+
+    def test_pending_refresh_denies_unknown_or_mismatched_anchor(self):
+        """An uncertain new post or different identity stays blocked."""
+        for pending, marker in (
+            ("-100123:new", "photo:-100123:101"),
+            ("-100999:101", "photo:-100123:101"),
+            ("-100123:102", "photo:-100123:101"),
+            ("-100123:101", "text:-100123:101"),
+            ("-100123:101", "photo:-100123:102"),
+        ):
+            with self.subTest(pending=pending, marker=marker):
+                monitor, _ = self.make_monitor(
+                    {
+                        "telegram_status_message_id": "101",
+                        "telegram_status_media_identity": marker,
+                        "telegram_graphic_publish_pending": pending,
+                    }
+                )
+                self.assertFalse(monitor.update_graphic_status("Offline"))
+                monitor.telegram.edit_photo.assert_not_called()
+                monitor.telegram.send_status_photo.assert_not_called()
+
+    def test_pending_refresh_beats_recovery_rotation(self):
+        """Scheduler refreshes the anchor for both connectivity states."""
+        initial = {
+            "telegram_status_message_id": "101",
+            "telegram_status_media_identity": "photo:-100123:101",
+            "telegram_graphic_publish_pending": "-100123:101",
+            APP.RECOVERY_ROTATION_PENDING_KEY: "1000",
+        }
+        monitor, state = self.make_monitor(initial)
+        monitor.graphic_channel_opted_in = Mock(return_value=True)
+        monitor.telegram_due = Mock(return_value=True)
+        monitor.state = Mock()
+        for connectivity in ("offline", "online"):
+            monitor.state.snapshot.return_value = {
+                "voltage": 220.0,
+                "connectivity": connectivity,
+            }
+            with patch.object(APP, "channel_status_text", return_value="Grid"):
+                APP.Monitor.update_status(monitor)
+        self.assertEqual(monitor.telegram.edit_photo.call_count, 2)
+        self.assertEqual(monitor.finish_voltage_status_update.call_count, 2)
+        self.assertEqual(state, initial)
+        monitor.telegram.send_status_photo.assert_not_called()
+        monitor.telegram.send.assert_not_called()
+        monitor.ensure_status_pinned.assert_not_called()
+
     def test_empty_pending_marker_blocks_legacy_rollback(self):
         """Disabling graphics cannot bypass even a malformed marker."""
 

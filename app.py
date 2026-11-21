@@ -3497,16 +3497,21 @@ class Monitor:
             return self._update_graphic_status_locked(text)
 
     def _update_graphic_status_locked(self, text: str) -> bool:
-        """Edit only a known post; never race an uncertain publish."""
+        """Refresh a verified photo anchor without retrying uncertain sends."""
 
         if self.legacy_confirmation_pending():
             return False
-        if (
-            self.storage.get_meta("telegram_graphic_publish_pending")
-            is not None
-        ):
-            return False
-        if not self.storage.get_meta(self.status_message_key()):
+        pending = self.storage.get_meta("telegram_graphic_publish_pending")
+        stored = self.storage.get_meta(self.status_message_key())
+        if pending is not None:
+            target = self.telegram.status_chat_id
+            if (
+                not Monitor.valid_legacy_status_target(stored, target)
+                or pending != f"{target}:{stored}"
+                or self.status_media_kind() != "photo"
+            ):
+                return False
+        if not stored:
             return self._publish_graphic_status_locked(text, notify=False)
         with tempfile.TemporaryDirectory(prefix="shelly-status-") as folder:
             image, caption = self.graphic_status_media(text, folder)
@@ -3628,6 +3633,15 @@ class Monitor:
         voltage = None if snap["voltage"] is None else float(snap["voltage"])
         connectivity = str(snap["connectivity"])
         if not self.telegram_due(voltage, connectivity):
+            return
+        if (
+            self.storage.get_meta("telegram_graphic_publish_pending")
+            is not None
+            and self.graphic_channel_opted_in()
+        ):
+            # Keep the known photo current without rotating or pinning.
+            if self.update_graphic_status(channel_status_text(self)):
+                self.finish_voltage_status_update()
             return
         if connectivity == "online" and self.storage.get_meta(
             RECOVERY_ROTATION_PENDING_KEY
