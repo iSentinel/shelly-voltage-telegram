@@ -199,6 +199,7 @@ def record_for_stage(args: argparse.Namespace, evidence: dict) -> dict:
         evidence.get("status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY"
         or evidence.get("version") != args.version
         or evidence.get("commit") != args.commit
+        or evidence.get("digest") != args.digest
         or evidence.get("digest_suffix") != args.digest[-12:]
         or evidence.get("release_authorized") is not False
         or evidence.get("rollback_authorized") is not False
@@ -213,6 +214,8 @@ def record_for_stage(args: argparse.Namespace, evidence: dict) -> dict:
             raise StageBlocked("STAGE_PAIR_EVIDENCE_INVALID")
     with args.archive.open("rb") as stream:
         source_sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    if evidence.get("source_sha256") != source_sha:
+        raise StageBlocked("STAGE_SOURCE_SHA256_MISMATCH")
     return {
         "version": args.version,
         "digest": args.digest,

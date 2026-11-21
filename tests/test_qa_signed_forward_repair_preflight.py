@@ -43,6 +43,7 @@ def signed_result(pair: argparse.Namespace) -> dict:
         "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
         "version": pair.version,
         "commit": pair.commit,
+        "digest": pair.digest,
         "digest_suffix": pair.digest[-12:],
         "source_signature_verified": True,
         "oci_signature_verified": True,
@@ -123,6 +124,8 @@ class ForwardRepairTests(unittest.TestCase):
             ("version", "0.5.27-hw"),
             ("commit", "d" * 40),
             ("digest_suffix", "e" * 12),
+            ("digest", "sha256:" + "e" * 52 + "b" * 12),
+            ("digest", None),
         ):
             with (
                 self.subTest(key=key),

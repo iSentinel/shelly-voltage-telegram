@@ -104,6 +104,7 @@ def require_signed_pair(args: argparse.Namespace) -> None:
         or proof.get("status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY"
         or proof.get("version") != args.version
         or proof.get("commit") != args.commit
+        or proof.get("digest") != args.digest
         or proof.get("digest_suffix") != args.digest[-12:]
         or proof.get("release_authorized") is not False
         or proof.get("rollback_authorized") is not False

@@ -107,7 +107,7 @@ def validate_paths(args: argparse.Namespace) -> None:
     safe_file(args.sha256sums, 16384)
 
 
-def verify_checksums(args: argparse.Namespace) -> None:
+def verify_checksums(args: argparse.Namespace) -> str:
     """Bind exactly one archive checksum to the selected filename."""
     lines = args.sha256sums.read_text(encoding="ascii").splitlines()
     matches = [
@@ -122,6 +122,7 @@ def verify_checksums(args: argparse.Namespace) -> None:
         actual = hashlib.file_digest(stream, "sha256").hexdigest()
     if actual != matches[0]:
         raise SourceBlocked("SOURCE_ARCHIVE_SHA256_MISMATCH")
+    return actual
 
 
 def safe_member(
@@ -249,14 +250,17 @@ def verify_signature(args: argparse.Namespace) -> None:
 def verify(args: argparse.Namespace) -> dict:
     """Produce read-only evidence, never installation authorization."""
     validate_paths(args)
-    verify_checksums(args)
+    checksum = verify_checksums(args)
     verify_archive_versions(args)
     verify_signature(args)
+    if verify_checksums(args) != checksum:
+        raise SourceBlocked("SOURCE_ARCHIVE_CHANGED_DURING_VERIFICATION")
     return {
         "status": "PASS_SIGNED_SOURCE_BYTES_ONLY",
         "version": args.version,
         "signed_source_verified": True,
         "source_sha256_verified": True,
+        "source_sha256": checksum,
         "source_commit_bound": bool(getattr(args, "expected_commit", "")),
         "release_authorized": False,
         "production_modified": False,

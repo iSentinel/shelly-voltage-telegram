@@ -183,6 +183,7 @@ def require_signed_source_pair_proof(
         proof.get("status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY"
         or proof.get("version") != expected.version
         or proof.get("commit") != expected.commit
+        or proof.get("digest") != expected.digest
         or proof.get("digest_suffix") != expected.digest[-12:]
         or proof.get("release_authorized") is not False
         or proof.get("rollback_authorized") is not False

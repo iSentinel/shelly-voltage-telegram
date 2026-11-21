@@ -97,6 +97,10 @@ class QaPairReceiptStagerTests(unittest.TestCase):
             "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
             "version": VERSION,
             "commit": COMMIT,
+            "digest": DIGEST,
+            "source_sha256": hashlib.sha256(
+                self.args.archive.read_bytes()
+            ).hexdigest(),
             "digest_suffix": DIGEST[-12:],
             "source_signature_verified": True,
             "oci_signature_verified": True,
@@ -139,6 +143,8 @@ class QaPairReceiptStagerTests(unittest.TestCase):
                 {"commit": "f" * 40},
                 {"release_authorized": True},
                 {"digest_suffix": "wrong"},
+                {"digest": "sha256:" + "d" * 52 + DIGEST[-12:]},
+                {"digest": None},
             )
         ):
             output = self.root / f"blocked-{number}"

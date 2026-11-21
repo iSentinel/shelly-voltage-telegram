@@ -53,6 +53,7 @@ def signed_proof(values: argparse.Namespace) -> dict:
         "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
         "version": values.version,
         "commit": values.commit,
+        "digest": values.digest,
         "digest_suffix": values.digest[-12:],
         "source_signature_verified": True,
         "oci_signature_verified": True,
@@ -150,7 +151,12 @@ class PostSignReleaseTests(unittest.TestCase):
 
     def test_signed_commit_or_digest_must_match_exactly(self) -> None:
         """Never join an image and source from different Git revisions."""
-        for key, value in (("commit", "c" * 40), ("digest_suffix", "d" * 12)):
+        for key, value in (
+            ("commit", "c" * 40),
+            ("digest_suffix", "d" * 12),
+            ("digest", "sha256:" + "d" * 52 + args().digest[-12:]),
+            ("digest", None),
+        ):
             with (
                 self.subTest(key=key),
                 patch.object(

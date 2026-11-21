@@ -88,6 +88,7 @@ def verify_candidate(args: argparse.Namespace) -> None:
         proof.get("status") != "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY"
         or proof.get("version") != pair.version
         or proof.get("commit") != pair.commit
+        or proof.get("digest") != pair.digest
         or proof.get("digest_suffix") != pair.digest[-12:]
         or any(proof.get(key) is not True for key in required)
     ):

@@ -115,6 +115,8 @@ def verify(args: argparse.Namespace) -> dict:
     if (
         source.get("status") != "PASS_SIGNED_SOURCE_BYTES_ONLY"
         or source.get("source_commit_bound") is not True
+        or not isinstance(source.get("source_sha256"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", source["source_sha256"])
         or source.get("release_authorized") is not False
     ):
         raise PairBlocked("PAIR_SOURCE_PROOF_INCOMPLETE")
@@ -124,8 +126,10 @@ def verify(args: argparse.Namespace) -> dict:
         "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
         "version": args.version,
         "commit": args.commit,
+        "digest": args.digest,
         "digest_suffix": args.digest[-12:],
         "source_signature_verified": True,
+        "source_sha256": source["source_sha256"],
         "oci_signature_verified": True,
         "oci_attestations_verified": True,
         "release_authorized": False,

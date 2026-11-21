@@ -75,6 +75,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
             "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
             "version": "0.5.26-hw",
             "commit": COMMIT,
+            "digest": NEW_DIGEST,
             "digest_suffix": NEW_DIGEST[-12:],
             "source_signature_verified": True,
             "oci_signature_verified": True,
@@ -89,6 +90,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
             self.source_pair_proof(),
             version="0.5.25-hw",
             commit=OLD_COMMIT,
+            digest=OLD_DIGEST,
             digest_suffix=OLD_DIGEST[-12:],
         )
 
@@ -243,6 +245,7 @@ class QaCutoverReadinessTests(unittest.TestCase):
             "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
             "version": "0.5.26-hw",
             "commit": COMMIT,
+            "digest": NEW_DIGEST,
             "digest_suffix": NEW_DIGEST[-12:],
             "source_signature_verified": False,
             "oci_signature_verified": True,

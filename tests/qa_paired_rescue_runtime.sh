@@ -328,6 +328,8 @@ def fake_signed_pair(_copied):
     return {
         "status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
         "version": version, "commit": commit,
+        "digest": digest,
+        "source_sha256": hashlib.sha256(_copied.archive.read_bytes()).hexdigest(),
         "digest_suffix": digest[-12:],
         "source_signature_verified": True,
         "oci_signature_verified": True,

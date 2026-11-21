@@ -25,6 +25,7 @@ VERSION = "0.5.26-hw"
 SOURCE_OK = {
     "status": "PASS_SIGNED_SOURCE_BYTES_ONLY",
     "source_commit_bound": True,
+    "source_sha256": "c" * 64,
     "release_authorized": False,
 }
 
@@ -58,6 +59,8 @@ class SignedReleasePairTests(unittest.TestCase):
         oci.assert_called_once()
         self.assertEqual(result["status"], "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY")
         self.assertEqual(result["commit"], COMMIT)
+        self.assertEqual(result["digest"], DIGEST)
+        self.assertEqual(result["source_sha256"], "c" * 64)
         self.assertFalse(result["release_authorized"])
         self.assertFalse(result["rollback_authorized"])
         self.assertFalse(result["production_modified"])
