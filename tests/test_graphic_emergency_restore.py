@@ -33,7 +33,7 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
     def test_production_requires_healthy_container(self):
         """An unhealthy writer is never safe to disarm or skip restarting."""
 
-        healthy = ["active", "enabled", "true", "healthy", "on-failure"]
+        healthy = ["active", "enabled", "true", "healthy", "no"]
         for status in ("unhealthy", "starting", "<no value>", ""):
             with (
                 self.subTest(health=status),
@@ -297,7 +297,7 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
             [
                 "docker",
                 "update",
-                "--restart=on-failure",
+                "--restart=no",
                 WATCHDOG.CONTAINER,
             ],
             calls,

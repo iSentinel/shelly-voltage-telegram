@@ -405,10 +405,15 @@ After a real interruption, use the pending marker to locate the private
 snapshot and verify the active image and database before resuming service.
 The common writer fence and controlled startup when recovery is blocked are
 tracked in [issue #340](https://github.com/iSentinel/shelly-voltage-telegram/issues/340).
-At boot, the enabled Compose unit owns service startup. Docker uses
-`on-failure` for an abnormal container exit while the daemon is running.
-An installation managed only by Docker Compose needs an explicit start
-after a host or daemon restart. [Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/)
+The enabled Compose unit owns boot startup. The application container
+uses Docker restart policy `no`. In a disposable LXC reboot with Docker
+26.1.5, a container set to `on-failure` restarted even though systemd
+rejected the recovery archive. Keeping automatic Docker restart disabled
+protects the systemd guard after an interrupted shutdown.
+After the monitor process exits, inspect the journal and use
+`systemctl restart shelly-voltage-compose.service` to run the guard again.
+Standalone Compose installations require an explicit start after a host
+or daemon restart.
 
 During a signed upgrade, verify the installed Compose unit and the running
 container's restart policy together. The deployment audit reports an

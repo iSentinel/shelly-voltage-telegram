@@ -60,7 +60,7 @@ class DeploymentStateTests(unittest.TestCase):
         self,
         image: str = IMAGE,
         health: str = "healthy",
-        restart: str = "on-failure",
+        restart: str = "no",
     ) -> dict:
         """Return a real audit using mocked read-only Docker inspection."""
         payload = f"{image}|{health}|{restart}\n"
@@ -111,7 +111,7 @@ class DeploymentStateTests(unittest.TestCase):
 
     def test_restart_policy_drift_is_reported_separately(self) -> None:
         """A healthy container must still pass the guarded boot policy."""
-        for policy in ("unless-stopped", "always", "no"):
+        for policy in ("unless-stopped", "always", "on-failure"):
             with self.subTest(policy=policy):
                 result = self.audit(restart=policy)
                 self.assertEqual(result["status"], "BLOCKED")
