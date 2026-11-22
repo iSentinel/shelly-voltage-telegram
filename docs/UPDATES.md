@@ -461,6 +461,19 @@ Production stays on published `0.5.12-hw` until those gates pass.
 
 ## Acceptance before production
 
+The preflight checks the latest reading on every phase listed by the
+monitor. A finalized voltage recovery must agree with fresh normal
+detectors and at least 15 minutes of settled voltage. Unresolved Telegram
+publication and rotation records remain independent blockers.
+
+Use `scripts/reconcile-status-photo.py --help` when a verified existing
+Telegram photo is still the current card after an uncertain publication.
+Confirm its channel and message ID from Telegram before inspection. The
+repair checks the same state again after the monitor and temporary photo
+editor stop, and writes a private SQLite rescue before retiring the stale
+transient records. It keeps the bound photo ID, measurements and event
+history. The script does not contact Telegram.
+
 Validate source archive and Cosign verification on a pinned digest, unit
 tests, offline/low-voltage gates, backup/checksum/restore behavior, restart
 with the pinned override, interrupted updates, and manual rollback on a

@@ -217,6 +217,87 @@ class ReleaseUpdaterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "alarm"):
                 updater.preflight(self.db, "http://127.0.0.1:8080/ready")
 
+    def settled_three_phase_fixture(self) -> dict:
+        """Build a finalized recovery with fresh, normal per-phase samples."""
+        now = time.time()
+        event_at = now - 960
+        values = {
+            "voltage_episode": json.dumps(
+                {
+                    "last_at": event_at,
+                    "finalized_at": event_at + 300,
+                    "transitions": [{"kind": "recovered", "at": event_at}],
+                }
+            ),
+            "last_voltage_event": json.dumps(
+                {
+                    "kind": "recovered",
+                    "phase": "L2",
+                    "timestamp": event_at,
+                }
+            ),
+            "voltage_recovery_stable_since": str(event_at),
+        }
+        phases = {}
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("ALTER TABLE measurements ADD COLUMN phase TEXT")
+            db.execute("DELETE FROM measurements")
+            for phase in ("L1", "L2", "L3"):
+                phases[phase] = {"ready": True, "connectivity": "online"}
+                db.execute(
+                    "INSERT INTO measurements VALUES(?, 222, ?)", (now, phase)
+                )
+                values[f"voltage_detector_{phase}"] = (
+                    '{"level":"normal","low":false}'
+                )
+            db.executemany("INSERT INTO meta VALUES(?, ?)", values.items())
+        return {"ready": True, "connectivity": "online", "phases": phases}
+
+    def test_preflight_accepts_finalized_three_phase_recovery(self):
+        """A settled electrical episode does not need Telegram rotation."""
+        status = self.settled_three_phase_fixture()
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_preflight_separately_blocks_unresolved_telegram_state(self):
+        """An unresolved send blocks even when electrical recovery is done."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "INSERT INTO meta VALUES(?, '')",
+                ("telegram_graphic_publish_pending",),
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "Telegram.*unresolved"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_preflight_checks_the_low_phase_even_if_another_is_newer(self):
+        """A healthy aggregate cannot hide a phase outside the upgrade band."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "UPDATE measurements SET voltage=200, ts=ts-1 WHERE phase='L2'"
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "upgrade band"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_finalized_episode_with_active_detector_blocks(self):
+        """A finalized edit window cannot authorize an active detector."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key='voltage_detector_L3'",
+                ('{"level":"normal","low":true}',),
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "phase detector"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
     def test_target_guard_refuses_downgrades(self):
         """Reject already installed, older or unpublished releases."""
 
