@@ -17,6 +17,10 @@ from urllib.parse import quote
 BLOCK_SIZE = 1024 * 1024
 
 
+class RetainedBootEligible(ValueError):
+    """The healthy databases differ only in data and can share the schema."""
+
+
 def parse_args() -> argparse.Namespace:
     """Read the archive path and maximum restored database size."""
 
@@ -24,7 +28,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--max-size-mib", type=int, default=2048)
     parser.add_argument("--compare-db", type=Path)
-    return parser.parse_args()
+    parser.add_argument(
+        "--retained-boot",
+        action="store_true",
+        help="Return 5 for changed data with a compatible live schema",
+    )
+    args = parser.parse_args()
+    if args.retained_boot and args.compare_db is None:
+        parser.error("--retained-boot requires --compare-db")
+    return args
 
 
 def restore_bounded(archive: Path, destination: Path, max_bytes: int) -> None:
@@ -54,7 +66,44 @@ def full_sqlite_digest():
     return digest
 
 
-def compare_full_sqlite(restored: Path, current: Path) -> None:
+def database_schema(db: sqlite3.Connection) -> tuple:
+    """Compare exact definitions and the application's migration version."""
+
+    definitions = db.execute(
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema "
+        "ORDER BY type, name"
+    ).fetchall()
+    version = db.execute(
+        "SELECT value FROM meta WHERE key='schema_version'"
+    ).fetchone()
+    if (
+        version is None
+        or not str(version[0]).isascii()
+        or not str(version[0]).isdigit()
+    ):
+        raise ValueError("application schema version is invalid")
+    user = db.execute("PRAGMA user_version").fetchone()
+    app = db.execute("PRAGMA application_id").fetchone()
+    return definitions, version, user, app
+
+
+def retained_boot_compatible(
+    live: sqlite3.Connection, saved: sqlite3.Connection
+) -> bool:
+    """Protect the known schema and unresolved Telegram delivery state."""
+
+    pending = live.execute(
+        "SELECT 1 FROM meta WHERE key IN "
+        "('telegram_graphic_publish_pending', "
+        "'telegram_legacy_text_confirm_pending', "
+        "'telegram_recovery_rotation_pending_at') LIMIT 1"
+    ).fetchone()
+    return pending is None and database_schema(live) == database_schema(saved)
+
+
+def compare_full_sqlite(
+    restored: Path, current: Path, retained_boot: bool = False
+) -> None:
     """Require full logical parity with stopped live SQLite, read-only."""
 
     if any(part.is_symlink() for part in (current, *current.parents)):
@@ -73,11 +122,16 @@ def compare_full_sqlite(restored: Path, current: Path) -> None:
             raise ValueError("live SQLite quick_check failed")
         digest = full_sqlite_digest()
         if digest(live) != digest(saved):
+            if retained_boot and retained_boot_compatible(live, saved):
+                raise RetainedBootEligible("live history differs")
             raise ValueError("rescue SQLite whole-history parity failed")
 
 
 def validate_database(
-    archive: Path, max_bytes: int, compare_db: Path | None = None
+    archive: Path,
+    max_bytes: int,
+    compare_db: Path | None = None,
+    retained_boot: bool = False,
 ) -> int:
     """Restore into a temporary file and verify basic database integrity."""
 
@@ -92,12 +146,12 @@ def validate_database(
             if row is None:
                 raise ValueError("measurements table missing")
             if compare_db is not None:
-                compare_full_sqlite(restored, compare_db)
+                compare_full_sqlite(restored, compare_db, retained_boot)
             return int(row[0])
 
 
 def main() -> int:
-    """Return code 2 if any check cannot be completed safely."""
+    """Return 2 on invalid evidence and 5 for boot-compatible data drift."""
 
     args = parse_args()
     if args.max_size_mib < 1 or args.archive.is_symlink():
@@ -108,8 +162,17 @@ def main() -> int:
         return 2
     try:
         count = validate_database(
-            args.archive, args.max_size_mib * BLOCK_SIZE, args.compare_db
+            args.archive,
+            args.max_size_mib * BLOCK_SIZE,
+            args.compare_db,
+            args.retained_boot,
         )
+    except RetainedBootEligible:
+        print(
+            "SQLite data differs with matching schema; rollback blocked",
+            file=sys.stderr,
+        )
+        return 5
     except (OSError, EOFError, ValueError, sqlite3.Error):
         print("FAIL: invalid SQLite archive", file=sys.stderr)
         return 2
