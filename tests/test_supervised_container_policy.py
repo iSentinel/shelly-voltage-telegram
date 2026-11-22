@@ -203,6 +203,80 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         source.read_text.return_value = content
         return source
 
+    def paired_storage_fixture(self) -> None:
+        """Make synthetic inspect facts match the selected host paths."""
+        self.info["Mounts"][0]["Type"] = "bind"
+        self.info["Mounts"].append(
+            {
+                "Type": "bind",
+                "Source": str(self.db.parent),
+                "Destination": "/data",
+                "RW": True,
+            }
+        )
+        self.info["Config"]["Env"] = [
+            f"DATABASE_PATH=/data/{self.db.name}",
+            "SVT_WRITER_FENCE_DIR=/run/svt-fence",
+        ]
+
+    def test_paired_storage_exact_bind(self) -> None:
+        """Strict storage checks require matching path, mounts and env."""
+        self.paired_storage_fixture()
+        SUPERVISOR.require_paired_storage(self.info, self.args)
+
+    def test_paired_storage_wrong_data_or_nested_mount(self) -> None:
+        """Reject different history and shadowed database/fence mounts."""
+        self.paired_storage_fixture()
+        data = self.info["Mounts"][1]
+        for key, value in (
+            ("Source", str(self.root / "other")),
+            ("Type", "volume"),
+            ("RW", False),
+        ):
+            with (
+                self.subTest(key=key),
+                patch.dict(data, {key: value}),
+                self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "STORAGE_MOUNT_MISMATCH"
+                ),
+            ):
+                SUPERVISOR.require_paired_storage(self.info, self.args)
+        for target in ("/data/history", "/run", "/run/svt-fence/lock"):
+            self.info["Mounts"].append(dict(data, Destination=target))
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "STORAGE_MOUNT_OVERLAP"
+            ):
+                SUPERVISOR.require_paired_storage(self.info, self.args)
+            self.info["Mounts"].pop()
+
+    def test_paired_storage_rejects_missing_wrong_or_duplicate_env(
+        self,
+    ) -> None:
+        """The app must use the verified DB and fence, not another path."""
+        self.paired_storage_fixture()
+        env = self.info["Config"]["Env"]
+        for values in (
+            env[:1],
+            ["DATABASE_PATH=/data/other.sqlite3", env[1]],
+            env + ["DATABASE_PATH=/data/other.sqlite3"],
+        ):
+            with (
+                self.subTest(values=values),
+                patch.dict(self.info["Config"], {"Env": values}),
+                self.assertRaisesRegex(
+                    SUPERVISOR.BootBlocked, "STORAGE_ENV_MISMATCH"
+                ),
+            ):
+                SUPERVISOR.require_paired_storage(self.info, self.args)
+
+    def test_strict_and_offline_modes_conflict(self) -> None:
+        """Strict receipt mode cannot silently take an offline branch."""
+        self.args.require_pair_receipt = True
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "STRICT_QA_MODE_CONFLICT"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
     def test_actual_candidate_checks_complete_paired_receipt(self) -> None:
         """Require root-only receipt and immutable Docker revision at boot."""
         self.args.qa_offline = False
@@ -215,6 +289,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             "org.opencontainers.image.revision": "a" * 40
         }
         self.args.source_archive_dir = self.root / "source"
+        self.paired_storage_fixture()
         with (
             patch.object(
                 SUPERVISOR, "source_version", return_value="0.5.26-hw"

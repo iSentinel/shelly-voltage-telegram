@@ -13,7 +13,7 @@ import stat
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from writer_fence import (  # noqa: E402
@@ -224,6 +224,55 @@ def image_revision(info: dict) -> object:
     return labels.get("org.opencontainers.image.revision")
 
 
+def require_storage_mount(info: dict, source: Path, target: str) -> None:
+    """Require one exact bind mount and reject overlapping destinations."""
+    dest = PurePosixPath(target)
+    selected = []
+    for mount in info.get("Mounts", []):
+        raw = mount.get("Destination")
+        if not isinstance(raw, str) or not raw.startswith("/"):
+            raise BootBlocked("SVT_PAIRED_MOUNT_INVALID")
+        path = PurePosixPath(raw)
+        if ".." in path.parts:
+            raise BootBlocked("SVT_PAIRED_MOUNT_INVALID")
+        if path == dest or path in dest.parents or dest in path.parents:
+            selected.append(mount)
+    if len(selected) != 1:
+        raise BootBlocked("SVT_PAIRED_STORAGE_MOUNT_OVERLAP")
+    mount = selected[0]
+    if (
+        mount.get("Type") != "bind"
+        or mount.get("Source") != str(source)
+        or mount.get("Destination") != target
+        or mount.get("RW") is not True
+    ):
+        raise BootBlocked("SVT_PAIRED_STORAGE_MOUNT_MISMATCH")
+
+
+def require_paired_storage(info: dict, args: argparse.Namespace) -> None:
+    """Bind the strict runtime to the host database and common writer fence."""
+    database = args.database
+    fence = args.fence_dir
+    for path in (database, fence):
+        if not path.is_absolute() or path != path.resolve():
+            raise BootBlocked("SVT_PAIRED_STORAGE_PATH_UNSAFE")
+    if database.parent == fence:
+        raise BootBlocked("SVT_PAIRED_STORAGE_LAYOUT_INVALID")
+    require_storage_mount(info, database.parent, "/data")
+    require_storage_mount(info, fence, "/run/svt-fence")
+    env = info.get("Config", {}).get("Env", [])
+    if not isinstance(env, list) or not all(isinstance(x, str) for x in env):
+        raise BootBlocked("SVT_PAIRED_STORAGE_ENV_INVALID")
+    expected = {
+        "DATABASE_PATH": f"/data/{database.name}",
+        "SVT_WRITER_FENCE_DIR": "/run/svt-fence",
+    }
+    for key, value in expected.items():
+        matches = [entry for entry in env if entry.partition("=")[0] == key]
+        if matches != [f"{key}={value}"]:
+            raise BootBlocked("SVT_PAIRED_STORAGE_ENV_MISMATCH")
+
+
 def validate_container(info: dict, args: argparse.Namespace) -> None:
     """Refuse a foreign running writer and independent Docker restarts."""
     if info.get("State", {}).get("Running") is not False:
@@ -241,6 +290,8 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
     ]
     if len(shared) != 1:
         raise BootBlocked("SVT_FENCE_MOUNT_MISMATCH")
+    if args.qa_offline and getattr(args, "require_pair_receipt", False):
+        raise BootBlocked("SVT_STRICT_QA_MODE_CONFLICT")
     if args.qa_offline:
         if not args.container.startswith("svt-qa-"):
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")
@@ -254,6 +305,8 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
         getattr(args, "source_archive_dir", None),
     ):
         raise BootBlocked("SVT_SIGNED_IMAGE_RECEIPT_MISMATCH")
+    if getattr(args, "require_pair_receipt", False):
+        require_paired_storage(info, args)
 
 
 def _pending_under_gate(database: Path) -> bool:
