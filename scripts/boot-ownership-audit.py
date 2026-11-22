@@ -14,7 +14,9 @@ from pathlib import Path
 EXPECTED_RECOVER = (
     "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover"
 )
-EXPECTED_START = "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh"
+EXPECTED_START = (
+    "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start"
+)
 EXPECTED_RELOAD = EXPECTED_START
 EXPECTED_STOP = "/usr/bin/docker compose stop"
 
@@ -214,8 +216,9 @@ def effective_issues(fields: dict[str, str], installed: Path) -> list[str]:
         issues.append("BOOT_NETWORK_ORDERING_MISSING")
     if "network-online.target" not in fields["Wants"].split():
         issues.append("BOOT_NETWORK_WANTS_MISSING")
+    if fields["ExecStartPre"].strip():
+        issues.append("BOOT_EFFECTIVE_RECOVERY_CHANGED")
     for key, expected, reason in (
-        ("ExecStartPre", EXPECTED_RECOVER, "BOOT_EFFECTIVE_RECOVERY_CHANGED"),
         ("ExecStart", EXPECTED_START, "BOOT_EFFECTIVE_START_CHANGED"),
         ("ExecStop", EXPECTED_STOP, "BOOT_EFFECTIVE_STOP_CHANGED"),
     ):
@@ -235,7 +238,7 @@ def unit_issues(installed: str, source: str) -> list[str]:
     live = parse_service(installed)
     repo = parse_service(source)
     issues = []
-    if live.get("ExecStartPre") != EXPECTED_RECOVER:
+    if live.get("ExecStartPre") or live.get("ExecStart") != EXPECTED_START:
         issues.append("BOOT_RECOVERY_GATE_MISSING_OR_CHANGED")
     if live.get("ExecStart") != EXPECTED_START:
         issues.append("BOOT_START_PATH_UNEXPECTED")

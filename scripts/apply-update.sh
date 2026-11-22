@@ -14,6 +14,7 @@ CHANGED=false
 PENDING_FILE="$STATE/pending-update"
 PUBLIC_STATE="${SVT_PUBLIC_STATE:-/var/lib/shelly-voltage-update-check}"
 UPDATE_WORKSPACE=""
+UPDATE_LOCK="/run/lock/shelly-voltage-updater.lock"
 
 cleanup_workspace() {
     if [[ -n "$UPDATE_WORKSPACE" && -d "$UPDATE_WORKSPACE" ]]; then
@@ -24,7 +25,8 @@ cleanup_workspace() {
 usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
-       apply-update.sh --recover  (systemd boot recovery only)
+       apply-update.sh --recover  (disposable QA recovery only)
+       apply-update.sh --guarded-start  (legacy systemd start and reload)
 Legacy root-only QA updater; production SQLite rewinds are blocked.
 Production updates require a signed sole-writer WAL/PHOTO-safe cutover.
 Requires cosign, docker compose, Python 3 and flock.
@@ -90,7 +92,7 @@ requirements() {
     select_cosign
     mkdir -p "$STATE/snapshots"
     chmod 0700 "$STATE" "$STATE/snapshots"
-    exec 9>/run/lock/shelly-voltage-updater.lock
+    exec 9>>"$UPDATE_LOCK"
     flock -n 9 || { echo "FAIL: update already running" >&2; exit 3; }
 }
 
@@ -333,15 +335,39 @@ legacy_supervisor_guard() {
     fi
 }
 
+guarded_start() (
+    # Use the same lock as updates from the journal check through startup.
+    exec 9>>"$UPDATE_LOCK" || exit 3
+    flock -w 120 9 || exit 3
+    if [[ -L "$STATE" || ( -e "$STATE" && ! -d "$STATE" ) ]]; then
+        echo "FAIL: updater state directory is unsafe" >&2
+        exit 3
+    fi
+    if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+        echo "FAIL: pending update requires signed recovery before startup" >&2
+        exit 3
+    fi
+    start_stack
+)
+
+run_boot_command() {
+    [[ $EUID -eq 0 ]] || return 2
+    if [[ "$1" == "--guarded-start" ]]; then
+        guarded_start
+        return
+    fi
+    mkdir -p "$STATE"
+    exec 9>>"$UPDATE_LOCK"
+    flock -w 120 9 || return 3
+    recover_pending
+}
+
 main() {
     legacy_supervisor_guard "$@" || return 3
-    if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
-        [[ $EUID -eq 0 ]] || return 2
-        mkdir -p "$STATE"
-        exec 9>/run/lock/shelly-voltage-updater.lock
-        flock -w 120 9 || return 3
-        recover_pending
-        return
+    if [[ $# -eq 1 ]]; then
+        case "$1" in
+            --guarded-start|--recover) run_boot_command "$1"; return ;;
+        esac
     fi
     parse_args "$@"
     if [[ "$DRY_RUN" != true ]]; then

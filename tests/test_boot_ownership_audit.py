@@ -17,14 +17,13 @@ assert SPEC and SPEC.loader
 AUDIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AUDIT)
 
-UNIT = """[Unit]
+UNIT = f"""[Unit]
 Description=Test-only Shelly unit
 [Service]
 Type=oneshot
-ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover
-ExecStart=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
+ExecStart={AUDIT.EXPECTED_START}
 ExecStop=/usr/bin/docker compose stop
-ExecReload=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
+ExecReload={AUDIT.EXPECTED_RELOAD}
 [Install]
 WantedBy=multi-user.target
 """
@@ -34,18 +33,15 @@ SYSTEMD_SHOW = (
     "\n".join(
         (
             "Type=oneshot",
-            "ExecStartPre={ path=/bin/bash ; argv[]="
-            "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh "
-            "--recover ; "
-            "ignore_errors=no ; start_time=[n/a] ; status=0 }",
+            "ExecStartPre=",
             "ExecStart={ path=/bin/bash ; argv[]="
-            "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh ; "
+            f"{AUDIT.EXPECTED_START} ; "
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
             "ExecStop={ path=/usr/bin/docker ; "
             "argv[]=/usr/bin/docker compose stop ; "
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
             "ExecReload={ path=/bin/bash ; "
-            "argv[]=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh ; "
+            f"argv[]={AUDIT.EXPECTED_RELOAD} ; "
             "ignore_errors=no ; start_time=[n/a] ; status=0 }",
             "LoadState=loaded",
             "ActiveState=active",
@@ -98,18 +94,18 @@ class BootOwnerAuditTests(unittest.TestCase):
         self.assertFalse(result["rollback_authorized"])
 
     def test_installed_unit_differs_from_repository(self):
-        """A missing repository prestart hook must be reported."""
+        """A repository start command without the guard must be reported."""
 
         source = UNIT.replace(
-            "ExecStartPre=" + AUDIT.EXPECTED_RECOVER + "\n", ""
+            AUDIT.EXPECTED_START, "/usr/bin/docker compose up -d"
         )
         self.assert_blocked("BOOT_INSTALLED_SOURCE_DRIFT", source=source)
 
-    def test_missing_live_recovery_prestart_denied(self):
+    def test_missing_live_start_guard_denied(self):
         """Do not infer boot safety from a plain Compose ExecStart."""
 
         installed = UNIT.replace(
-            "ExecStartPre=" + AUDIT.EXPECTED_RECOVER + "\n", ""
+            AUDIT.EXPECTED_START, "/usr/bin/docker compose up -d"
         )
         self.assert_blocked(
             "BOOT_RECOVERY_GATE_MISSING_OR_CHANGED", installed=installed
@@ -175,7 +171,7 @@ class BootOwnerAuditTests(unittest.TestCase):
 
         installed = UNIT.replace(
             "ExecStart=",
-            "ExecStartPre=/bin/true\nExecStart=",
+            "ExecStart=/bin/true\nExecStart=",
         )
         with self.assertRaisesRegex(
             AUDIT.Blocked, "SERVICE_UNIT_DUPLICATED_DIRECTIVE"
@@ -241,14 +237,18 @@ class BootOwnerAuditTests(unittest.TestCase):
         )
         self.assertEqual(reasons, [])
         self.assertEqual(
-            AUDIT.effective_exec(fields["ExecStartPre"]),
-            AUDIT.EXPECTED_RECOVER,
+            AUDIT.effective_exec(fields["ExecStart"]),
+            AUDIT.EXPECTED_START,
         )
 
     def test_legacy_recover_blocks_supervisor_even_with_restart_no(self):
         """Restart=no alone cannot retire the old automatic DB recovery."""
         fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
-        reasons = AUDIT.supervisor_cutover_blockers(UNIT, fields, "no")
+        legacy = UNIT.replace(
+            "Type=oneshot",
+            f"Type=oneshot\nExecStartPre={AUDIT.EXPECTED_RECOVER}",
+        )
+        reasons = AUDIT.supervisor_cutover_blockers(legacy, fields, "no")
         self.assertIn("CUTOVER_LEGACY_AUTO_RECOVER_UNSAFE", reasons)
         self.assertIn("CUTOVER_ONESHOT_COMPOSE_OWNER_STILL_ACTIVE", reasons)
         self.assertIn("CUTOVER_SUPERVISOR_NOT_EFFECTIVE", reasons)
@@ -265,8 +265,8 @@ class BootOwnerAuditTests(unittest.TestCase):
     def test_supervisor_audit_detects_loaded_legacy_hook(self):
         """A safer unit file cannot hide the old loaded recovery command."""
         fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
-        source = UNIT.replace(AUDIT.EXPECTED_RECOVER, "/bin/true")
-        reasons = AUDIT.supervisor_cutover_blockers(source, fields, "no")
+        fields["ExecStartPre"] = AUDIT.EXPECTED_RECOVER
+        reasons = AUDIT.supervisor_cutover_blockers(UNIT, fields, "no")
         self.assertIn("CUTOVER_LEGACY_AUTO_RECOVER_UNSAFE", reasons)
 
     def test_supervisor_audit_detects_loaded_oneshot_owner(self):
@@ -440,9 +440,10 @@ class BootOwnerAuditTests(unittest.TestCase):
         )
 
     def test_effective_multiple_commands_fail_closed(self):
-        """A second ExecStartPre cannot be hidden in serialized metadata."""
+        """A second start command cannot hide in serialized metadata."""
 
-        raw = SYSTEMD_SHOW.splitlines()[1].split("=", 1)[1]
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        raw = fields["ExecStart"]
         for variant in ("", raw + " " + raw):
             with (
                 self.subTest(variant=bool(variant)),
@@ -455,7 +456,8 @@ class BootOwnerAuditTests(unittest.TestCase):
     def test_effective_ignore_errors_fails_closed(self):
         """Systemd ignore_errors=yes must never count as recovery fencing."""
 
-        raw = SYSTEMD_SHOW.splitlines()[1].split("=", 1)[1]
+        fields = dict(line.split("=", 1) for line in SYSTEMD_SHOW.splitlines())
+        raw = fields["ExecStart"]
         with self.assertRaisesRegex(
             AUDIT.Blocked, "SYSTEMD_EXEC_IGNORED_ERROR"
         ):

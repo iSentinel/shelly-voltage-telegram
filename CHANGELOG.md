@@ -1,3 +1,14 @@
+## 0.5.27-hw - guarded Docker startup
+
+- Keep Docker from restarting the voltage monitor before systemd checks
+  recovery state. On Docker 26.1.5 a test container with on-failure
+  started at guest boot even when systemd rejected a corrupt archive.
+- Hold the updater lock across the pending-state check and legacy service
+  startup or reload. Leave the journal and current SQLite available for
+  signed recovery when an update is pending.
+- Preserve the signed source and image publication workflow and the
+  supervised single-writer deployment path from 0.5.26-hw.
+
 ## 0.5.23-hw - signed installer/YASNO and backup-family diagnostics
 
 - Promote the exact owner-reviewed Issue #402 fixes merged through PR #409.
