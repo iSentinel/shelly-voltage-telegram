@@ -168,6 +168,30 @@ class InterruptedUpdateTests(unittest.TestCase):
         self.assertEqual(
             (self.state / "override.yaml").read_text(), "image: new\n"
         )
+        self.assertEqual(
+            json.loads((self.public / "deployed.json").read_text()),
+            {"version": "new"},
+        )
+
+    def test_failed_public_sync_does_not_repeat_sqlite_restore(self):
+        """A publication failure keeps completed recovery committed."""
+
+        self.public.write_text("occupied public path")
+        first = self.recover()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertIn("retry --sync-public-version", first.stderr)
+        self.assertFalse((self.state / "pending-update").exists())
+        self.assertEqual(self.sample(), 42)
+        with closing(sqlite3.connect(self.database)) as db, db:
+            db.execute("UPDATE samples SET id=123")
+        self.public.unlink()
+        second = self.recover()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(self.sample(), 123)
+        self.assertEqual(
+            json.loads((self.public / "deployed.json").read_text()),
+            {"version": "old"},
+        )
 
     def test_untrusted_snapshot_name_is_rejected(self):
         """Reject paths escaping the protected snapshot directory."""
