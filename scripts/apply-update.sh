@@ -120,7 +120,11 @@ storage_preflight() {
 
 verify_image() {
     local target="$IMAGE@$1"
-    "$COSIGN_EXECUTABLE" verify \
+    local -a verifier=("$COSIGN_EXECUTABLE")
+    if [[ $# == 2 ]]; then
+        verifier=(timeout "$2" "$COSIGN_EXECUTABLE")
+    fi
+    "${verifier[@]}" verify \
         --certificate-identity "https://github.com/iSentinel/shelly-voltage-telegram/.github/workflows/image.yml@refs/tags/v$VERSION" \
         --certificate-oidc-issuer https://token.actions.githubusercontent.com \
         "$target" >/dev/null
@@ -150,6 +154,11 @@ snapshot() {
     fi
     if [[ -f "$STATE/deployed.json" ]]; then
         cp -a "$STATE/deployed.json" "$SNAPSHOT/deployed.json"
+    fi
+    local container
+    if container="$(docker inspect --format '{{.Id}}' shelly-voltage-bot 2>/dev/null)" &&
+        [[ "$container" =~ ^[0-9a-f]{64}$ ]]; then
+        printf '%s\n' "$container" > "$SNAPSHOT/container-id"
     fi
     DATABASE_PATH="$DB" BACKUP_DIR="$SNAPSHOT" BACKUP_KEEP=1 \
         /bin/bash "$ROOT/scripts/backup.sh" >"$SNAPSHOT/backup.log"
@@ -262,14 +271,16 @@ verify_recovery_history() {
     actual="$(sha256sum -- "$archive")" || return 1
     [[ "$recorded" == "$actual" ]] || return 1
     /usr/bin/python3 -I -B "$ROOT/scripts/validate-sqlite-archive.py" \
-        --archive "$archive" --compare-db "$DB"
+        --archive "$archive" --compare-db "$DB" "$@"
 }
 
 require_recovery_history() {
-    if ! verify_recovery_history; then
+    local result=0
+    verify_recovery_history "$@" || result=$?
+    if [[ "$result" != 0 ]]; then
         echo "FAIL: recovery archive does not match live SQLite or could not be verified; inspect pending update" >&2
-        return 1
     fi
+    return "$result"
 }
 
 validate_recovery_snapshot() {
@@ -323,7 +334,7 @@ recover_pending() {
     validate_recovery_snapshot || return 1
     echo "RECOVERY: interrupted update $token" >&2
     # Compare before stopping Docker and recheck any commits made during stop.
-    require_recovery_history || return 1
+    require_recovery_history --retained-boot || return $?
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
     require_recovery_history || return 1
     restore_recovery_receipt override.yaml || return 1
@@ -389,6 +400,62 @@ os.replace(name, destination)
 PY
 }
 
+retained_boot_identity() {
+    /usr/bin/python3 -I -B "$ROOT/scripts/retained-boot-preflight.py" \
+        --root "$ROOT" --state "$STATE" --snapshot "$SNAPSHOT" --db "$DB"
+}
+
+wait_retained_health() {
+    # The container health check accepts an offline Shelly during boot.
+    local health
+    for _ in $(seq 1 30); do
+        health="$(docker inspect --format '{{.State.Health.Status}}' "$1")" ||
+            return 2
+        if [[ "$health" == healthy ]]; then
+            return 0
+        fi
+        [[ "$health" == starting ]] || return 2
+        sleep 2
+    done
+    return 2
+}
+
+start_retained_stack() {
+    local identity version digest container result=0
+    identity="$(retained_boot_identity)" || return 2
+    read -r version digest container <<< "$identity"
+    VERSION="$version"
+    select_cosign || return 2
+    verify_image "$digest" 60 || return 2
+    # Repeat the checks after verification while the updater lock is held.
+    verify_recovery_history --retained-boot || result=$?
+    if [[ "$result" != 5 || "$(retained_boot_identity)" != "$identity" ]]; then
+        echo "RETAINED BOOT BLOCKED: evidence changed" >&2
+        return 2
+    fi
+    docker start "$container" >/dev/null || return 2
+    if ! wait_retained_health "$container"; then
+        echo "RECOVERY PENDING: retained container health could not be verified" >&2
+        return 2
+    fi
+    echo "RECOVERY PENDING: started previously verified container with current SQLite"
+}
+
+recover_and_start() {
+    local result
+    if recover_pending; then
+        require_no_pending_recovery || return $?
+        start_stack
+    else
+        result=$?
+        if [[ "$result" == 5 ]]; then
+            start_retained_stack
+        else
+            return "$result"
+        fi
+    fi
+}
+
 run_recovery_command() {
     acquire_update_lock -w 120 || return $?
     mkdir -p "$STATE" || return 1
@@ -397,9 +464,7 @@ run_recovery_command() {
             recover_pending
             ;;
         --recover-and-start)
-            recover_pending || return $?
-            require_no_pending_recovery || return $?
-            start_stack
+            recover_and_start
             ;;
         --sync-public-version)
             require_no_pending_recovery || return $?

@@ -391,6 +391,16 @@ the live SQLite file in place. If the archive is invalid or history differs,
 it retains the pending marker and the live database for review.
 The updater refuses another deployment while this marker remains.
 
+At systemd startup, a valid archive with different data and the same
+SQLite schema can allow a retained boot. The deployed receipt and pinned
+override must match the pre-update snapshot. The original stopped
+container ID, local signed image and database bind mount must also match.
+The updater verifies the signature and checks this evidence again before
+starting that container by ID. Docker health must then report healthy.
+The pending marker stays in place and the updater continues to refuse
+another deployment. Archives that predate container-ID recording can
+still use the regular matching-history recovery path.
+
 After a real interruption, use the pending marker to locate the private
 snapshot and verify the active image and database before resuming service.
 The common writer fence and controlled startup when recovery is blocked are
