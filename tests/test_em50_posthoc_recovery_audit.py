@@ -220,5 +220,98 @@ class PosthocRecoveryAuditTests(unittest.TestCase):
         self.assertFalse(report["release_authorized"])
 
 
+class ThreePhaseRecoveryAuditTests(unittest.TestCase):
+    """Pro3EM needs all three latest incident identities in one snapshot."""
+
+    def setUp(self):
+        """Add distinct but synchronized L2 and L3 events."""
+        PosthocRecoveryAuditTests.setUp(self)
+        with contextlib.closing(sqlite3.connect(self.db)) as conn:
+            for oid, phase in ((19, "L2"), (20, "L3")):
+                conn.execute(
+                    "insert into outages values(?,1000,2000,?)",
+                    (oid, phase),
+                )
+                conn.executemany(
+                    "insert into measurements values(?,222,50,?)",
+                    [(stamp, phase) for stamp in range(2000, 3001, 10)],
+                )
+            conn.commit()
+
+    mutate = PosthocRecoveryAuditTests.mutate
+
+    def audit_three(self, ids=(18, 19, 20)):
+        """Evaluate all three phase windows using the production auditor."""
+        return QA.inspect_three_phases(self.db, ids, NOW)
+
+    def test_three_phase_exact_pass(self):
+        """Every phase must supply actual samples, never release approval."""
+        before = self.db.read_bytes()
+        result = self.audit_three()
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(set(result["phases"]), {"L1", "L2", "L3"})
+        self.assertTrue(
+            all(p["samples_15min"] == 91 for p in result["phases"].values())
+        )
+        self.assertFalse(result["telegram_delivery_verified"])
+        self.assertFalse(result["release_authorized"])
+        self.assertEqual(self.db.read_bytes(), before)
+
+    def test_duplicate_or_misordered_ids_rejected(self):
+        """Identity order is explicitly L1, L2, L3."""
+        for ids in ((18, 18, 20), (19, 18, 20), (18, 19, 21)):
+            with self.subTest(ids=ids), self.assertRaises(ValueError):
+                self.audit_three(ids)
+
+    def test_missing_middle_phase_samples(self):
+        """L1/L3 cannot mask a gap on L2."""
+        self.mutate(
+            "delete from measurements where phase='L2' and ts>2300 and ts<2500"
+        )
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            self.audit_three()
+
+    def test_new_l2_event_blocks_previous_group(self):
+        """The latest global event alone cannot prove healthy L2."""
+        self.mutate("insert into outages values(21,2990,null,'L2')")
+        with self.assertRaisesRegex(ValueError, "latest"):
+            self.audit_three()
+
+    def test_unsynchronized_phase_events_rejected(self):
+        """Do not join unrelated phase outages."""
+        self.mutate("update outages set started_at=900 where id=19")
+        with self.assertRaisesRegex(ValueError, "simultaneous"):
+            self.audit_three()
+
+    def test_cli_three_phase_scope_is_telemetry_only(self):
+        """Explicit CLI mode never authorizes a release or delivery claim."""
+        args = [
+            "audit.py",
+            "--db",
+            str(self.db),
+            "--incident-ids",
+            "18",
+            "19",
+            "20",
+            "--json",
+        ]
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(QA.time, "time", return_value=NOW),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+        ):
+            self.assertEqual(QA.main(), 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "pass")
+        self.assertFalse(report["release_authorized"])
+        self.assertFalse(report["telegram_delivery_verified"])
+
+    def test_open_historical_outage_blocks_current_group(self):
+        """An unresolved older incident remains inconsistent."""
+        self.mutate("insert into outages values(17,500,null,'L3')")
+        with self.assertRaisesRegex(ValueError, "open"):
+            self.audit_three()
+
+
 if __name__ == "__main__":
     unittest.main()

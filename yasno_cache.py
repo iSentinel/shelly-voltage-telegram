@@ -14,9 +14,11 @@ from pathlib import Path
 from yasno_schedule import (
     MAX_BYTES,
     YASNO_URL,
+    YasnoDay,
+    YasnoEmergency,
     fetch_live,
     outage_windows,
-    parse_schedule,
+    parse_provider_state,
     parse_timestamp,
 )
 
@@ -137,11 +139,36 @@ def read_verified_cache(path: str) -> tuple[dict, datetime]:
     return payload, captured
 
 
-def fetch_to_cache(path: str, group: str = "10.1"):
-    """Validate the live direct response before replacing any old cache."""
+def reject_provider_regression(
+    path: str, result: YasnoDay | YasnoEmergency
+) -> None:
+    """Do not revive a plan older than a known same-day emergency notice."""
+    try:
+        previous_data, previous_time = read_verified_cache(path)
+        previous = parse_provider_state(
+            previous_data, result.group, previous_time, previous_time
+        )
+    except (ValueError, OSError, TypeError, KeyError):
+        return
+    if previous.day != result.day:
+        return
+    if result.published_at < previous.published_at:
+        raise ValueError("refusing an older YASNO publication")
+    if (
+        isinstance(previous, YasnoEmergency)
+        and isinstance(result, YasnoDay)
+        and result.published_at <= previous.published_at
+    ):
+        raise ValueError("plan must be newer than last emergency notice")
 
+
+def fetch_to_cache(path: str, group: str = "10.1"):
+    """Atomically accept a valid plan or authoritative emergency notice."""
     data, captured = fetch_live()
-    result = parse_schedule(data, group, datetime.now(timezone.utc), captured)
+    result = parse_provider_state(
+        data, group, datetime.now(timezone.utc), captured
+    )
+    reject_provider_regression(path, result)
     atomic_write(path, build_cache(data, captured))
     return result
 
@@ -156,10 +183,13 @@ def main() -> None:
     result = fetch_to_cache(args.output, args.group)
     print("YASNO cache updated (direct public HTTPS response)")
     print(f"Group {result.group} / day {result.day}")
-    print(
-        "Planned outage forecast:",
-        ", ".join(outage_windows(result.bars)) or "none published",
-    )
+    if isinstance(result, YasnoEmergency):
+        print("EmergencyShutdowns: planning intervals suspended")
+    else:
+        print(
+            "Planned outage forecast:",
+            ", ".join(outage_windows(result.bars)) or "none published",
+        )
     print("No Shelly or Telegram changes")
 
 

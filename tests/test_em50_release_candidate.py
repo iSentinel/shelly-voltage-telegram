@@ -27,8 +27,8 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
     def test_promotion_markers_are_equal(self):
         """The approved release must have matching stable version files."""
 
-        self.assertEqual(version("VERSION"), "0.5.25-hw")
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.25-hw")
+        self.assertRegex(version("VERSION"), r"^[0-9]+\.[0-9]+\.[0-9]+-hw$")
+        self.assertEqual(version("RELEASE_VERSION"), version("VERSION"))
         self.assertEqual(version("LIVE_VERSION"), "0.5.6-hw")
         self.assertNotEqual(version("VERSION"), version("LIVE_VERSION"))
 
@@ -39,7 +39,8 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
             mock.patch.object(policy, "tag_commit", return_value="a" * 40),
             mock.patch.object(policy, "current_commit", return_value="a" * 40),
         ):
-            policy.validate("push", "refs/tags/v0.5.25-hw", "", "", ROOT)
+            current_tag = f"refs/tags/v{version('RELEASE_VERSION')}"
+            policy.validate("push", current_tag, "", "", ROOT)
             with self.assertRaisesRegex(ValueError, "tag differs"):
                 policy.validate("push", "refs/tags/v0.5.24-hw", "", "", ROOT)
 
@@ -60,10 +61,13 @@ class Em50ReleaseCandidateTests(unittest.TestCase):
                 policy.validate("push", "refs/tags/v0.5.23-hw", "", "", sample)
 
     def test_published_marker_is_the_exact_release_target(self):
-        """Stable and candidate markers may match only on release."""
+        """Release notes are versioned with the exact publication target."""
 
-        self.assertEqual(version("RELEASE_VERSION"), "0.5.25-hw")
-        self.assertEqual(version("VERSION"), "0.5.25-hw")
+        target = version("RELEASE_VERSION")
+        notes = ROOT / "docs" / f"release-notes-{target}.md"
+        self.assertEqual(
+            notes.read_text(encoding="utf-8").splitlines()[0], f"# {target}"
+        )
 
     def test_manual_qa_build_ref_is_allowed(self):
         """Only a manual namespace may name an unsigned candidate."""

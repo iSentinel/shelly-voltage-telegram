@@ -14,6 +14,7 @@ CHANGED=false
 PENDING_FILE="$STATE/pending-update"
 PUBLIC_STATE="${SVT_PUBLIC_STATE:-/var/lib/shelly-voltage-update-check}"
 UPDATE_WORKSPACE=""
+UPDATE_LOCK="/run/lock/shelly-voltage-updater.lock"
 
 cleanup_workspace() {
     if [[ -n "$UPDATE_WORKSPACE" && -d "$UPDATE_WORKSPACE" ]]; then
@@ -24,9 +25,10 @@ cleanup_workspace() {
 usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
-       apply-update.sh --recover  (systemd boot recovery only)
-Root-only, explicitly approved update of a published, signed GHCR image.
-Never runs automatically; refuse when Shelly is offline or an outage is open.
+       apply-update.sh --recover  (disposable QA recovery only)
+       apply-update.sh --guarded-start  (legacy systemd start and reload)
+Legacy root-only QA updater; production SQLite rewinds are blocked.
+Production updates require a signed sole-writer WAL/PHOTO-safe cutover.
 Requires cosign, docker compose, Python 3 and flock.
 EOF
 }
@@ -90,7 +92,7 @@ requirements() {
     select_cosign
     mkdir -p "$STATE/snapshots"
     chmod 0700 "$STATE" "$STATE/snapshots"
-    exec 9>/run/lock/shelly-voltage-updater.lock
+    exec 9>>"$UPDATE_LOCK"
     flock -n 9 || { echo "FAIL: update already running" >&2; exit 3; }
 }
 
@@ -118,13 +120,14 @@ verify_source_archive() {
     local base="https://github.com/iSentinel/shelly-voltage-telegram/releases/download/v$VERSION"
     curl -fsSL --retry 2 --max-time 75 "$base/$archive" -o "$dir/$archive"
     curl -fsSL --retry 2 --max-time 30 "$base/SHA256SUMS" -o "$dir/SHA256SUMS"
-    awk -v file="$archive" '$2 == file {print $1 "  " $2}' \
-        "$dir/SHA256SUMS" > "$dir/SELECTED.SHA256"
-    [[ $(wc -l < "$dir/SELECTED.SHA256") -eq 1 ]] || {
-        echo "FAIL: release archive checksum missing or repeated" >&2
-        return 1
-    }
-    (cd "$dir" && sha256sum -c SELECTED.SHA256)
+    # A public SHA256 file is not a cryptographic source signature.
+    curl -fsSL --retry 2 --max-time 30 \
+        "$base/$archive.sigstore.json" -o "$dir/$archive.sigstore.json"
+    python3 "$ROOT/scripts/verify-source-release-bundle.py" \
+        --version "$VERSION" \
+        --archive "$dir/$archive" \
+        --bundle "$dir/$archive.sigstore.json" \
+        --sha256sums "$dir/SHA256SUMS"
 }
 
 snapshot() {
@@ -163,6 +166,7 @@ wait_healthy() {
 }
 
 start_stack() {
+    legacy_supervisor_guard || return 3
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
@@ -186,9 +190,26 @@ mark_pending() {
     sync -f "$STATE"
 }
 
+legacy_production_db_guard() {
+    local canonical
+    canonical="$(readlink -m -- "$DB")" || {
+        echo "FAIL: legacy production SQLite path unresolved" >&2
+        return 3
+    }
+    case "$canonical" in
+        /var/lib/shelly-voltage/*)
+            echo "FAIL: legacy production SQLite rewind/activation blocked" >&2
+            echo "Use a signed sole-writer WAL/PHOTO-preserving cutover." >&2
+            return 3
+            ;;
+    esac
+}
+
 recover_pending() {
+    legacy_supervisor_guard || return 3
     local token
     [[ -f "$PENDING_FILE" ]] || return 0
+    legacy_production_db_guard || return 3
     token="$(cat "$PENDING_FILE")"
     if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
         echo "FAIL: invalid pending update marker" >&2
@@ -214,6 +235,8 @@ recover_pending() {
 }
 
 restore_snapshot_database() {
+    legacy_supervisor_guard || return 3
+    legacy_production_db_guard || return 3
     local backup rescue temp
     backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
     [[ -n "$backup" ]] || return 1
@@ -269,6 +292,8 @@ rollback() {
 }
 
 activate() {
+    legacy_supervisor_guard || return 3
+    legacy_production_db_guard || return 3
     local digest="$1" tmp
     tmp="$(mktemp "$STATE/.override.XXXXXX")"
     printf 'services:\n  shelly-voltage:\n    image: %s@%s\n' \
@@ -298,16 +323,56 @@ os.replace(name, destination)
 PY
 }
 
-main() {
-    if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
-        [[ $EUID -eq 0 ]] || return 2
-        mkdir -p "$STATE"
-        exec 9>/run/lock/shelly-voltage-updater.lock
-        flock -w 120 9 || return 3
-        recover_pending
+legacy_supervisor_guard() {
+    case "${1:-}" in
+        -h|--help) return 0 ;;
+    esac
+    if [[ -n "${SVT_SUPERVISOR_OVERLAY:-}" ||
+          -n "${SVT_WRITER_FENCE_DIR:-}" ||
+          -e /var/lib/shelly-voltage-fence/.svt-owner.lock ]]; then
+        echo "FAIL: legacy updater blocked with protected sole owner" >&2
+        return 3
+    fi
+}
+
+guarded_start() (
+    # Use the same lock as updates from the journal check through startup.
+    exec 9>>"$UPDATE_LOCK" || exit 3
+    flock -w 120 9 || exit 3
+    if [[ -L "$STATE" || ( -e "$STATE" && ! -d "$STATE" ) ]]; then
+        echo "FAIL: updater state directory is unsafe" >&2
+        exit 3
+    fi
+    if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+        echo "FAIL: pending update requires signed recovery before startup" >&2
+        exit 3
+    fi
+    start_stack
+)
+
+run_boot_command() {
+    [[ $EUID -eq 0 ]] || return 2
+    if [[ "$1" == "--guarded-start" ]]; then
+        guarded_start
         return
     fi
+    mkdir -p "$STATE"
+    exec 9>>"$UPDATE_LOCK"
+    flock -w 120 9 || return 3
+    recover_pending
+}
+
+main() {
+    legacy_supervisor_guard "$@" || return 3
+    if [[ $# -eq 1 ]]; then
+        case "$1" in
+            --guarded-start|--recover) run_boot_command "$1"; return ;;
+        esac
+    fi
     parse_args "$@"
+    if [[ "$DRY_RUN" != true ]]; then
+        legacy_production_db_guard || return 3
+    fi
     requirements
     preflight
     python3 "$ROOT/scripts/github_update.py" guard \

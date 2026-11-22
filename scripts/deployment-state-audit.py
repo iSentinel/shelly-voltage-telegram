@@ -117,8 +117,10 @@ def audit(root: Path, state: Path) -> dict:
         image, health, restart = inspect_running_image()
         if image != f"{IMAGE}@{digest}":
             reasons.append("RUNNING_IMAGE_MISMATCH")
-        if health != "healthy" or restart != "unless-stopped":
+        if health != "healthy":
             reasons.append("RUNTIME_NOT_HEALTHY")
+        if restart != "no":
+            reasons.append("RUNTIME_RESTART_POLICY_MISMATCH")
     except AuditBlocked as exc:
         reasons.append(str(exc))
     return {

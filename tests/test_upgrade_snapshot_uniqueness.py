@@ -102,6 +102,7 @@ def create_fixture(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     (installed / "VERSION").write_text("0.5.13-hw\n")
     for filename in (
         "app.py",
+        "writer_fence.py",
         "Dockerfile",
         "compose.yaml",
         "requirements.txt",

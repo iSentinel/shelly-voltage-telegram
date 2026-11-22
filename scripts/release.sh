@@ -62,10 +62,15 @@ validate_inputs() {
         exit 2
     }
     local required=(
-        VERSION RELEASE_VERSION LIVE_VERSION app.py advanced_features.py apartment_phases.py update_info.py
+        VERSION RELEASE_VERSION LIVE_VERSION app.py writer_fence.py advanced_features.py apartment_phases.py update_info.py
         telegram_i18n.py notification_features.py Dockerfile
         dtek_schedule.py outage_data_ua.py yasno_schedule.py yasno_cache.py yasno_handoff.py telegram_channel_yasno.py telegram_schedule_periods.py telegram_widget_data.py telegram_widget_fallback.py telegram_card_png.py telegram_card_v5.py telegram_uk_bitmap.py telegram_smooth_type.py telegram_smooth_bitmap.py
         compose.yaml requirements.txt README.md scripts/graphic-emergency-restore.py
+        scripts/prepare-writer-fence.py scripts/writer-fence-marker.py
+        scripts/supervised-container.py scripts/fenced-newest-rescue.py
+        scripts/stage-guarded-update.py
+        scripts/verify-source-release-bundle.py
+        scripts/verify-signed-release-pair.py
     )
     for file in "${required[@]}"; do
         [[ -f "$PROJECT/$file" ]] || {
@@ -148,6 +153,14 @@ copy_public_tree() {
     chmod 0644 "$destination/.env.example"
 }
 
+normalize_public_modes() {
+    local destination="$1"
+    # Archive modes cannot depend on the checkout or extraction umask.
+    find "$destination" -type d -exec chmod 0755 {} +
+    find "$destination" -type f -perm /111 -exec chmod 0755 {} +
+    find "$destination" -type f ! -perm /111 -exec chmod 0644 {} +
+}
+
 write_file_manifest() {
     local destination="$1"
     (
@@ -156,6 +169,7 @@ write_file_manifest() {
             | LC_ALL=C sort -z \
             | xargs -0r sha256sum > FILES.SHA256
     )
+    chmod 0644 "$destination/FILES.SHA256"
 }
 
 assert_public_tree() {
@@ -260,6 +274,7 @@ main() {
     STAGE_DIR="$stage"
     trap cleanup EXIT
     copy_public_tree "$stage/$name"
+    normalize_public_modes "$stage/$name"
     assert_public_tree "$stage/$name"
     assert_no_deployment_identifiers "$stage/$name"
     write_file_manifest "$stage/$name"

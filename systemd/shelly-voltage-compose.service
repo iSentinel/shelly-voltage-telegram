@@ -8,9 +8,8 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/shelly-voltage
-ExecStartPre=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover
-ExecStart=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
-ExecReload=/bin/bash /opt/shelly-voltage/scripts/start-compose.sh
+ExecStart=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start
+ExecReload=/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start
 ExecStop=/usr/bin/docker compose stop
 TimeoutStartSec=0
 

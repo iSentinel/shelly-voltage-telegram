@@ -79,9 +79,7 @@ class SignedDeployPlanTests(unittest.TestCase):
         calls = self.invoke(signed=True)
         self.assertIn("start ", calls)
         self.assertNotIn("start --build", calls)
-        self.assertTrue(
-            any("update --restart=unless-stopped" in x for x in calls)
-        )
+        self.assertTrue(any("update --restart=no" in x for x in calls))
         self.assertIn("ready-verified", calls)
 
     def test_fresh_bootstrap_retains_build_behavior(self) -> None:

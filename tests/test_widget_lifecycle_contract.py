@@ -23,7 +23,7 @@ class WidgetLifecycleContractTests(unittest.TestCase):
         self.assertIn("3acba1b62093c83815d38603d26f48c4f26a94c2", action)
 
     def test_transitions_cover_stale_and_recovery(self):
-        """A single host should apply five state versions and probe each."""
+        """A single host should exercise all transitions and probe each."""
 
         script = SCENARIOS.read_text(encoding="utf-8")
         for expected in (
@@ -31,7 +31,11 @@ class WidgetLifecycleContractTests(unittest.TestCase):
             "recovered Ukrainian",
             "expired schedule",
             "one phase again",
-            "result.probes.length, 5",
+            "official emergency",
+            "expired emergency",
+            "conflicting notice and plan",
+            "new official plan",
+            "result.probes.length, steps.length + 1",
             "result.watchesPublicData",
         ):
             with self.subTest(expected=expected):

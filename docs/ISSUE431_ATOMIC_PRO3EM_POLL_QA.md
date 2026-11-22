@@ -1,0 +1,170 @@
+# Issue #431 — atomic Pro3EM polling-cycle persistence
+
+Status: SOURCE-ONLY QA. No production deployment, merge or release
+authorization. Related: Issue #340 one restart owner/shared SQLite
+writer fence; Issue #422 signed OCI/source/WAL rollback.
+
+## Reproduced defect in signed v0.5.25-hw
+
+The original Monitor.poll_pro3em_once() reads all three phases
+from one EM.GetStatus, then calls accept_phase_sample() for
+L1/L2/L3 sequentially. Each call invokes Storage.add(), opening
+and committing a separate SQLite transaction.
+
+A separate disposable container running the EXACT currently
+signed v0.5.25-hw image was externally SIGKILLed just after one
+real Storage.add(L1) commit and before L2/L3. Docker exit 137;
+isolated SQLite quick_check=ok but only L1=1 was present.
+No hardware, production database, Telegram, or secrets touched.
+
+## Source-only fix under QA
+
+Storage.add_phases(ts, readings) now inserts the available
+phase rows through one executemany() inside one SQLite
+transaction. The Pro3EM poll reads the existing single RPC
+response, selects only L1/L2/L3, calls add_phases() exactly
+once, then performs the existing per-phase state/alert callbacks
+with persisted=True. Thus callbacks cannot double-insert rows.
+
+The legacy Storage.add() and direct accept_phase_sample()
+remain intact for a one-phase meter, out-of-band secondary
+sampling and other accepted callers.
+
+When an RPC response lacks L2 or L3, only genuinely available
+phase readings are committed together. The missing phase
+continues to run the existing explicit per-phase failure path:
+no fabricated 0 V, no reused cached value and no change to
+the low-voltage thresholds or Telegram destination.
+
+**Important scope:** whole-RPC triplet persistence is atomic
+for available phases. The code intentionally does NOT demand
+that a legitimate partial reply contain all three phases,
+because that would silently discard valid measurements.
+A partial database timestamp is a real partial reading, not
+evidence of a half-committed transaction. Monitor state
+continues to distinguish which phase was missing.
+
+## Independent validation
+
+Within the already signed v0.5.25-hw image, mounted the QA
+source under /src and ran with working directory /src.
+That detail matters: running in the default /app would load
+the unmodified signed image source, without add_phases().
+
+All containers were nonroot UID10001, read-only rootfs,
+--network none, dropped capabilities, without secrets or
+production mounts. Only a disposable synthetic SQLite folder
+was writable.
+
+- 8/8 new source-only Storage/Monitor tests PASS: complete
+  timestamp triplet, forced SQL abort at L3 rolls back all
+  phases, real missing L2 retains L1/L3, empty response has
+  zero writes, old L1 API preserved, no duplicate writes,
+  missing state handled, and failed batch changes no
+  phase runtime state.
+- Selected existing regressions PASS: test_app.py 154/154,
+  test_phase_readiness_and_rollup.py 6/6,
+  test_rpc_nonfinite_samples.py 11/11,
+  test_shelly_runtime_error_redaction.py 5/5.
+  Total new and selected existing: 184/184.
+- Exact project Ruff 0.14.2 and maintainability gate PASS.
+- Real external docker kill --signal SIGKILL after an
+  instrumented SQLite BEFORE INSERT trigger reached L3,
+  but before the transaction committed, returned
+  Docker exit 137. Reopened synthetic SQLite: 0 rows,
+  quick_check=ok, saved model pro3em and PHOTO marker intact.
+- A separate real external Docker SIGKILL after a completed
+  add_phases() transaction returned exit 137. Reopened
+  synthetic SQLite: exactly L1/L2/L3, one shared timestamp,
+  quick_check=ok, pro3em/PHOTO intact.
+- Both QA Docker containers were deleted, temporary SQLite
+  directories automatically removed. No public Telegram
+  message, real Shelly RPC, or production restart occurred.
+
+## Release acceptance still required
+
+- Integrate with Issue #340's single lifetime writer owner,
+  common host/container transaction lock, updater pending
+  marker and service supervision. These QA sources are NOT
+  installed on the currently signed running bot.
+- Integrate Issue #422's newest whole-history WAL backup,
+  PHOTO/send-intent parity, signed OCI/source/receipt pair
+  and fail-closed recovery before any update to production.
+- Test real legitimate partial sensor reads, stale phase
+  readiness and low-but-real voltage without false zeros.
+- Run exact-candidate signed image and reproducible
+  crash/rollback tests on isolated Docker/systemd. Require
+  all Python 3.11/3.12/3.13 CI results and exact-head
+  Owner Approval before any release.
+
+## Cross-process pending marker and actual Storage batch, 2026-11-19
+
+The source-only follow-up
+tests/test_pro3em_batch_pending_fence.py exercises the real
+patched Storage.add_phases() from independent Python subprocesses
+sharing the *proposed* Issue340 two-lock protocol:
+
+- A lifetime nonblocking owner.lock admits only one writer.
+  A second process returns BLOCKED_OWNER before writing.
+- A shorter txn.lock protects both the entire actual SQLite
+  add_phases transaction and the synthetic updater's durable
+  pending-update marker publication.
+- A pending marker already present before a poll causes a
+  fail-closed BLOCKED_PENDING, leaving zero phase rows.
+- If an updater tries to publish pending while a writer is
+  paused under txn.lock, publication cannot pass the
+  transaction. Once the writer completes its atomic batch,
+  the updater publishes pending. The next writer loop sees
+  the marker and refuses all further writes.
+- All tests verify real L1/L2/L3 completeness, SQLite
+  quick_check=ok, nonzero genuine readings, selected meter
+  model pro3em and persisted PHOTO identity.
+- 3/3 real cross-process acceptance tests PASS. Together
+  with the original 8/8 batch tests, these provide 11/11
+  new source-only focused tests. Project Ruff/maintainability
+  gate PASS across 246 Python files.
+
+**Scope warning:** the lifetime and short transaction locks
+exist only in the synthetic test subprocess. They have NOT
+been installed in Monitor, Storage.connect, Telegram command
+threads, Compose, systemd, apply-update.sh or rollback.sh.
+The real production Issue340 boot-owner and Issue422 signed
+WAL rollback gates remain open until all actors adopt the
+same verified on-disk inode and fail-closed protocol.
+
+## Idempotent phase-cycle replay without schema migration
+
+The source-only batch writer now serializes a cycle replay with
+BEGIN IMMEDIATE and checks for existing readings at the exact
+timestamp before any insert. If a complete previous cycle
+contains precisely the same set of phase/voltage/frequency
+triples, the replay returns without adding duplicate records.
+
+If a prior batch exists but has different values, a different
+phase set, an incomplete historical L1-only cycle, or
+duplicated/conflicting phase data, the new writer raises
+ValueError ("conflicting Pro3EM poll-cycle replay") and
+does not replace or extend historical data.
+
+Only supported L1/L2/L3 labels are accepted by this method.
+The older single-phase Storage.add API is unchanged, as are
+legitimate missing-phase states and low-voltage alert policy.
+
+This protects source-only replay paths without introducing a
+UNIQUE(ts,phase) constraint into historical production SQLite.
+Read-only check on 2026-11-19 found zero duplicated
+(timestamp,phase) groups in live history, but neither existing
+index is UNIQUE. A schema migration must be reviewed separately.
+
+Five additional isolated tests PASS: exact retry no-op,
+conflicting voltage fail-closed, existing partial cycle refusal,
+unexpected L4 rejection, and two concurrent SQL writer handles
+serialized without duplicate phase rows. The focused suite is
+now 13 atomic/replay tests plus 3 cross-process pending-fence
+tests; 154 test_app, 6 readiness, 11 RPC nonfinite, and 5
+runtime error regression tests also PASS. Total 192/192
+selected tests PASS, and the source quality gate PASS.
+
+**Remaining:** idempotent SQLite inserts alone do not guarantee
+exactly-once Telegram sends or a sole Docker writer. Issues
+#340 and #422 still require coordinated end-to-end acceptance.

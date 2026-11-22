@@ -26,3 +26,11 @@ upload blocks further posts until the result is reconciled.
 Disabling graphics on a verified photo switches to caption updates.
 Returning the channel to a text post requires a separate publication with
 a verified destination and cleanup of the photo.
+
+### Elapsed half-hour marks
+
+Every completed 30-minute slot retains its dimmed forecast color and gains
+one upward diagonal stroke on the exposed side of the hour label. The current
+slot keeps its white outline and has no strike; future slots are unmarked.
+Kyiv local time determines the boundary. The marks indicate elapsed forecast
+time, not measured power availability. At midnight no slot is elapsed.
