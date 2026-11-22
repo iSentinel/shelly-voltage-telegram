@@ -75,3 +75,31 @@ complete OCI descriptor/content/provenance graph parity, root trust
 rotation policy, Docker RepoDigest binding, a strict runtime start, or
 deployment authorization. The existing online production verifier is
 unchanged. Do not substitute these logs for a staged paired receipt.
+
+## Offline content graph and local image parity
+
+The QA-only qa_offline_oci_graph.py verifier checks the pinned original
+index, both platform manifests/configs, descriptor sizes and SHA256
+of each referenced blob, all gzip layer DiffIDs in manifest order,
+and the SPDX/SLSA statements bound to the platform manifest digests.
+The source revision is checked in the signed-index-bound OCI config.
+SLSA metadata is included by the signed index; it is not a separately
+verified attestation signature or independent proof of source revision.
+
+Run in the disconnected QA guest with the exact original OCI layout:
+
+```sh
+python3 scripts/qa_offline_oci_graph.py \
+  --layout /var/lib/svt-qa-offline-source-20261122/oci-layout \
+  --digest sha256:cd8ee5e8044f924e089fc9f603b299b515746fb816b0305818db2475177f7b49 \
+  --commit e70473099b168cd077d555b6abc668db3ed3dd14
+```
+
+The actual report matches the connected host report, with ten layers
+per architecture. Actual Docker inspect for AMD64 matches the signed
+config ID, revision, platform and ordered DiffIDs. Streaming Docker
+image save also verifies the serialized config hash and unpacked layer
+hashes against those values. No image was run or retagged. This does
+not establish a registry RepoDigest, atomic runtime exclusion, or
+permit substituting local content parity for a real strict receipt.
+The production verifier remains unchanged.
