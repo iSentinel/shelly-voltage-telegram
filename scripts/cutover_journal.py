@@ -197,10 +197,23 @@ class Journal:
                 raise JournalBlocked("JOURNAL_EXISTS")
             self.persist([])
 
-    def append(self, kind: str, stage: str, evidence: str = "") -> None:
-        """Persist exactly one next intent or externally observed result."""
+    def append(
+        self,
+        kind: str,
+        stage: str,
+        evidence: str = "",
+        *,
+        expected_checksum: str | None = None,
+    ) -> None:
+        """Append only if the expected observed journal state still holds."""
         with self.locked():
-            events = self.read()["events"]
+            state = self.read()
+            if (
+                expected_checksum is not None
+                and expected_checksum != state["checksum"]
+            ):
+                raise JournalBlocked("JOURNAL_HEAD_CHANGED")
+            events = state["events"]
             event = {
                 "kind": kind,
                 "stage": stage,
