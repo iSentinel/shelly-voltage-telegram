@@ -130,7 +130,7 @@ def retained_container(reference: str, name: str, database: Path) -> str:
         or not ID.fullmatch(image)
         or selected != reference
         or status != "exited"
-        or policy != "on-failure"
+        or policy != "no"
         or db_env != f"DATABASE_PATH=/data/{database.name}"
     ):
         raise BootBlocked("CONTAINER_STATE_MISMATCH")

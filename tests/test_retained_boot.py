@@ -111,7 +111,7 @@ class RetainedBootTests(unittest.TestCase):
         )
         fake.chmod(0o700)
 
-    def write_inspection(self, container=CONTAINER, policy="on-failure"):
+    def write_inspection(self, container=CONTAINER, policy="no"):
         """Describe the original stopped container bound to the test DB."""
         mounts = json.dumps(
             [
@@ -216,6 +216,16 @@ class RetainedBootTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("CONTAINER_REPLACED", result.stderr)
         self.assertFalse(self.trace.exists())
+
+    def test_autonomous_docker_restart_is_rejected(self):
+        """Only systemd may start the retained container after boot."""
+        for policy in ("on-failure", "unless-stopped", "always"):
+            with self.subTest(policy=policy):
+                self.write_inspection(policy=policy)
+                result = self.run_recovery()
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("CONTAINER_STATE_MISMATCH", result.stderr)
+                self.assertFalse(self.trace.exists())
 
     def test_invalid_signature_and_changed_journal_do_not_start(self):
         """Refuse the launch if any confirmation is missing or changes."""

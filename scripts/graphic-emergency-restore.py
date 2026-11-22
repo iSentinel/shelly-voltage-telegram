@@ -88,7 +88,7 @@ def production_running() -> bool:
                     CONTAINER,
                 ]
             )
-            == "on-failure"
+            == "no"
         )
     except RestoreBlocked:
         return False
@@ -312,7 +312,7 @@ def restore() -> dict:
     command(["systemctl", "unmask", "--runtime", UNIT])
     # Compose may recreate a missing container after a failed Docker update.
     with suppress(RestoreBlocked):
-        command(["docker", "update", "--restart=on-failure", CONTAINER])
+        command(["docker", "update", "--restart=no", CONTAINER])
     command(["systemctl", "enable", UNIT])
     command(["systemctl", "restart", UNIT], timeout=90)
     if not production_running():
