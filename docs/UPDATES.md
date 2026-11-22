@@ -326,10 +326,11 @@ unsigned images or automatic installation.
   service. It has no Install section, timer, or automatic trigger.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
   preserve a pinned image choice after a host reboot.
-- On every Compose service start, `ExecStartPre` calls the root-only
-  `apply-update.sh --recover` mode. A private pending-update marker triggers
-  restoration of the previous image selection and SQLite snapshot *before*
-  allowing the service to start.
+- Compose service start and reload use the root-only
+  `apply-update.sh --recover-and-start` entry point. It holds the updater
+  lock across recovery and the Compose launch. A pending update permits
+  recovery of the previous image selection only after the current SQLite
+  history matches the private archive.
 
 **Cosign v3 or newer is required.** Debian Trixie's Cosign 2.5.0 reports
 `no signatures found` for the project's published OCI signatures, while
@@ -376,20 +377,39 @@ installation.
 Before changing the Compose image, the updater takes a restricted snapshot of
 the SQLite database, environment file, secrets, and previous image choice.
 The image is pinned by immutable digest. After replacement, it requires
-`/health`, fresh `/ready` status and a second electrical preflight. A failed
-update restores the previous image choice and the backed-up database, keeping
-a separate rescue copy of the post-failure database. Inspect the rescue
-copy before discarding any measurements created during the upgrade window.
+`/health`, fresh `/ready` status and a second electrical preflight. If the
+update fails, recovery compares the complete SQLite schema, history and
+metadata with the checksummed archive. The read-only comparison includes
+committed changes still in the WAL.
 
 The updater writes a durable pending-update marker before selecting the
 new image. The marker is cleared only after the replacement passes health,
-readiness and electrical checks. If the host restarts mid-upgrade, systemd
-restores the original image and SQLite before launching the Compose stack.
-An invalid snapshot or marker fails closed and keeps the pending state for
-manual recovery. The earliest post-failure rescue database is preserved on
-repeated recovery attempts.
+readiness and electrical checks. Recovery checks history before stopping the
+Compose service, again after it stops, and before clearing the marker.
+With matching history, it restores the previous image selection and leaves
+the live SQLite file in place. If the archive is invalid or history differs,
+it retains the pending marker and the live database for review.
+The updater refuses another deployment while this marker remains.
 
-Boot recovery was additionally tested through three real, controlled
+After a real interruption, use the pending marker to locate the private
+snapshot and verify the active image and database before resuming service.
+The common writer fence and controlled startup when recovery is blocked are
+tracked in [issue #340](https://github.com/iSentinel/shelly-voltage-telegram/issues/340).
+Docker also evaluates its container restart policy independently of the
+Compose unit. The systemd lock covers only starts and reloads through that
+unit and manual updates through `apply-update.sh`.
+
+The private deployment receipt is the source for public version status.
+After activation commits, the updater replaces public `deployed.json`
+atomically. Exit code 4 means activation completed but the updater could
+not confirm the committed state or synchronize the public receipt. Use
+`apply-update.sh --sync-public-version` to retry only publication after
+checking the reported error. This command refuses to run while recovery
+is pending. Startup also retries publication from the committed receipt.
+A public status error after commit leaves the active image and SQLite in
+place.
+
+The earlier boot recovery flow was tested through three controlled
 reboots of disposable LXC 111: an interrupted update was restored, a malformed
 pending marker blocked startup, and a corrupted backup checksum blocked
 restoration until corrected. These tests do **not** simulate uncontrolled
@@ -405,7 +425,7 @@ separate hardware acceptance and explicit approval.
 ```bash
 python3 scripts/github_update.py --help
 bash scripts/apply-update.sh --help
-# Recovery is invoked automatically by systemd before starting Compose.
+# systemd holds the updater lock across recovery and Compose start.
 # On the disposable test LXC only:
 sudo bash scripts/apply-update.sh --recover
 python3 scripts/github_update.py check --root /opt/shelly-voltage
