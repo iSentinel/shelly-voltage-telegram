@@ -56,9 +56,14 @@ class DeploymentStateTests(unittest.TestCase):
         )
         path.chmod(0o600)
 
-    def audit(self, image: str = IMAGE, health: str = "healthy") -> dict:
+    def audit(
+        self,
+        image: str = IMAGE,
+        health: str = "healthy",
+        restart: str = "on-failure",
+    ) -> dict:
         """Return a real audit using mocked read-only Docker inspection."""
-        payload = f"{image}|{health}|unless-stopped\n"
+        payload = f"{image}|{health}|{restart}\n"
         result = subprocess.CompletedProcess([], 0, payload, "")
         with patch.object(
             AUDIT.subprocess, "run", return_value=result
@@ -104,6 +109,16 @@ class DeploymentStateTests(unittest.TestCase):
             self.audit(health="unhealthy")["reason_codes"],
         )
 
+    def test_restart_policy_drift_is_reported_separately(self) -> None:
+        """A healthy container must still pass the guarded boot policy."""
+        for policy in ("unless-stopped", "always", "no"):
+            with self.subTest(policy=policy):
+                result = self.audit(restart=policy)
+                self.assertEqual(result["status"], "BLOCKED")
+                self.assertEqual(
+                    result["reason_codes"], ["RUNTIME_RESTART_POLICY_MISMATCH"]
+                )
+
     def test_pending_update_is_blocked(self) -> None:
         """Pending interrupted updates make parity insufficient."""
         (self.state / "pending-update").write_text("interrupted")
@@ -148,7 +163,9 @@ class DeploymentStateTests(unittest.TestCase):
         )
         with patch.object(AUDIT.subprocess, "run", return_value=result):
             output = AUDIT.audit(self.root, self.state)
-        self.assertIn("RUNTIME_NOT_HEALTHY", output["reason_codes"])
+        self.assertIn(
+            "RUNTIME_RESTART_POLICY_MISMATCH", output["reason_codes"]
+        )
 
     def test_inspect_fail_closed(self) -> None:
         """Unavailable Docker metadata cannot satisfy parity."""

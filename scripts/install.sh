@@ -433,7 +433,7 @@ deploy() {
     fi
     systemctl start shelly-voltage-compose.service shelly-voltage-backup.timer
     if [[ "$SIGNED_DEPLOYMENT" == true ]]; then
-        docker update --restart=unless-stopped shelly-voltage-bot >/dev/null
+        docker update --restart=on-failure shelly-voltage-bot >/dev/null
         await_signed_ready
         return
     fi

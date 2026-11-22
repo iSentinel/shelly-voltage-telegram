@@ -395,9 +395,17 @@ After a real interruption, use the pending marker to locate the private
 snapshot and verify the active image and database before resuming service.
 The common writer fence and controlled startup when recovery is blocked are
 tracked in [issue #340](https://github.com/iSentinel/shelly-voltage-telegram/issues/340).
-Docker also evaluates its container restart policy independently of the
-Compose unit. The systemd lock covers only starts and reloads through that
-unit and manual updates through `apply-update.sh`.
+At boot, the enabled Compose unit owns service startup. Docker uses
+`on-failure` for an abnormal container exit while the daemon is running.
+An installation managed only by Docker Compose needs an explicit start
+after a host or daemon restart. [Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/)
+
+During a signed upgrade, verify the installed Compose unit and the running
+container's restart policy together. The deployment audit reports an
+unexpected restart policy separately from an unhealthy container. Finish
+and disarm any earlier graphic emergency restoration before migrating
+the startup policy. The next authorized arm can refresh the known
+v0.5.25-hw pinned helper once its marker and units are inactive.
 
 The private deployment receipt is the source for public version status.
 After activation commits, the updater replaces public `deployed.json`

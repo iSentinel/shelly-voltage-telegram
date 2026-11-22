@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -22,6 +23,9 @@ BOOT_UNIT = "shelly-graphic-emergency-boot.service"
 BOOT_FILE = Path("/etc/systemd/system") / BOOT_UNIT
 STATE_DIR = Path("/var/lib/shelly-graphic-emergency")
 ARMED_MARKER = STATE_DIR / "armed"
+LEGACY_COPY_SHA256 = (
+    "104c8d0b98cb67fc6c4849462ed7edd8b4b15cda2e6a81959b0235e6043fc021"
+)
 
 
 class RestoreBlocked(Exception):
@@ -84,7 +88,7 @@ def production_running() -> bool:
                     CONTAINER,
                 ]
             )
-            == "unless-stopped"
+            == "on-failure"
         )
     except RestoreBlocked:
         return False
@@ -104,6 +108,44 @@ def approval(path: Path) -> bool:
     return guard.owner_approval_verified(path)
 
 
+def legacy_watchdog_idle() -> bool:
+    """Require all earlier restoration actors and the arm marker idle."""
+
+    if ARMED_MARKER.exists() or ARMED_MARKER.is_symlink():
+        return False
+    units = (TIMER, "shelly-graphic-emergency-restore.service", BOOT_UNIT)
+    return all(
+        state(["systemctl", "show", unit, "-p", "ActiveState", "--value"])
+        == "inactive"
+        for unit in units
+    )
+
+
+def stable_copy_is_current(content: bytes) -> bool:
+    """Allow refreshing only the known, inactive v0.5.25-hw watchdog."""
+
+    if not STABLE.exists() and not STABLE.is_symlink():
+        return False
+    meta = STABLE.lstat()
+    if (
+        not stat.S_ISREG(meta.st_mode)
+        or meta.st_uid != 0
+        or meta.st_nlink != 1
+        or stat.S_IMODE(meta.st_mode) != 0o700
+        or meta.st_size > 128 * 1024
+    ):
+        raise RestoreBlocked("STABLE_COPY_CONFLICT")
+    existing = STABLE.read_bytes()
+    if existing == content:
+        return True
+    if (
+        hashlib.sha256(existing).hexdigest() != LEGACY_COPY_SHA256
+        or not legacy_watchdog_idle()
+    ):
+        raise RestoreBlocked("STABLE_COPY_CONFLICT")
+    return False
+
+
 def install_stable_copy() -> None:
     """Pin this exact script outside the candidate source checkout."""
 
@@ -116,21 +158,14 @@ def install_stable_copy() -> None:
     directory = parent.stat()
     if directory.st_uid != 0 or directory.st_mode & 0o022:
         raise RestoreBlocked("STABLE_DIRECTORY_UNSAFE")
-    if STABLE.exists() or STABLE.is_symlink():
-        data = STABLE.lstat()
-        if (
-            not stat.S_ISREG(data.st_mode)
-            or data.st_uid != 0
-            or stat.S_IMODE(data.st_mode) != 0o700
-            or STABLE.read_bytes() != source.read_bytes()
-        ):
-            raise RestoreBlocked("STABLE_COPY_CONFLICT")
+    content = source.read_bytes()
+    if stable_copy_is_current(content):
         return
     with tempfile.NamedTemporaryFile(
         dir=STABLE.parent, prefix=".graphic-restore-", delete=False
     ) as f:
         staged = Path(f.name)
-        f.write(source.read_bytes())
+        f.write(content)
         f.flush()
         os.fsync(f.fileno())
     try:
@@ -277,7 +312,7 @@ def restore() -> dict:
     command(["systemctl", "unmask", "--runtime", UNIT])
     # Compose may recreate a missing container after a failed Docker update.
     with suppress(RestoreBlocked):
-        command(["docker", "update", "--restart=unless-stopped", CONTAINER])
+        command(["docker", "update", "--restart=on-failure", CONTAINER])
     command(["systemctl", "enable", UNIT])
     command(["systemctl", "restart", UNIT], timeout=90)
     if not production_running():
