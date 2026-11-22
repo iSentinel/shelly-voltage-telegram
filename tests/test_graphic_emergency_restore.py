@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +33,7 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
     def test_production_requires_healthy_container(self):
         """An unhealthy writer is never safe to disarm or skip restarting."""
 
-        healthy = ["active", "enabled", "true", "healthy", "unless-stopped"]
+        healthy = ["active", "enabled", "true", "healthy", "on-failure"]
         for status in ("unhealthy", "starting", "<no value>", ""):
             with (
                 self.subTest(health=status),
@@ -165,6 +168,57 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
         self.assertIn("--restore --execute", config)
         self.assertNotIn("shelly-voltage-compose.service", config)
 
+    def test_legacy_pin_refresh_requires_exact_digest_and_idle_units(self):
+        """Preserve an unknown pin and any pin in use by a restoration."""
+
+        with tempfile.TemporaryDirectory() as folder:
+            pin = Path(folder) / "watchdog"
+            pin.write_bytes(b"legacy")
+            pin.chmod(0o700)
+            info = SimpleNamespace(
+                st_mode=pin.stat().st_mode, st_uid=0, st_nlink=1, st_size=6
+            )
+            digest = hashlib.sha256(b"legacy").hexdigest()
+            with (
+                mock.patch.object(WATCHDOG, "STABLE", pin),
+                mock.patch.object(WATCHDOG.Path, "lstat", return_value=info),
+                mock.patch.object(WATCHDOG, "LEGACY_COPY_SHA256", digest),
+                mock.patch.object(
+                    WATCHDOG, "legacy_watchdog_idle", side_effect=[True, False]
+                ) as idle,
+            ):
+                self.assertTrue(WATCHDOG.stable_copy_is_current(b"legacy"))
+                self.assertFalse(WATCHDOG.stable_copy_is_current(b"current"))
+                with self.assertRaisesRegex(
+                    WATCHDOG.RestoreBlocked, "CONFLICT"
+                ):
+                    WATCHDOG.stable_copy_is_current(b"current")
+                pin.write_bytes(b"unrecognized")
+                with self.assertRaisesRegex(
+                    WATCHDOG.RestoreBlocked, "CONFLICT"
+                ):
+                    WATCHDOG.stable_copy_is_current(b"current")
+                self.assertEqual(idle.call_count, 2)
+
+    def test_idle_legacy_pin_requires_no_armed_marker_or_active_worker(self):
+        """An existing marker or an in-flight restore prevents a refresh."""
+
+        with tempfile.TemporaryDirectory() as folder:
+            marker = Path(folder) / "armed"
+            with mock.patch.object(WATCHDOG, "ARMED_MARKER", marker):
+                with mock.patch.object(
+                    WATCHDOG, "state", side_effect=["inactive", "activating"]
+                ):
+                    self.assertFalse(WATCHDOG.legacy_watchdog_idle())
+                with mock.patch.object(
+                    WATCHDOG, "state", return_value="inactive"
+                ):
+                    self.assertTrue(WATCHDOG.legacy_watchdog_idle())
+                marker.write_text("armed")
+                with mock.patch.object(WATCHDOG, "state") as state:
+                    self.assertFalse(WATCHDOG.legacy_watchdog_idle())
+                state.assert_not_called()
+
     def test_missing_boot_rescue_blocks_timer_creation(self):
         """No maintenance timer may arm without verified reboot rescue."""
 
@@ -243,7 +297,7 @@ class GraphicEmergencyRestoreTests(unittest.TestCase):
             [
                 "docker",
                 "update",
-                "--restart=unless-stopped",
+                "--restart=on-failure",
                 WATCHDOG.CONTAINER,
             ],
             calls,

@@ -3,7 +3,7 @@ services:
     build:
       context: .
     container_name: shelly-voltage-bot
-    restart: unless-stopped
+    restart: on-failure
     init: true
     env_file:
       - .env
