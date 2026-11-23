@@ -1,69 +1,44 @@
-"""Exercise SQLite rollback without Docker or production resources."""
+"""Exercise updater failure handling without real Docker resources."""
 
-import gzip
-import hashlib
+import json
 import os
-import sqlite3
 import subprocess
 import tempfile
 import unittest
-from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+DIGEST = "sha256:" + "a" * 64
+MOCK_ACTIVATION = """
+    source "$1"
+    requirements() { mkdir -p "$STATE"; }
+    preflight() { :; }
+    storage_preflight() { :; }
+    snapshot() { :; }
+    verify_image() { :; }
+    verify_source_archive() { :; }
+    docker() { :; }
+    python3() { if [[ "$2" == digest ]]; then echo test; fi; }
+    activate() {
+        echo test > "$PENDING_FILE"
+        echo "$RECEIPT" > "$STATE/deployed.json"
+        echo "image: $IMAGE@$PIN" > "$STATE/override.yaml"
+        chmod 0600 "$STATE/deployed.json" "$STATE/override.yaml"
+    }
+    rollback() { echo 'UNEXPECTED ROLLBACK'; exit 19; }
+    main --version 0.5.25-hw
+"""
 
 
 class OfflineRollbackTests(unittest.TestCase):
     """Keep real monitoring data out of rollback unit tests."""
 
     def setUp(self):
-        """Create a disposable database and backup directory."""
+        """Create temporary updater state."""
 
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        self.database = self.root / "monitor.sqlite3"
-        self.snapshot = self.root / "snapshot"
-        self.snapshot.mkdir()
-        with closing(sqlite3.connect(self.database)) as db, db:
-            db.execute("CREATE TABLE samples (id INTEGER)")
-            db.execute("INSERT INTO samples VALUES (42)")
-        raw = self.database.read_bytes()
-        self.backup = self.snapshot / "voltage-test.sqlite3.gz"
-        self.backup.write_bytes(gzip.compress(raw))
-        digest = hashlib.sha256(self.backup.read_bytes()).hexdigest()
-        (self.snapshot / (self.backup.name + ".sha256")).write_text(
-            f"{digest}  {self.backup}\n", encoding="utf-8"
-        )
-        with closing(sqlite3.connect(self.database)) as db, db:
-            db.execute("UPDATE samples SET id=99")
-
-    def run_restore(self):
-        """Run only rollback functions with a mocked Compose command."""
-
-        script = ROOT / "scripts" / "apply-update.sh"
-        shell = (
-            'source "$1"; '
-            'SNAPSHOT="$2"; DB="$3"; ROOT="$4"; '
-            "docker() { return 0; }; "
-            "chown() { return 0; }; "
-            "restore_snapshot_database"
-        )
-        return subprocess.run(
-            [
-                "bash",
-                "-c",
-                shell,
-                "bash",
-                str(script),
-                str(self.snapshot),
-                str(self.database),
-                str(self.root),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
 
     def test_recovery_clears_public_version_without_deployment(self):
         """Restoring the original image clears stale version metadata."""
@@ -125,6 +100,98 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertIn("DRY-RUN PASS", result.stdout)
         self.assertFalse(Path(capture.read_text().strip()).exists())
 
+    def apply_with_mock_activation(self, state, public, pin=DIGEST):
+        """Run the real updater finalization with a synthetic activation."""
+
+        return subprocess.run(
+            [
+                "bash",
+                "-c",
+                MOCK_ACTIVATION,
+                "bash",
+                str(ROOT / "scripts/apply-update.sh"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                **os.environ,
+                "SVT_UPDATE_STATE": str(state),
+                "SVT_PUBLIC_STATE": str(public),
+                "PIN": pin,
+                "RECEIPT": json.dumps(
+                    {
+                        "version": "0.5.25-hw",
+                        "digest": DIGEST,
+                        "private": "test",
+                    }
+                ),
+            },
+        )
+
+    def test_public_sync_failure_reports_partial_update(self):
+        """A healthy activation can succeed before public publication fails."""
+
+        state, public = self.root / "private", self.root / "public"
+        public.mkdir()
+        (public / "deployed.json").mkdir()
+        result = self.apply_with_mock_activation(state, public)
+        self.assertEqual(result.returncode, 4, result.stderr)
+        self.assertIn("retry --sync-public-version", result.stderr)
+        self.assertNotIn("UPDATE PASS", result.stdout)
+        self.assertNotIn("UNEXPECTED ROLLBACK", result.stdout)
+        self.assertFalse((state / "pending-update").exists())
+        self.assertEqual(
+            json.loads((state / "deployed.json").read_text())["version"],
+            "0.5.25-hw",
+        )
+        self.assertEqual(list(public.glob(".deployed-*")), [])
+
+    def test_success_requires_exact_public_receipt(self):
+        """Success follows publication of a complete readable receipt."""
+
+        state, public = self.root / "private", self.root / "public"
+        public.mkdir()
+        published = public / "deployed.json"
+        published.write_text('{"version":"0.5.24-hw"}')
+        result = self.apply_with_mock_activation(state, public)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("UPDATE PASS: 0.5.25-hw", result.stdout)
+        self.assertEqual(
+            json.loads(published.read_text()),
+            {"version": "0.5.25-hw", "digest": DIGEST},
+        )
+        self.assertEqual(published.stat().st_mode & 0o777, 0o644)
+        self.assertFalse((state / "pending-update").exists())
+
+    def test_mismatched_pin_keeps_previous_public_version(self):
+        """An inconsistent committed pair cannot publish an update PASS."""
+        state, public = self.root / "private", self.root / "public"
+        public.mkdir()
+        report = public / "deployed.json"
+        report.write_text('{"version":"0.5.24-hw"}')
+        before = report.read_bytes()
+        result = self.apply_with_mock_activation(
+            state, public, pin="sha256:" + "b" * 64
+        )
+        self.assertEqual(result.returncode, 4)
+        self.assertIn("DEPLOYED_PIN_MISMATCH", result.stderr)
+        self.assertNotIn("UPDATE PASS", result.stdout)
+        self.assertEqual(report.read_bytes(), before)
+
+    def test_new_update_cannot_replace_unresolved_recovery(self):
+        """An unresolved journal survives a retry of the apply command."""
+
+        state, public = self.root / "private", self.root / "public"
+        state.mkdir()
+        pending = state / "pending-update"
+        pending.write_text("existing pending update\n")
+        result = self.apply_with_mock_activation(state, public)
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn("update recovery is pending", result.stderr)
+        self.assertEqual(pending.read_text(), "existing pending update\n")
+        self.assertFalse((state / "deployed.json").exists())
+
     def test_nested_failure_runs_rollback_handler(self):
         """An error in a nested health check must trigger recovery."""
 
@@ -177,77 +244,6 @@ class OfflineRollbackTests(unittest.TestCase):
             )
             with self.subTest(version=version):
                 self.assertEqual(result.returncode == 0, accepted)
-
-    def test_valid_snapshot_restores_previous_database(self):
-        """Recover old records and retain post-failure data separately."""
-
-        result = self.run_restore()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        with closing(sqlite3.connect(self.database)) as db, db:
-            self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (42,)
-            )
-        rescue = self.snapshot / "failed-upgrade-database.sqlite3"
-        with closing(sqlite3.connect(rescue)) as db:
-            self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (99,)
-            )
-
-    def test_restore_does_not_overwrite_stale_temp_file(self):
-        """A previous recovery temporary file must remain untouched."""
-
-        stale = Path(str(self.database) + ".recovery.$")
-        stale.write_text("previous interrupted attempt", encoding="utf-8")
-        result = self.run_restore()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            stale.read_text(encoding="utf-8"),
-            "previous interrupted attempt",
-        )
-        self.assertEqual(
-            list(self.root.glob("monitor.sqlite3.recovery.????????")), []
-        )
-        with closing(sqlite3.connect(self.database)) as db:
-            self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (42,)
-            )
-
-    def test_rescue_includes_uncheckpointed_wal_data(self):
-        """Rescue must include committed rows still residing in the WAL."""
-
-        writer = sqlite3.connect(self.database)
-        try:
-            writer.execute("PRAGMA journal_mode=WAL")
-            writer.execute("PRAGMA wal_autocheckpoint=0")
-            writer.execute("UPDATE samples SET id=777")
-            writer.commit()
-            self.assertTrue(Path(str(self.database) + "-wal").exists())
-            result = self.run_restore()
-            self.assertEqual(result.returncode, 0, result.stderr)
-            rescue = self.snapshot / "failed-upgrade-database.sqlite3"
-            with closing(sqlite3.connect(rescue)) as db:
-                self.assertEqual(
-                    db.execute("SELECT id FROM samples").fetchone(), (777,)
-                )
-        finally:
-            writer.close()
-
-    def test_bad_checksum_leaves_active_database_unchanged(self):
-        """Reject a corrupted backup before any database replacement."""
-
-        (self.snapshot / (self.backup.name + ".sha256")).write_text(
-            "0" * 64 + f"  {self.backup}\n",
-            encoding="utf-8",
-        )
-        result = self.run_restore()
-        self.assertNotEqual(result.returncode, 0)
-        with closing(sqlite3.connect(self.database)) as db, db:
-            self.assertEqual(
-                db.execute("SELECT id FROM samples").fetchone(), (99,)
-            )
-        self.assertFalse(
-            (self.snapshot / "failed-upgrade-database.sqlite3").exists()
-        )
 
 
 if __name__ == "__main__":
