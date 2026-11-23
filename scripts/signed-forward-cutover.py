@@ -526,6 +526,7 @@ def runtime_config(paths: Layout, work: Path, pair: dict) -> None:
     """Preserve private configuration and validate the effective image pin."""
     target = work / "next"
     guarded_unit(target)
+    require_legacy_compatible(target)
     copy_configuration(paths.source, target)
     pin = image_pin(pair["digest"])
     write_file(
@@ -547,6 +548,15 @@ def runtime_config(paths: Layout, work: Path, pair: dict) -> None:
         "services"
     ]
     validate_compose(paths, services["shelly-voltage"], pin)
+
+
+def require_legacy_compatible(source: Path) -> None:
+    """Reject a signed application that cannot start under legacy Compose."""
+    app = source / "app.py"
+    safe_path(app)
+    # Inspect the signed entry point without starting another SQLite writer.
+    if "SVT_FENCE_DIR_REQUIRED" in app.read_text():
+        raise ValueError("candidate requires the sole-writer supervisor")
 
 
 def validate_compose(paths: Layout, monitor: dict, pin: str) -> None:

@@ -463,6 +463,11 @@ Production stays on published `0.5.12-hw` until those gates pass.
 
 ### Switch the signed source and OCI together
 
+This path applies to releases that can start under the legacy Compose
+service. A release that requires the fenced sole-writer supervisor is
+blocked during preparation, before stopping any service. It requires a
+separately tested migration to supervised startup.
+
 Use the reviewed operator checkout of
 `scripts/signed-forward-cutover.py --help` to prepare or activate a
 signed release pair on an installed Compose system. The Python

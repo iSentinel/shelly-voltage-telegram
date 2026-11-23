@@ -54,6 +54,7 @@ def fixture_source(directory: Path, version: str) -> None:
         (directory / name).write_text(version + "\n")
     (directory / "scripts").mkdir()
     (directory / "scripts" / "apply-update.sh").write_text("#!/bin/bash\n")
+    (directory / "app.py").write_text('"""Legacy-compatible fixture."""\n')
     (directory / "systemd").mkdir()
     (directory / "systemd" / CUTOVER.MONITOR).write_text(CURRENT_UNIT)
     (directory / "compose.yaml").write_text("services: {}\n")
@@ -329,6 +330,21 @@ class ForwardCutoverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "startup guard"):
             CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
         self.assertFalse(self.paths.marker.exists())
+        self.assert_history([222])
+
+    def test_supervised_candidate_blocks_before_any_runtime_change(self):
+        """Do not stop a legacy writer for an incompatible signed release."""
+        app = self.work / "next" / "app.py"
+        app.write_text('raise WriterFenceError("SVT_FENCE_DIR_REQUIRED")\n')
+        with self.assertRaisesRegex(ValueError, "requires the sole-writer"):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertEqual(CUTOVER.read_pair(self.paths), OLD)
+        self.assertEqual(self.paths.unit.read_text(), LEGACY_UNIT)
+        self.assertEqual(self.timer, "active")
+        self.assertFalse(self.paths.marker.exists())
+        self.assertFalse(
+            any(call[1] in {"stop", "update"} for call in self.calls)
+        )
         self.assert_history([222])
 
     def test_recovers_interruption_between_source_renames(self) -> None:
