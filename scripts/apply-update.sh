@@ -25,9 +25,12 @@ usage() {
     cat <<'EOF'
 Usage: apply-update.sh --version 0.5.13-hw [--dry-run] [-h|--help]
        apply-update.sh --recover  (systemd boot recovery only)
+       apply-update.sh --sync-public-version
 Root-only, explicitly approved update of a published, signed GHCR image.
 Never runs automatically; refuse when Shelly is offline or an outage is open.
 Requires cosign, docker compose, Python 3 and flock.
+Exit 4 after activation means the new image is active but its version status
+could not be confirmed. Retry only the version status with --sync-public-version.
 EOF
 }
 
@@ -166,12 +169,88 @@ start_stack() {
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
+update_version_receipt() {
+    /usr/bin/python3 -I -B - "$1" "$PUBLIC_STATE" "$2" \
+        "$(dirname -- "${BASH_SOURCE[0]}")/deployment-state-audit.py" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+
+def sync_directory(path):
+    """Persist file name changes in the containing directory."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def public_content(state, helper):
+    """Read the committed receipt and publish only version and digest."""
+    receipt = state / "deployed.json"
+    override = state / "override.yaml"
+    if not os.path.lexists(receipt) and not os.path.lexists(override):
+        return None
+    spec = importlib.util.spec_from_file_location("svt_release_audit", helper)
+    if spec is None or spec.loader is None:
+        raise SystemExit("FAIL: deployment audit helper is unavailable")
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    try:
+        version, digest = audit.deployed_record(state)
+        if audit.override_image(state) != f"{audit.IMAGE}@{digest}":
+            raise audit.AuditBlocked("DEPLOYED_PIN_MISMATCH")
+        if any(path.stat().st_uid != os.geteuid() for path in (receipt, override)):
+            raise audit.AuditBlocked("PRIVATE_STATE_OWNER_MISMATCH")
+    except audit.AuditBlocked as error:
+        raise SystemExit(f"FAIL: cannot publish version ({error})") from None
+    payload = {"version": version, "digest": digest}
+    return (json.dumps(payload, sort_keys=True) + "\n").encode()
+
+
+state, folder, helper = map(Path, (sys.argv[1], sys.argv[2], sys.argv[4]))
+content = public_content(state, helper)
+if sys.argv[3] == "verify":
+    sys.exit(0)
+if folder.resolve() == state.resolve():
+    raise SystemExit("FAIL: public and private update state must be separate")
+destination = folder / "deployed.json"
+if folder.is_symlink():
+    raise SystemExit("FAIL: linked public version directory")
+if not folder.is_dir():
+    folder.mkdir(parents=True, exist_ok=True)
+    sync_directory(folder.parent)
+if content is not None:
+    with tempfile.NamedTemporaryFile(dir=folder, prefix=".deployed-",
+                                     delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(content)
+            os.fchmod(file.fileno(), 0o644)
+            file.flush()
+            os.fsync(file.fileno())
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+else:
+    destination.unlink(missing_ok=True)
+sync_directory(folder)
+PY
+}
+
 sync_public_version() {
-    mkdir -p "$PUBLIC_STATE"
-    if [[ -f "$STATE/deployed.json" ]]; then
-        install -m 0644 "$STATE/deployed.json" "$PUBLIC_STATE/deployed.json"
-    else
-        rm -f "$PUBLIC_STATE/deployed.json"
+    # Readers see either the complete old receipt or the complete new one.
+    update_version_receipt "$STATE" publish
+}
+
+publish_committed_version() {
+    if ! sync_public_version; then
+        echo "FAIL: deployed version status could not be synchronized; retry --sync-public-version" >&2
+        return 4
     fi
 }
 
@@ -186,71 +265,120 @@ mark_pending() {
     sync -f "$STATE"
 }
 
+recovery_file_is_safe() {
+    local mode
+    [[ -f "$1" && ! -L "$1" && -O "$1" ]] || return 1
+    [[ "$(stat -c %h -- "$1")" == 1 ]] || return 1
+    mode="$(stat -c %a -- "$1")" || return 1
+    (( (8#$mode & 022) == 0 ))
+}
+
+verify_recovery_history() {
+    local archive manifest recorded actual
+    local -a archives=("$SNAPSHOT"/voltage-*.sqlite3.gz)
+    [[ ${#archives[@]} == 1 ]] || return 1
+    archive="${archives[0]}"
+    manifest="$archive.sha256"
+    recovery_file_is_safe "$archive" || return 1
+    recovery_file_is_safe "$manifest" || return 1
+    [[ "$(stat -c %s -- "$manifest")" -le 8192 ]] || return 1
+    [[ "$(stat -c %s -- "$archive")" -le 2147483648 ]] || return 1
+    recorded="$(cat -- "$manifest")" || return 1
+    actual="$(sha256sum -- "$archive")" || return 1
+    [[ "$recorded" == "$actual" ]] || return 1
+    /usr/bin/python3 -I -B "$ROOT/scripts/validate-sqlite-archive.py" \
+        --archive "$archive" --compare-db "$DB"
+}
+
+require_recovery_history() {
+    if ! verify_recovery_history; then
+        echo "FAIL: recovery archive does not match live SQLite or could not be verified; inspect pending update" >&2
+        return 1
+    fi
+}
+
+validate_recovery_snapshot() {
+    local directory file
+    for directory in "$STATE" "$STATE/snapshots" "$SNAPSHOT"; do
+        if [[ ! -d "$directory" || -L "$directory" || ! -O "$directory" ]] ||
+            [[ "$(stat -c %a -- "$directory")" != 700 ]]; then
+            echo "FAIL: recovery snapshot directory is unsafe" >&2
+            return 1
+        fi
+    done
+    for file in override.yaml deployed.json; do
+        if [[ -e "$SNAPSHOT/$file" || -L "$SNAPSHOT/$file" ]]; then
+            recovery_file_is_safe "$SNAPSHOT/$file" || return 1
+        fi
+    done
+    # Verify the saved pair before we stop a healthy writer.
+    update_version_receipt "$SNAPSHOT" verify
+}
+
+restore_recovery_receipt() {
+    local name="$1" temporary
+    if [[ ! -f "$SNAPSHOT/$name" ]]; then
+        rm -f -- "$STATE/$name"
+        return
+    fi
+    temporary="$(mktemp "$STATE/.receipt.XXXXXXXX")" || return 1
+    if ! install -m 0600 -- "$SNAPSHOT/$name" "$temporary" ||
+        ! mv -fT -- "$temporary" "$STATE/$name"; then
+        rm -f -- "$temporary"
+        return 1
+    fi
+}
+
+confirm_recovery_writer_stopped() {
+    local containers
+    containers="$(docker ps -q --filter 'name=^/shelly-voltage-bot$')" || return 1
+    if [[ -n "$containers" ]]; then
+        echo "FAIL: SQLite writer is still running; recovery stays pending" >&2
+        return 1
+    fi
+}
+
 recover_pending() {
     local token
-    [[ -f "$PENDING_FILE" ]] || return 0
-    token="$(cat "$PENDING_FILE")"
+    if [[ ! -e "$PENDING_FILE" && ! -L "$PENDING_FILE" ]]; then
+        # A previous update may have committed immediately before a shutdown.
+        publish_committed_version || true
+        return 0
+    fi
+    if ! recovery_file_is_safe "$PENDING_FILE" ||
+        [[ "$(stat -c %s -- "$PENDING_FILE")" -gt 128 ]]; then
+        echo "FAIL: unsafe pending update marker" >&2
+        return 1
+    fi
+    token="$(cat -- "$PENDING_FILE")" || return 1
     if [[ ! "$token" =~ ^[0-9]{8}T[0-9]{6}Z-[0-9]+\.[0-9]+\.[0-9]+-hw$ ]]; then
         echo "FAIL: invalid pending update marker" >&2
         return 1
     fi
     SNAPSHOT="$STATE/snapshots/$token"
-    [[ -d "$SNAPSHOT" ]] || return 1
+    validate_recovery_snapshot || return 1
     echo "RECOVERY: interrupted update $token" >&2
+    # Compare before stopping Docker and recheck any commits made during stop.
+    require_recovery_history || return 1
     docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    if [[ -f "$SNAPSHOT/override.yaml" ]]; then
-        cp -a "$SNAPSHOT/override.yaml" "$STATE/override.yaml"
-    else
-        rm -f "$STATE/override.yaml"
-    fi
-    if [[ -f "$SNAPSHOT/deployed.json" ]]; then
-        cp -a "$SNAPSHOT/deployed.json" "$STATE/deployed.json"
-    else
-        rm -f "$STATE/deployed.json"
-    fi
-    restore_snapshot_database
-    sync_public_version
-    rm -f "$PENDING_FILE"
+    confirm_recovery_writer_stopped || return 1
+    require_recovery_history || return 1
+    restore_recovery_receipt override.yaml || return 1
+    restore_recovery_receipt deployed.json || return 1
+    require_recovery_history || return 1
+    # Persist the previous image selection before clearing the recovery journal.
+    sync -f "$STATE" || return 1
+    rm -f -- "$PENDING_FILE" || return 1
+    sync -f "$STATE" || return 1
+    # The committed receipt can be published again independently.
+    publish_committed_version || true
 }
 
-restore_snapshot_database() {
-    local backup rescue temp
-    backup="$(find "$SNAPSHOT" -maxdepth 1 -name 'voltage-*.sqlite3.gz' -print -quit)"
-    [[ -n "$backup" ]] || return 1
-    sha256sum -c "$backup.sha256" || return 1
-    docker compose -f "$ROOT/compose.yaml" stop shelly-voltage || return 1
-    rescue="$SNAPSHOT/failed-upgrade-database.sqlite3"
-    if [[ -f "$DB" && ! -e "$rescue" ]]; then
-        python3 - "$DB" "$rescue" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-source = "file:" + sys.argv[1] + "?mode=ro"
-with closing(sqlite3.connect(source, uri=True)) as original:
-    with closing(sqlite3.connect(sys.argv[2])) as destination:
-        original.backup(destination)
-PY
-        chmod 0600 "$rescue"
+require_no_pending_recovery() {
+    if [[ -e "$PENDING_FILE" || -L "$PENDING_FILE" ]]; then
+        echo "FAIL: update recovery is pending" >&2
+        return 3
     fi
-    temp="$(mktemp "${DB}.recovery.XXXXXXXX")"
-    if ! gzip -dc "$backup" > "$temp"; then
-        rm -f "$temp"
-        return 1
-    fi
-    python3 - "$temp" <<'PY'
-import sqlite3
-import sys
-from contextlib import closing
-
-with closing(sqlite3.connect(sys.argv[1])) as db:
-    if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-        raise SystemExit("invalid rollback database")
-PY
-    chown --reference="$DB" "$temp"
-    chmod --reference="$DB" "$temp"
-    rm -f "$DB-wal" "$DB-shm"
-    mv -f "$temp" "$DB"
 }
 
 rollback() {
@@ -298,17 +426,29 @@ os.replace(name, destination)
 PY
 }
 
-main() {
-    if [[ "${1:-}" == "--recover" && $# -eq 1 ]]; then
-        [[ $EUID -eq 0 ]] || return 2
-        mkdir -p "$STATE"
-        exec 9>/run/lock/shelly-voltage-updater.lock
-        flock -w 120 9 || return 3
+run_recovery_command() {
+    [[ $EUID -eq 0 ]] || return 2
+    mkdir -p "$STATE"
+    exec 9>/run/lock/shelly-voltage-updater.lock
+    flock -w 120 9 || return 3
+    if [[ "$1" == "--recover" ]]; then
         recover_pending
+        return
+    fi
+    require_no_pending_recovery || return $?
+    publish_committed_version
+}
+
+main() {
+    if [[ $# -eq 1 && ( "$1" == "--recover" || "$1" == "--sync-public-version" ) ]]; then
+        run_recovery_command "$1"
         return
     fi
     parse_args "$@"
     requirements
+    if [[ "$DRY_RUN" == false ]]; then
+        require_no_pending_recovery || return $?
+    fi
     preflight
     python3 "$ROOT/scripts/github_update.py" guard \
         --root "$ROOT" --state "$STATE" --version "$VERSION"
@@ -332,7 +472,11 @@ main() {
     activate "$digest"
     rm -f "$PENDING_FILE"
     trap - ERR INT TERM
-    sync_public_version || echo "WARN: version status update failed" >&2
+    if ! sync -f "$STATE"; then
+        echo "FAIL: could not confirm the committed update state on disk" >&2
+        return 4
+    fi
+    publish_committed_version || return $?
     echo "UPDATE PASS: $VERSION"
 }
 
