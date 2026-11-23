@@ -21,6 +21,7 @@ REPO = "iSentinel/shelly-voltage-telegram"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram"
 API = f"https://api.github.com/repos/{REPO}/releases"
 DEFAULT_STATE = Path("/var/lib/shelly-voltage-update-check")
+ABSENT_CREDENTIAL = "shelly-version-not-provisioned"
 VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)-hw\Z")
 REQUEST_TIMEOUT = 12
 MAX_RESPONSE_BYTES = 128 * 1024
@@ -93,17 +94,26 @@ def published_release(tag: str | None = None) -> dict:
     return release
 
 
-def installed_version(root: Path, state: Path) -> str:
+def version_input(path: Path, absent: str | None) -> str | None:
+    """Read a version input, including an optional systemd fallback."""
+    if not path.is_file():
+        return None
+    value = path.read_text(encoding="utf-8").strip()
+    return None if value == absent else value
+
+
+def installed_version(
+    root: Path, state: Path, *, absent: str | None = None
+) -> str:
     """Prefer deployed or published release to candidate source version."""
 
-    deployed = state / "deployed.json"
-    if deployed.is_file():
-        data = json.loads(deployed.read_text(encoding="utf-8"))
-        version = data["version"]
+    deployed = version_input(state / "deployed.json", absent)
+    if deployed is not None:
+        version = json.loads(deployed)["version"]
     else:
-        release = root / "RELEASE_VERSION"
-        path = release if release.is_file() else root / "VERSION"
-        version = path.read_text(encoding="utf-8").strip()
+        version = version_input(root / "RELEASE_VERSION", absent)
+        if version is None:
+            version = (root / "VERSION").read_text(encoding="utf-8").strip()
     version_tuple(version)
     return version.removeprefix("v")
 
@@ -122,10 +132,15 @@ def atomic_json(path: Path, payload: dict) -> None:
     os.replace(temp, path)
 
 
-def check(root: Path, state: Path) -> dict:
+def check(root: Path, state: Path, credentials: Path | None = None) -> dict:
     """Return release availability; never install anything."""
 
-    current = installed_version(root, state)
+    if credentials is None:
+        current = installed_version(root, state)
+    else:
+        current = installed_version(
+            credentials, credentials, absent=ABSENT_CREDENTIAL
+        )
     release = published_release()
     latest = release["tag_name"].removeprefix("v")
     return {
@@ -262,6 +277,16 @@ def parser() -> argparse.ArgumentParser:
     )
     command.add_argument("--state", type=Path, default=DEFAULT_STATE)
     command.add_argument(
+        "--credentials",
+        type=Path,
+        help="Read version files copied by systemd for the scheduled check.",
+    )
+    command.add_argument(
+        "--status-file",
+        type=Path,
+        help="Write the check result here instead of STATE/status.json.",
+    )
+    command.add_argument(
         "--database",
         type=Path,
         default=Path("/var/lib/shelly-voltage/voltage.sqlite3"),
@@ -277,8 +302,8 @@ def main() -> int:
     args = parser().parse_args()
     try:
         if args.action == "check":
-            result = check(args.root, args.state)
-            atomic_json(args.state / "status.json", result)
+            result = check(args.root, args.state, args.credentials)
+            atomic_json(args.status_file or args.state / "status.json", result)
             print(json.dumps(result, sort_keys=True))
         elif args.action == "preflight":
             preflight(args.database, "http://127.0.0.1:8080/ready")
