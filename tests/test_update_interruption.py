@@ -218,6 +218,16 @@ class InterruptedUpdateTests(unittest.TestCase):
         self.assertEqual(self.sample(), 42)
         self.assert_recovery_pending()
 
+    def test_wrong_snapshot_image_pin_blocks_recovery_before_stop(self):
+        """Matching SQLite cannot authorize an inconsistent saved pair."""
+        (self.snapshot / "override.yaml").write_text(override(NEW))
+        result = self.recover()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DEPLOYED_PIN_MISMATCH", result.stderr)
+        self.assertFalse(self.stops.exists())
+        self.assertEqual(self.sample(), 42)
+        self.assert_recovery_pending()
+
     def test_sqlite_user_version_change_blocks_recovery(self):
         """Schema version metadata participates in history comparison."""
 

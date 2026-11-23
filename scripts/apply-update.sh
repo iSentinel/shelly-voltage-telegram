@@ -169,10 +169,8 @@ start_stack() {
     /bin/bash "$ROOT/scripts/start-compose.sh"
 }
 
-sync_public_version() {
-    # The private deployment receipt is authoritative. Readers always see
-    # either the complete old receipt or the complete new receipt.
-    /usr/bin/python3 -I -B - "$STATE" "$PUBLIC_STATE" \
+update_version_receipt() {
+    /usr/bin/python3 -I -B - "$1" "$PUBLIC_STATE" "$2" \
         "$(dirname -- "${BASH_SOURCE[0]}")/deployment-state-audit.py" <<'PY'
 import importlib.util
 import json
@@ -214,11 +212,13 @@ def public_content(state, helper):
     return (json.dumps(payload, sort_keys=True) + "\n").encode()
 
 
-state, folder, helper = map(Path, sys.argv[1:])
+state, folder, helper = map(Path, (sys.argv[1], sys.argv[2], sys.argv[4]))
+content = public_content(state, helper)
+if sys.argv[3] == "verify":
+    sys.exit(0)
 if folder.resolve() == state.resolve():
     raise SystemExit("FAIL: public and private update state must be separate")
 destination = folder / "deployed.json"
-content = public_content(state, helper)
 if folder.is_symlink():
     raise SystemExit("FAIL: linked public version directory")
 if not folder.is_dir():
@@ -240,6 +240,11 @@ else:
     destination.unlink(missing_ok=True)
 sync_directory(folder)
 PY
+}
+
+sync_public_version() {
+    # Readers see either the complete old receipt or the complete new one.
+    update_version_receipt "$STATE" publish
 }
 
 publish_committed_version() {
@@ -306,6 +311,8 @@ validate_recovery_snapshot() {
             recovery_file_is_safe "$SNAPSHOT/$file" || return 1
         fi
     done
+    # Verify the saved pair before we stop a healthy writer.
+    update_version_receipt "$SNAPSHOT" verify
 }
 
 restore_recovery_receipt() {

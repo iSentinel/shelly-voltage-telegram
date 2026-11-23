@@ -386,6 +386,7 @@ new image. The marker is cleared only after the replacement passes health,
 readiness and electrical checks. Recovery checks history before stopping the
 Compose service, again after it stops, and before clearing the marker.
 It also requires Docker to confirm that the monitor container is stopped.
+The snapshot's deployment receipt and pin must agree before any stop.
 With matching history, it restores the previous image selection and leaves
 the live SQLite file in place. If the archive is invalid or history differs,
 it retains the pending marker and the live database for review.
