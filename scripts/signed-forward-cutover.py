@@ -31,10 +31,14 @@ CONTAINER = "shelly-voltage-bot"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
 READY = "http://127.0.0.1:8080/ready"
 LEGACY_START = "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh"
+LEGACY_RECOVER = (
+    "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --recover"
+)
 GUARDED_START = (
     "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start"
 )
 START_DIRECTIVES = ("ExecStart=", "ExecReload=")
+START_HOOKS = ("ExecCondition=", "ExecStartPre=", "ExecStartPost=")
 ID_PATTERN = re.compile(r"cutover-[A-Za-z0-9_]{8}\Z")
 PHOTO_PATTERN = re.compile(r"[1-9][0-9]{0,18}\Z")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}\Z")
@@ -591,7 +595,9 @@ def guarded_unit(source: Path) -> bytes:
     path = source / "systemd" / MONITOR
     safe_path(path)
     payload = path.read_bytes()
-    if startup_commands(payload) != startup_pair(GUARDED_START):
+    if startup_commands(payload) != startup_pair(
+        GUARDED_START
+    ) or unit_directives(payload, START_HOOKS):
         raise ValueError(
             "candidate systemd unit lacks the expected startup guard"
         )
@@ -600,11 +606,19 @@ def guarded_unit(source: Path) -> bytes:
 
 def startup_commands(payload: bytes) -> list[str]:
     """Identify every start and reload command, including overrides."""
-    return [
-        line.strip()
-        for line in payload.decode().splitlines()
-        if line.strip().startswith(START_DIRECTIVES)
-    ]
+    return unit_directives(payload, START_DIRECTIVES)
+
+
+def unit_assignment(line: str) -> str:
+    """Normalize whitespace around a systemd directive's equals sign."""
+    key, separator, value = line.strip().partition("=")
+    return key.rstrip() + separator + value.lstrip()
+
+
+def unit_directives(payload: bytes, names: tuple[str, ...]) -> list[str]:
+    """Read all matching unit assignments, including repeated definitions."""
+    lines = map(unit_assignment, payload.decode().splitlines())
+    return [line for line in lines if line.startswith(names)]
 
 
 def startup_pair(command: str) -> list[str]:
@@ -620,13 +634,18 @@ def bridge_unit(previous: bytes, helper: Path) -> bytes:
         startup_pair(GUARDED_START),
     ):
         raise ValueError("the current systemd startup recipe is unrecognized")
+    hooks = unit_directives(previous, START_HOOKS)
+    legacy_recovery = f"ExecStartPre={LEGACY_RECOVER}"
+    if hooks not in ([], [legacy_recovery]):
+        raise ValueError("the current systemd startup hook is unrecognized")
     replacement = dict(
         zip(commands, startup_pair(f"/bin/bash {helper} --guarded-start"))
     )
     return (
         "\n".join(
-            replacement.get(line.strip(), line)
+            replacement.get(unit_assignment(line), line)
             for line in previous.decode().splitlines()
+            if unit_assignment(line) != legacy_recovery
         )
         + "\n"
     ).encode()
@@ -750,10 +769,10 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
         )
     if read_pair(paths) != saved["previous"]:
         raise ValueError("the previous source and pin could not be verified")
-    write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
-    run("systemctl", "daemon-reload")
     if marked:
         clear_marker(paths, work)
+    write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
+    run("systemctl", "daemon-reload")
     save_phase(work, saved, "previous-pair-restored")
 
 

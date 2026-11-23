@@ -477,6 +477,9 @@ freezes the previous runtime and any temporary photo editor. It verifies
 a full SQLite rescue while the writer is stopped, then installs the
 checked source and pinned OCI. The guard stops systemd start and reload
 while the transition is incomplete, including after a host restart.
+The temporary unit drops the legacy automatic SQLite recovery hook.
+If the operation returns to the previous pair before the candidate
+starts, the hook returns only after its pending marker has been cleared.
 The public receipt is published after three healthy reads and a matching
 photo binding. A temporary editor stays disabled once activation begins.
 

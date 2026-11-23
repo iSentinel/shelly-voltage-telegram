@@ -39,7 +39,9 @@ CURRENT_UNIT = (
     "/opt/shelly-voltage/scripts/apply-update.sh --guarded-start\n"
 )
 LEGACY_UNIT = (
-    "[Service]\nExecStart=/bin/bash /opt/shelly-voltage/scripts/"
+    "[Service]\n"
+    f"ExecStartPre={CUTOVER.LEGACY_RECOVER}\n"
+    "ExecStart=/bin/bash /opt/shelly-voltage/scripts/"
     "start-compose.sh\nExecReload=/bin/bash "
     "/opt/shelly-voltage/scripts/start-compose.sh\n"
 )
@@ -272,6 +274,7 @@ class ForwardCutoverTests(unittest.TestCase):
             expected = f"/bin/bash {helper} --guarded-start"
             commands = CUTOVER.startup_commands(paths.unit.read_bytes())
             self.assertEqual(commands, CUTOVER.startup_pair(expected))
+            self.assertNotIn(b"ExecStartPre", paths.unit.read_bytes())
             self.assertEqual(self.runtime[2], "no")
             self.assertTrue(helper.exists())
             original(paths, work)
@@ -287,6 +290,45 @@ class ForwardCutoverTests(unittest.TestCase):
         self.assertTrue(self.paths.marker.exists())
         CUTOVER.recover(self.paths, self.work)
         self.assertEqual(self.paths.unit.read_text(), LEGACY_UNIT)
+        self.assert_history([222])
+
+    def test_old_unit_returns_only_after_its_marker_is_cleared(self) -> None:
+        """Never re-arm legacy automatic recovery while the marker exists."""
+        saved = CUTOVER.capture(self.paths, self.work, NEW, PHOTO)
+        CUTOVER.save_phase(self.work, saved, "preboot")
+        CUTOVER.arm_boot_guard(self.paths, self.work)
+        CUTOVER.freeze(self.paths, self.work, saved)
+        original = CUTOVER.write_file
+
+        def check_write(path, data, *args):
+            if path == self.paths.unit and b"ExecStartPre" in data:
+                self.assertFalse(self.paths.marker.exists())
+            original(path, data, *args)
+
+        with patch.object(CUTOVER, "write_file", side_effect=check_write):
+            CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(self.paths.unit.read_text(), LEGACY_UNIT)
+        self.assert_history([222])
+
+    def test_unknown_existing_hook_blocks_cutover(self) -> None:
+        """Do not run an operator hook before the pending-state guard."""
+        self.paths.unit.write_text(
+            LEGACY_UNIT + "ExecStartPre = /usr/bin/true\n"
+        )
+        with self.assertRaisesRegex(
+            ValueError, "startup hook is unrecognized"
+        ):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertFalse(self.paths.marker.exists())
+        self.assert_history([222])
+
+    def test_candidate_must_not_run_hook_before_guard(self) -> None:
+        """Reject a candidate unit with an independent startup command."""
+        unit = self.work / "next" / "systemd" / CUTOVER.MONITOR
+        unit.write_text(CURRENT_UNIT + "ExecCondition = /usr/bin/true\n")
+        with self.assertRaisesRegex(ValueError, "startup guard"):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertFalse(self.paths.marker.exists())
         self.assert_history([222])
 
     def test_recovers_interruption_between_source_renames(self) -> None:
