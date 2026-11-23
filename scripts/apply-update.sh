@@ -215,6 +215,8 @@ def public_content(state, helper):
 
 
 state, folder, helper = map(Path, sys.argv[1:])
+if folder.resolve() == state.resolve():
+    raise SystemExit("FAIL: public and private update state must be separate")
 destination = folder / "deployed.json"
 content = public_content(state, helper)
 if folder.is_symlink():

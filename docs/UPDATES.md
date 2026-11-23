@@ -399,7 +399,8 @@ tracked in [issue #340](https://github.com/iSentinel/shelly-voltage-telegram/iss
 The private deployment receipt is the source for public version status.
 After activation commits, the updater replaces public `deployed.json`
 atomically with the version and the immutable image digest after checking
-that the private receipt matches the Compose pin. Exit code 4 means
+that the private receipt matches the Compose pin. Publication refuses a
+public path that points back to the private directory. Exit code 4 means
 activation completed but the updater could
 not confirm the committed state or synchronize the public receipt. Use
 `apply-update.sh --sync-public-version` to retry only publication after

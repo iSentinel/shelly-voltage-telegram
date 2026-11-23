@@ -179,6 +179,18 @@ class OfflineRollbackTests(unittest.TestCase):
         self.assertNotIn("UPDATE PASS", result.stdout)
         self.assertEqual(report.read_bytes(), before)
 
+    def test_publication_cannot_replace_its_private_input(self):
+        """An aliased public directory must leave the receipt protected."""
+        state = self.root / "private"
+        alias = self.root / "public"
+        alias.symlink_to(state, target_is_directory=True)
+        result = self.apply_with_mock_activation(state, alias)
+        receipt = state / "deployed.json"
+        self.assertEqual(result.returncode, 4)
+        self.assertIn("public and private update state", result.stderr)
+        self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(json.loads(receipt.read_text())["private"], "test")
+
     def test_new_update_cannot_replace_unresolved_recovery(self):
         """An unresolved journal survives a retry of the apply command."""
 
