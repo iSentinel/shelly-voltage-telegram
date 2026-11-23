@@ -461,6 +461,32 @@ Production stays on published `0.5.12-hw` until those gates pass.
 
 ## Acceptance before production
 
+### Switch the signed source and OCI together
+
+Use the reviewed operator checkout of
+`scripts/signed-forward-cutover.py --help` to prepare or activate a
+signed release pair on an installed Compose system. The Python
+environment must include the project's Loguru dependency. Supply the
+approved version, exact Git commit, image digest and source SHA-256,
+plus the three release assets and the independently confirmed current
+Telegram photo ID. The `prepare` command verifies the signatures and
+stages a private copy of the source and configuration.
+
+The `activate` command freezes the previous runtime and any temporary
+photo editor, then verifies a full SQLite rescue while the writer is
+stopped. It installs the checked source and pinned OCI as one protected
+transition. The installed systemd startup guard blocks partial state.
+The public receipt is published after three healthy reads and a matching
+photo binding. A temporary editor stays disabled once activation begins.
+
+Keep the printed transaction ID and the operator checkout outside the
+installed source directory. To resume an interrupted activation, use
+`recover --transaction <id>`. Before the candidate may have run, recovery
+can restore the previous source, image pin, unit and timer. After that
+point it resumes the same candidate and retains the current SQLite.
+The rescue SQLite is kept for inspection. The command does not copy it
+back over the installed database.
+
 The preflight checks the latest reading on every phase listed by the
 monitor. A finalized voltage recovery must agree with fresh normal
 detectors and at least 15 minutes of settled voltage. Unresolved Telegram
