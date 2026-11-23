@@ -317,11 +317,16 @@ unsigned images or automatic installation.
 ## Host services
 
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
-  activation, beginning after a short delay on boot.
+  activation, beginning after a short delay on boot. The installer starts
+  the timer when it enables it.
 - `shelly-voltage-update-check.service` runs an unprivileged, read-only
-  release check and stores JSON in `/var/lib/shelly-voltage-update-check/status.json`.
-- The daily checker directory contains only nonsensitive version status. Root
-  snapshots and secret backups remain in a separate restricted directory.
+  release check. systemd supplies read-only copies of the checker and its
+  version inputs without granting access to the private project tree.
+- Read the timer's result from
+  `/var/lib/shelly-voltage-release-check/status.json`. Manual checks still
+  default to the status file under `--state`. The updater's
+  `/var/lib/shelly-voltage-update-check/deployed.json` remains a separate
+  root-managed input.
 - `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
   service. It has no Install section, timer, or automatic trigger.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
