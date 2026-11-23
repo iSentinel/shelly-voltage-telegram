@@ -19,6 +19,7 @@ import time
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from shutil import copyfileobj
 
 import github_update as updater
 from loguru import logger
@@ -37,8 +38,20 @@ LEGACY_RECOVER = (
 GUARDED_START = (
     "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start"
 )
+FENCE_TARGET = "/run/svt-fence"
+SUPERVISOR_OVERLAY = "deploy/compose.supervised-candidate.yml"
+SUPERVISOR_TEMPLATE = "deploy/shelly-voltage-supervised.candidate.unit"
+SOURCE_ARCHIVE_ARG = (
+    "--source-archive-dir /var/lib/shelly-voltage-updater/signed-source"
+)
 START_DIRECTIVES = ("ExecStart=", "ExecReload=")
 START_HOOKS = ("ExecCondition=", "ExecStartPre=", "ExecStartPost=")
+INERT_LEGACY_UNIT = (
+    b"[Unit]\nDescription=Retired legacy Compose owner\n"
+    b"RefuseManualStart=yes\n"
+    b"[Service]\nType=oneshot\nExecStart=/usr/bin/false\n"
+    b"[Install]\nWantedBy=multi-user.target\n"
+)
 ID_PATTERN = re.compile(r"cutover-[A-Za-z0-9_]{8}\Z")
 PHOTO_PATTERN = re.compile(r"[1-9][0-9]{0,18}\Z")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}\Z")
@@ -61,6 +74,7 @@ class Layout:
     updater_lock: Path = Path("/run/lock/shelly-voltage-updater.lock")
     overlay: Path = Path("/etc/shelly-voltage/yasno-reader.yaml")
     public_state: Path = Path("/var/lib/shelly-voltage-update-check")
+    fence: Path = Path("/var/lib/shelly-voltage-fence")
 
     @property
     def home(self) -> Path:
@@ -72,8 +86,13 @@ class Layout:
         """Use the marker recognized by both releases' startup entry points."""
         return self.state / "pending-update"
 
+    @property
+    def supervisor_unit(self) -> Path:
+        """Locate the new owner alongside the original systemd service."""
+        return self.unit.with_name(SUPERVISOR)
 
-def run(*args: str, timeout: int = 20) -> str:
+
+def run(*args: str, timeout: int = 20, fence: Path | None = None) -> str:
     """Execute a fixed operator command without exposing its private output."""
     env = {
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -81,6 +100,8 @@ def run(*args: str, timeout: int = 20) -> str:
         "LC_ALL": "C.UTF-8",
         "DOCKER_HOST": "unix:///var/run/docker.sock",
     }
+    if fence is not None:
+        env["SVT_WRITER_FENCE_DIR"] = str(fence)
     result = subprocess.run(
         args,
         capture_output=True,
@@ -320,12 +341,16 @@ def docker_state() -> tuple[str, str, str]:
     return result[0], result[1], result[2]
 
 
-def verify_database_mount(mounts, paths: Layout) -> None:
+def verify_database_mount(mounts, paths: Layout, supervised=False) -> None:
     """Require the current SQLite directory and forbid replacement code."""
     data = []
+    fences = []
     for target, source, kind, writable in mounts:
         if target == "/data":
             data.append((source, kind, writable))
+            continue
+        if supervised and target == FENCE_TARGET:
+            fences.append((source, kind, writable))
             continue
         allowed = target in ("/run/yasno", "/var/backups/shelly-voltage")
         if (
@@ -341,28 +366,44 @@ def verify_database_mount(mounts, paths: Layout) -> None:
         raise ValueError(
             "Docker does not use the expected live SQLite directory"
         )
+    if supervised and fences != [(str(paths.fence), "bind", True)]:
+        raise ValueError("Docker does not use the protected writer fence")
 
 
-def verify_current_mounts(paths: Layout) -> None:
-    """Inspect only the mounted paths and one database environment entry."""
+def verify_current_mounts(paths: Layout, supervised=False) -> None:
+    """Inspect mounts and only the relevant environment entries."""
     mounts = json.loads(
         run("docker", "inspect", "--format", "{{json .Mounts}}", CONTAINER)
     )
     verify_database_mount(
         ((m["Destination"], m["Source"], m["Type"], m["RW"]) for m in mounts),
         paths,
+        supervised,
     )
-    database = run(
+    if (
+        container_env("DATABASE_PATH")
+        != f"DATABASE_PATH=/data/{paths.database.name}"
+    ):
+        raise ValueError("Docker points to a different SQLite filename")
+    if (
+        supervised
+        and container_env("SVT_WRITER_FENCE_DIR")
+        != f"SVT_WRITER_FENCE_DIR={FENCE_TARGET}"
+    ):
+        raise ValueError("Docker points to a different writer fence")
+
+
+def container_env(key: str) -> str:
+    """Read one named environment entry without displaying other values."""
+    return run(
         "docker",
         "inspect",
         "--format",
         "{{range .Config.Env}}"
-        '{{if eq (index (split . "=") 0) "DATABASE_PATH"}}'
+        f'{{{{if eq (index (split . "=") 0) "{key}"}}}}'
         "{{println .}}{{end}}{{end}}",
         CONTAINER,
     )
-    if database != f"DATABASE_PATH=/data/{paths.database.name}":
-        raise ValueError("Docker points to a different SQLite filename")
 
 
 def boot_layout(paths: Layout) -> None:
@@ -489,7 +530,9 @@ def installed_runtime(paths: Layout) -> tuple[dict, str]:
     return installed, policy
 
 
-def capture(paths: Layout, work: Path, pair: dict, photo: str) -> dict:
+def capture(
+    paths: Layout, work: Path, pair: dict, photo: str, supervised=False
+) -> dict:
     """Record the existing pair before touching any running writer."""
     installed, policy = installed_runtime(paths)
     if updater.version_tuple(pair["version"]) <= updater.version_tuple(
@@ -512,6 +555,7 @@ def capture(paths: Layout, work: Path, pair: dict, photo: str) -> dict:
         "previous": installed,
         "restart": policy,
         "photo": photo,
+        "supervised": supervised,
         "timer_active": state_of(PHOTO_TIMER) == "active",
         "timer_enabled": run(
             "systemctl", "show", "-p", "UnitFileState", "--value", PHOTO_TIMER
@@ -522,11 +566,15 @@ def capture(paths: Layout, work: Path, pair: dict, photo: str) -> dict:
     return state
 
 
-def runtime_config(paths: Layout, work: Path, pair: dict) -> None:
+def runtime_config(
+    paths: Layout, work: Path, pair: dict, supervised=False
+) -> None:
     """Preserve private configuration and validate the effective image pin."""
     target = work / "next"
     guarded_unit(target)
-    require_legacy_compatible(target)
+    require_runtime_owner(target, supervised)
+    if supervised:
+        validate_supervisor_inputs(paths, work)
     copy_configuration(paths.source, target)
     pin = image_pin(pair["digest"])
     write_file(
@@ -541,25 +589,91 @@ def runtime_config(paths: Layout, work: Path, pair: dict) -> None:
         "-f",
         str(work / "next-override.yaml"),
     ]
+    if supervised:
+        command.extend(("-f", str(target / SUPERVISOR_OVERLAY)))
     if paths.overlay.exists() or paths.overlay.is_symlink():
         safe_path(paths.overlay)
         command.extend(("-f", str(paths.overlay)))
     services = json.loads(run(*command, "config", "--format", "json"))[
         "services"
     ]
-    validate_compose(paths, services["shelly-voltage"], pin)
+    if set(services) != {"shelly-voltage"}:
+        raise ValueError("candidate Compose must contain only the monitor")
+    validate_compose(paths, services["shelly-voltage"], pin, supervised)
 
 
-def require_legacy_compatible(source: Path) -> None:
-    """Reject a signed application that cannot start under legacy Compose."""
+def require_runtime_owner(source: Path, supervised: bool) -> None:
+    """Check whether the signed app requires the selected startup owner."""
     app = source / "app.py"
     safe_path(app)
     # Inspect the signed entry point without starting another SQLite writer.
-    if "SVT_FENCE_DIR_REQUIRED" in app.read_text():
+    requires_fence = "SVT_FENCE_DIR_REQUIRED" in app.read_text()
+    if requires_fence and not supervised:
         raise ValueError("candidate requires the sole-writer supervisor")
+    if supervised and not requires_fence:
+        raise ValueError("candidate does not require the shared writer fence")
 
 
-def validate_compose(paths: Layout, monitor: dict, pin: str) -> None:
+def stage_supervised_receipt(archive: Path, work: Path, pair: dict) -> dict:
+    """Keep the exact verified archive the supervisor checks on every boot."""
+    directory = work / "release-archive"
+    directory.mkdir(mode=0o700)
+    target = directory / archive.name
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as output, archive.open("rb") as source:
+        copyfileobj(source, output)
+        output.flush()
+        os.fsync(output.fileno())
+    with target.open("rb") as stream:
+        if (
+            hashlib.file_digest(stream, "sha256").hexdigest()
+            != pair["archive_sha256"]
+        ):
+            raise ValueError("retained signed source archive changed")
+    durable(directory)
+    durable(work)
+    return {
+        **pair,
+        "source_commit": pair["commit"],
+        "source_sha256": pair["archive_sha256"],
+        "transaction_token": work.name,
+        "pair_status": "PASS_SIGNED_SOURCE_OCI_PAIR_ONLY",
+        "source_signature_verified": True,
+        "oci_signature_verified": True,
+        "oci_attestations_verified": True,
+    }
+
+
+def supervisor_unit(source: Path, work: Path) -> bytes:
+    """Bind the signed service template to its retained archive directory."""
+    template = source / SUPERVISOR_TEMPLATE
+    safe_path(template)
+    payload = template.read_text()
+    if payload.count(SOURCE_ARCHIVE_ARG) != 1:
+        raise ValueError(
+            "candidate supervisor archive argument is unrecognized"
+        )
+    return payload.replace(
+        SOURCE_ARCHIVE_ARG, f"--source-archive-dir {work / 'release-archive'}"
+    ).encode()
+
+
+def validate_supervisor_inputs(paths: Layout, work: Path) -> None:
+    """Refuse to adopt an existing supervisor or its lock namespace."""
+    for path in (paths.fence, paths.supervisor_unit):
+        if path.exists() or path.is_symlink():
+            raise ValueError(
+                "an existing supervisor or writer fence blocks migration"
+            )
+    target = work / "next"
+    safe_path(target / SUPERVISOR_OVERLAY)
+    write_file(work / SUPERVISOR, supervisor_unit(target, work), 0o644)
+    run("systemd-analyze", "verify", str(work / SUPERVISOR), timeout=35)
+
+
+def validate_compose(
+    paths: Layout, monitor: dict, pin: str, supervised=False
+) -> None:
     """Verify that the candidate uses the intended pin and existing data."""
     if monitor["image"] != pin or monitor["restart"] != "no":
         raise ValueError(
@@ -576,12 +690,20 @@ def validate_compose(paths: Layout, monitor: dict, pin: str) -> None:
             for m in monitor["volumes"]
         ),
         paths,
+        supervised,
     )
     if (
         monitor["environment"].get("DATABASE_PATH")
         != f"/data/{paths.database.name}"
     ):
         raise ValueError("candidate Compose points to a different SQLite file")
+    if (
+        supervised
+        and monitor["environment"].get("SVT_WRITER_FENCE_DIR") != FENCE_TARGET
+    ):
+        raise ValueError(
+            "candidate Compose points to a different writer fence"
+        )
 
 
 def copy_configuration(source: Path, target: Path) -> None:
@@ -713,6 +835,138 @@ def freeze(paths: Layout, work: Path, saved: dict) -> None:
     backup_database(paths, work, saved["photo"])
 
 
+def fence_pending(paths: Layout, work: Path) -> bool:
+    """Identify the shared pending marker without adopting another event."""
+    marker = paths.fence / ".svt-update-pending"
+    if not (marker.exists() or marker.is_symlink()):
+        return False
+    safe_path(marker)
+    if marker.read_text() != f"{work.name}\n":
+        raise ValueError("writer fence belongs to another transaction")
+    return True
+
+
+def control_fence(
+    paths: Layout, work: Path, action: str, source: Path
+) -> None:
+    """Change the pending marker under the application's SQLite gate."""
+    run(
+        sys.executable,
+        "-B",
+        str(source / "scripts/writer-fence-marker.py"),
+        action,
+        "--database",
+        str(paths.database),
+        "--token",
+        work.name,
+        fence=paths.fence,
+    )
+
+
+def arm_supervisor(paths: Layout, work: Path, saved: dict) -> None:
+    """Create a new pending owner and remove only the known stopped writer."""
+    target = work / "next"
+    write_file(work / "owns-writer-fence", b"1\n")
+    run(
+        sys.executable,
+        "-B",
+        str(target / "scripts/prepare-writer-fence.py"),
+        "--directory",
+        str(paths.fence),
+        "--uid",
+        "10001",
+    )
+    control_fence(paths, work, "publish", target)
+    remove_stopped_pair(saved)
+
+
+def remove_stopped_pair(saved: dict) -> None:
+    """Let Compose create a fresh container without adopting a foreign one."""
+    existing = run(
+        "docker",
+        "ps",
+        "-a",
+        "--filter",
+        f"name=^/{CONTAINER}$",
+        "--format",
+        "{{.Names}}",
+    )
+    if not existing:
+        return
+    image, status, policy = docker_state()
+    allowed = {image_pin(saved[key]["digest"]) for key in ("pair", "previous")}
+    if (
+        existing != CONTAINER
+        or image not in allowed
+        or status not in ("created", "exited")
+        or policy != "no"
+    ):
+        raise ValueError("refusing to remove an unconfirmed stopped container")
+    run("docker", "rm", CONTAINER, timeout=30)
+
+
+def install_supervisor(paths: Layout, work: Path) -> None:
+    """Change the boot owner only while the shared writer gate is pending."""
+    if not fence_pending(paths, work):
+        raise ValueError("missing supervisor pending marker")
+    run("systemctl", "disable", MONITOR)
+    write_file(paths.unit, INERT_LEGACY_UNIT, 0o644)
+    write_file(paths.supervisor_unit, (work / SUPERVISOR).read_bytes(), 0o644)
+    run("systemctl", "daemon-reload")
+    run("systemctl", "enable", SUPERVISOR)
+    verify_supervisor_units(paths, work)
+
+
+def verify_supervisor_units(paths: Layout, work: Path) -> None:
+    """Confirm exact owner recipe and that legacy startup is disabled."""
+    safe_path(paths.supervisor_unit)
+    if paths.supervisor_unit.read_bytes() != supervisor_unit(
+        paths.source, work
+    ):
+        raise ValueError("installed supervisor unit changed")
+    if paths.unit.read_bytes() != INERT_LEGACY_UNIT:
+        raise ValueError("retired legacy owner changed")
+    for name, expected in ((SUPERVISOR, "enabled"), (MONITOR, "disabled")):
+        policy = run(
+            "systemctl", "show", "-p", "UnitFileState", "--value", name
+        )
+        fragment = run(
+            "systemctl", "show", "-p", "FragmentPath", "--value", name
+        )
+        dropins = run(
+            "systemctl", "show", "-p", "DropInPaths", "--value", name
+        )
+        desired = paths.supervisor_unit if name == SUPERVISOR else paths.unit
+        if policy != expected or fragment != str(desired) or dropins:
+            raise ValueError(
+                "the installed startup owner could not be verified"
+            )
+
+
+def retire_supervisor(paths: Layout, work: Path, saved: dict) -> None:
+    """Undo only services and fences put in place before candidate startup."""
+    if paths.supervisor_unit.exists() or paths.supervisor_unit.is_symlink():
+        safe_path(paths.supervisor_unit)
+        if (
+            paths.supervisor_unit.read_bytes()
+            != (work / SUPERVISOR).read_bytes()
+        ):
+            raise ValueError("supervisor unit belongs to another operation")
+        run("systemctl", "stop", SUPERVISOR, timeout=45)
+        run("systemctl", "disable", SUPERVISOR)
+        remove_stopped_pair(saved)
+        paths.supervisor_unit.unlink()
+        durable(paths.supervisor_unit.parent)
+    if (work / "owns-writer-fence").is_file() and paths.fence.exists():
+        safe_path(paths.fence, folder=True)
+        fence_pending(paths, work)
+        sealed = paths.fence.with_name(f".{paths.fence.name}-{work.name}")
+        if sealed.exists() or sealed.is_symlink():
+            raise ValueError("the retired writer fence already exists")
+        os.rename(paths.fence, sealed)
+        durable(sealed.parent)
+
+
 def install_pair(paths: Layout, work: Path, saved: dict) -> None:
     """Install both components while the pending guard blocks startup."""
     os.rename(paths.source, work / "previous")
@@ -727,7 +981,10 @@ def install_pair(paths: Layout, work: Path, saved: dict) -> None:
         (work / "next-override.yaml").read_bytes(),
     )
     record(paths.state / "deployed.json", pair)
-    write_file(paths.unit, guarded_unit(paths.source), mode=0o644)
+    if saved.get("supervised"):
+        install_supervisor(paths, work)
+    else:
+        write_file(paths.unit, guarded_unit(paths.source), mode=0o644)
     run("sync", "-f", str(paths.source))
     run("systemctl", "daemon-reload")
     if read_pair(paths) != pair:
@@ -758,6 +1015,8 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
     original = work / "previous"
     if not marked and read_pair(paths) != saved["previous"]:
         raise ValueError("the installed pair changed outside this cutover")
+    if saved.get("supervised"):
+        retire_supervisor(paths, work, saved)
     if original.exists():
         if not marked:
             raise ValueError("a partially switched pair has no owned marker")
@@ -783,6 +1042,8 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
         clear_marker(paths, work)
     write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
     run("systemctl", "daemon-reload")
+    if saved.get("supervised"):
+        run("systemctl", "enable", MONITOR)
     save_phase(work, saved, "previous-pair-restored")
 
 
@@ -807,12 +1068,14 @@ def verify_ready(paths: Layout, saved: dict) -> None:
     raise ValueError("candidate readiness or photo continuity unconfirmed")
 
 
-def activate(paths: Layout, work: Path, pair: dict, photo: str) -> None:
+def activate(
+    paths: Layout, work: Path, pair: dict, photo: str, supervised=False
+) -> None:
     """Use fail-closed recovery across the source and image switch."""
     try:
         with lease(paths.updater_lock):
-            saved = capture(paths, work, pair, photo)
-            runtime_config(paths, work, pair)
+            saved = capture(paths, work, pair, photo, supervised)
+            runtime_config(paths, work, pair, supervised)
             seal_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
         info = work / "transaction.json"
@@ -832,19 +1095,32 @@ def seal_pair(paths: Layout, work: Path, saved: dict) -> None:
     try:
         arm_boot_guard(paths, work)
         freeze(paths, work, saved)
+        if saved.get("supervised"):
+            arm_supervisor(paths, work, saved)
         install_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
         restore_preboot(paths, work, saved)
         raise
     save_phase(work, saved, "candidate-may-have-run")
-    clear_marker(paths, work)
+    open_candidate_gate(paths, work, saved)
+
+
+def open_candidate_gate(paths: Layout, work: Path, saved: dict) -> None:
+    """Allow startup only after the new paired state is durably committed."""
+    if exact_marker_exists(paths, work):
+        clear_marker(paths, work)
+    if saved.get("supervised") and fence_pending(paths, work):
+        control_fence(paths, work, "clear", paths.source)
 
 
 def start_candidate(paths: Layout, work: Path, saved: dict) -> None:
     """Start the coherent pair and leave it intact on verification failure."""
-    run("systemctl", "start", MONITOR, timeout=65)
+    supervised = saved.get("supervised", False)
+    run(
+        "systemctl", "start", SUPERVISOR if supervised else MONITOR, timeout=65
+    )
     verify_ready(paths, saved)
-    verify_current_mounts(paths)
+    verify_current_mounts(paths, supervised)
     if read_pair(paths) != saved["pair"]:
         raise ValueError("candidate source or pin changed after startup")
     publish_version(paths, saved["pair"])
@@ -874,11 +1150,8 @@ def recover(paths: Layout, work: Path) -> None:
                 raise ValueError(
                     "candidate may have run and installed pair drifted"
                 )
-            boot_layout(paths)
-            if paths.unit.read_bytes() != guarded_unit(paths.source):
-                raise ValueError("installed systemd unit changed")
-            if exact_marker_exists(paths, work):
-                clear_marker(paths, work)
+            verify_recovery_owner(paths, work, saved)
+            open_candidate_gate(paths, work, saved)
         elif saved["phase"] in ("preboot", "previous-pair-restored"):
             restore_preboot(paths, work, saved)
         else:
@@ -887,6 +1160,16 @@ def recover(paths: Layout, work: Path) -> None:
         start_candidate(paths, work, saved)
         return
     start_previous(work, saved)
+
+
+def verify_recovery_owner(paths: Layout, work: Path, saved: dict) -> None:
+    """Validate the installed owner before releasing a pending start."""
+    if saved.get("supervised"):
+        verify_supervisor_units(paths, work)
+    else:
+        boot_layout(paths)
+        if paths.unit.read_bytes() != guarded_unit(paths.source):
+            raise ValueError("installed systemd unit changed")
 
 
 def start_previous(work: Path, saved: dict) -> None:
@@ -915,6 +1198,11 @@ def options() -> argparse.Namespace:
             command.add_argument(f"--{name}", required=True)
         for name in ("archive", "bundle", "sha256sums"):
             command.add_argument(f"--{name}", type=Path, required=True)
+        command.add_argument(
+            "--supervised",
+            action="store_true",
+            help="migrate the legacy service to the protected sole writer",
+        )
     modes.add_parser("recover").add_argument("--transaction", required=True)
     return cli.parse_args()
 
@@ -935,11 +1223,13 @@ def dispatch(paths: Layout, args: argparse.Namespace) -> Path:
     logger.info("Private transaction {}", work.name)
     stage_source(args.archive, work, pair)
     stage_image(pair)
+    if args.supervised:
+        pair = stage_supervised_receipt(args.archive, work, pair)
     if args.action == "activate":
-        activate(paths, work, pair, args.photo)
+        activate(paths, work, pair, args.photo, args.supervised)
     else:
-        capture(paths, work, pair, args.photo)
-        runtime_config(paths, work, pair)
+        capture(paths, work, pair, args.photo, args.supervised)
+        runtime_config(paths, work, pair, args.supervised)
     return work
 
 

@@ -463,10 +463,12 @@ Production stays on published `0.5.12-hw` until those gates pass.
 
 ### Switch the signed source and OCI together
 
-This path applies to releases that can start under the legacy Compose
-service. A release that requires the fenced sole-writer supervisor is
-blocked during preparation, before stopping any service. It requires a
-separately tested migration to supervised startup.
+The default path supports releases that can start under legacy Compose.
+Use `--supervised` on both `prepare` and `activate` for the first
+migration from the legacy service to the fenced sole-writer supervisor.
+Preparation validates the signed supervisor unit and effective Compose
+plan, including the required read-write fence and the current SQLite
+mount. Existing supervisor installations require their own update path.
 
 Use the reviewed operator checkout of
 `scripts/signed-forward-cutover.py --help` to prepare or activate a
@@ -487,6 +489,13 @@ If the operation returns to the previous pair before the candidate
 starts, the hook returns only after its pending marker has been cleared.
 The public receipt is published after three healthy reads and a matching
 photo binding. A temporary editor stays disabled once activation begins.
+
+With `--supervised`, the updater stops the previous writer, takes the
+cold SQLite rescue, fences both startup paths, and removes only the
+confirmed stopped container. It disables and retires the old unit
+before enabling the supervisor. The supervisor rechecks the signed
+source archive retained in the transaction directory on every startup.
+Keep this directory for as long as the installed unit points to it.
 
 Keep the printed transaction ID and the operator checkout outside the
 installed source directory. To resume an interrupted activation, use

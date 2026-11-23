@@ -77,6 +77,7 @@ class ForwardCutoverTests(unittest.TestCase):
             updater_lock=base / "update.lock",
             overlay=base / "yasno.yaml",
             public_state=base / "public",
+            fence=base / "fence",
         )
         self.work = base / "transaction"
         self.work.mkdir()
@@ -403,6 +404,63 @@ class ForwardCutoverTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(ValueError, "override release files"):
             CUTOVER.verify_database_mount(mounts, self.paths)
+
+    def test_supervisor_requires_the_protected_fence_mount(self) -> None:
+        """A supervised image must share the exact host lock namespace."""
+        data = ("/data", str(self.paths.database.parent), "bind", True)
+        fence = (CUTOVER.FENCE_TARGET, str(self.paths.fence), "bind", True)
+        CUTOVER.verify_database_mount([data, fence], self.paths, True)
+        with self.assertRaisesRegex(ValueError, "protected writer fence"):
+            CUTOVER.verify_database_mount([data], self.paths, True)
+
+    def test_supervisor_rejects_an_app_without_a_required_fence(self) -> None:
+        """Setting a mount alone cannot make a legacy app use the fence."""
+        source = self.work / "next"
+        with self.assertRaisesRegex(ValueError, "does not require"):
+            CUTOVER.require_runtime_owner(source, True)
+        (source / "app.py").write_text('"SVT_FENCE_DIR_REQUIRED"\n')
+        CUTOVER.require_runtime_owner(source, True)
+
+    def test_remove_refuses_an_active_or_unrelated_container(self) -> None:
+        """Handoff may remove only one of the exact stopped image pairs."""
+        saved = {"previous": OLD, "pair": NEW}
+        for image, status in (
+            (CUTOVER.image_pin(OLD["digest"]), "running"),
+            (CUTOVER.image_pin("sha256:" + "c" * 64), "exited"),
+        ):
+            with (
+                patch.object(
+                    CUTOVER, "run", return_value=CUTOVER.CONTAINER
+                ) as run,
+                patch.object(
+                    CUTOVER, "docker_state", return_value=(image, status, "no")
+                ),
+                self.assertRaisesRegex(
+                    ValueError, "unconfirmed stopped container"
+                ),
+            ):
+                CUTOVER.remove_stopped_pair(saved)
+            self.assertEqual(run.call_count, 1)
+
+    def test_gate_releases_the_supervisor_after_the_legacy_marker(
+        self,
+    ) -> None:
+        """Keep Docker fenced until the legacy pending marker is gone."""
+        CUTOVER.make_marker(self.paths, self.work)
+        self.paths.fence.mkdir()
+        (self.paths.fence / ".svt-update-pending").write_text(
+            self.work.name + "\n"
+        )
+        with patch.object(CUTOVER, "control_fence") as control:
+            control.side_effect = lambda *_: self.assertFalse(
+                self.paths.marker.exists()
+            )
+            CUTOVER.open_candidate_gate(
+                self.paths, self.work, {"supervised": True}
+            )
+            control.assert_called_once_with(
+                self.paths, self.work, "clear", self.paths.source
+            )
 
     def test_candidate_requires_guarded_boot_unit(self) -> None:
         """Reject a source package that enables an unguarded boot path."""
