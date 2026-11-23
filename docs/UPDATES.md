@@ -472,10 +472,11 @@ plus the three release assets and the independently confirmed current
 Telegram photo ID. The `prepare` command verifies the signatures and
 stages a private copy of the source and configuration.
 
-The `activate` command freezes the previous runtime and any temporary
-photo editor, then verifies a full SQLite rescue while the writer is
-stopped. It installs the checked source and pinned OCI as one protected
-transition. The installed systemd startup guard blocks partial state.
+The `activate` command installs the signed startup guard before it
+freezes the previous runtime and any temporary photo editor. It verifies
+a full SQLite rescue while the writer is stopped, then installs the
+checked source and pinned OCI. The guard stops systemd start and reload
+while the transition is incomplete, including after a host restart.
 The public receipt is published after three healthy reads and a matching
 photo binding. A temporary editor stays disabled once activation begins.
 

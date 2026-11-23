@@ -38,6 +38,11 @@ CURRENT_UNIT = (
     "apply-update.sh --guarded-start\nExecReload=/bin/bash "
     "/opt/shelly-voltage/scripts/apply-update.sh --guarded-start\n"
 )
+LEGACY_UNIT = (
+    "[Service]\nExecStart=/bin/bash /opt/shelly-voltage/scripts/"
+    "start-compose.sh\nExecReload=/bin/bash "
+    "/opt/shelly-voltage/scripts/start-compose.sh\n"
+)
 
 
 def fixture_source(directory: Path, version: str) -> None:
@@ -46,6 +51,7 @@ def fixture_source(directory: Path, version: str) -> None:
     for name in ("VERSION", "RELEASE_VERSION"):
         (directory / name).write_text(version + "\n")
     (directory / "scripts").mkdir()
+    (directory / "scripts" / "apply-update.sh").write_text("#!/bin/bash\n")
     (directory / "systemd").mkdir()
     (directory / "systemd" / CUTOVER.MONITOR).write_text(CURRENT_UNIT)
     (directory / "compose.yaml").write_text("services: {}\n")
@@ -103,7 +109,7 @@ class ForwardCutoverTests(unittest.TestCase):
         (paths.state / "override.yaml").write_text(
             f"services:\n  shelly-voltage:\n    image: {pin}\n"
         )
-        paths.unit.write_text(OLD["version"])
+        paths.unit.write_text(LEGACY_UNIT)
         with closing(sqlite3.connect(paths.database)) as db, db:
             db.executescript(
                 "PRAGMA journal_mode=WAL;"
@@ -247,7 +253,7 @@ class ForwardCutoverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "injected reload failure"):
             CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
         self.assertEqual(CUTOVER.read_pair(self.paths), OLD)
-        self.assertEqual(self.paths.unit.read_text(), OLD["version"])
+        self.assertEqual(self.paths.unit.read_text(), LEGACY_UNIT)
         self.assertFalse(self.paths.marker.exists())
         self.assertEqual(self.journal()["phase"], "recovered")
         self.assertEqual(
@@ -257,10 +263,37 @@ class ForwardCutoverTests(unittest.TestCase):
         self.assertEqual(self.timer, "active")
         self.assert_history([222])
 
+    def test_legacy_start_and_reload_are_guarded_before_marker(self) -> None:
+        """Fence the old systemd unit before the cutover can be interrupted."""
+        original = CUTOVER.make_marker
+
+        def abort_after_marker(paths, work):
+            helper = work / "boot-guard.sh"
+            expected = f"/bin/bash {helper} --guarded-start"
+            commands = CUTOVER.startup_commands(paths.unit.read_bytes())
+            self.assertEqual(commands, CUTOVER.startup_pair(expected))
+            self.assertEqual(self.runtime[2], "no")
+            self.assertTrue(helper.exists())
+            original(paths, work)
+            raise KeyboardInterrupt
+
+        with (
+            patch.object(
+                CUTOVER, "make_marker", side_effect=abort_after_marker
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertTrue(self.paths.marker.exists())
+        CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(self.paths.unit.read_text(), LEGACY_UNIT)
+        self.assert_history([222])
+
     def test_recovers_interruption_between_source_renames(self) -> None:
         """The durable marker permits recovery with the live path absent."""
         saved = CUTOVER.capture(self.paths, self.work, NEW, PHOTO)
         CUTOVER.save_phase(self.work, saved, "preboot")
+        CUTOVER.arm_boot_guard(self.paths, self.work)
         CUTOVER.freeze(self.paths, self.work, saved)
         os.rename(self.paths.source, self.work / "previous")
         CUTOVER.recover(self.paths, self.work)

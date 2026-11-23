@@ -30,6 +30,11 @@ PHOTO_SERVICE = "shelly-incident-photo-refresh.service"
 CONTAINER = "shelly-voltage-bot"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
 READY = "http://127.0.0.1:8080/ready"
+LEGACY_START = "/bin/bash /opt/shelly-voltage/scripts/start-compose.sh"
+GUARDED_START = (
+    "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start"
+)
+START_DIRECTIVES = ("ExecStart=", "ExecReload=")
 ID_PATTERN = re.compile(r"cutover-[A-Za-z0-9_]{8}\Z")
 PHOTO_PATTERN = re.compile(r"[1-9][0-9]{0,18}\Z")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}\Z")
@@ -494,7 +499,9 @@ def capture(paths: Layout, work: Path, pair: dict, photo: str) -> dict:
             work / f"previous-{name}", (paths.state / name).read_bytes()
         )
     verify_current_mounts(paths)
-    write_file(work / "previous.service", paths.unit.read_bytes())
+    previous_unit = paths.unit.read_bytes()
+    bridge_unit(previous_unit, work / "boot-guard.sh")
+    write_file(work / "previous.service", previous_unit)
     state = {
         "phase": "staged",
         "pair": pair,
@@ -584,19 +591,56 @@ def guarded_unit(source: Path) -> bytes:
     path = source / "systemd" / MONITOR
     safe_path(path)
     payload = path.read_bytes()
-    commands = [
-        line.strip()
-        for line in payload.decode().splitlines()
-        if line.strip().startswith(("ExecStart", "ExecReload"))
-    ]
-    guard = (
-        "/bin/bash /opt/shelly-voltage/scripts/apply-update.sh --guarded-start"
-    )
-    if commands != [f"ExecStart={guard}", f"ExecReload={guard}"]:
+    if startup_commands(payload) != startup_pair(GUARDED_START):
         raise ValueError(
             "candidate systemd unit lacks the expected startup guard"
         )
     return payload
+
+
+def startup_commands(payload: bytes) -> list[str]:
+    """Identify every start and reload command, including overrides."""
+    return [
+        line.strip()
+        for line in payload.decode().splitlines()
+        if line.strip().startswith(START_DIRECTIVES)
+    ]
+
+
+def startup_pair(command: str) -> list[str]:
+    """Use the same guarded command for start and reload."""
+    return [f"{directive}{command}" for directive in START_DIRECTIVES]
+
+
+def bridge_unit(previous: bytes, helper: Path) -> bytes:
+    """Keep the existing unit settings and guard start and reload."""
+    commands = startup_commands(previous)
+    if commands not in (
+        startup_pair(LEGACY_START),
+        startup_pair(GUARDED_START),
+    ):
+        raise ValueError("the current systemd startup recipe is unrecognized")
+    replacement = dict(
+        zip(commands, startup_pair(f"/bin/bash {helper} --guarded-start"))
+    )
+    return (
+        "\n".join(
+            replacement.get(line.strip(), line)
+            for line in previous.decode().splitlines()
+        )
+        + "\n"
+    ).encode()
+
+
+def arm_boot_guard(paths: Layout, work: Path) -> None:
+    """Install the signed startup guard before publishing any pending state."""
+    release_script = work / "next" / "scripts" / "apply-update.sh"
+    safe_path(release_script)
+    helper = work / "boot-guard.sh"
+    write_file(helper, release_script.read_bytes())
+    previous = (work / "previous.service").read_bytes()
+    write_file(paths.unit, bridge_unit(previous, helper), 0o644)
+    run("systemctl", "daemon-reload")
 
 
 def marker_bytes(work: Path) -> bytes:
@@ -704,10 +748,10 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
         write_file(
             paths.state / name, (work / f"previous-{name}").read_bytes()
         )
-    write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
-    run("systemctl", "daemon-reload")
     if read_pair(paths) != saved["previous"]:
         raise ValueError("the previous source and pin could not be verified")
+    write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
+    run("systemctl", "daemon-reload")
     if marked:
         clear_marker(paths, work)
     save_phase(work, saved, "previous-pair-restored")
@@ -757,6 +801,7 @@ def seal_pair(paths: Layout, work: Path, saved: dict) -> None:
     """Make the switch recoverable before unlocking the systemd start path."""
     save_phase(work, saved, "preboot")
     try:
+        arm_boot_guard(paths, work)
         freeze(paths, work, saved)
         install_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
