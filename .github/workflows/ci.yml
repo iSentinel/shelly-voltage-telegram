@@ -19,9 +19,31 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install v5 font packages
+        shell: bash
+        timeout-minutes: 6
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fonts-inter fonts-noto-core
+          set -euo pipefail
+          apt_options=(
+            -o Acquire::Retries=2
+            -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20
+          )
+          for attempt in 1 2 3; do
+            if sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update \
+              && sudo apt-get "${apt_options[@]}" install -y \
+                --no-install-recommends fonts-inter fonts-noto-core; then
+              break
+            fi
+            if (( attempt == 3 )); then
+              echo "ERROR: required v5 fonts unavailable" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+          for package in fonts-inter fonts-noto-core; do
+            dpkg-query -W -f='${Status}\n' "$package" \
+              | grep -qx "install ok installed"
+          done
       - name: Install runtime dependencies
         run: python -m pip install -r requirements.txt
       - name: Install quality tools
