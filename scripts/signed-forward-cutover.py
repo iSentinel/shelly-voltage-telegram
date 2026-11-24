@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Activate signed source and OCI together while retaining current SQLite."""
+"""Check and switch signed source and OCI while retaining current SQLite."""
 
 from __future__ import annotations
 
@@ -43,6 +43,24 @@ GUARDED_START = (
 FENCE_TARGET = "/run/svt-fence"
 SUPERVISOR_OVERLAY = "deploy/compose.supervised-candidate.yml"
 SUPERVISOR_TEMPLATE = "deploy/shelly-voltage-supervised.candidate.unit"
+ROLLBACK_SUPERVISOR_FILES = frozenset(
+    (
+        SUPERVISOR_OVERLAY,
+        SUPERVISOR_TEMPLATE,
+        "scripts/prepare-writer-fence.py",
+        "scripts/supervised-container.py",
+        "scripts/writer-fence-marker.py",
+    )
+)
+MONITOR_FILES = frozenset(
+    (
+        ".dockerignore",
+        "Dockerfile",
+        "requirements.txt",
+        "app.py",
+        "writer_fence.py",
+    )
+)
 SOURCE_ARCHIVE_ARG = (
     "--source-archive-dir /var/lib/shelly-voltage-updater/signed-source"
 )
@@ -587,6 +605,80 @@ def verify_installed_supervisor(paths: Layout, receipt: dict) -> None:
     pending = paths.fence / ".svt-update-pending"
     if pending.exists() or pending.is_symlink():
         raise ValueError("an existing writer-fence update is pending")
+
+
+def archived_monitor_inputs(
+    archive: Path, version: str, approved_sha: str
+) -> dict[str, str]:
+    """Hash the Python sources and build inputs without extracting files."""
+    prefix = f"shelly-voltage-telegram-{version}/"
+    inputs = {}
+    supervisor = set()
+    with archive.open("rb") as stream:
+        if hashlib.file_digest(stream, "sha256").hexdigest() != approved_sha:
+            raise ValueError("rollback source archive changed")
+        stream.seek(0)
+        with tarfile.open(fileobj=stream, mode="r:gz") as tar:
+            for member in tar:
+                if not member.name.startswith(prefix):
+                    continue
+                name = member.name.removeprefix(prefix)
+                if not member.isfile():
+                    continue
+                if name in ROLLBACK_SUPERVISOR_FILES:
+                    supervisor.add(name)
+                if name in MONITOR_FILES or (
+                    "/" not in name and name.endswith(".py")
+                ):
+                    if name in inputs:
+                        raise ValueError("duplicate archived monitor file")
+                    with tar.extractfile(member) as source:
+                        inputs[name] = hashlib.file_digest(
+                            source, "sha256"
+                        ).hexdigest()
+    if not inputs.keys() >= MONITOR_FILES:
+        raise ValueError("signed archive lacks monitor build inputs")
+    if supervisor != ROLLBACK_SUPERVISOR_FILES:
+        raise ValueError("signed archive lacks supervisor files")
+    return inputs
+
+
+def rollback_preflight(paths: Layout, args: argparse.Namespace) -> dict:
+    """Report a potential rollback pair without stopping the live writer."""
+    if not PHOTO_PATTERN.fullmatch(args.photo):
+        raise ValueError("the confirmed photo ID is invalid")
+    proposed = signed_candidate(args)
+    current, _, supervised = installed_runtime(paths, True)
+    if not supervised:
+        raise ValueError("rollback preflight requires a verified supervisor")
+    if updater.version_tuple(proposed["version"]) >= updater.version_tuple(
+        current["version"]
+    ):
+        raise ValueError("rollback target must be older than installed")
+    anchor = paths.home / current["transaction_token"]
+    installed_inputs = archived_monitor_inputs(
+        retained_archive(anchor, current["version"]),
+        current["version"],
+        current["source_sha256"],
+    )
+    if installed_inputs != archived_monitor_inputs(
+        args.archive, proposed["version"], proposed["archive_sha256"]
+    ):
+        raise ValueError("signed monitor sources or build inputs differ")
+    verify_current_mounts(paths, True)
+    updater.preflight(paths.database, READY)
+    read_photo(paths, args.photo)
+    if installed_runtime(paths, True)[0] != current:
+        raise ValueError("installed release changed during rollback preflight")
+    return {
+        "status": "PASS_ROLLBACK_PAIR_PREFLIGHT_ONLY",
+        "installed_version": current["version"],
+        "target_version": proposed["version"],
+        "target_commit": proposed["commit"],
+        "target_digest": proposed["digest"],
+        "monitor_inputs_match": True,
+        "rollback_authorized": False,
+    }
 
 
 def capture(
@@ -1423,20 +1515,21 @@ def start_previous(paths: Layout, work: Path, saved: dict) -> None:
 
 
 def options() -> argparse.Namespace:
-    """Expose preparation, explicit activation and interrupted recovery."""
+    """Expose preparation, preflight, activation and interrupted recovery."""
     cli = argparse.ArgumentParser(description=__doc__)
     modes = cli.add_subparsers(dest="action", required=True)
-    for mode in ("prepare", "activate"):
+    for mode in ("prepare", "activate", "check-rollback"):
         command = modes.add_parser(mode)
         for name in ("version", "commit", "digest", "archive-sha256", "photo"):
             command.add_argument(f"--{name}", required=True)
         for name in ("archive", "bundle", "sha256sums"):
             command.add_argument(f"--{name}", type=Path, required=True)
-        command.add_argument(
-            "--supervised",
-            action="store_true",
-            help="install or update the protected sole writer",
-        )
+        if mode != "check-rollback":
+            command.add_argument(
+                "--supervised",
+                action="store_true",
+                help="install or update the protected sole writer",
+            )
     for mode in ("recover", "sync-release-check"):
         modes.add_parser(mode).add_argument("--transaction", required=True)
     return cli.parse_args()
@@ -1481,6 +1574,9 @@ def main() -> int:
     try:
         if os.geteuid() != 0:
             raise ValueError("root is required")
+        if args.action == "check-rollback":
+            print(json.dumps(rollback_preflight(paths, args)))
+            return 0
         paths.home.mkdir(mode=0o700, exist_ok=True)
         if stat.S_IMODE(safe_path(paths.home, folder=True).st_mode) != 0o700:
             raise ValueError("cutover home must have private permissions")
