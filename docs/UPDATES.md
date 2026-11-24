@@ -317,19 +317,24 @@ unsigned images or automatic installation.
 ## Host services
 
 - `shelly-voltage-update-check.timer` checks every 24 hours after the previous
-  activation, beginning after a short delay on boot.
+  activation, beginning after a short delay on boot. The installer starts
+  the timer when it enables it.
 - `shelly-voltage-update-check.service` runs an unprivileged, read-only
-  release check and stores JSON in `/var/lib/shelly-voltage-update-check/status.json`.
-- The daily checker directory contains only nonsensitive version status. Root
-  snapshots and secret backups remain in a separate restricted directory.
+  release check. systemd supplies read-only copies of the checker and its
+  version inputs without granting access to the private project tree.
+- Read the timer's result from
+  `/var/lib/shelly-voltage-release-check/status.json`. Manual checks still
+  default to the status file under `--state`. The updater's
+  `/var/lib/shelly-voltage-update-check/deployed.json` remains a separate
+  root-managed input.
 - `shelly-voltage-updater-apply@.service` is a root-only **manual** oneshot
   service. It has no Install section, timer, or automatic trigger.
 - `shelly-voltage-compose.service` uses `scripts/start-compose.sh` to
   preserve a pinned image choice after a host reboot.
 - On every Compose service start, `ExecStartPre` calls the root-only
-  `apply-update.sh --recover` mode. A private pending-update marker triggers
-  restoration of the previous image selection and SQLite snapshot *before*
-  allowing the service to start.
+  `apply-update.sh --recover` mode. A pending update permits recovery of
+  the previous image selection only after the current SQLite history
+  matches the private archive.
 
 **Cosign v3 or newer is required.** Debian Trixie's Cosign 2.5.0 reports
 `no signatures found` for the project's published OCI signatures, while
@@ -376,20 +381,41 @@ installation.
 Before changing the Compose image, the updater takes a restricted snapshot of
 the SQLite database, environment file, secrets, and previous image choice.
 The image is pinned by immutable digest. After replacement, it requires
-`/health`, fresh `/ready` status and a second electrical preflight. A failed
-update restores the previous image choice and the backed-up database, keeping
-a separate rescue copy of the post-failure database. Inspect the rescue
-copy before discarding any measurements created during the upgrade window.
+`/health`, fresh `/ready` status and a second electrical preflight. If the
+update fails, recovery compares the complete SQLite schema, history and
+metadata with the checksummed archive. The read-only comparison includes
+committed changes still in the WAL.
 
 The updater writes a durable pending-update marker before selecting the
 new image. The marker is cleared only after the replacement passes health,
-readiness and electrical checks. If the host restarts mid-upgrade, systemd
-restores the original image and SQLite before launching the Compose stack.
-An invalid snapshot or marker fails closed and keeps the pending state for
-manual recovery. The earliest post-failure rescue database is preserved on
-repeated recovery attempts.
+readiness and electrical checks. Recovery checks history before stopping the
+Compose service, again after it stops, and before clearing the marker.
+It also requires Docker to confirm that the monitor container is stopped.
+The snapshot's deployment receipt and pin must agree before any stop.
+With matching history, it restores the previous image selection and leaves
+the live SQLite file in place. If the archive is invalid or history differs,
+it retains the pending marker and the live database for review.
+The updater refuses another deployment while this marker remains.
 
-Boot recovery was additionally tested through three real, controlled
+After a real interruption, use the pending marker to locate the private
+snapshot and verify the active image and database before resuming service.
+The common writer fence and controlled startup when recovery is blocked are
+tracked in [issue #340](https://github.com/iSentinel/shelly-voltage-telegram/issues/340).
+
+The private deployment receipt is the source for public version status.
+After activation commits, the updater replaces public `deployed.json`
+atomically with the version and the immutable image digest after checking
+that the private receipt matches the Compose pin. Publication refuses a
+public path that points back to the private directory. Exit code 4 means
+activation completed but the updater could
+not confirm the committed state or synchronize the public receipt. Use
+`apply-update.sh --sync-public-version` to retry only publication after
+checking the reported error. This command refuses to run while recovery
+is pending. Startup also retries publication from the committed receipt.
+A public status error after commit leaves the active image and SQLite in
+place.
+
+The earlier boot recovery flow was tested through three controlled
 reboots of disposable LXC 111: an interrupted update was restored, a malformed
 pending marker blocked startup, and a corrupted backup checksum blocked
 restoration until corrected. These tests do **not** simulate uncontrolled
@@ -464,11 +490,12 @@ Production stays on published `0.5.12-hw` until those gates pass.
 ### Switch the signed source and OCI together
 
 The default path supports releases that can start under legacy Compose.
-Use `--supervised` on both `prepare` and `activate` for the first
-migration from the legacy service to the fenced sole-writer supervisor.
+Use `--supervised` on both `prepare` and `activate` to migrate from
+the legacy service or to upgrade an already verified supervisor.
 Preparation validates the signed supervisor unit and effective Compose
 plan, including the required read-write fence and the current SQLite
-mount. Existing supervisor installations require their own update path.
+mount. For an existing supervisor it also checks the previous verified
+transaction and its retained source archive.
 
 Use the reviewed operator checkout of
 `scripts/signed-forward-cutover.py --help` to prepare or activate a
@@ -492,8 +519,10 @@ photo binding. A temporary editor stays disabled once activation begins.
 
 With `--supervised`, the updater stops the previous writer, takes the
 cold SQLite rescue, fences both startup paths, and removes only the
-confirmed stopped container. It disables and retires the old unit
-before enabling the supervisor. The supervisor rechecks the signed
+confirmed stopped container. On the first migration it disables and
+retires the legacy unit. On subsequent upgrades it keeps the shared
+writer lock and saves the previous supervisor unit for recovery before
+the candidate may run. The active supervisor rechecks the signed
 source archive retained in the transaction directory on every startup.
 Keep this directory for as long as the installed unit points to it.
 

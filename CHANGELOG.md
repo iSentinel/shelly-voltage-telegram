@@ -1,3 +1,14 @@
+## 0.5.28-hw - supervised updates and release checks
+
+- Upgrade an already supervised monitor with a signed source archive
+  and pinned container image. Keep the same SQLite and writer lock.
+- Restore the previous supervised release if an update stops before
+  the new monitor can run. Resume the candidate after it can write.
+- Run the scheduled release check with a dedicated systemd identity.
+- Preserve current SQLite writes during legacy recovery and reconcile
+  the public version receipt with the installed release.
+- Retry transient CI font downloads within a fixed time limit.
+
 ## 0.5.27-hw - guarded Docker startup
 
 - Keep Docker from restarting the voltage monitor before systemd checks

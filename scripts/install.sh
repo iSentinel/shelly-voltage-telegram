@@ -387,7 +387,8 @@ install_units() {
         run cp "$TARGET/systemd/$unit" "/etc/systemd/system/$unit"
     done
     run systemctl daemon-reload
-    run systemctl enable shelly-voltage-compose.service shelly-voltage-backup.timer shelly-voltage-update-check.timer
+    run systemctl enable shelly-voltage-compose.service shelly-voltage-backup.timer
+    run systemctl enable --now shelly-voltage-update-check.timer
 }
 
 await_signed_ready() {

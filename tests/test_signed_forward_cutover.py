@@ -1,5 +1,6 @@
 """Exercise the signed cutover and its interruption points with real SQLite."""
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -87,6 +88,8 @@ class ForwardCutoverTests(unittest.TestCase):
             "unless-stopped",
         )
         self.timer = "active"
+        self.supervisor_mode = False
+        self.container_exists = True
         self.calls = []
         self.failed_reload = False
         self.prepare_disk()
@@ -140,30 +143,49 @@ class ForwardCutoverTests(unittest.TestCase):
             )
             return ""
         if args[:2] == ("docker", "inspect"):
-            if args[3] == "{{json .Mounts}}":
-                return json.dumps(
-                    [
-                        {
-                            "Destination": "/data",
-                            "Source": str(self.paths.database.parent),
-                            "Type": "bind",
-                            "RW": True,
-                        }
-                    ]
-                )
-            if "DATABASE_PATH" in args[3]:
-                return f"DATABASE_PATH=/data/{self.paths.database.name}"
-            return "|".join(self.runtime)
+            return self.inspect_response(args[3])
         if args[:2] == ("docker", "update"):
             self.runtime = (*self.runtime[:2], args[2].split("=")[-1])
             return ""
         if args[:2] == ("docker", "compose"):
             return self.compose_config()
-        if args[0] == "sync":
+        if args[:2] == ("docker", "ps"):
+            return CUTOVER.CONTAINER if self.container_exists else ""
+        if args[:2] == ("docker", "rm"):
+            self.container_exists = False
+            return ""
+        if args[0] in ("sync", "systemd-analyze"):
             return ""
         if args[0] == "systemctl":
             return self.systemd(args)
         raise AssertionError(args)
+
+    def inspect_response(self, template: str) -> str:
+        """Return only the Docker fields read by the updater."""
+        if template == "{{json .Mounts}}":
+            mounts = [
+                {
+                    "Destination": "/data",
+                    "Source": str(self.paths.database.parent),
+                    "Type": "bind",
+                    "RW": True,
+                }
+            ]
+            if self.supervisor_mode:
+                mounts.append(
+                    {
+                        "Destination": CUTOVER.FENCE_TARGET,
+                        "Source": str(self.paths.fence),
+                        "Type": "bind",
+                        "RW": True,
+                    }
+                )
+            return json.dumps(mounts)
+        if "DATABASE_PATH" in template:
+            return f"DATABASE_PATH=/data/{self.paths.database.name}"
+        if "SVT_WRITER_FENCE_DIR" in template:
+            return f"SVT_WRITER_FENCE_DIR={CUTOVER.FENCE_TARGET}"
+        return "|".join(self.runtime)
 
     def compose_config(self) -> str:
         """Return the fixture's effective candidate mount and image."""
@@ -181,31 +203,52 @@ class ForwardCutoverTests(unittest.TestCase):
                 }
             ],
         }
+        if self.supervisor_mode:
+            monitor["environment"]["SVT_WRITER_FENCE_DIR"] = (
+                CUTOVER.FENCE_TARGET
+            )
+            monitor["volumes"].append(
+                {
+                    "type": "bind",
+                    "target": CUTOVER.FENCE_TARGET,
+                    "source": str(self.paths.fence),
+                }
+            )
         return json.dumps({"services": {"shelly-voltage": monitor}})
+
+    def systemd_property(self, prop: str, unit: str, owner: str) -> str:
+        """Report the installed unit paths and the current service state."""
+        if prop == "FragmentPath":
+            if unit == CUTOVER.SUPERVISOR:
+                return str(self.paths.supervisor_unit)
+            return str(self.paths.unit)
+        if prop == "DropInPaths":
+            return ""
+        if prop == "UnitFileState":
+            if self.supervisor_mode and unit != owner:
+                return "disabled"
+            return "enabled"
+        if unit == owner:
+            return "active" if self.runtime[1] == "running" else "inactive"
+        return self.timer if unit == CUTOVER.PHOTO_TIMER else "inactive"
 
     def systemd(self, args: tuple[str, ...]) -> str:
         """Reject an unsafe startup even when the test injected an error."""
+        owner = CUTOVER.SUPERVISOR if self.supervisor_mode else CUTOVER.MONITOR
         if args[1] == "show":
-            if args[3] == "FragmentPath":
-                return str(self.paths.unit)
-            if args[3] == "DropInPaths":
-                return ""
-            if args[3] == "UnitFileState":
-                return "enabled"
-            if args[-1] == CUTOVER.MONITOR:
-                return "active" if self.runtime[1] == "running" else "inactive"
-            return (
-                self.timer if args[-1] == CUTOVER.PHOTO_TIMER else "inactive"
-            )
+            return self.systemd_property(args[3], args[-1], owner)
         if args[1] == "daemon-reload" and self.failed_reload:
             self.failed_reload = False
             raise ValueError("injected reload failure")
         if args[1] == "is-enabled":
             return "enabled"
-        if args[-1] == CUTOVER.MONITOR and args[1] == "stop":
+        if args[-1] == owner and args[1] == "stop":
             self.runtime = (self.runtime[0], "exited", self.runtime[2])
-        if args[-1] == CUTOVER.MONITOR and args[1] == "start":
-            if self.paths.marker.exists():
+        if args[-1] == owner and args[1] == "start":
+            if (
+                self.paths.marker.exists()
+                or (self.paths.fence / ".svt-update-pending").exists()
+            ):
                 raise AssertionError("startup raced the pending journal")
             selected = CUTOVER.read_pair(self.paths)
             self.runtime = (
@@ -213,11 +256,63 @@ class ForwardCutoverTests(unittest.TestCase):
                 "running",
                 "no",
             )
+            self.container_exists = True
         if args[-1] == CUTOVER.PHOTO_TIMER and args[1] == "stop":
             self.timer = "inactive"
         if args[-1] == CUTOVER.PHOTO_TIMER and args[1] == "start":
             self.timer = "active"
         return ""
+
+    def existing_supervisor(self) -> dict:
+        """Install a previous signed receipt and retained unit fixture."""
+        self.supervisor_mode = True
+        self.timer = "inactive"
+        self.runtime = (*self.runtime[:2], "no")
+        paths = self.paths
+        paths.fence.mkdir()
+        unit_template = (
+            f"[Service]\nExecStart=/bin/true {CUTOVER.SOURCE_ARCHIVE_ARG}\n"
+        )
+        for folder in (paths.source, self.work / "next"):
+            (folder / "deploy").mkdir()
+            (folder / CUTOVER.SUPERVISOR_TEMPLATE).write_text(unit_template)
+            (folder / CUTOVER.SUPERVISOR_OVERLAY).write_text("services: {}")
+            (folder / "app.py").write_text('"SVT_FENCE_DIR_REQUIRED"\n')
+        token = "cutover-OLD12345"
+        prior = paths.home / token
+        (prior / "release-archive").mkdir(parents=True)
+        archive = (
+            prior / "release-archive/shelly-voltage-telegram-0.5.25-hw.tar.gz"
+        )
+        archive.write_bytes(b"signed archive fixture")
+        old = {
+            **OLD,
+            "transaction_token": token,
+            "source_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        }
+        CUTOVER.record(paths.state / "deployed.json", old)
+        CUTOVER.record(
+            prior / "transaction.json", {"phase": "verified", "pair": old}
+        )
+        paths.unit.write_bytes(CUTOVER.INERT_LEGACY_UNIT)
+        paths.supervisor_unit.write_bytes(
+            CUTOVER.supervisor_unit(paths.source, prior)
+        )
+        patch.object(
+            CUTOVER, "control_fence", side_effect=self.control_fence
+        ).start()
+        return old
+
+    def control_fence(self, paths, work, action, _source):
+        """Track the same shared pending marker used by the signed writer."""
+        marker = paths.fence / ".svt-update-pending"
+        if action == "publish":
+            self.assertFalse(marker.exists())
+            marker.write_text(f"{work.name}\n")
+        else:
+            self.assertFalse(paths.marker.exists())
+            self.assertEqual(marker.read_text(), f"{work.name}\n")
+            marker.unlink()
 
     def journal(self) -> dict:
         """Read the durable local transaction status."""
@@ -249,6 +344,75 @@ class ForwardCutoverTests(unittest.TestCase):
         self.assertEqual(
             receipt, {key: NEW[key] for key in ("version", "digest")}
         )
+        self.assert_history([222])
+
+    def test_supervised_upgrade_preserves_fence_and_database(self):
+        """Replace a running supervised pair and keep its writer lock."""
+        self.existing_supervisor()
+        fence = self.paths.fence.stat().st_ino
+        CUTOVER.activate(self.paths, self.work, NEW, PHOTO, True)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(CUTOVER.read_pair(self.paths), NEW)
+        self.assertEqual(self.paths.fence.stat().st_ino, fence)
+        self.assertEqual(
+            self.paths.unit.read_bytes(), CUTOVER.INERT_LEGACY_UNIT
+        )
+        self.assertNotIn(("systemctl", "disable", CUTOVER.MONITOR), self.calls)
+        self.assertFalse(self.paths.marker.exists())
+        self.assertFalse(CUTOVER.fence_pending(self.paths, self.work))
+        self.assert_history([222])
+
+    def test_supervised_preboot_interruption_restores_the_previous_unit(self):
+        """Recover the previous supervisor after a source and pin switch."""
+        old = self.existing_supervisor()
+        old_unit = self.paths.supervisor_unit.read_bytes()
+        install = CUTOVER.install_pair
+
+        def interrupt(*args):
+            install(*args)
+            raise KeyboardInterrupt
+
+        with (
+            patch.object(CUTOVER, "install_pair", side_effect=interrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO, True)
+        self.assertTrue(CUTOVER.fence_pending(self.paths, self.work))
+        CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(self.journal()["phase"], "recovered")
+        self.assertEqual(CUTOVER.read_pair(self.paths), old)
+        self.assertEqual(self.paths.supervisor_unit.read_bytes(), old_unit)
+        self.assertFalse(CUTOVER.fence_pending(self.paths, self.work))
+        self.assert_history([222])
+
+    def test_supervised_postboot_recovery_preserves_new_writes(self):
+        """After candidate startup, retain it and the newest SQLite history."""
+        self.existing_supervisor()
+
+        def interrupt(*_args):
+            with closing(sqlite3.connect(self.paths.database)) as db, db:
+                db.execute("INSERT INTO measurements VALUES (223)")
+            raise OSError("injected receipt failure")
+
+        with (
+            patch.object(CUTOVER, "publish_version", side_effect=interrupt),
+            self.assertRaisesRegex(OSError, "injected receipt failure"),
+        ):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO, True)
+        self.assertEqual(self.journal()["phase"], "candidate-may-have-run")
+        CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(CUTOVER.read_pair(self.paths), NEW)
+        self.assert_history([222, 223])
+
+    def test_supervised_unverified_previous_receipt_blocks_before_stop(self):
+        """Require a verified previous transaction before stopping it."""
+        previous = self.existing_supervisor()
+        prior = self.paths.home / previous["transaction_token"]
+        CUTOVER.record(prior / "transaction.json", {"phase": "preboot"})
+        with self.assertRaisesRegex(ValueError, "not verified"):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO, True)
+        self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
         self.assert_history([222])
 
     def test_preboot_failure_restores_the_original_pair(self) -> None:

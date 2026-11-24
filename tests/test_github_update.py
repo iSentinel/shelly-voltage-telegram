@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
@@ -96,6 +97,68 @@ class ReleaseUpdaterTests(unittest.TestCase):
             updater, "published_release", return_value=self.latest
         ):
             self.assertFalse(updater.check(self.root, self.state)["available"])
+
+    def test_scheduled_check_respects_version_input_priority(self):
+        """Use the deployed version, then release metadata, then VERSION."""
+        credentials = self.base / "credentials"
+        credentials.mkdir()
+        deployed = credentials / "deployed.json"
+        release = credentials / "RELEASE_VERSION"
+        (credentials / "VERSION").write_text("0.5.10-hw\n")
+        values = (
+            (json.dumps({"version": "0.5.12-hw"}), "0.5.11-hw", "0.5.12-hw"),
+            (updater.ABSENT_CREDENTIAL, "0.5.11-hw", "0.5.11-hw"),
+            (
+                updater.ABSENT_CREDENTIAL,
+                updater.ABSENT_CREDENTIAL,
+                "0.5.10-hw",
+            ),
+        )
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
+            for receipt, marker, expected in values:
+                deployed.write_text(receipt)
+                release.write_text(marker)
+                status = updater.check(self.root, self.state, credentials)
+                self.assertEqual(status["installed"], expected)
+                self.assertFalse(status["auto_install"])
+
+    def test_invalid_installed_receipt_does_not_fall_back(self):
+        """An existing malformed receipt is still an error."""
+        self.state.mkdir()
+        (self.state / "deployed.json").write_text("")
+        with self.assertRaises(ValueError):
+            updater.installed_version(self.root, self.state)
+
+    def test_checker_can_write_status_outside_the_input_directory(self):
+        """Create the report without writing into its read-only inputs."""
+        self.state.mkdir()
+        receipt = self.state / "deployed.json"
+        version = json.dumps({"version": "0.5.12-hw"})
+        receipt.write_text(version)
+        output = self.base / "checker-state" / "status.json"
+        args = [
+            "github_update.py",
+            "check",
+            "--credentials",
+            str(self.state),
+            "--status-file",
+            str(output),
+        ]
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(
+                updater, "published_release", return_value=self.latest
+            ),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(updater.main(), 0)
+        status = json.loads(output.read_text())
+        self.assertEqual(status["installed"], "0.5.12-hw")
+        self.assertFalse(status["auto_install"])
+        self.assertEqual(receipt.read_text(), version)
+        self.assertFalse((self.state / "status.json").exists())
 
     def test_refuse_unpublished_or_prerelease(self):
         """A draft or unlisted archive cannot become an update."""

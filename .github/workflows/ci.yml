@@ -48,15 +48,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install v5 font packages
         shell: bash
+        timeout-minutes: 6
         run: |
           set -euo pipefail
+          apt_options=(
+            -o Acquire::Retries=2
+            -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20
+          )
           for attempt in 1 2 3; do
-            if sudo apt-get -o Acquire::Retries=2 \
-                -o Acquire::http::Timeout=20 \
-                -o Acquire::https::Timeout=20 update \
-              && sudo apt-get -o Acquire::Retries=2 \
-                -o Acquire::http::Timeout=20 \
-                -o Acquire::https::Timeout=20 install -y \
+            if sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update \
+              && sudo apt-get "${apt_options[@]}" install -y \
                 --no-install-recommends fonts-inter fonts-noto-core; then
               break
             fi

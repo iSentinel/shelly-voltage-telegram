@@ -516,45 +516,85 @@ def backup_database(paths: Layout, work: Path, photo: str) -> None:
     durable(work)
 
 
-def installed_runtime(paths: Layout) -> tuple[dict, str]:
+def installed_runtime(
+    paths: Layout, supervised: bool
+) -> tuple[dict, str, bool]:
     """Check the sole startup owner and its exact running release."""
     if paths.marker.exists() or paths.marker.is_symlink():
         raise ValueError("a different update is already pending")
-    boot_layout(paths)
-    if state_of(MONITOR) != "active":
-        raise ValueError("the Compose startup owner is not active")
     safe_path(paths.state, folder=True)
     database = paths.database.lstat()
     if not stat.S_ISREG(database.st_mode) or database.st_nlink != 1:
         raise ValueError("the live database is not an ordinary file")
     installed = read_pair(paths)
+    previous_supervised = state_of(SUPERVISOR) == "active"
+    if previous_supervised:
+        if not supervised:
+            raise ValueError("the installed supervisor requires --supervised")
+        verify_installed_supervisor(paths, installed)
+    else:
+        boot_layout(paths)
+        if state_of(MONITOR) != "active":
+            raise ValueError("the Compose startup owner is not active")
     image, status, policy = docker_state()
     if image != image_pin(installed["digest"]) or status != "running":
         raise ValueError("live Docker image does not match the installed pair")
-    if policy not in ("no", "unless-stopped"):
+    if policy not in ("no", "unless-stopped") or (
+        previous_supervised and policy != "no"
+    ):
         raise ValueError("unrecognized Docker restart policy")
-    return installed, policy
+    return installed, policy, previous_supervised
+
+
+def installed_transaction(paths: Layout, receipt: dict) -> Path:
+    """Locate the previous supervisor's retained verified source archive."""
+    token = receipt.get("transaction_token", "")
+    if not isinstance(token, str) or not ID_PATTERN.fullmatch(token):
+        raise ValueError("previous supervisor transaction is invalid")
+    work = paths.home / token
+    safe_path(work, folder=True)
+    journal = work / "transaction.json"
+    safe_path(journal)
+    saved = json.loads(journal.read_text())
+    if saved.get("phase") != "verified" or saved.get("pair") != receipt:
+        raise ValueError("previous supervised update is not verified")
+    archive = (
+        work
+        / "release-archive"
+        / (f"shelly-voltage-telegram-{receipt['version']}.tar.gz")
+    )
+    safe_path(archive)
+    with archive.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if digest != receipt.get("source_sha256"):
+        raise ValueError("previous supervisor source archive changed")
+    return work
+
+
+def verify_installed_supervisor(paths: Layout, receipt: dict) -> None:
+    """Check the existing protected owner before starting another cutover."""
+    verify_supervisor_units(paths, installed_transaction(paths, receipt))
+    safe_path(paths.fence, folder=True)
+    pending = paths.fence / ".svt-update-pending"
+    if pending.exists() or pending.is_symlink():
+        raise ValueError("an existing writer-fence update is pending")
 
 
 def capture(
     paths: Layout, work: Path, pair: dict, photo: str, supervised=False
 ) -> dict:
     """Record the existing pair before touching any running writer."""
-    installed, policy = installed_runtime(paths)
+    installed, policy, previous_supervised = installed_runtime(
+        paths, supervised
+    )
     if updater.version_tuple(pair["version"]) <= updater.version_tuple(
         installed["version"]
     ):
         raise ValueError("the signed release must advance the current version")
     read_photo(paths, photo)
     updater.preflight(paths.database, READY)
-    for name in ("deployed.json", "override.yaml"):
-        write_file(
-            work / f"previous-{name}", (paths.state / name).read_bytes()
-        )
-    verify_current_mounts(paths)
-    previous_unit = paths.unit.read_bytes()
-    bridge_unit(previous_unit, work / "boot-guard.sh")
-    write_file(work / "previous.service", previous_unit)
+    verify_current_mounts(paths, previous_supervised)
+    capture_receipts(paths, work, previous_supervised)
     state = {
         "phase": "staged",
         "pair": pair,
@@ -562,6 +602,7 @@ def capture(
         "restart": policy,
         "photo": photo,
         "supervised": supervised,
+        "previous_supervised": previous_supervised,
         "timer_active": state_of(PHOTO_TIMER) == "active",
         "timer_enabled": run(
             "systemctl", "show", "-p", "UnitFileState", "--value", PHOTO_TIMER
@@ -572,15 +613,37 @@ def capture(
     return state
 
 
+def capture_receipts(
+    paths: Layout, work: Path, previous_supervised: bool
+) -> None:
+    """Retain the previous private pair and its verified startup unit."""
+    for name in ("deployed.json", "override.yaml"):
+        write_file(
+            work / f"previous-{name}", (paths.state / name).read_bytes()
+        )
+    if previous_supervised:
+        write_file(
+            work / "previous.service", paths.supervisor_unit.read_bytes()
+        )
+    else:
+        previous_unit = paths.unit.read_bytes()
+        bridge_unit(previous_unit, work / "boot-guard.sh")
+        write_file(work / "previous.service", previous_unit)
+
+
 def runtime_config(
-    paths: Layout, work: Path, pair: dict, supervised=False
+    paths: Layout,
+    work: Path,
+    pair: dict,
+    supervised=False,
+    previous_supervised=False,
 ) -> None:
     """Preserve private configuration and validate the effective image pin."""
     target = work / "next"
     guarded_unit(target)
     require_runtime_owner(target, supervised)
     if supervised:
-        validate_supervisor_inputs(paths, work)
+        validate_supervisor_inputs(paths, work, previous_supervised)
     copy_configuration(paths.source, target)
     pin = image_pin(pair["digest"])
     write_file(
@@ -664,13 +727,16 @@ def supervisor_unit(source: Path, work: Path) -> bytes:
     ).encode()
 
 
-def validate_supervisor_inputs(paths: Layout, work: Path) -> None:
-    """Refuse to adopt an existing supervisor or its lock namespace."""
-    for path in (paths.fence, paths.supervisor_unit):
-        if path.exists() or path.is_symlink():
-            raise ValueError(
-                "an existing supervisor or writer fence blocks migration"
-            )
+def validate_supervisor_inputs(
+    paths: Layout, work: Path, previous_supervised: bool = False
+) -> None:
+    """Validate the candidate unit and reject unverified startup owners."""
+    if not previous_supervised:
+        for path in (paths.fence, paths.supervisor_unit):
+            if path.exists() or path.is_symlink():
+                raise ValueError(
+                    "an existing supervisor or writer fence blocks migration"
+                )
     target = work / "next"
     safe_path(target / SUPERVISOR_OVERLAY)
     write_file(work / SUPERVISOR, supervisor_unit(target, work), 0o644)
@@ -828,9 +894,14 @@ def freeze(paths: Layout, work: Path, saved: dict) -> None:
     if saved["timer_enabled"]:
         run("systemctl", "disable", PHOTO_TIMER)
     wait_stopped(PHOTO_SERVICE)
-    run("docker", "update", "--restart=no", CONTAINER)
+    owner = MONITOR
+    if saved.get("previous_supervised"):
+        owner = SUPERVISOR
+        control_fence(paths, work, "publish", paths.source)
+    else:
+        run("docker", "update", "--restart=no", CONTAINER)
     make_marker(paths, work)
-    run("systemctl", "stop", MONITOR, timeout=45)
+    run("systemctl", "stop", owner, timeout=45)
     image, status, policy = docker_state()
     if (image, status, policy) != (
         image_pin(saved["previous"]["digest"]),
@@ -913,12 +984,15 @@ def remove_stopped_pair(saved: dict) -> None:
     run("docker", "rm", CONTAINER, timeout=30)
 
 
-def install_supervisor(paths: Layout, work: Path) -> None:
+def install_supervisor(
+    paths: Layout, work: Path, previous_supervised: bool = False
+) -> None:
     """Change the boot owner only while the shared writer gate is pending."""
     if not fence_pending(paths, work):
         raise ValueError("missing supervisor pending marker")
-    run("systemctl", "disable", MONITOR)
-    write_file(paths.unit, INERT_LEGACY_UNIT, 0o644)
+    if not previous_supervised:
+        run("systemctl", "disable", MONITOR)
+        write_file(paths.unit, INERT_LEGACY_UNIT, 0o644)
     write_file(paths.supervisor_unit, (work / SUPERVISOR).read_bytes(), 0o644)
     run("systemctl", "daemon-reload")
     run("systemctl", "enable", SUPERVISOR)
@@ -928,6 +1002,7 @@ def install_supervisor(paths: Layout, work: Path) -> None:
 def verify_supervisor_units(paths: Layout, work: Path) -> None:
     """Confirm exact owner recipe and that legacy startup is disabled."""
     safe_path(paths.supervisor_unit)
+    safe_path(paths.unit)
     if paths.supervisor_unit.read_bytes() != supervisor_unit(
         paths.source, work
     ):
@@ -990,7 +1065,9 @@ def install_pair(paths: Layout, work: Path, saved: dict) -> None:
     )
     record(paths.state / "deployed.json", pair)
     if saved.get("supervised"):
-        install_supervisor(paths, work)
+        install_supervisor(
+            paths, work, saved.get("previous_supervised", False)
+        )
     else:
         write_file(paths.unit, guarded_unit(paths.source), mode=0o644)
     run("sync", "-f", str(paths.source))
@@ -1023,8 +1100,7 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
     original = work / "previous"
     if not marked and read_pair(paths) != saved["previous"]:
         raise ValueError("the installed pair changed outside this cutover")
-    if saved.get("supervised"):
-        retire_supervisor(paths, work, saved)
+    prepare_preboot_recovery(paths, work, saved)
     if original.exists():
         if not marked:
             raise ValueError("a partially switched pair has no owned marker")
@@ -1046,13 +1122,41 @@ def restore_preboot(paths: Layout, work: Path, saved: dict) -> None:
         )
     if read_pair(paths) != saved["previous"]:
         raise ValueError("the previous source and pin could not be verified")
+    restore_previous_unit(paths, work, saved, marked)
+    save_phase(work, saved, "previous-pair-restored")
+
+
+def prepare_preboot_recovery(paths: Layout, work: Path, saved: dict) -> None:
+    """Stop only the owned pending systemd path before changing it back."""
+    if saved.get("previous_supervised"):
+        if fence_pending(paths, work):
+            run("systemctl", "stop", SUPERVISOR, timeout=45)
+            remove_stopped_pair(saved)
+        elif (work / "previous").exists():
+            raise ValueError("previous supervisor recovery lost its fence")
+    elif saved.get("supervised"):
+        retire_supervisor(paths, work, saved)
+
+
+def restore_previous_unit(
+    paths: Layout, work: Path, saved: dict, marked: bool
+) -> None:
+    """Release the gate only after restoring the original startup path."""
+    previous = (work / "previous.service").read_bytes()
+    if saved.get("previous_supervised"):
+        write_file(paths.supervisor_unit, previous, 0o644)
+        run("systemctl", "daemon-reload")
+        verify_supervisor_units(
+            paths, installed_transaction(paths, saved["previous"])
+        )
+        open_candidate_gate(paths, work, saved)
+        return
     if marked:
         clear_marker(paths, work)
-    write_file(paths.unit, (work / "previous.service").read_bytes(), 0o644)
+    write_file(paths.unit, previous, 0o644)
     run("systemctl", "daemon-reload")
     if saved.get("supervised"):
         run("systemctl", "enable", MONITOR)
-    save_phase(work, saved, "previous-pair-restored")
 
 
 def verify_ready(paths: Layout, saved: dict) -> None:
@@ -1083,7 +1187,9 @@ def activate(
     try:
         with lease(paths.updater_lock):
             saved = capture(paths, work, pair, photo, supervised)
-            runtime_config(paths, work, pair, supervised)
+            runtime_config(
+                paths, work, pair, supervised, saved["previous_supervised"]
+            )
             seal_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
         info = work / "transaction.json"
@@ -1092,7 +1198,7 @@ def activate(
             and json.loads(info.read_text())["phase"]
             == "previous-pair-restored"
         ):
-            start_previous(work, json.loads(info.read_text()))
+            start_previous(paths, work, json.loads(info.read_text()))
         raise
     start_candidate(paths, work, saved)
 
@@ -1101,9 +1207,12 @@ def seal_pair(paths: Layout, work: Path, saved: dict) -> None:
     """Make the switch recoverable before unlocking the systemd start path."""
     save_phase(work, saved, "preboot")
     try:
-        arm_boot_guard(paths, work)
+        if not saved.get("previous_supervised"):
+            arm_boot_guard(paths, work)
         freeze(paths, work, saved)
-        if saved.get("supervised"):
+        if saved.get("previous_supervised"):
+            remove_stopped_pair(saved)
+        elif saved.get("supervised"):
             arm_supervisor(paths, work, saved)
         install_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
@@ -1167,7 +1276,7 @@ def recover(paths: Layout, work: Path) -> None:
     if saved["phase"] == "candidate-may-have-run":
         start_candidate(paths, work, saved)
         return
-    start_previous(work, saved)
+    start_previous(paths, work, saved)
 
 
 def verify_recovery_owner(paths: Layout, work: Path, saved: dict) -> None:
@@ -1180,8 +1289,14 @@ def verify_recovery_owner(paths: Layout, work: Path, saved: dict) -> None:
             raise ValueError("installed systemd unit changed")
 
 
-def start_previous(work: Path, saved: dict) -> None:
+def start_previous(paths: Layout, work: Path, saved: dict) -> None:
     """Bring back only the pre-cutover runtime and its original timer mode."""
+    if saved.get("previous_supervised"):
+        run("systemctl", "start", SUPERVISOR, timeout=65)
+        verify_ready(paths, {**saved, "pair": saved["previous"]})
+        verify_current_mounts(paths, True)
+        save_phase(work, saved, "recovered")
+        return
     run("systemctl", "start", MONITOR, timeout=65)
     if docker_state()[:2] != (
         image_pin(saved["previous"]["digest"]),
@@ -1209,7 +1324,7 @@ def options() -> argparse.Namespace:
         command.add_argument(
             "--supervised",
             action="store_true",
-            help="migrate the legacy service to the protected sole writer",
+            help="install or update the protected sole writer",
         )
     modes.add_parser("recover").add_argument("--transaction", required=True)
     return cli.parse_args()
@@ -1236,8 +1351,10 @@ def dispatch(paths: Layout, args: argparse.Namespace) -> Path:
     if args.action == "activate":
         activate(paths, work, pair, args.photo, args.supervised)
     else:
-        capture(paths, work, pair, args.photo, args.supervised)
-        runtime_config(paths, work, pair, args.supervised)
+        saved = capture(paths, work, pair, args.photo, args.supervised)
+        runtime_config(
+            paths, work, pair, args.supervised, saved["previous_supervised"]
+        )
     return work
 
 
