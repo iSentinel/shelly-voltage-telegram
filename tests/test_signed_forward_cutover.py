@@ -7,6 +7,7 @@ import os
 import shutil
 import sqlite3
 import sys
+import tarfile
 import tempfile
 import unittest
 from contextlib import closing, nullcontext
@@ -88,6 +89,8 @@ class ForwardCutoverTests(unittest.TestCase):
             "unless-stopped",
         )
         self.timer = "active"
+        self.check_timer = "inactive"
+        self.fail_check_timer = False
         self.supervisor_mode = False
         self.container_exists = True
         self.calls = []
@@ -221,6 +224,11 @@ class ForwardCutoverTests(unittest.TestCase):
         if prop == "FragmentPath":
             if unit == CUTOVER.SUPERVISOR:
                 return str(self.paths.supervisor_unit)
+            if unit in (
+                CUTOVER.RELEASE_CHECK_SERVICE,
+                CUTOVER.RELEASE_CHECK_TIMER,
+            ):
+                return str(self.paths.unit.with_name(unit))
             return str(self.paths.unit)
         if prop == "DropInPaths":
             return ""
@@ -230,6 +238,8 @@ class ForwardCutoverTests(unittest.TestCase):
             return "enabled"
         if unit == owner:
             return "active" if self.runtime[1] == "running" else "inactive"
+        if unit == CUTOVER.RELEASE_CHECK_TIMER:
+            return self.check_timer
         return self.timer if unit == CUTOVER.PHOTO_TIMER else "inactive"
 
     def systemd(self, args: tuple[str, ...]) -> str:
@@ -237,6 +247,11 @@ class ForwardCutoverTests(unittest.TestCase):
         owner = CUTOVER.SUPERVISOR if self.supervisor_mode else CUTOVER.MONITOR
         if args[1] == "show":
             return self.systemd_property(args[3], args[-1], owner)
+        if args[1:] == ("enable", "--now", CUTOVER.RELEASE_CHECK_TIMER):
+            if self.fail_check_timer:
+                raise ValueError("injected timer failure")
+            self.check_timer = "active"
+            return ""
         if args[1] == "daemon-reload" and self.failed_reload:
             self.failed_reload = False
             raise ValueError("injected reload failure")
@@ -317,6 +332,92 @@ class ForwardCutoverTests(unittest.TestCase):
     def journal(self) -> dict:
         """Read the durable local transaction status."""
         return json.loads((self.work / "transaction.json").read_text())
+
+    def release_check_pair(self) -> dict:
+        """Add signed-input fixtures and inactive stock units to an upgrade."""
+        self.existing_supervisor()
+        paths = self.paths
+        work = paths.home / "cutover-NEW12345"
+        self.work.rename(work)
+        self.work = work
+        prefix = f"shelly-voltage-telegram-{NEW['version']}"
+        archive = work / f"{prefix}.tar.gz"
+        units = {
+            CUTOVER.RELEASE_CHECK_SERVICE: b"LoadCredential=checker.py:test\n",
+            CUTOVER.RELEASE_CHECK_TIMER: b"[Timer]\nOnBootSec=10m\n",
+        }
+        with tarfile.open(archive, "w:gz") as tar:
+            for unit, payload in units.items():
+                file = work / "next" / "systemd" / unit
+                file.write_bytes(payload)
+                tar.add(file, f"{prefix}/systemd/{unit}")
+                (paths.source / "systemd" / unit).write_bytes(b"old unit\n")
+                paths.unit.with_name(unit).write_bytes(b"old unit\n")
+            checker = work / "next" / "scripts/github_update.py"
+            checker.write_text("# checker fixture\n")
+            tar.add(checker, f"{prefix}/scripts/github_update.py")
+        pair = {
+            **NEW,
+            "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        }
+        return CUTOVER.stage_supervised_receipt(archive, work, pair)
+
+    def test_supervised_upgrade_starts_the_packaged_release_timer(self):
+        """Use the candidate's checker and replace the old stock units."""
+        pair = self.release_check_pair()
+        CUTOVER.activate(self.paths, self.work, pair, PHOTO, True)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(self.check_timer, "active")
+        for unit in (
+            CUTOVER.RELEASE_CHECK_SERVICE,
+            CUTOVER.RELEASE_CHECK_TIMER,
+        ):
+            expected = self.paths.source / "systemd" / unit
+            self.assertEqual(
+                self.paths.unit.with_name(unit).read_bytes(),
+                expected.read_bytes(),
+            )
+        self.assert_history([222])
+
+    def test_timer_failure_can_be_retried_without_restarting_the_monitor(self):
+        """Leave the verified monitor running when the timer cannot start."""
+        pair = self.release_check_pair()
+        self.fail_check_timer = True
+        CUTOVER.activate(self.paths, self.work, pair, PHOTO, True)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(self.check_timer, "inactive")
+        self.fail_check_timer = False
+        self.calls.clear()
+        CUTOVER.sync_release_check(self.paths, self.work)
+        self.assertEqual(self.check_timer, "active")
+        self.assertNotIn(
+            ("systemctl", "start", CUTOVER.SUPERVISOR), self.calls
+        )
+        self.assert_history([222])
+
+    def test_release_check_preserves_local_unit_edits(self):
+        """Check both targets before replacing either installed unit."""
+        pair = self.release_check_pair()
+        timer = self.paths.unit.with_name(CUTOVER.RELEASE_CHECK_TIMER)
+        timer.write_bytes(b"locally modified\n")
+        CUTOVER.activate(self.paths, self.work, pair, PHOTO, True)
+        self.assertEqual(self.journal()["phase"], "verified")
+        with self.assertRaisesRegex(ValueError, "locally modified"):
+            CUTOVER.sync_release_check(self.paths, self.work)
+        self.assertEqual(timer.read_bytes(), b"locally modified\n")
+        service = self.paths.unit.with_name(CUTOVER.RELEASE_CHECK_SERVICE)
+        self.assertEqual(service.read_bytes(), b"old unit\n")
+
+    def test_release_check_rejects_a_changed_checker(self):
+        """Do not install or start units for an altered host checker."""
+        pair = self.release_check_pair()
+        checker = self.work / "next" / "scripts/github_update.py"
+        checker.write_bytes(b"# changed fixture\n")
+        CUTOVER.activate(self.paths, self.work, pair, PHOTO, True)
+        with self.assertRaisesRegex(ValueError, "differs from signed source"):
+            CUTOVER.sync_release_check(self.paths, self.work)
+        self.assertEqual(self.check_timer, "inactive")
+        self.assert_history([222])
 
     def assert_history(self, values: list[int]) -> None:
         """Check both SQLite identity and all expected observations."""
