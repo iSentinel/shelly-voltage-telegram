@@ -1,7 +1,9 @@
 """Exercise the signed cutover and its interruption points with real SQLite."""
 
+import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -10,7 +12,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
-from contextlib import closing, nullcontext
+from contextlib import closing, nullcontext, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -60,6 +62,21 @@ def fixture_source(directory: Path, version: str) -> None:
     (directory / "systemd").mkdir()
     (directory / "systemd" / CUTOVER.MONITOR).write_text(CURRENT_UNIT)
     (directory / "compose.yaml").write_text("services: {}\n")
+
+
+def rollback_archive(
+    path: Path, version: str, app: bytes = b"monitor source"
+) -> str:
+    """Build a read-only preflight fixture with exact archive inputs."""
+    with tarfile.open(path, "w:gz") as tar:
+        for name in CUTOVER.MONITOR_FILES | CUTOVER.ROLLBACK_SUPERVISOR_FILES:
+            data = app if name == "app.py" else name.encode()
+            member = tarfile.TarInfo(
+                f"shelly-voltage-telegram-{version}/{name}"
+            )
+            member.size = len(data)
+            tar.addfile(member, io.BytesIO(data))
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class ForwardCutoverTests(unittest.TestCase):
@@ -332,6 +349,88 @@ class ForwardCutoverTests(unittest.TestCase):
     def journal(self) -> dict:
         """Read the durable local transaction status."""
         return json.loads((self.work / "transaction.json").read_text())
+
+    def rollback_pair(
+        self, target: str = "0.5.24-hw", app: bytes = b"monitor source"
+    ) -> tuple[argparse.Namespace, dict]:
+        """Stage exact source bytes for an installed owner and older target."""
+        paths = self.paths
+        current = self.existing_supervisor()
+        prior = paths.home / current["transaction_token"]
+        archive = CUTOVER.retained_archive(prior, current["version"])
+        current["source_sha256"] = rollback_archive(
+            archive, current["version"]
+        )
+        CUTOVER.record(paths.state / "deployed.json", current)
+        CUTOVER.record(
+            prior / "transaction.json", {"phase": "verified", "pair": current}
+        )
+        archive = self.work / f"shelly-voltage-telegram-{target}.tar.gz"
+        pair = {
+            **NEW,
+            "version": target,
+            "archive_sha256": rollback_archive(archive, target, app),
+        }
+        args = argparse.Namespace(
+            action="check-rollback", photo=PHOTO, archive=archive
+        )
+        return args, pair
+
+    def test_rollback_preflight_reads_live_state_without_a_lease_or_write(
+        self,
+    ):
+        """Report the verified pair without changing any runtime state."""
+        args, pair = self.rollback_pair()
+        output = io.StringIO()
+        with (
+            patch.object(CUTOVER, "options", return_value=args),
+            patch.object(CUTOVER, "Layout", return_value=self.paths),
+            patch.object(CUTOVER.os, "geteuid", return_value=0),
+            patch.object(CUTOVER, "signed_candidate", return_value=pair),
+            patch.object(CUTOVER, "lease") as lease,
+            redirect_stdout(output),
+        ):
+            self.assertEqual(CUTOVER.main(), 0)
+        lease.assert_not_called()
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "PASS_ROLLBACK_PAIR_PREFLIGHT_ONLY")
+        self.assertFalse(report["rollback_authorized"])
+        self.assertTrue(report["monitor_inputs_match"])
+        self.assertTrue(
+            all(call[1] in ("show", "inspect") for call in self.calls)
+        )
+        self.assert_history([222])
+
+    def test_rollback_preflight_rejects_same_version(self):
+        """Require an older signed target even when inputs match."""
+        args, pair = self.rollback_pair(target=OLD["version"])
+        with (
+            patch.object(CUTOVER, "signed_candidate", return_value=pair),
+            self.assertRaisesRegex(ValueError, "must be older"),
+        ):
+            CUTOVER.rollback_preflight(self.paths, args)
+
+    def test_rollback_preflight_detects_changed_monitor_source(self):
+        """Require a separate compatibility check if inputs differ."""
+        args, pair = self.rollback_pair(app=b"changed monitor source")
+        with (
+            patch.object(CUTOVER, "signed_candidate", return_value=pair),
+            self.assertRaisesRegex(ValueError, "build inputs differ"),
+        ):
+            CUTOVER.rollback_preflight(self.paths, args)
+        self.assert_history([222])
+
+    def test_rollback_preflight_rejects_target_archive_changed_after_proof(
+        self,
+    ):
+        """Read only bytes bound to the target signature verification."""
+        args, pair = self.rollback_pair()
+        args.archive.write_bytes(b"invalid archive")
+        with (
+            patch.object(CUTOVER, "signed_candidate", return_value=pair),
+            self.assertRaisesRegex(ValueError, "source archive changed"),
+        ):
+            CUTOVER.rollback_preflight(self.paths, args)
 
     def release_check_pair(self) -> dict:
         """Add signed-input fixtures and inactive stock units to an upgrade."""
