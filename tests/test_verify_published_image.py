@@ -86,6 +86,16 @@ def audit_without_network(index, objects, commit=COMMIT):
 class PublishedImageTests(unittest.TestCase):
     """Verify attestation lookup, platform checks, and digest validation."""
 
+    def test_standalone_verifier_never_claims_cosign_proof(self) -> None:
+        """OCI metadata alone is not a cryptographic release signature."""
+        source = (ROOT / "scripts/verify-published-image.py").read_text()
+        self.assertIn(
+            "RELEASE OCI CONTENT: PASS (Cosign signature NOT verified)",
+            source,
+        )
+        self.assertNotIn("Verify signed release image contents", source)
+        self.assertIn("Check OCI bytes, revision and metadata", source)
+
     def test_valid_digest(self) -> None:
         """Accept only exact SHA-256 OCI references."""
 

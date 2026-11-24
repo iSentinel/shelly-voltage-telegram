@@ -50,6 +50,7 @@ class RollbackYasnoComposeTests(unittest.TestCase):
         env = dict(os.environ)
         env.update(
             SVT_ROOT=str(self.app),
+            DATABASE_PATH=str(self.root / "qa-data.sqlite3"),
             SVT_YASNO_READER_OVERLAY=str(self.overlay),
             SVT_UPDATE_OVERRIDE=str(self.updater),
             DOCKER_FIXTURE_LOG=str(self.log),

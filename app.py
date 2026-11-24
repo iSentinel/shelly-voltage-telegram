@@ -55,8 +55,10 @@ from telegram_i18n import LANGUAGES, command_descriptions, duration_text, tr
 from telegram_widget_data import slots_from_community, widget_public_data
 from telegram_widget_fallback import widget_fallback_text
 from update_info import release_notice
+from writer_fence import WriterFenceError, fenced_connect, writer_lease
 from yasno_cache import read_verified_cache as read_yasno_verified_cache
-from yasno_schedule import parse_schedule as parse_yasno_schedule
+from yasno_schedule import YasnoEmergency
+from yasno_schedule import parse_provider_state as parse_yasno_schedule
 from yasno_schedule import read_cached as read_yasno_cache
 
 
@@ -557,7 +559,7 @@ class Storage:
     def connect(self) -> sqlite3.Connection:
         """Open SQLite with WAL and a busy timeout."""
 
-        db = sqlite3.connect(self.path, timeout=10)
+        db = fenced_connect(self.path, timeout=10)
         db.execute("PRAGMA journal_mode=WAL")
         db.execute("PRAGMA busy_timeout=5000")
         return db
@@ -2266,8 +2268,22 @@ def recovery_banner_lines(monitor: Monitor) -> list[str]:
     ]
 
 
-def cached_yasno_preview_args() -> dict | None:
-    """Read a configured local YASNO cache; never make a network request."""
+def same_day_emergency_history(
+    data: dict, group: str, fetched_at: datetime, now: datetime
+) -> bool:
+    """Use a once-valid notice only to suppress conflicting fallback plans."""
+    if fetched_at > now:
+        return False
+    try:
+        previous = parse_yasno_schedule(data, group, fetched_at, fetched_at)
+    except (ValueError, TypeError, KeyError):
+        return False
+    current_day = now.astimezone(ZoneInfo("Europe/Kyiv")).date().isoformat()
+    return isinstance(previous, YasnoEmergency) and previous.day == current_day
+
+
+def cached_yasno_preview_args(now: float | None = None) -> dict | None:
+    """Read local YASNO; a truthy no-plan result inhibits unsafe fallback."""
 
     trusted = os.getenv("YASNO_TRUSTED_CACHE_FILE")
     path = trusted or os.getenv("YASNO_CACHE_FILE")
@@ -2277,21 +2293,33 @@ def cached_yasno_preview_args() -> dict | None:
     try:
         reader = read_yasno_verified_cache if trusted else read_yasno_cache
         data, fetched_at = reader(path)
-        result = parse_yasno_schedule(
-            data, group, datetime.now(ZoneInfo("UTC")), fetched_at
-        )
-        return {
-            "group": result.group,
-            "bars": result.bars,
-            "day": result.day,
-            "forecast_updated": result.retrieved_at,
-            "forecast_source": "yasno",
-        }
+        clock = time.time() if now is None else now
+        current = datetime.fromtimestamp(clock, ZoneInfo("UTC"))
     except (ValueError, OSError, KeyError, TypeError):
         return None
+    try:
+        result = parse_yasno_schedule(data, group, current, fetched_at)
+    except (ValueError, OSError, KeyError, TypeError):
+        if trusted and same_day_emergency_history(
+            data, group, fetched_at, current
+        ):
+            # Retain neither obsolete notice nor bars; block fallback only.
+            return {"group": group, "forecast_source": "yasno"}
+        return None
+    args = {
+        "group": result.group,
+        "day": result.day,
+        "forecast_updated": result.retrieved_at,
+        "forecast_source": "yasno",
+    }
+    if isinstance(result, YasnoEmergency):
+        args["forecast_notice"] = "emergency"
+    else:
+        args["bars"] = result.bars
+    return args
 
 
-def cached_community_preview_args() -> dict:
+def cached_community_preview_args(now: float | None = None) -> dict:
     """Use an independently labelled community cache only if valid."""
 
     path = os.getenv("COMMUNITY_OUTAGE_CACHE_FILE")
@@ -2301,7 +2329,13 @@ def cached_community_preview_args() -> dict:
         return {}
     try:
         cache = read_snapshot(path)
-        bars, day, updated = slots_from_community(cache, region, group)
+        clock = time.time() if now is None else now
+        bars, day, updated = slots_from_community(
+            cache,
+            region,
+            group,
+            now=datetime.fromtimestamp(clock, ZoneInfo("UTC")),
+        )
         return {
             "group": group,
             "bars": bars,
@@ -2324,10 +2358,13 @@ def private_widget_preview_text(monitor: Monitor) -> str:
                 phase: monitor.phase_states[phase].snapshot()
                 for phase in ("L2", "L3")
             }
-    forecast = cached_yasno_preview_args() or cached_community_preview_args()
+    clock = time.time()
+    forecast = cached_yasno_preview_args(
+        clock
+    ) or cached_community_preview_args(clock)
     return widget_fallback_text(
         widget_public_data(
-            reading, language=language, phases=phases, **forecast
+            reading, language=language, phases=phases, now=clock, **forecast
         )
     )
 
@@ -2374,13 +2411,15 @@ def private_graphic_preview_state(monitor: Monitor) -> str:
             monitor.warning_high,
             monitor.critical_high,
         )
-    forecast = cached_yasno_preview_args() or {}
+    clock = time.time()
+    forecast = cached_yasno_preview_args(clock) or {}
     return widget_public_data(
         snapshot,
         language=language,
         phases=phases or None,
         max_sample_age=max_age,
         voltage_limits=limits,
+        now=clock,
         **forecast,
     )
 
@@ -7469,7 +7508,14 @@ def main() -> int:
     if args.command == "telegram-channel-rights":
         return telegram_channel_rights_check(cfg)
     install_signals()
-    Monitor(cfg).run()
+    try:
+        if not os.getenv("SVT_WRITER_FENCE_DIR"):
+            raise WriterFenceError("SVT_FENCE_DIR_REQUIRED")
+        with writer_lease(cfg.database_path):
+            Monitor(cfg).run()
+    except WriterFenceError as exc:
+        logger.error("Monitoring writer fenced: {}", exc)
+        return 3
     return 0
 
 

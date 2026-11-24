@@ -25,11 +25,39 @@ class WorkflowSecurityTests(unittest.TestCase):
         )
         self.assertIn("scripts/check-quality.py", quality)
 
+    def test_font_dependency_retries_fail_closed(self):
+        """Transient apt mirrors must not bypass required visual fonts."""
+        text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("for attempt in 1 2 3", text)
+        self.assertIn("Acquire::Retries=2", text)
+        self.assertIn("Acquire::http::Timeout=20", text)
+        self.assertIn("Acquire::https::Timeout=20", text)
+        self.assertIn("fonts-inter fonts-noto-core", text)
+        self.assertIn('grep -qx "install ok installed"', text)
+        self.assertIn("required v5 fonts unavailable", text)
+        self.assertNotIn("continue-on-error: true", text)
+        self.assertNotIn("fonts-inter fonts-noto-core || true", text)
+
     def test_ci_syntax_checks_shared_quality_gate(self):
         """CI must syntax-check the shared shell quality gate."""
 
         text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
         self.assertIn("bash -n scripts/quality.sh", text)
+
+    def test_ci_bounds_font_installation_and_requires_both_packages(self):
+        """Keep network retries bounded and both rendering fonts required."""
+        text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        start = text.index("- name: Install v5 font packages")
+        end = text.index("- name:", start + 1)
+        step = text[start:end]
+        self.assertIn("timeout-minutes: 6", step)
+        self.assertIn("for attempt in 1 2 3", step)
+        self.assertIn("Acquire::http::Timeout=20", step)
+        self.assertIn("Acquire::https::Timeout=20", step)
+        self.assertIn("APT::Update::Error-Mode=any", step)
+        self.assertIn("ERROR: required v5 fonts unavailable", step)
+        self.assertIn("for package in fonts-inter fonts-noto-core", step)
+        self.assertIn('grep -qx "install ok installed"', step)
 
     def test_no_pull_request_target(self):
         for path in WORKFLOWS.glob("*.yml"):
@@ -96,6 +124,17 @@ class WorkflowSecurityTests(unittest.TestCase):
             text,
         )
         self.assertNotIn("startsWith(inputs.image_tag, 'v')", text)
+
+    def test_public_oci_signature_must_verify_after_signing(self):
+        """The tag build must reject signatures invisible to public clients."""
+        image = (WORKFLOWS / "image.yml").read_text(encoding="utf-8")
+        self.assertLess(
+            image.index("Sign versioned image by digest"),
+            image.index("Verify published release signature anonymously"),
+        )
+        self.assertIn('DOCKER_CONFIG="$anonymous_config" cosign verify', image)
+        self.assertIn("PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS", image)
+        self.assertIn("ERROR: public OCI signature not verifiable", image)
 
     def test_release_requires_public_version_promotion(self):
         """Final publication must explicitly promote RELEASE_VERSION."""

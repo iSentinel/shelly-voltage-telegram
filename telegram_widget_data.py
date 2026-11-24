@@ -53,23 +53,12 @@ def health_state(
     return result
 
 
-def forecast_state(
-    bars: str | None,
-    day: str | None,
-    updated: float | None,
-    now: float,
-    source: str = "community",
+def forecast_metadata(
+    day: str | None, updated: float | None, now: float, source: str
 ) -> dict:
-    """Include a source-labelled forecast only when verified fresh."""
-
-    if bars is None:
-        return {}
+    """Return bounded provider timing, never inventing a schedule."""
     if source not in ("community", "yasno"):
         raise ValueError("unknown forecast source")
-    if not isinstance(bars, str) or len(bars) != 48:
-        raise ValueError("forecast must have 48 half-hour slots")
-    if any(char not in BARS for char in bars):
-        raise ValueError("forecast contains unknown slot states")
     if not isinstance(day, str):
         raise ValueError("forecast day is missing")
     expected = datetime.fromtimestamp(now, KYIV).date().isoformat()
@@ -80,13 +69,57 @@ def forecast_state(
         raise ValueError("forecast is stale")
     next_day = date.fromisoformat(day) + timedelta(days=1)
     expires = datetime.combine(next_day, dt_time.min, KYIV).timestamp()
-    return {
-        "b": bars,
-        "d": day,
-        "u": int(fresh),
-        "e": round(expires),
-        "src": source,
-    }
+    return {"d": day, "u": int(fresh), "e": round(expires), "src": source}
+
+
+def local_day_start(day: str) -> int:
+    """Give thin clients a Kyiv midnight epoch without timezone libraries."""
+    return int(
+        datetime.combine(
+            date.fromisoformat(day), dt_time.min, KYIV
+        ).timestamp()
+    )
+
+
+def forecast_state(
+    bars: str | None,
+    day: str | None,
+    updated: float | None,
+    now: float,
+    source: str = "community",
+    notice: str | None = None,
+) -> dict:
+    """Encode either a fresh plan or an explicit official emergency notice."""
+    if notice is not None:
+        if notice != "emergency" or source != "yasno" or bars is not None:
+            raise ValueError("invalid or conflicting forecast notice")
+        meta = forecast_metadata(day, updated, now, source)
+        return {"n": notice, "a": local_day_start(meta["d"]), **meta}
+    if bars is None:
+        return {}
+    if not isinstance(bars, str) or len(bars) != 48:
+        raise ValueError("forecast must have 48 half-hour slots")
+    if any(char not in BARS for char in bars):
+        raise ValueError("forecast contains unknown slot states")
+    return {"b": bars, **forecast_metadata(day, updated, now, source)}
+
+
+def valid_emergency_notice(state: dict, now: float) -> bool:
+    """Only show explicit, unexpired official cancellation metadata."""
+    if (
+        state.get("n") != "emergency"
+        or state.get("src") != "yasno"
+        or "b" in state
+        or not re.fullmatch(r"\d{1,2}\.\d", str(state.get("g", "")))
+    ):
+        return False
+    try:
+        meta = forecast_metadata(state.get("d"), state.get("u"), now, "yasno")
+    except (ValueError, TypeError, OverflowError):
+        return False
+    return state.get("e") == meta["e"] and state.get("a") == local_day_start(
+        meta["d"]
+    )
 
 
 def widget_phase_states(
@@ -118,6 +151,7 @@ def widget_public_data(
     forecast_source: str = "community",
     max_sample_age: float = MAX_SAMPLE_AGE,
     voltage_limits: tuple[float, float, float, float] | None = None,
+    forecast_notice: str | None = None,
 ) -> str:
     """Encode an opaque per-widget state fitting Bot API widget limits."""
 
@@ -132,15 +166,23 @@ def widget_public_data(
     secondary = widget_phase_states(phases, clock, max_sample_age)
     if secondary:
         state["p"] = secondary
+    forecast = forecast_state(
+        bars, day, forecast_updated, clock, forecast_source, forecast_notice
+    )
+    return encode_widget_state(state, group, voltage_limits, forecast)
+
+
+def encode_widget_state(
+    state: dict, group: str, voltage_limits: tuple | None, forecast: dict
+) -> str:
+    """Attach validated configuration and enforce the public state size."""
     if voltage_limits is not None:
         state["limits"] = voltage_limits
     if group:
         if not re.fullmatch(r"\d{1,2}\.\d", group):
             raise ValueError("unsupported outage group")
         state["g"] = group
-    state.update(
-        forecast_state(bars, day, forecast_updated, clock, forecast_source)
-    )
+    state.update(forecast)
     encoded = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
     if len(encoded.encode("utf-8")) > PUBLIC_DATA_LIMIT:
         raise ValueError("widget state exceeds Telegram size limit")

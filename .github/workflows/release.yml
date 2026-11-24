@@ -13,9 +13,18 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   release:
+    needs: ci
+    environment: shelly-release-approval
     runs-on: ubuntu-latest
     steps:
       - name: Resolve tag
@@ -40,11 +49,22 @@ jobs:
           ref: ${{ steps.tag.outputs.tag }}
           fetch-depth: 0
 
-      - name: Validate tag matches VERSION
+      - name: Validate tag matches VERSION and CI-tested commit
         shell: bash
+        env:
+          TESTED_SHA: ${{ needs.ci.outputs.tested_commit }}
         run: |
           set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ && "$sha" == "$TESTED_SHA" ]] || {
+            echo "ERROR: source release differs from CI-tested commit" >&2
+            exit 5
+          }
           tag='${{ steps.tag.outputs.tag }}'
+          [[ "$GITHUB_REF" == "refs/tags/$tag" ]] || {
+            echo "ERROR: source signing requires the exact tag event ref" >&2
+            exit 6
+          }
           version="$(tr -d '\r\n' < VERSION)"
           release_version="$(tr -d '\r\n' < RELEASE_VERSION)"
           [[ "$tag" == "v$version" ]] || {
@@ -55,6 +75,29 @@ jobs:
             echo "ERROR: RELEASE_VERSION=$release_version must match VERSION=$version" >&2
             exit 4
           }
+
+      - name: Verify protected GitHub release controls
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_RULESET_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${GH_TOKEN:?RELEASE_RULESET_READ_TOKEN required}"
+          umask 077
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/rulesets?includes_parents=true" --jq ".[].id" | while read -r id; do
+            gh api "repos/$GITHUB_REPOSITORY/rulesets/$id"
+          done | jq -s . > "$scratch/rulesets.json"
+          gh api "repos/$GITHUB_REPOSITORY/environments" > "$scratch/environments.json"
+          gh api "repos/$GITHUB_REPOSITORY" > "$scratch/repo.json"
+          python3 scripts/qa-release-tag-protection.py --qa-only\
+            --version "$(cat VERSION)"\
+            --commit "$(git rev-parse HEAD)"\
+            --repo-json "$scratch/repo.json"\
+            --rulesets-json "$scratch/rulesets.json"\
+            --environments-json "$scratch/environments.json"\
+            --workflows-dir "$GITHUB_WORKSPACE/.github/workflows" --jsonl
 
       - name: Build reproducible source assets
         shell: bash
@@ -79,6 +122,84 @@ jobs:
             exit 4
           }
 
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign and verify immutable source bundle
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ steps.tag.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.ci.outputs.tested_commit }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
+          bundle="$archive.sigstore.json"
+          [[ "$GITHUB_REF" == "refs/tags/$SOURCE_TAG" ]] || exit 6
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]] || exit 6
+          [[ -s "$archive" ]] || exit 7
+          cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
+          cosign sign-blob --yes --bundle "$bundle" "$archive"
+          [[ -s "$bundle" ]] || exit 8
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@refs/tags/$SOURCE_TAG"
+          cosign verify-blob --bundle "$bundle" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-sha "$SOURCE_COMMIT" \
+            --certificate-github-workflow-ref "refs/tags/$SOURCE_TAG" \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            "$archive"
+          echo "SIGNED SOURCE ARCHIVE BUNDLE: PASS"
+
+      - name: Check public signed OCI before source publication
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ steps.tag.outputs.tag }}
+          SOURCE_COMMIT: ${{ needs.ci.outputs.tested_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/tags/$SOURCE_TAG" ]] || exit 5
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 5
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/image.yml@$GITHUB_REF"
+          anonymous_config="$(mktemp -d)"
+          trap 'rm -rf -- "$anonymous_config"' EXIT
+          cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
+          verified=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            if digest="$(timeout 45 python3 scripts/qa-public-oci-tag-index.py --tag "$SOURCE_TAG" 2>/dev/null)"; then
+              if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] && \
+                DOCKER_CONFIG="$anonymous_config" timeout 70 cosign verify \
+                  --certificate-identity "$identity" \
+                  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+                  --certificate-github-workflow-sha "$SOURCE_COMMIT" \
+                  --certificate-github-workflow-ref "$GITHUB_REF" \
+                  --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+                  "${image}@${digest}" >"$anonymous_config/verify.out" 2>"$anonymous_config/verify.err"; then
+                if timeout 90 python3 scripts/verify-published-image.py \
+                  --digest "$digest" --commit "$SOURCE_COMMIT"; then
+                  verified="$digest"
+                  break
+                fi
+              fi
+            fi
+            if (( attempt == 12 )); then
+              echo "ERROR: signed OCI not publicly verifiable; source release blocked" >&2
+              exit 7
+            fi
+            sleep 10
+          done
+          [[ "$verified" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 8
+          if ! final_digest="$(timeout 45 python3 scripts/qa-public-oci-tag-index.py --tag "$SOURCE_TAG" 2>/dev/null)"; then
+            echo "ERROR: OCI release tag unavailable after signature check" >&2
+            exit 9
+          fi
+          if [[ "$final_digest" != "$verified" ]]; then
+            echo "ERROR: OCI release tag changed after signature check" >&2
+            exit 9
+          fi
+          echo "SIGNED SOURCE AND PUBLIC OCI PAIR READY: $verified"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,9 +211,68 @@ jobs:
             echo "ERROR: GitHub Release $RELEASE_TAG already exists" >&2
             exit 5
           fi
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
           gh release create "$RELEASE_TAG" \
-            dist/shelly-voltage-telegram-*.tar.gz \
-            dist/SHA256SUMS \
-            --verify-tag \
-            --title "$RELEASE_TAG" \
-            --generate-notes
+            --draft --verify-tag --title "$RELEASE_TAG" --generate-notes
+
+      - name: Upload and verify draft source assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '\r\n' < VERSION)"
+          archive="dist/shelly-voltage-telegram-$version.tar.gz"
+          bundle="$archive.sigstore.json"
+          gh release upload "$RELEASE_TAG" "$archive" "$bundle" dist/SHA256SUMS
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh release view "$RELEASE_TAG" --json tagName,isDraft,assets >"$scratch/draft.json"
+          python3 - "$scratch/draft.json" "$RELEASE_TAG" "$archive" "$bundle" dist/SHA256SUMS <<'PYCHECK'
+          import json
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path(sys.argv[1]).read_text())
+          tag = sys.argv[2]
+          paths = [Path(item) for item in sys.argv[3:]]
+          expected = {p.name: p.stat().st_size for p in paths}
+          if len(expected) != 3 or any(size <= 0 for size in expected.values()):
+              raise SystemExit("DRAFT_LOCAL_ASSET_LIST_INVALID")
+          if manifest.get("tagName") != tag or manifest.get("isDraft") is not True:
+              raise SystemExit("DRAFT_IDENTITY_INVALID")
+          assets = manifest.get("assets")
+          if not isinstance(assets, list) or len(assets) != 3:
+              raise SystemExit("DRAFT_ASSET_COUNT_INVALID")
+          received = {
+              item.get("name"): item.get("size")
+              for item in assets if isinstance(item, dict)
+          }
+          if received != expected:
+              raise SystemExit("DRAFT_ASSET_METADATA_MISMATCH")
+          print("DRAFT_SOURCE_ASSET_METADATA: PASS")
+          PYCHECK
+          mkdir -m 0700 "$scratch/download"
+          gh release download "$RELEASE_TAG" --dir "$scratch/download"
+          for file in "$archive" "$bundle" dist/SHA256SUMS; do
+            name="$(basename "$file")"
+            [[ -f "$scratch/download/$name" ]] || exit 10
+            cmp -s "$file" "$scratch/download/$name" || {
+              echo "ERROR: draft source asset byte mismatch: $name" >&2
+              exit 11
+            }
+          done
+          echo "DRAFT_SOURCE_UPLOAD_BYTE_PARITY: PASS"
+
+      - name: Publish verified GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false
+          gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' | grep -qx false
+          echo "VERIFIED_GITHUB_RELEASE_PUBLISHED: PASS"

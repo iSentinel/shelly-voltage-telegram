@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
@@ -96,6 +97,68 @@ class ReleaseUpdaterTests(unittest.TestCase):
             updater, "published_release", return_value=self.latest
         ):
             self.assertFalse(updater.check(self.root, self.state)["available"])
+
+    def test_scheduled_check_respects_version_input_priority(self):
+        """Use the deployed version, then release metadata, then VERSION."""
+        credentials = self.base / "credentials"
+        credentials.mkdir()
+        deployed = credentials / "deployed.json"
+        release = credentials / "RELEASE_VERSION"
+        (credentials / "VERSION").write_text("0.5.10-hw\n")
+        values = (
+            (json.dumps({"version": "0.5.12-hw"}), "0.5.11-hw", "0.5.12-hw"),
+            (updater.ABSENT_CREDENTIAL, "0.5.11-hw", "0.5.11-hw"),
+            (
+                updater.ABSENT_CREDENTIAL,
+                updater.ABSENT_CREDENTIAL,
+                "0.5.10-hw",
+            ),
+        )
+        with patch.object(
+            updater, "published_release", return_value=self.latest
+        ):
+            for receipt, marker, expected in values:
+                deployed.write_text(receipt)
+                release.write_text(marker)
+                status = updater.check(self.root, self.state, credentials)
+                self.assertEqual(status["installed"], expected)
+                self.assertFalse(status["auto_install"])
+
+    def test_invalid_installed_receipt_does_not_fall_back(self):
+        """An existing malformed receipt is still an error."""
+        self.state.mkdir()
+        (self.state / "deployed.json").write_text("")
+        with self.assertRaises(ValueError):
+            updater.installed_version(self.root, self.state)
+
+    def test_checker_can_write_status_outside_the_input_directory(self):
+        """Create the report without writing into its read-only inputs."""
+        self.state.mkdir()
+        receipt = self.state / "deployed.json"
+        version = json.dumps({"version": "0.5.12-hw"})
+        receipt.write_text(version)
+        output = self.base / "checker-state" / "status.json"
+        args = [
+            "github_update.py",
+            "check",
+            "--credentials",
+            str(self.state),
+            "--status-file",
+            str(output),
+        ]
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(
+                updater, "published_release", return_value=self.latest
+            ),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(updater.main(), 0)
+        status = json.loads(output.read_text())
+        self.assertEqual(status["installed"], "0.5.12-hw")
+        self.assertFalse(status["auto_install"])
+        self.assertEqual(receipt.read_text(), version)
+        self.assertFalse((self.state / "status.json").exists())
 
     def test_refuse_unpublished_or_prerelease(self):
         """A draft or unlisted archive cannot become an update."""
@@ -215,6 +278,87 @@ class ReleaseUpdaterTests(unittest.TestCase):
                 {"ready": True, "connectivity": "online"}
             )
             with self.assertRaisesRegex(ValueError, "alarm"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def settled_three_phase_fixture(self) -> dict:
+        """Build a finalized recovery with fresh, normal per-phase samples."""
+        now = time.time()
+        event_at = now - 960
+        values = {
+            "voltage_episode": json.dumps(
+                {
+                    "last_at": event_at,
+                    "finalized_at": event_at + 300,
+                    "transitions": [{"kind": "recovered", "at": event_at}],
+                }
+            ),
+            "last_voltage_event": json.dumps(
+                {
+                    "kind": "recovered",
+                    "phase": "L2",
+                    "timestamp": event_at,
+                }
+            ),
+            "voltage_recovery_stable_since": str(event_at),
+        }
+        phases = {}
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute("ALTER TABLE measurements ADD COLUMN phase TEXT")
+            db.execute("DELETE FROM measurements")
+            for phase in ("L1", "L2", "L3"):
+                phases[phase] = {"ready": True, "connectivity": "online"}
+                db.execute(
+                    "INSERT INTO measurements VALUES(?, 222, ?)", (now, phase)
+                )
+                values[f"voltage_detector_{phase}"] = (
+                    '{"level":"normal","low":false}'
+                )
+            db.executemany("INSERT INTO meta VALUES(?, ?)", values.items())
+        return {"ready": True, "connectivity": "online", "phases": phases}
+
+    def test_preflight_accepts_finalized_three_phase_recovery(self):
+        """A settled electrical episode does not need Telegram rotation."""
+        status = self.settled_three_phase_fixture()
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_preflight_separately_blocks_unresolved_telegram_state(self):
+        """An unresolved send blocks even when electrical recovery is done."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "INSERT INTO meta VALUES(?, '')",
+                ("telegram_graphic_publish_pending",),
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "Telegram.*unresolved"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_preflight_checks_the_low_phase_even_if_another_is_newer(self):
+        """A healthy aggregate cannot hide a phase outside the upgrade band."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "UPDATE measurements SET voltage=200, ts=ts-1 WHERE phase='L2'"
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "upgrade band"):
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+
+    def test_finalized_episode_with_active_detector_blocks(self):
+        """A finalized edit window cannot authorize an active detector."""
+        status = self.settled_three_phase_fixture()
+        with closing(sqlite3.connect(self.db)) as db, db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key='voltage_detector_L3'",
+                ('{"level":"normal","low":true}',),
+            )
+        with patch("urllib.request.urlopen") as request:
+            request.return_value.__enter__.return_value = _JsonReply(status)
+            with self.assertRaisesRegex(ValueError, "phase detector"):
                 updater.preflight(self.db, "http://127.0.0.1:8080/ready")
 
     def test_target_guard_refuses_downgrades(self):

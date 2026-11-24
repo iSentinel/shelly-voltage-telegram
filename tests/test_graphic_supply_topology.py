@@ -46,6 +46,9 @@ class ShellySupplyTopologyTests(unittest.TestCase):
     def setUp(self):
         """Render only inside disposable test directories."""
 
+        style = mock.patch.dict("os.environ", {"TELEGRAM_GRAPHIC_STYLE": "v4"})
+        style.start()
+        self.addCleanup(style.stop)
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.png = Path(folder.name) / "status.png"

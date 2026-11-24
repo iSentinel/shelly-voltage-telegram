@@ -22,6 +22,7 @@ from telegram_widget_data import (
     MAX_SAMPLE_AGE,
     MIN_VISIBLE_VOLTAGE,
     numeric,
+    valid_emergency_notice,
 )
 
 WIDTH = 960
@@ -130,6 +131,8 @@ def valid_forecast(state: dict, now: float) -> str:
     """Accept a verified, unexpired forecast only for today's Kyiv date."""
 
     bars = state.get("b")
+    if "n" in state:
+        return ""
     if not isinstance(bars, str) or len(bars) != 48:
         return ""
     if set(bars) - set("OX?"):
@@ -318,6 +321,11 @@ def draw_timeline(
     rectangle(pixels, 28, 336, 932, 788, PANEL, 16)
     label(pixels, "ГРАФІК YASNO / ДТЕК", 60, 347, INK, 3)
     if not bars:
+        if valid_emergency_notice(state, now):
+            label(pixels, "АВАРІЙНІ ВІДКЛЮЧЕННЯ", 60, 525, AMBER, 3)
+            label(pixels, "ПЛАНОВИЙ ГРАФІК НЕ ДІЄ", 60, 572, MUTED, 3)
+            label(pixels, "ФАКТ ЖИВЛЕННЯ ЗА SHELLY", 60, 758, MUTED, 2)
+            return
         label(pixels, "НЕМАЄ АКТУАЛЬНОГО ГРАФІКА", 60, 572, MUTED, 3)
         hint = OFFLINE_HINT if state.get("s") == "offline" else "НЕМАЄ ДАНИХ"
         label(pixels, hint, 60, 758, MUTED, 2)

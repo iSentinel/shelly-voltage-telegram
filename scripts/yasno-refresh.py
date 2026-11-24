@@ -18,7 +18,7 @@ from yasno_cache import (  # noqa: E402
     fetch_to_cache,
     read_verified_cache,
 )
-from yasno_schedule import parse_schedule  # noqa: E402
+from yasno_schedule import YasnoEmergency, parse_provider_state  # noqa: E402
 
 DEFAULT_INTERVAL_S = 900
 MIN_INTERVAL_S = 300
@@ -32,11 +32,14 @@ def cache_health(
 
     try:
         payload, captured = read_verified_cache(path)
-        result = parse_schedule(payload, group, now, captured)
+        result = parse_provider_state(payload, group, now, captured)
         age = (now - captured).total_seconds()
     except (ValueError, OSError, TypeError, KeyError) as exc:
         return False, -1.0, type(exc).__name__
-    return True, age, f"{result.day} group={result.group}"
+    detail = f"{result.day} group={result.group}"
+    if isinstance(result, YasnoEmergency):
+        detail += " status=EmergencyShutdowns"
+    return True, age, detail
 
 
 @contextmanager
@@ -75,7 +78,10 @@ def refresh_once(path: str, group: str, interval_s: int) -> str:
         if fresh and age < interval_s:
             return f"SKIPPED cache fresh age={age:.0f}s {detail}"
         day = fetch_to_cache(path, group)
-        return f"UPDATED day={day.day} group={day.group} source=YASNO"
+        detail = f"UPDATED day={day.day} group={day.group} source=YASNO"
+        if isinstance(day, YasnoEmergency):
+            detail += " status=EmergencyShutdowns"
+        return detail
 
 
 def options() -> argparse.Namespace:

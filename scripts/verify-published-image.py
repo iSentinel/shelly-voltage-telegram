@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify signed release image contents through the public OCI registry."""
+"""Check OCI bytes, revision and metadata; not a signature verifier."""
 
 from __future__ import annotations
 
@@ -149,7 +149,7 @@ def statement_types(token: str, manifest: dict, image_digest: str) -> set[str]:
 
 
 def verify_image(token: str, index: dict, commit: str) -> None:
-    """Verify per-platform code labels and signed-index attestations."""
+    """Check revision and digest-bound unsigned attestation metadata."""
 
     images = platform_manifests(index)
     for arch, image in images.items():
@@ -182,7 +182,7 @@ def main() -> int:
     if index.get("mediaType") not in INDEX_TYPES:
         raise ValueError("The release digest is not an OCI image index")
     verify_image(token, index, args.commit)
-    print("RELEASE OCI ATTESTATIONS: PASS")
+    print("RELEASE OCI CONTENT: PASS (Cosign signature NOT verified)")
     return 0
 
 

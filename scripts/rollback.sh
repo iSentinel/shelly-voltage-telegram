@@ -26,8 +26,8 @@ usage() {
     cat <<'EOF'
 Usage: rollback.sh [--snapshot DIR] [--dry-run] [--no-start] [--confirm-db-replacement] [-h|--help]
 
-Restore source and SQLite from a pre-upgrade snapshot.
-By default the newest snapshot under /var/backups/shelly-voltage/upgrades is used.
+Legacy QA restore of source and SQLite from a pre-upgrade snapshot.
+Production paths are blocked; use a signed single-owner newest-history rollback.
 
 Options:
   --snapshot DIR  Restore this snapshot instead of the newest one.
@@ -223,7 +223,21 @@ preflight_backup_paths() {
     fi
 }
 
+legacy_production_rollback_guard() {
+    local db_target source_target
+    db_target="$(readlink -m -- "$DB")" || return 3
+    source_target="$(readlink -m -- "$TARGET")" || return 3
+    case "$db_target:$source_target" in
+        /var/lib/shelly-voltage/*:*|*:/opt/shelly-voltage|*:/opt/shelly-voltage/*)
+            echo "ERROR: legacy production source/SQLite rollback blocked." >&2
+            echo "Use signed sole-owner newest WAL/PHOTO-safe rollback." >&2
+            return 3
+            ;;
+    esac
+}
+
 rescue_current_db() {
+    [[ "$DRY_RUN" == true ]] || legacy_production_rollback_guard || return 3
     [[ -f "$DB" ]] || return 0
     local rescue label
     label="rollback-rescue-$(date +%Y%m%d-%H%M%S)"
@@ -265,6 +279,7 @@ assert_writer_stopped() {
 
 stop_service() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: stop Compose service"; return; }
+    legacy_production_rollback_guard || return 3
     # A missing Compose file is not proof that the Docker SQLite writer stopped.
     WRITER_REQUIRED=true
     if [[ -f "$TARGET/compose.yaml" ]]; then
@@ -278,6 +293,7 @@ stop_service() {
 
 restore_source() {
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore source -> $TARGET"; return; }
+    legacy_production_rollback_guard || return 3
     mkdir -p "$TARGET"
     # Keep locally created checkpoints/locks that do not belong to releases.
     find "$TARGET" -mindepth 1 -maxdepth 1 \
@@ -295,6 +311,7 @@ restore_source() {
 }
 
 restore_database() {
+    [[ "$DRY_RUN" == true ]] || legacy_production_rollback_guard || return 3
     local backup
     backup="$(unique_snapshot_backup)"
     [[ "$DRY_RUN" == true ]] && { echo "DRY-RUN: restore DB $backup -> $DB"; return; }
@@ -364,6 +381,7 @@ await_signed_rollback_ready() {
 
 start_service() {
     [[ "$NO_START" == true ]] && return
+    [[ "$DRY_RUN" == true ]] || legacy_production_rollback_guard || return 3
     if [[ "$DRY_RUN" == true ]]; then
         if [[ "$SIGNED_ROLLBACK" == true ]]; then
             echo "DRY-RUN: start pinned signed image without Docker build"
@@ -392,9 +410,25 @@ start_service() {
     exit 1
 }
 
+legacy_supervisor_guard() {
+    case "${1:-}" in
+        -h|--help) return 0 ;;
+    esac
+    if [[ -n "${SVT_SUPERVISOR_OVERLAY:-}" ||
+          -n "${SVT_WRITER_FENCE_DIR:-}" ||
+          -e /var/lib/shelly-voltage-fence/.svt-owner.lock ]]; then
+        echo "ERROR: legacy rollback blocked with protected sole owner" >&2
+        return 3
+    fi
+}
+
 main() {
+    legacy_supervisor_guard "$@" || return 3
     parse_args "$@"
     require_root
+    if [[ "$DRY_RUN" != true ]]; then
+        legacy_production_rollback_guard || return 3
+    fi
     preflight_source_target
     select_snapshot
     validate_snapshot
