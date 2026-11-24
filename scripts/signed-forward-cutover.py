@@ -650,21 +650,8 @@ def rollback_preflight(paths: Layout, args: argparse.Namespace) -> dict:
     proposed = signed_candidate(args)
     current, _, supervised = installed_runtime(paths, True)
     if not supervised:
-        raise ValueError("rollback preflight requires a verified supervisor")
-    if updater.version_tuple(proposed["version"]) >= updater.version_tuple(
-        current["version"]
-    ):
-        raise ValueError("rollback target must be older than installed")
-    anchor = paths.home / current["transaction_token"]
-    installed_inputs = archived_monitor_inputs(
-        retained_archive(anchor, current["version"]),
-        current["version"],
-        current["source_sha256"],
-    )
-    if installed_inputs != archived_monitor_inputs(
-        args.archive, proposed["version"], proposed["archive_sha256"]
-    ):
-        raise ValueError("signed monitor sources or build inputs differ")
+        raise ValueError("rollback requires a verified supervisor")
+    validate_rollback_target(paths, current, proposed, args.archive)
     verify_current_mounts(paths, True)
     updater.preflight(paths.database, READY)
     read_photo(paths, args.photo)
@@ -681,17 +668,70 @@ def rollback_preflight(paths: Layout, args: argparse.Namespace) -> dict:
     }
 
 
+def validate_rollback_target(
+    paths: Layout, current: dict, target: dict, archive: Path
+) -> None:
+    """Require an older supervised pair with matching monitor inputs."""
+    if updater.version_tuple(target["version"]) >= updater.version_tuple(
+        current["version"]
+    ):
+        raise ValueError("rollback target must be older than installed")
+    anchor = paths.home / current["transaction_token"]
+    installed_inputs = archived_monitor_inputs(
+        retained_archive(anchor, current["version"]),
+        current["version"],
+        current["source_sha256"],
+    )
+    if installed_inputs != archived_monitor_inputs(
+        archive, target["version"], target["archive_sha256"]
+    ):
+        raise ValueError("signed monitor sources or build inputs differ")
+
+
+def validate_direction(
+    paths: Layout,
+    work: Path,
+    installed: dict,
+    pair: dict,
+    previous_supervised: bool,
+    rollback_from: str | None,
+) -> None:
+    """Keep forward updates monotonic and bind rollback to its exact origin."""
+    if rollback_from is None:
+        if updater.version_tuple(pair["version"]) <= updater.version_tuple(
+            installed["version"]
+        ):
+            raise ValueError(
+                "the signed release must advance the current version"
+            )
+        return
+    if not previous_supervised:
+        raise ValueError("rollback requires a verified supervisor")
+    if installed["digest"] != rollback_from:
+        raise ValueError(
+            "installed image differs from the approved rollback origin"
+        )
+    validate_rollback_target(
+        paths, installed, pair, retained_archive(work, pair["version"])
+    )
+
+
 def capture(
-    paths: Layout, work: Path, pair: dict, photo: str, supervised=False
+    paths: Layout,
+    work: Path,
+    pair: dict,
+    photo: str,
+    supervised=False,
+    *,
+    rollback_from: str | None = None,
 ) -> dict:
     """Record the existing pair before touching any running writer."""
     installed, policy, previous_supervised = installed_runtime(
         paths, supervised
     )
-    if updater.version_tuple(pair["version"]) <= updater.version_tuple(
-        installed["version"]
-    ):
-        raise ValueError("the signed release must advance the current version")
+    validate_direction(
+        paths, work, installed, pair, previous_supervised, rollback_from
+    )
     read_photo(paths, photo)
     updater.preflight(paths.database, READY)
     verify_current_mounts(paths, previous_supervised)
@@ -710,6 +750,9 @@ def capture(
         )
         == "enabled",
     }
+    if rollback_from is not None:
+        state["rollback_from"] = rollback_from
+        state["release_timer"] = rollback_timer_modes(paths, work, installed)
     record(work / "transaction.json", state)
     return state
 
@@ -738,10 +781,14 @@ def runtime_config(
     pair: dict,
     supervised=False,
     previous_supervised=False,
+    *,
+    rollback=False,
 ) -> None:
     """Preserve private configuration and validate the effective image pin."""
     target = work / "next"
-    guarded_unit(target)
+    # An existing supervisor uses the checked supervisor unit during rollback.
+    if not rollback:
+        guarded_unit(target)
     require_runtime_owner(target, supervised)
     if supervised:
         validate_supervisor_inputs(paths, work, previous_supervised)
@@ -751,6 +798,14 @@ def runtime_config(
         work / "next-override.yaml",
         f"services:\n  shelly-voltage:\n    image: {pin}\n".encode(),
     )
+    verify_candidate_plan(paths, work, pin, supervised)
+
+
+def verify_candidate_plan(
+    paths: Layout, work: Path, pin: str, supervised: bool
+) -> None:
+    """Read the resolved Compose plan before stopping either service."""
+    target = work / "next"
     command = [
         "docker",
         "compose",
@@ -990,6 +1045,7 @@ def clear_marker(paths: Layout, work: Path) -> None:
 
 def freeze(paths: Layout, work: Path, saved: dict) -> None:
     """Stop the photo editor and block autonomous startup before the swap."""
+    pause_release_check(saved.get("release_timer", {}))
     if saved["timer_active"]:
         run("systemctl", "stop", PHOTO_TIMER)
     if saved["timer_enabled"]:
@@ -1011,6 +1067,28 @@ def freeze(paths: Layout, work: Path, saved: dict) -> None:
     ):
         raise ValueError("the existing writer did not stop")
     backup_database(paths, work, saved["photo"])
+    if saved.get("rollback_from") is not None:
+        seal_rollback_rescue(work, saved["photo"])
+
+
+def seal_rollback_rescue(work: Path, photo: str) -> None:
+    """Check the standalone rescue and record its checksum before switching."""
+    backup = work / "database-before.sqlite3"
+    safe_path(backup)
+    with closing(
+        sqlite3.connect(backup.as_uri() + "?mode=ro&immutable=1", uri=True)
+    ) as db:
+        if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
+            raise ValueError(
+                "standalone rollback rescue integrity check failed"
+            )
+        photo_identity(db, photo)
+    with backup.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    write_file(
+        backup.with_suffix(".sqlite3.sha256"),
+        f"{digest}  {backup.name}\n".encode(),
+    )
 
 
 def fence_pending(paths: Layout, work: Path) -> bool:
@@ -1282,14 +1360,32 @@ def verify_ready(paths: Layout, saved: dict) -> None:
 
 
 def activate(
-    paths: Layout, work: Path, pair: dict, photo: str, supervised=False
+    paths: Layout,
+    work: Path,
+    pair: dict,
+    photo: str,
+    supervised=False,
+    *,
+    rollback_from: str | None = None,
 ) -> None:
     """Use fail-closed recovery across the source and image switch."""
     try:
         with lease(paths.updater_lock):
-            saved = capture(paths, work, pair, photo, supervised)
+            saved = capture(
+                paths,
+                work,
+                pair,
+                photo,
+                supervised,
+                rollback_from=rollback_from,
+            )
             runtime_config(
-                paths, work, pair, supervised, saved["previous_supervised"]
+                paths,
+                work,
+                pair,
+                supervised,
+                saved["previous_supervised"],
+                rollback=rollback_from is not None,
             )
             seal_pair(paths, work, saved)
     except (OSError, ValueError, subprocess.SubprocessError, sqlite3.Error):
@@ -1345,7 +1441,7 @@ def start_candidate(paths: Layout, work: Path, saved: dict) -> None:
     save_phase(work, saved, "verified")
     if supervised:
         try:
-            if packaged_release_check(paths):
+            if packaged_release_check(paths.source):
                 sync_release_check(paths, work)
         except (
             OSError,
@@ -1361,9 +1457,9 @@ def start_candidate(paths: Layout, work: Path, saved: dict) -> None:
             )
 
 
-def packaged_release_check(paths: Layout) -> bool:
+def packaged_release_check(source: Path) -> bool:
     """Recognize a signed release that supplies the isolated checker."""
-    service = paths.source / "systemd" / RELEASE_CHECK_SERVICE
+    service = source / "systemd" / RELEASE_CHECK_SERVICE
     if not (service.exists() or service.is_symlink()):
         return False
     safe_path(service)
@@ -1424,7 +1520,7 @@ def sync_release_check(paths: Layout, work: Path) -> None:
         raise ValueError("release checker requires the current transaction")
     if paths.marker.exists() or paths.marker.is_symlink():
         raise ValueError("another supervised update is pending")
-    if not packaged_release_check(paths):
+    if not packaged_release_check(paths.source):
         raise ValueError("the signed release has no isolated release checker")
     try:
         units = checked_release_check_files(paths, work, pair)
@@ -1447,6 +1543,60 @@ def sync_release_check(paths: Layout, work: Path) -> None:
         raise ValueError("release checker timer is not active")
 
 
+def rollback_timer_modes(paths: Layout, work: Path, installed: dict) -> dict:
+    """Capture the packaged timer if the older checker cannot use it."""
+    if not packaged_release_check(paths.source) or packaged_release_check(
+        work / "next"
+    ):
+        return {}
+    active = state_of(RELEASE_CHECK_TIMER)
+    enabled = run(
+        "systemctl",
+        "show",
+        "-p",
+        "UnitFileState",
+        "--value",
+        RELEASE_CHECK_TIMER,
+    )
+    if active in ("inactive", "failed") and enabled in (
+        "",
+        "disabled",
+        "masked",
+    ):
+        return {}
+    if active not in ("active", "inactive", "failed") or enabled not in (
+        "enabled",
+        "disabled",
+    ):
+        raise ValueError("unsupported release checker timer state")
+    anchor = paths.home / installed["transaction_token"]
+    units = checked_release_check_files(paths, anchor, installed)
+    if any(
+        release_check_unit_needs_update(paths, work, unit, body)
+        for unit, body in units.items()
+    ):
+        raise ValueError("rollback requires the stock release checker units")
+    return {"active": active == "active", "enabled": enabled == "enabled"}
+
+
+def pause_release_check(modes: dict) -> None:
+    """Stop an incompatible scheduled checker before the source swap."""
+    if modes.get("active"):
+        run("systemctl", "stop", RELEASE_CHECK_TIMER)
+    if modes.get("enabled"):
+        run("systemctl", "disable", RELEASE_CHECK_TIMER)
+    if modes:
+        run("systemctl", "stop", RELEASE_CHECK_SERVICE)
+
+
+def restore_release_check(modes: dict) -> None:
+    """Restore the newer checker's original schedule after early recovery."""
+    if modes.get("enabled"):
+        run("systemctl", "enable", RELEASE_CHECK_TIMER)
+    if modes.get("active"):
+        run("systemctl", "start", RELEASE_CHECK_TIMER)
+
+
 def publish_version(paths: Layout, pair: dict) -> None:
     """Publish the read-only receipt only once the new pair is healthy."""
     paths.public_state.mkdir(mode=0o755, exist_ok=True)
@@ -1465,6 +1615,17 @@ def recover(paths: Layout, work: Path) -> None:
     safe_path(state_file)
     saved = json.loads(state_file.read_text())
     with lease(paths.updater_lock):
+        if saved.get("rollback_from") is not None and saved["phase"] in (
+            "verified",
+            "recovered",
+        ):
+            key = "pair" if saved["phase"] == "verified" else "previous"
+            pair = saved[key]
+            if installed_runtime(paths, True)[0] != pair:
+                raise ValueError("installed pair changed after rollback")
+            verify_current_mounts(paths, True)
+            verify_ready(paths, {**saved, "pair": pair})
+            return
         if saved["phase"] == "candidate-may-have-run":
             if read_pair(paths) != saved["pair"]:
                 raise ValueError(
@@ -1498,6 +1659,7 @@ def start_previous(paths: Layout, work: Path, saved: dict) -> None:
         run("systemctl", "start", SUPERVISOR, timeout=65)
         verify_ready(paths, {**saved, "pair": saved["previous"]})
         verify_current_mounts(paths, True)
+        restore_release_check(saved.get("release_timer", {}))
         save_phase(work, saved, "recovered")
         return
     run("systemctl", "start", MONITOR, timeout=65)
@@ -1518,17 +1680,23 @@ def options() -> argparse.Namespace:
     """Expose preparation, preflight, activation and interrupted recovery."""
     cli = argparse.ArgumentParser(description=__doc__)
     modes = cli.add_subparsers(dest="action", required=True)
-    for mode in ("prepare", "activate", "check-rollback"):
+    for mode in ("prepare", "activate", "check-rollback", "rollback"):
         command = modes.add_parser(mode)
         for name in ("version", "commit", "digest", "archive-sha256", "photo"):
             command.add_argument(f"--{name}", required=True)
         for name in ("archive", "bundle", "sha256sums"):
             command.add_argument(f"--{name}", type=Path, required=True)
-        if mode != "check-rollback":
+        if mode in ("prepare", "activate"):
             command.add_argument(
                 "--supervised",
                 action="store_true",
                 help="install or update the protected sole writer",
+            )
+        if mode == "rollback":
+            command.add_argument(
+                "--from-digest",
+                required=True,
+                help="approved digest of the currently running image",
             )
     for mode in ("recover", "sync-release-check"):
         modes.add_parser(mode).add_argument("--transaction", required=True)
@@ -1551,20 +1719,39 @@ def dispatch(paths: Layout, args: argparse.Namespace) -> Path:
     if not PHOTO_PATTERN.fullmatch(args.photo):
         raise ValueError("the confirmed photo ID is invalid")
     pair = signed_candidate(args)
-    work = Path(tempfile.mkdtemp(prefix="cutover-", dir=paths.home))
-    logger.info("Private transaction {}", work.name)
-    stage_source(args.archive, work, pair)
-    stage_image(pair)
-    if args.supervised:
-        pair = stage_supervised_receipt(args.archive, work, pair)
-    if args.action == "activate":
-        activate(paths, work, pair, args.photo, args.supervised)
+    supervised = args.action == "rollback" or args.supervised
+    rollback_from = getattr(args, "from_digest", None)
+    if rollback_from is not None:
+        image_pin(rollback_from)
+    work, pair = stage_transaction(paths, args.archive, pair, supervised)
+    if args.action in {"activate", "rollback"}:
+        activate(
+            paths,
+            work,
+            pair,
+            args.photo,
+            supervised,
+            rollback_from=rollback_from,
+        )
     else:
-        saved = capture(paths, work, pair, args.photo, args.supervised)
+        saved = capture(paths, work, pair, args.photo, supervised)
         runtime_config(
-            paths, work, pair, args.supervised, saved["previous_supervised"]
+            paths, work, pair, supervised, saved["previous_supervised"]
         )
     return work
+
+
+def stage_transaction(
+    paths: Layout, archive: Path, pair: dict, supervised: bool
+) -> tuple[Path, dict]:
+    """Stage the exact release and retain its archive for supervised boot."""
+    work = Path(tempfile.mkdtemp(prefix="cutover-", dir=paths.home))
+    logger.info("Private transaction {}", work.name)
+    stage_source(archive, work, pair)
+    stage_image(pair)
+    if supervised:
+        pair = stage_supervised_receipt(archive, work, pair)
+    return work, pair
 
 
 def main() -> int:
