@@ -413,6 +413,18 @@ class ForwardCutoverTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "protected writer fence"):
             CUTOVER.verify_database_mount([data], self.paths, True)
 
+    def test_fence_helper_does_not_inherit_a_restrictive_umask(self) -> None:
+        """Give the signed helper the mask needed for its 0755 directory."""
+        saved = {"pair": NEW, "previous": OLD}
+        with (
+            patch.object(CUTOVER, "run") as run,
+            patch.object(CUTOVER, "control_fence"),
+            patch.object(CUTOVER, "remove_stopped_pair"),
+        ):
+            CUTOVER.arm_supervisor(self.paths, self.work, saved)
+        self.assertIn("prepare-writer-fence.py", run.call_args.args[2])
+        self.assertEqual(run.call_args.kwargs["umask"], 0o022)
+
     def test_supervisor_rejects_an_app_without_a_required_fence(self) -> None:
         """Setting a mount alone cannot make a legacy app use the fence."""
         source = self.work / "next"

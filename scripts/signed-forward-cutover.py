@@ -92,7 +92,12 @@ class Layout:
         return self.unit.with_name(SUPERVISOR)
 
 
-def run(*args: str, timeout: int = 20, fence: Path | None = None) -> str:
+def run(
+    *args: str,
+    timeout: int = 20,
+    fence: Path | None = None,
+    umask: int = -1,
+) -> str:
     """Execute a fixed operator command without exposing its private output."""
     env = {
         "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -109,6 +114,7 @@ def run(*args: str, timeout: int = 20, fence: Path | None = None) -> str:
         timeout=timeout,
         check=False,
         env=env,
+        umask=umask,
     )
     if result.returncode:
         raise ValueError(f"command failed: {args[0]} ({result.returncode})")
@@ -875,6 +881,8 @@ def arm_supervisor(paths: Layout, work: Path, saved: dict) -> None:
         str(paths.fence),
         "--uid",
         "10001",
+        # The released helper validates a 0755 directory and 0600 locks.
+        umask=0o022,
     )
     control_fence(paths, work, "publish", target)
     remove_stopped_pair(saved)
