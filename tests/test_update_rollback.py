@@ -118,6 +118,7 @@ class OfflineRollbackTests(unittest.TestCase):
                 **os.environ,
                 "SVT_UPDATE_STATE": str(state),
                 "SVT_PUBLIC_STATE": str(public),
+                "DATABASE_PATH": str(self.root / "fixture.sqlite3"),
                 "PIN": pin,
                 "RECEIPT": json.dumps(
                     {

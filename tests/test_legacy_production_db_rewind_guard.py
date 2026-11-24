@@ -74,10 +74,12 @@ class LegacyProductionRewindGuardTests(unittest.TestCase):
         self.assertFalse(self.actions.exists())
         self.assertTrue(self.pending.is_file())
 
-    def test_direct_old_database_restore_refused(self) -> None:
-        """Source-call bypasses must be fenced before DB backup selection."""
-        result = self.sourced("restore_snapshot_database", PRODUCTION_DB)
-        self.assertEqual(result.returncode, 3)
+    def test_direct_old_database_restore_removed(self) -> None:
+        """Sourcing the updater exposes no old SQLite restore function."""
+        result = self.sourced(
+            "declare -F restore_snapshot_database", PRODUCTION_DB
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
         self.assertFalse(self.actions.exists())
 
     def test_direct_legacy_activation_refused(self) -> None:

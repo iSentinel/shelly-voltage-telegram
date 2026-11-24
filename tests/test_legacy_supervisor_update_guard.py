@@ -70,10 +70,9 @@ class LegacySupervisorGuardTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3, result.stderr)
 
     def test_sourced_legacy_functions_refuse_supervised_mode(self) -> None:
-        """Other scripts cannot call old restore functions around main."""
+        """Sourced recovery and startup must enforce the supervisor guard."""
         for action in (
             "recover_pending",
-            "restore_snapshot_database",
             "activate sha256:fixture",
             "start_stack",
         ):
