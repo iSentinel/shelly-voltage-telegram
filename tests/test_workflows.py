@@ -31,6 +31,21 @@ class WorkflowSecurityTests(unittest.TestCase):
         text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
         self.assertIn("bash -n scripts/quality.sh", text)
 
+    def test_ci_bounds_font_installation_and_requires_both_packages(self):
+        """Keep network retries bounded and both rendering fonts required."""
+        text = (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+        start = text.index("- name: Install v5 font packages")
+        end = text.index("- name:", start + 1)
+        step = text[start:end]
+        self.assertIn("timeout-minutes: 6", step)
+        self.assertIn("for attempt in 1 2 3", step)
+        self.assertIn("Acquire::http::Timeout=20", step)
+        self.assertIn("Acquire::https::Timeout=20", step)
+        self.assertIn("APT::Update::Error-Mode=any", step)
+        self.assertIn("ERROR: required v5 fonts unavailable", step)
+        self.assertIn("for package in fonts-inter fonts-noto-core", step)
+        self.assertIn('grep -qx "install ok installed"', step)
+
     def test_no_pull_request_target(self):
         for path in WORKFLOWS.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
