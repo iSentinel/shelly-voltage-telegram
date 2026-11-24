@@ -28,6 +28,8 @@ MONITOR = "shelly-voltage-compose.service"
 SUPERVISOR = "shelly-voltage-supervised.service"
 PHOTO_TIMER = "shelly-incident-photo-refresh.timer"
 PHOTO_SERVICE = "shelly-incident-photo-refresh.service"
+RELEASE_CHECK_SERVICE = "shelly-voltage-update-check.service"
+RELEASE_CHECK_TIMER = "shelly-voltage-update-check.timer"
 CONTAINER = "shelly-voltage-bot"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram@"
 READY = "http://127.0.0.1:8080/ready"
@@ -556,19 +558,26 @@ def installed_transaction(paths: Layout, receipt: dict) -> Path:
     journal = work / "transaction.json"
     safe_path(journal)
     saved = json.loads(journal.read_text())
-    if saved.get("phase") != "verified" or saved.get("pair") != receipt:
+    if (
+        not isinstance(saved, dict)
+        or saved.get("phase") != "verified"
+        or saved.get("pair") != receipt
+    ):
         raise ValueError("previous supervised update is not verified")
-    archive = (
-        work
-        / "release-archive"
-        / (f"shelly-voltage-telegram-{receipt['version']}.tar.gz")
-    )
+    archive = retained_archive(work, receipt["version"])
     safe_path(archive)
     with archive.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     if digest != receipt.get("source_sha256"):
         raise ValueError("previous supervisor source archive changed")
     return work
+
+
+def retained_archive(work: Path, version: str) -> Path:
+    """Locate the retained source archive of a verified release."""
+    return (
+        work / "release-archive" / f"shelly-voltage-telegram-{version}.tar.gz"
+    )
 
 
 def verify_installed_supervisor(paths: Layout, receipt: dict) -> None:
@@ -1242,6 +1251,108 @@ def start_candidate(paths: Layout, work: Path, saved: dict) -> None:
         raise ValueError("candidate source or pin changed after startup")
     publish_version(paths, saved["pair"])
     save_phase(work, saved, "verified")
+    if supervised:
+        try:
+            if packaged_release_check(paths):
+                sync_release_check(paths, work)
+        except (
+            OSError,
+            ValueError,
+            subprocess.SubprocessError,
+            tarfile.TarError,
+        ) as exc:
+            logger.warning(
+                "Monitor verified. Release timer unavailable ({}). "
+                "Retry with sync-release-check --transaction {}",
+                exc if isinstance(exc, ValueError) else type(exc).__name__,
+                work.name,
+            )
+
+
+def packaged_release_check(paths: Layout) -> bool:
+    """Recognize a signed release that supplies the isolated checker."""
+    service = paths.source / "systemd" / RELEASE_CHECK_SERVICE
+    if not (service.exists() or service.is_symlink()):
+        return False
+    safe_path(service)
+    return b"LoadCredential=checker.py:" in service.read_bytes()
+
+
+def checked_release_check_files(paths: Layout, work: Path, pair: dict) -> dict:
+    """Match service templates and the executable to the retained archive."""
+    root = f"shelly-voltage-telegram-{pair['version']}"
+    files = (
+        f"systemd/{RELEASE_CHECK_SERVICE}",
+        f"systemd/{RELEASE_CHECK_TIMER}",
+        "scripts/github_update.py",
+    )
+    approved = {}
+    with tarfile.open(retained_archive(work, pair["version"]), "r:gz") as tar:
+        for name in files:
+            member = tar.getmember(f"{root}/{name}")
+            if not member.isfile() or not 0 < member.size <= 131072:
+                raise ValueError("invalid archived release checker file")
+            with tar.extractfile(member) as source:
+                data = source.read()
+            installed = paths.source / name
+            safe_path(installed)
+            if installed.read_bytes() != data:
+                raise ValueError("release checker differs from signed source")
+            if name.startswith("systemd/"):
+                approved[installed.name] = data
+    return approved
+
+
+def release_check_unit_needs_update(
+    paths: Layout, work: Path, unit: str, payload: bytes
+) -> bool:
+    """Allow only the previous stock file or the exact current template."""
+    target = paths.unit.with_name(unit)
+    fragment = run("systemctl", "show", "-p", "FragmentPath", "--value", unit)
+    dropins = run("systemctl", "show", "-p", "DropInPaths", "--value", unit)
+    if dropins or fragment not in ("", str(target)):
+        raise ValueError("release checker has a local systemd override")
+    if not (target.exists() or target.is_symlink()):
+        return True
+    safe_path(target)
+    contents = target.read_bytes()
+    if contents == payload:
+        return False
+    previous = work / "previous" / "systemd" / unit
+    safe_path(previous)
+    if contents != previous.read_bytes():
+        raise ValueError("release checker has a locally modified unit")
+    return True
+
+
+def sync_release_check(paths: Layout, work: Path) -> None:
+    """Install the isolated timer without touching the monitor or SQLite."""
+    pair = read_pair(paths)
+    if installed_transaction(paths, pair) != work:
+        raise ValueError("release checker requires the current transaction")
+    if paths.marker.exists() or paths.marker.is_symlink():
+        raise ValueError("another supervised update is pending")
+    if not packaged_release_check(paths):
+        raise ValueError("the signed release has no isolated release checker")
+    try:
+        units = checked_release_check_files(paths, work, pair)
+    except KeyError as exc:
+        raise ValueError("release checker missing in signed archive") from exc
+    changed = [
+        (unit, body)
+        for unit, body in units.items()
+        if release_check_unit_needs_update(paths, work, unit, body)
+    ]
+    was_active = state_of(RELEASE_CHECK_TIMER) == "active"
+    for unit, body in changed:
+        write_file(paths.unit.with_name(unit), body, 0o644)
+    # Reload on retry as well in case an interruption left new files on disk.
+    run("systemctl", "daemon-reload")
+    if changed and was_active:
+        run("systemctl", "restart", RELEASE_CHECK_TIMER)
+    run("systemctl", "enable", "--now", RELEASE_CHECK_TIMER, timeout=45)
+    if state_of(RELEASE_CHECK_TIMER) != "active":
+        raise ValueError("release checker timer is not active")
 
 
 def publish_version(paths: Layout, pair: dict) -> None:
@@ -1326,18 +1437,23 @@ def options() -> argparse.Namespace:
             action="store_true",
             help="install or update the protected sole writer",
         )
-    modes.add_parser("recover").add_argument("--transaction", required=True)
+    for mode in ("recover", "sync-release-check"):
+        modes.add_parser(mode).add_argument("--transaction", required=True)
     return cli.parse_args()
 
 
 def dispatch(paths: Layout, args: argparse.Namespace) -> Path:
     """Choose a fixed production operation under the operator lease."""
-    if args.action == "recover":
+    if args.action in {"recover", "sync-release-check"}:
         if not ID_PATTERN.fullmatch(args.transaction):
             raise ValueError("invalid transaction name")
         work = paths.home / args.transaction
         safe_path(work, folder=True)
-        recover(paths, work)
+        if args.action == "recover":
+            recover(paths, work)
+        else:
+            with lease(paths.updater_lock):
+                sync_release_check(paths, work)
         return work
     if not PHOTO_PATTERN.fullmatch(args.photo):
         raise ValueError("the confirmed photo ID is invalid")
