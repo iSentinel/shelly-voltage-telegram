@@ -18,6 +18,25 @@ database.
 
 `PASS_ROLLBACK_PAIR_PREFLIGHT_ONLY` confirms those checks. The command
 opens the live database read-only and leaves the current release running.
-Executing a rollback requires separate approval and a verified rescue of
-the latest SQLite data after the writer stops. A historical database
-snapshot alone is insufficient.
+
+## Execute an approved rollback
+
+Use the reviewed operator checkout for both rollback and recovery.
+The `rollback` action accepts the same signed target inputs as
+`check-rollback` and requires `--from-digest` for the approved running
+image. The command checks the running pair again before stopping it.
+
+```bash
+python3 scripts/signed-forward-cutover.py rollback --help
+python3 scripts/signed-forward-cutover.py recover --transaction <id>
+```
+
+After stopping the writer, the command saves the latest SQLite history
+in a standalone rescue with a SHA-256 checksum. The older image opens
+the existing database. If an interruption occurs before it may start,
+recovery returns to the original supervisor. Once the older image may
+have written, recovery resumes that same image with the current data.
+Repeating recovery after completion verifies the running pair again.
+An incompatible scheduled release checker stays paused after a completed
+rollback. Recovery restores its prior timer state when it returns to
+the original release.

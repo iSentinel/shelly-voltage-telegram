@@ -107,6 +107,7 @@ class ForwardCutoverTests(unittest.TestCase):
         )
         self.timer = "active"
         self.check_timer = "inactive"
+        self.check_timer_enabled = False
         self.fail_check_timer = False
         self.supervisor_mode = False
         self.container_exists = True
@@ -250,6 +251,8 @@ class ForwardCutoverTests(unittest.TestCase):
         if prop == "DropInPaths":
             return ""
         if prop == "UnitFileState":
+            if unit == CUTOVER.RELEASE_CHECK_TIMER:
+                return "enabled" if self.check_timer_enabled else "disabled"
             if self.supervisor_mode and unit != owner:
                 return "disabled"
             return "enabled"
@@ -268,6 +271,10 @@ class ForwardCutoverTests(unittest.TestCase):
             if self.fail_check_timer:
                 raise ValueError("injected timer failure")
             self.check_timer = "active"
+            self.check_timer_enabled = True
+            return ""
+        if args[-1] == CUTOVER.RELEASE_CHECK_TIMER:
+            self.adjust_check_timer(args[1])
             return ""
         if args[1] == "daemon-reload" and self.failed_reload:
             self.failed_reload = False
@@ -294,6 +301,13 @@ class ForwardCutoverTests(unittest.TestCase):
         if args[-1] == CUTOVER.PHOTO_TIMER and args[1] == "start":
             self.timer = "active"
         return ""
+
+    def adjust_check_timer(self, operation: str) -> None:
+        """Model the timer activation and enablement separately."""
+        if operation in ("enable", "disable"):
+            self.check_timer_enabled = operation == "enable"
+        elif operation in ("start", "stop"):
+            self.check_timer = "active" if operation == "start" else "inactive"
 
     def existing_supervisor(self) -> dict:
         """Install a previous signed receipt and retained unit fixture."""
@@ -431,6 +445,142 @@ class ForwardCutoverTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "source archive changed"),
         ):
             CUTOVER.rollback_preflight(self.paths, args)
+
+    def stage_older_supervisor(self, app: bytes = b"monitor source") -> dict:
+        """Retain a verified older pair whose unused legacy unit is old."""
+        args, pair = self.rollback_pair(app=app)
+        work = self.paths.home / "cutover-NEW12345"
+        self.work.rename(work)
+        self.work = work
+        for name in ("VERSION", "RELEASE_VERSION"):
+            self.work.joinpath("next", name).write_text(pair["version"] + "\n")
+        self.work.joinpath("next", "systemd", CUTOVER.MONITOR).write_text(
+            LEGACY_UNIT
+        )
+        archive = work / args.archive.name
+        return CUTOVER.stage_supervised_receipt(archive, work, pair)
+
+    def activate_older_pair(self, pair: dict) -> None:
+        """Run a rollback approved for the fixture's current digest."""
+        CUTOVER.activate(
+            self.paths,
+            self.work,
+            pair,
+            PHOTO,
+            True,
+            rollback_from=OLD["digest"],
+        )
+
+    def test_supervised_rollback_keeps_sqlite_and_seals_its_rescue(self):
+        """Verify the old pair and the checksum of the stopped-writer copy."""
+        pair = self.stage_older_supervisor()
+        self.activate_older_pair(pair)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(CUTOVER.read_pair(self.paths), pair)
+        self.assertEqual(
+            self.paths.unit.read_bytes(), CUTOVER.INERT_LEGACY_UNIT
+        )
+        backup = self.work / "database-before.sqlite3"
+        checksum = backup.with_suffix(".sqlite3.sha256").read_text().split()[0]
+        self.assertEqual(
+            checksum, hashlib.sha256(backup.read_bytes()).hexdigest()
+        )
+        self.assert_history([222])
+
+    def test_supervised_rollback_refuses_different_origin_before_stop(self):
+        """Require the approved running digest even if the target matches."""
+        pair = self.stage_older_supervisor()
+        with self.assertRaisesRegex(ValueError, "approved rollback origin"):
+            CUTOVER.activate(
+                self.paths,
+                self.work,
+                pair,
+                PHOTO,
+                True,
+                rollback_from=NEW["digest"],
+            )
+        self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
+        self.assertFalse(self.paths.marker.exists())
+        self.assert_history([222])
+
+    def test_supervised_rollback_rechecks_compatibility_before_stop(self):
+        """Apply the read-only input check again under the activation lock."""
+        pair = self.stage_older_supervisor(app=b"different application")
+        with self.assertRaisesRegex(ValueError, "build inputs differ"):
+            self.activate_older_pair(pair)
+        self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
+        self.assert_history([222])
+
+    def test_supervised_rollback_aborts_when_the_rescue_fails(self):
+        """Keep the original pair when its standalone rescue is invalid."""
+        pair = self.stage_older_supervisor()
+        original = CUTOVER.read_pair(self.paths)
+        with (
+            patch.object(
+                CUTOVER,
+                "seal_rollback_rescue",
+                side_effect=ValueError("invalid rescue"),
+            ),
+            self.assertRaisesRegex(ValueError, "invalid rescue"),
+        ):
+            self.activate_older_pair(pair)
+        self.assertEqual(self.journal()["phase"], "recovered")
+        self.assertEqual(CUTOVER.read_pair(self.paths), original)
+        self.assertFalse(self.paths.marker.exists())
+        self.assert_history([222])
+
+    def test_supervised_rollback_recovers_origin_after_preboot_interrupt(self):
+        """Restore the newer pair and its checker after early failure."""
+        pair = self.stage_older_supervisor()
+        old = CUTOVER.read_pair(self.paths)
+        install_pair = CUTOVER.install_pair
+        modes = {"active": True, "enabled": True}
+        self.check_timer = "active"
+        self.check_timer_enabled = True
+
+        def interrupt(*args):
+            install_pair(*args)
+            raise KeyboardInterrupt
+
+        with (
+            patch.object(CUTOVER, "rollback_timer_modes", return_value=modes),
+            patch.object(CUTOVER, "install_pair", side_effect=interrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.activate_older_pair(pair)
+        self.assertFalse(self.check_timer_enabled)
+        self.assertEqual(self.check_timer, "inactive")
+        CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(CUTOVER.read_pair(self.paths), old)
+        self.assertEqual(self.journal()["phase"], "recovered")
+        self.assertTrue(self.check_timer_enabled)
+        self.assertEqual(self.check_timer, "active")
+        self.assert_history([222])
+
+    def test_supervised_rollback_keeps_new_rows_after_old_writer_starts(self):
+        """Resume the older writer when it may have written to SQLite."""
+        pair = self.stage_older_supervisor()
+
+        def interrupt(*_args):
+            with closing(sqlite3.connect(self.paths.database)) as db, db:
+                db.execute("INSERT INTO measurements VALUES (223)")
+            raise OSError("receipt interrupted")
+
+        with (
+            patch.object(CUTOVER, "publish_version", side_effect=interrupt),
+            self.assertRaisesRegex(OSError, "receipt interrupted"),
+        ):
+            self.activate_older_pair(pair)
+        self.assertEqual(self.journal()["phase"], "candidate-may-have-run")
+        CUTOVER.recover(self.paths, self.work)
+        self.assertEqual(self.journal()["phase"], "verified")
+        self.assertEqual(CUTOVER.read_pair(self.paths), pair)
+        self.assert_history([222, 223])
+        self.calls.clear()
+        CUTOVER.recover(self.paths, self.work)
+        self.assertTrue(
+            all(call[1] in ("show", "inspect") for call in self.calls)
+        )
 
     def release_check_pair(self) -> dict:
         """Add signed-input fixtures and inactive stock units to an upgrade."""
