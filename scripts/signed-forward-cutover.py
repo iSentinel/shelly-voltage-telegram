@@ -53,7 +53,13 @@ ROLLBACK_SUPERVISOR_FILES = frozenset(
     )
 )
 MONITOR_FILES = frozenset(
-    ("Dockerfile", "requirements.txt", "app.py", "writer_fence.py")
+    (
+        ".dockerignore",
+        "Dockerfile",
+        "requirements.txt",
+        "app.py",
+        "writer_fence.py",
+    )
 )
 SOURCE_ARCHIVE_ARG = (
     "--source-archive-dir /var/lib/shelly-voltage-updater/signed-source"
