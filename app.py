@@ -686,27 +686,28 @@ class Storage:
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
 
-    def reserve_report(self, delivered: str, period: str) -> bool:
-        """Reserve a report before starting its non-idempotent request."""
+    def reserve_report(self, delivered: str, period: str) -> str | None:
+        """Reserve a uniquely identified logical delivery before sending."""
         pending = f"telegram_report_pending:{delivered}"
+        attempt = secrets.token_hex(16)
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             if self.get_meta(delivered, db) == period:
-                return False
+                return None
             cursor = db.execute(
                 "INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)",
-                (pending, period),
+                (pending, f"{period}:{attempt}"),
             )
-            return cursor.rowcount == 1
+            return attempt if cursor.rowcount == 1 else None
 
     def finish_report(
-        self, delivered: str, period: str, *, accepted: bool
+        self, delivered: str, period: str, attempt: str, *, accepted: bool
     ) -> None:
         """Resolve only the exact reserved report in one transaction."""
         pending = f"telegram_report_pending:{delivered}"
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
-            if self.get_meta(pending, db) != period:
+            if self.get_meta(pending, db) != f"{period}:{attempt}":
                 raise ValueError("scheduled report intent changed")
             if accepted:
                 self.set_meta(delivered, period, db)
@@ -4679,7 +4680,8 @@ class Monitor:
         notify: bool | None = None,
     ) -> bool:
         """Keep uncertain sends reserved; never assume a lost ACK failed."""
-        if not self.storage.reserve_report(delivered, period):
+        attempt = self.storage.reserve_report(delivered, period)
+        if attempt is None:
             return False
         try:
             message_id = self.telegram.send(
@@ -4688,9 +4690,11 @@ class Monitor:
             if type(message_id) is not int or message_id <= 0:
                 raise ValueError("invalid scheduled report acknowledgement")
         except ScheduledReportRejected:
-            self.storage.finish_report(delivered, period, accepted=False)
+            self.storage.finish_report(
+                delivered, period, attempt, accepted=False
+            )
             raise
-        self.storage.finish_report(delivered, period, accepted=True)
+        self.storage.finish_report(delivered, period, attempt, accepted=True)
         return True
 
     def maybe_weekly_private_reports(

@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import secrets
 import socket
 import sqlite3
 import stat
@@ -61,7 +60,9 @@ def database_identity(path: Path) -> tuple[int, int]:
     return info.st_dev, info.st_ino
 
 
-def read_state(db: sqlite3.Connection, key: str) -> tuple[str, str | None]:
+def read_state(
+    db: sqlite3.Connection, key: str
+) -> tuple[str, str | None, str]:
     """Require an unresolved canonical period and no newer delivery."""
     if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
         raise ValueError("SQLite integrity check failed")
@@ -71,17 +72,22 @@ def read_state(db: sqlite3.Connection, key: str) -> tuple[str, str | None]:
             (PREFIX + key, key),
         )
     )
-    period = rows.get(PREFIX + key)
+    raw = rows.get(PREFIX + key)
     previous = rows.get(key)
-    if not isinstance(period, str) or not valid_period(key, period):
-        raise ValueError("missing or malformed pending report")
+    if not isinstance(raw, str):
+        raise ValueError("missing pending report")
+    period, separator, attempt = raw.partition(":")
+    if not separator or not re.fullmatch(r"[a-f0-9]{32}", attempt):
+        raise ValueError("legacy or invalid reservation identity")
+    if not valid_period(key, period):
+        raise ValueError("malformed pending report period")
     if previous is not None and (
         not isinstance(previous, str)
         or not valid_period(key, previous)
         or previous >= period
     ):
         raise ValueError("delivered period conflicts with pending report")
-    return period, previous
+    return period, previous, attempt
 
 
 def fingerprint(path: Path, key: str, state: tuple) -> str:
@@ -104,6 +110,7 @@ def inspect(path: Path, key: str) -> dict:
         "status": "PENDING_REVIEW",
         "stream": key,
         "period": state[0],
+        "attempt_id": state[2],
         "fingerprint": fingerprint(path, key, state),
         "delivery_verified": False,
         "deployment_authorized": False,
@@ -156,9 +163,10 @@ def save_backup(path: Path, backup: Path, key: str, state: tuple) -> str:
 
 
 def settle(
-    db: sqlite3.Connection, key: str, period: str, args, digest: str
+    db: sqlite3.Connection, key: str, state: tuple, args, digest: str
 ) -> None:
     """Atomically record operator evidence and settle the exact reservation."""
+    period, _, attempt = state
     if args.outcome == "delivered":
         db.execute(
             "INSERT INTO meta(key,value) VALUES(?,?) "
@@ -168,6 +176,7 @@ def settle(
     record = json.dumps(
         {
             "period": period,
+            "attempt_id": attempt,
             "outcome": args.outcome,
             "evidence_ref": args.evidence_ref,
             "message_id": args.message_id,
@@ -176,10 +185,11 @@ def settle(
         },
         sort_keys=True,
     )
-    audit_key = f"telegram_report_resolution:{key}:{secrets.token_hex(16)}"
+    audit_key = f"telegram_report_resolution:{key}:{attempt}"
     db.execute("INSERT INTO meta(key,value) VALUES(?,?)", (audit_key, record))
     cursor = db.execute(
-        "DELETE FROM meta WHERE key=? AND value=?", (PREFIX + key, period)
+        "DELETE FROM meta WHERE key=? AND value=?",
+        (PREFIX + key, f"{period}:{attempt}"),
     )
     if cursor.rowcount != 1:
         raise ValueError("pending report changed")
@@ -212,7 +222,7 @@ def apply(args: argparse.Namespace) -> dict:
                 != args.expect_fingerprint
             ):
                 raise ValueError("reviewed state changed")
-            settle(db, args.stream, state[0], args, digest)
+            settle(db, args.stream, state, args, digest)
     return {
         "status": "PASS_QA_OPERATOR_RECONCILIATION_ONLY",
         "outcome": args.outcome,
