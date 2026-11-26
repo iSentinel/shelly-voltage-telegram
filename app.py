@@ -191,6 +191,7 @@ class Config:
     daily_summary_minute: int
     backup_dir: Path
     telegram_pin_status: bool
+    scheduled_reports_mode: str = "enabled"
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -372,6 +373,9 @@ def monitoring_alert_settings() -> dict[str, object]:
         "daily_summary_hour": int(os.getenv("DAILY_SUMMARY_HOUR", "22")),
         "daily_summary_minute": int(os.getenv("DAILY_SUMMARY_MINUTE", "55")),
         "telegram_pin_status": env_bool("TELEGRAM_PIN_STATUS", False),
+        "scheduled_reports_mode": os.getenv(
+            "SCHEDULED_REPORTS_MODE", "enabled"
+        ),
     }
 
 
@@ -391,6 +395,8 @@ def load_config() -> Config:
     values.update(telegram_settings())
     values.update(monitoring_settings(poll))
     cfg = Config(**values)
+    if cfg.scheduled_reports_mode not in ("enabled", "paused"):
+        raise ValueError("SCHEDULED_REPORTS_MODE must be enabled or paused")
     validate_config(cfg)
     return cfg
 
@@ -4754,6 +4760,8 @@ class Monitor:
     def maybe_daily_summary(self) -> None:
         """Post one daily summary after the configured local time."""
 
+        if self.cfg.scheduled_reports_mode != "enabled":
+            return
         with self.config_lock:
             if not self.daily_summary_enabled or not self.telegram.enabled:
                 return
@@ -4784,6 +4792,8 @@ class Monitor:
         notify: bool | None = None,
     ) -> bool:
         """Keep uncertain sends reserved; never assume a lost ACK failed."""
+        if self.cfg.scheduled_reports_mode != "enabled":
+            return False
         attempt = self.storage.reserve_report(delivered, period)
         if attempt is None:
             return False
@@ -4806,7 +4816,10 @@ class Monitor:
     ) -> None:
         """Send due opt-in reports only to authorized private chats."""
 
-        if not self.telegram.enabled:
+        if (
+            not self.telegram.enabled
+            or self.cfg.scheduled_reports_mode != "enabled"
+        ):
             return
         local = local_time or datetime.now(ZoneInfo(self.cfg.timezone))
         week_key = private_weekly_due_key(local)
@@ -4826,6 +4839,8 @@ class Monitor:
     def send_due_private_weekly(self, user_id: str, week_key: str) -> None:
         """Send at most one successful weekly digest per administrator."""
 
+        if self.cfg.scheduled_reports_mode != "enabled":
+            return
         enabled = f"telegram_weekly_private_enabled_{user_id}"
         delivered = f"telegram_weekly_private_sent_{user_id}"
         with self.config_lock:
@@ -6372,6 +6387,10 @@ class Monitor:
         threading.Thread(
             target=self.command_loop, name="telegram-commands", daemon=True
         ).start()
+        if self.cfg.scheduled_reports_mode != "enabled":
+            logger.warning("Scheduled reports paused by startup policy")
+            self.run_monitor_loop()
+            return
         wakeup = threading.Event()
         stopped = threading.Event()
         reporter = threading.Thread(

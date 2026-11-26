@@ -1,3 +1,19 @@
+## 2026-11-26 — same-runtime scheduled report recovery profile
+
+- PR #463 exact CI 8/8 PASS.
+- Add immutable startup policy SCHEDULED_REPORTS_MODE=enabled|paused.
+  Paused prevents the report worker and direct scheduled delivery
+  without changing pending, opt-in or delivered markers.
+- 195 focused tests and project quality gate PASS.
+- Real networkless LXC114 same-image paused/enabled restart: ordinary
+  alert accepted while paused, no scheduled delivery; enabled accepts
+  one synthetic daily report. History 9/39, prefix and inode match,
+  weekly pending and both preferences preserved, both exit 0.
+- Prefer identical signed runtime plus paused profile for report-only
+  recovery. No relaxed signed rollback guard, no signed candidate yet.
+- NEXT: exact CI, root-protected configuration/restart acceptance and
+  signed candidate preparation. Production apply remains disabled.
+
 ## 2026-11-26 — stopped-writer report intent guard
 
 - PR #462 exact CI 8/8 PASS.
