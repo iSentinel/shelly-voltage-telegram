@@ -1,3 +1,18 @@
+## 2026-11-26 — operator report reconciliation prototype
+
+- PR #458 exact CI 8/8 PASS.
+- Add read-only inspection and explicit QA-only reconciliation tool.
+  Require exact state fingerprint, writer/transaction gates, new private
+  rescue and operator-attested evidence; atomically settle and audit.
+- Nine focused tests and quality gate PASS. Actual LXC114 copy of
+  SIGKILL fixture: stale fingerprint refused, delivered outcome with
+  simulated message 42 committed, 11 measurement rows preserved,
+  original evidence and pending rescue intact.
+- NEXT: unique per-attempt reservation identity, protected production
+  fences/approval design, active HTTP deadline and crash acceptance.
+  Period-only evidence cannot identify a later retry of the same period.
+- No production reconciliation, signed release or rollback authorization.
+
 ## 2026-11-26 — durable scheduled report delivery intent
 
 - PR #457 exact CI 8/8 PASS. Reproduced slow accepted loopback HTTP
