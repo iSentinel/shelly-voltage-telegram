@@ -54,7 +54,7 @@ tested crash scenario; it does not bound the active HTTP request.
 The separate script `scripts/reconcile-report-delivery.py` inspects one
 exact daily or weekly report stream with `--inspect --database PATH
 --stream KEY`. It returns a fingerprint bound to the SQLite inode,
-pending period and prior delivery marker. No Telegram API is called.
+pending period, unique logical attempt ID and prior delivery marker. No Telegram API is called.
 
 Use `--apply-qa` only on isolated LXC114, with the database-local
 writer fence, no active writer or pending update, a fresh inspection,
@@ -71,14 +71,31 @@ database inode and unrelated history remain in place. The earlier
 pending reservation is retained in the rescue copy.
 
 Production writes are not implemented or authorized. Before extending
-this prototype to production, bind evidence to a unique per-attempt
-reservation identifier (current reservations contain only a period),
-require the protected production writer and updater fences, and validate
-operator evidence and backup freshness. Do not use a fingerprint from
-a previous attempt even if it has the same period. No automatic clearing,
+this prototype to production, require the protected production writer and
+updater fences and validate operator evidence and backup freshness.
+Do not use a fingerprint from a previous attempt even if it has the
+same period. No automatic clearing,
 downgrade authorization or remote exactly-once guarantee is implied.
 
 QA evidence 2026-11-26: stale fingerprint rejected; a copy of the actual
 SIGKILL fixture was reconciled as synthetic delivered message 42.
 All 11 measurement rows and other metadata matched the original;
 the backup retained the pending intent and the audited SHA256 matched.
+
+## Unique logical delivery attempt
+
+New pending reservations store `period:attempt_id`, where the attempt
+ID is a random 128-bit hexadecimal token. Runtime completion requires
+both exact values. The operator inspection fingerprint includes the
+attempt ID, and the resolution record uses the same ID. A new reservation
+after an explicit rejection has a new identity even within the same
+period. An explicit 429 retry within one reservation retains its identity.
+
+Legacy period-only pending values remain blocking: the new reconciliation
+tool refuses them rather than inventing an attempt identity or clearing
+them. Production reconciliation remains unimplemented.
+
+Networkless LXC114 QA verified stale runtime acknowledgement and stale
+operator fingerprint rejection for a replacement attempt of the same
+period. The current synthetic attempt was reconciled independently;
+11 original measurement rows and the pending rescue copy were preserved.

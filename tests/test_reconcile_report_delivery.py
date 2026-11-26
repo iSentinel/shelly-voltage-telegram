@@ -32,6 +32,8 @@ class ReportRepairTests(unittest.TestCase):
         self.backup = self.path.with_name("backup.sqlite3")
         self.key = REPAIR.DAILY
         self.period = "2026-11-26"
+        self.attempt = "a" * 32
+        self.raw = f"{self.period}:{self.attempt}"
         with closing(sqlite3.connect(self.path)) as db, db:
             db.executescript(
                 "PRAGMA journal_mode=WAL;"
@@ -41,7 +43,7 @@ class ReportRepairTests(unittest.TestCase):
             )
             db.execute(
                 "INSERT INTO meta VALUES(?,?)",
-                (REPAIR.PREFIX + self.key, self.period),
+                (REPAIR.PREFIX + self.key, self.raw),
             )
 
     def args(self, outcome="delivered"):
@@ -80,7 +82,7 @@ class ReportRepairTests(unittest.TestCase):
         self.assertEqual(meta[self.key], self.period)
         self.assertNotIn(REPAIR.PREFIX + self.key, meta)
         self.assertEqual(
-            self.metadata(self.backup)[REPAIR.PREFIX + self.key], self.period
+            self.metadata(self.backup)[REPAIR.PREFIX + self.key], self.raw
         )
         self.assertEqual(self.path.stat().st_ino, inode)
         self.assertEqual(
@@ -102,6 +104,32 @@ class ReportRepairTests(unittest.TestCase):
             self.apply(args)
         self.assertFalse(self.backup.exists())
         self.assertIn(REPAIR.PREFIX + self.key, self.metadata())
+
+    def test_same_period_new_attempt_invalidates_review(self):
+        """An older review cannot settle a different logical delivery."""
+        args = self.args()
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key=?",
+                (self.period + ":" + "b" * 32, REPAIR.PREFIX + self.key),
+            )
+        with self.assertRaisesRegex(ValueError, "fingerprint"):
+            self.apply(args)
+        self.assertFalse(self.backup.exists())
+        self.assertIsNone(self.metadata().get(self.key))
+
+    def test_legacy_pending_stays_unresolved(self):
+        """Period-only markers must not be silently upgraded or cleared."""
+        with closing(sqlite3.connect(self.path)) as db, db:
+            db.execute(
+                "UPDATE meta SET value=? WHERE key=?",
+                (self.period, REPAIR.PREFIX + self.key),
+            )
+        with self.assertRaisesRegex(ValueError, "legacy"):
+            REPAIR.inspect(self.path, self.key)
+        self.assertEqual(
+            self.metadata()[REPAIR.PREFIX + self.key], self.period
+        )
 
     def test_active_writer_refuses_reconciliation(self):
         """Do not acquire a second writer lease."""

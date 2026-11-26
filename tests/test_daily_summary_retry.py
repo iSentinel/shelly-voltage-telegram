@@ -119,14 +119,37 @@ class DailySummaryRetryTests(unittest.TestCase):
     def test_finish_requires_exact_period(self):
         """A wrong acknowledgement cannot clear another report intent."""
         storage = self.monitor.storage
-        self.assertTrue(storage.reserve_report("daily_summary_day", "day1"))
+        attempt = storage.reserve_report("daily_summary_day", "day1")
+        self.assertIsNotNone(attempt)
         with self.assertRaisesRegex(ValueError, "intent changed"):
-            storage.finish_report("daily_summary_day", "day2", accepted=True)
-        self.assertFalse(storage.reserve_report("daily_summary_day", "day2"))
+            storage.finish_report(
+                "daily_summary_day", "day2", attempt, accepted=True
+            )
+        self.assertIsNone(storage.reserve_report("daily_summary_day", "day2"))
         self.assertIsNone(storage.get_meta("daily_summary_day"))
-        storage.finish_report("daily_summary_day", "day1", accepted=True)
+        storage.finish_report(
+            "daily_summary_day", "day1", attempt, accepted=True
+        )
         self.assertEqual(storage.get_meta("daily_summary_day"), "day1")
         self.assertFalse(storage.reserve_report("daily_summary_day", "day1"))
+
+    def test_stale_attempt_cannot_resolve_same_period(self):
+        """A rejected reservation cannot settle a later attempt."""
+        storage = self.monitor.storage
+        key, period = "daily_summary_day", "2026-11-26"
+        first = storage.reserve_report(key, period)
+        storage.finish_report(key, period, first, accepted=False)
+        second = storage.reserve_report(key, period)
+        self.assertNotEqual(first, second)
+        with self.assertRaisesRegex(ValueError, "intent changed"):
+            storage.finish_report(key, period, first, accepted=True)
+        self.assertEqual(
+            storage.get_meta(f"telegram_report_pending:{key}"),
+            f"{period}:{second}",
+        )
+        self.assertIsNone(storage.get_meta(key))
+        storage.finish_report(key, period, second, accepted=True)
+        self.assertEqual(storage.get_meta(key), period)
 
     def test_no_daily_summary_when_disabled(self):
         """Disabled options cannot start retries or deliveries."""

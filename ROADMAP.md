@@ -1,3 +1,18 @@
+## 2026-11-26 — unique report reservation identity
+
+- Reserve a random 128-bit logical attempt ID alongside the report period.
+  Require exact period and ID for both runtime and operator completion.
+- Reject stale acknowledgements and review fingerprints even for the same
+  period; never automatically reinterpret legacy period-only reservations.
+- 220 focused tests and quality gate PASS. Networkless LXC114 derived
+  Docker QA verified stale runtime ACK and stale operator review refusal,
+  correct current resolution and 11 preserved historical measurements.
+- Initial QA-only build context file mode prevented unprivileged import;
+  rebuilt with readable app.py and reran successfully.
+- NEXT: exact CI, active HTTP shutdown/deadline design, protected
+  production reconciliation and cross-version rollback contract.
+  No production writes or signed release changes.
+
 ## 2026-11-26 — operator report reconciliation prototype
 
 - PR #458 exact CI 8/8 PASS.
