@@ -48,3 +48,37 @@ With the reservation, SQLite remained intact and the next process
 did not repeat the accepted request. The restarted process stopped
 normally. This protects against duplicate automatic sends in the
 tested crash scenario; it does not bound the active HTTP request.
+
+## Operator reconciliation prototype (QA only)
+
+The separate script `scripts/reconcile-report-delivery.py` inspects one
+exact daily or weekly report stream with `--inspect --database PATH
+--stream KEY`. It returns a fingerprint bound to the SQLite inode,
+pending period and prior delivery marker. No Telegram API is called.
+
+Use `--apply-qa` only on isolated LXC114, with the database-local
+writer fence, no active writer or pending update, a fresh inspection,
+`--expect-fingerprint HASH`, `--outcome delivered|rejected`,
+`--evidence-ref REF` and a new `--backup PATH` in a root-owned 0700
+directory. Delivered requires the independently confirmed
+`--message-id ID`; rejected requires positive rejection evidence,
+not merely an absent response. Do not put secrets in evidence references.
+The script records an operator attestation, not remote verification.
+
+The rescue is created and checked before any database change.
+Resolution and its audit record are committed together. The original
+database inode and unrelated history remain in place. The earlier
+pending reservation is retained in the rescue copy.
+
+Production writes are not implemented or authorized. Before extending
+this prototype to production, bind evidence to a unique per-attempt
+reservation identifier (current reservations contain only a period),
+require the protected production writer and updater fences, and validate
+operator evidence and backup freshness. Do not use a fingerprint from
+a previous attempt even if it has the same period. No automatic clearing,
+downgrade authorization or remote exactly-once guarantee is implied.
+
+QA evidence 2026-11-26: stale fingerprint rejected; a copy of the actual
+SIGKILL fixture was reconciled as synthetic delivered message 42.
+All 11 measurement rows and other metadata matched the original;
+the backup retained the pending intent and the audited SHA256 matched.
