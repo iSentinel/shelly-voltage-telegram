@@ -11,11 +11,12 @@ import json
 import os
 import re
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -97,13 +98,13 @@ def inspect_qa_container(root: Path, name: str) -> dict:
     return items[0]
 
 
-def validate_paused(root: Path, info: dict) -> None:
+def validate_paused(root: Path, info: dict, *, running: bool = False) -> None:
     """Require the exact stopped image, mode and two shared mounts."""
     host = info["HostConfig"]
     env = info["Config"]["Env"]
     modes = [v for v in env if v.split("=", 1)[0] == "SCHEDULED_REPORTS_MODE"]
     if (
-        info["State"]["Running"] is not False
+        info["State"]["Running"] is not running
         or info["Image"] != QA_IMAGE
         or host["NetworkMode"] != "none"
         or host["RestartPolicy"]["Name"] != "no"
@@ -168,6 +169,137 @@ def bind_armed_identity(root: Path, info: dict) -> dict:
         atomic_write(
             path, (json.dumps(record, sort_keys=True) + "\n").encode()
         )
+    return record
+
+
+def read_record(path: Path) -> dict:
+    """Read a bounded root-controlled journal object."""
+    protected(path)
+    if path.stat().st_size > 4096:
+        raise ValueError("oversized record")
+    record = json.loads(path.read_text())
+    if not isinstance(record, dict):
+        raise ValueError("invalid record")
+    return record
+
+
+def start_binding(root: Path, name: str, *, running: bool) -> dict:
+    """Verify the original ARM identity and committed pause configuration."""
+    if os.path.lexists(marker_path(root)):
+        raise ValueError("startup marker still present")
+    if (
+        read_journal(root)["phase"] != "configured"
+        or (root / ".env").read_bytes() != NEW
+    ):
+        raise ValueError("configuration not committed")
+    info = inspect_qa_container(root, name)
+    validate_paused(root, info, running=running)
+    armed = read_record(root / "armed-container.json")
+    if armed != {
+        "container_id": info["Id"],
+        "image_id": QA_IMAGE,
+        "mode": "paused",
+        "runtime_verified": False,
+    }:
+        raise ValueError("armed identity mismatch")
+    return info
+
+
+def history_snapshot(root: Path, through: int | None = None) -> dict:
+    """Hash historical rows and report metadata in a read-only snapshot."""
+    path = root / "data/qa.sqlite3"
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+        raise ValueError("invalid QA database")
+    with closing(
+        sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=5)
+    ) as db:
+        db.execute("BEGIN")
+        if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
+            raise ValueError("database integrity failed")
+        count, last = db.execute(
+            "SELECT count(*),max(id) FROM measurements"
+        ).fetchone()
+        if not count or last is None:
+            raise ValueError("empty history")
+        rows = db.execute(
+            "SELECT * FROM measurements WHERE id<=? ORDER BY id",
+            (last if through is None else through,),
+        ).fetchall()
+        meta = db.execute(
+            "SELECT key,value FROM meta WHERE key='daily_summary_day' OR "
+            "key GLOB 'telegram_report_pending:*' OR "
+            "key GLOB 'telegram_weekly_private_sent_*' OR "
+            "key GLOB 'telegram_status_*' ORDER BY key"
+        ).fetchall()
+    after = path.lstat()
+    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+        raise ValueError("database identity changed")
+    return {
+        "inode": before.st_ino,
+        "device": before.st_dev,
+        "rows": count,
+        "last_id": last,
+        "prefix_sha256": sha(json.dumps(rows).encode()),
+        "metadata_sha256": sha(json.dumps(meta).encode()),
+    }
+
+
+def record_start(root: Path, name: str) -> dict:
+    """Publish a one-shot START intent before an operator starts Docker."""
+    path = root / "start-intent.json"
+    if os.path.lexists(path):
+        raise ValueError("start already attempted; observe, do not repeat")
+    info = start_binding(root, name, running=False)
+    record = {
+        "container_id": info["Id"],
+        "previous_started_at": info["State"]["StartedAt"],
+        "baseline": history_snapshot(root),
+        "deployment_authorized": False,
+    }
+    atomic_write(path, (json.dumps(record, sort_keys=True) + "\n").encode())
+    return record
+
+
+def observe_start(root: Path, name: str) -> dict:
+    """Review an existing QA launch without starting or adopting any writer."""
+    intent = read_record(root / "start-intent.json")
+    info = start_binding(root, name, running=True)
+    started = info["State"]["StartedAt"]
+    if (
+        info["Id"] != intent["container_id"]
+        or started == intent["previous_started_at"]
+    ):
+        raise ValueError("no new armed launch")
+    baseline = intent["baseline"]
+    snapshot = history_snapshot(root, baseline["last_id"])
+    for key in ("inode", "device", "prefix_sha256", "metadata_sha256"):
+        if snapshot[key] != baseline[key]:
+            raise ValueError("runtime history or metadata changed")
+    if snapshot["rows"] <= baseline["rows"]:
+        raise ValueError("no new measurements")
+    final = start_binding(root, name, running=True)
+    if final["Id"] != info["Id"] or final["State"]["StartedAt"] != started:
+        raise ValueError("launch changed during review")
+    record = {
+        "container_id": info["Id"],
+        "started_at": started,
+        "baseline_rows": baseline["rows"],
+        "observed_rows": snapshot["rows"],
+        "history_verified": True,
+        "runtime_verified": False,
+        "deployment_authorized": False,
+    }
+    path = root / "start-observation.json"
+    if os.path.lexists(path):
+        prior = read_record(path)
+        if (
+            prior["container_id"] != record["container_id"]
+            or prior["started_at"] != started
+        ):
+            raise ValueError("observed launch changed")
+        return prior
+    atomic_write(path, (json.dumps(record, sort_keys=True) + "\n").encode())
     return record
 
 
@@ -295,14 +427,18 @@ def recover(root: Path) -> dict:
 
 
 @contextmanager
-def exclusive(root: Path):
-    """Require the operator lock and quiescent writer/transaction gates."""
+def exclusive(root: Path, *, observation: bool = False):
+    """Serialize operator work and gate a consistent live observation."""
     fd = os.open(root / "operator.lock", os.O_RDWR | os.O_NOFOLLOW)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         database = root / "data/qa.sqlite3"
-        with quiescent_writer_lease(database), update_gate(database):
-            yield
+        if observation:
+            with update_gate(database):
+                yield
+        else:
+            with quiescent_writer_lease(database), update_gate(database):
+                yield
     finally:
         os.close(fd)
 
@@ -310,19 +446,26 @@ def exclusive(root: Path):
 def main() -> int:
     """Prepare or replay a configuration-only QA transaction."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare", "recover", "arm"))
+    parser.add_argument(
+        "action",
+        choices=("prepare", "recover", "arm", "start-intent", "observe"),
+    )
     parser.add_argument("--container")
     parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args()
     try:
         require_qa(args.root)
-        with exclusive(args.root):
+        with exclusive(args.root, observation=args.action == "observe"):
             if args.action == "prepare":
                 result = prepare_fenced(args.root)
             elif args.action == "recover":
                 result = recover_fenced(args.root)
-            else:
+            elif args.action == "arm":
                 result = arm_paused(args.root, args.container)
+            elif args.action == "start-intent":
+                result = record_start(args.root, args.container)
+            else:
+                result = observe_start(args.root, args.container)
     except (
         OSError,
         ValueError,
@@ -330,6 +473,7 @@ def main() -> int:
         KeyError,
         TypeError,
         subprocess.SubprocessError,
+        sqlite3.Error,
     ) as exc:
         print(json.dumps({"status": "BLOCKED", "reason": type(exc).__name__}))
         return 3

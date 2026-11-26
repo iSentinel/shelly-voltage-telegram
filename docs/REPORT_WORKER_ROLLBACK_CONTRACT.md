@@ -252,3 +252,35 @@ A full production transaction must integrate signed receipt verification,
 automatic binding at every startup, operator lock ownership, crash
 recovery around START and independent runtime evidence. The strict
 signed rollback policy remains unchanged.
+
+## Interrupted START observation (QA only)
+
+The start-intent action records the exact armed container ID, previous
+Docker StartedAt, SQLite device/inode, historical row count and maximum
+ID, and hashes of the ordered historical prefix and selected report
+and status metadata. It refuses a second intent. The separate observe
+action performs a read-only SQLite snapshot under the transaction gate
+and checks the running container identity before and after observation.
+It requires a new StartedAt, unchanged original history and metadata,
+and additional measurements. A repeated observation of the same launch
+returns the original durable observation. It neither starts nor adopts
+a running writer.
+
+Real LXC114 QA on 2026-11-27: observation of the stopped container was
+refused. A separate QA operator process invoked the offline supervisor
+and was SIGKILLed after Docker start, before observation. The running
+container was observed without restarting it: 103 historical rows,
+124 observed rows, unchanged SQLite identity and selected metadata.
+Replay returned the same record and StartedAt did not change.
+One ordinary synthetic alert was received; graceful stop exited zero.
+A second start-intent was refused. 53 focused tests and quality gate
+passed.
+
+The START intent and supervisor launch are still separate operations.
+The intent does not automatically prevent direct supervisor or Docker
+starts, and StartedAt does not prove that exactly one launch occurred
+between observations. This is history observation only, not full
+runtime acceptance: runtime_verified and deployment_authorized remain
+false. Production startup ownership, signed verification, full readiness,
+three-phase sampling evidence and durable acceptance integration remain
+outstanding. No automatic retry after an uncertain START is authorized.

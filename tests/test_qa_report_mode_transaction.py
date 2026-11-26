@@ -1,8 +1,10 @@
 """Exercise durable config-only recovery on disposable files."""
 
 import importlib.util
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -214,6 +216,74 @@ class ReportModeTransactionTests(unittest.TestCase):
             self.assertTrue(
                 TX.arm_paused(self.root, "fixture")["startup_gate_released"]
             )
+
+    def start_fixture(self):
+        """Create an armed fixture with one historical measurement."""
+        (self.root / "fence").mkdir()
+        (self.root / "data").mkdir()
+        database = self.root / "data/qa.sqlite3"
+        with closing(sqlite3.connect(database)) as db, db:
+            db.executescript(
+                "CREATE TABLE measurements(id INTEGER PRIMARY KEY,v REAL);"
+                "CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT);"
+                "INSERT INTO measurements VALUES(1,220);"
+                "INSERT INTO meta VALUES('daily_summary_day','2026-11-26');"
+            )
+        TX.prepare_fenced(self.root)
+        TX.recover_fenced(self.root)
+        info = self.fixture_container()
+        info["State"]["StartedAt"] = "old"
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            TX.arm_paused(self.root, "fixture")
+            TX.record_start(self.root, "fixture")
+        return info, database
+
+    def test_start_intent_is_not_reissued(self):
+        """A recorded attempt requires observation, not another intent."""
+        info, _ = self.start_fixture()
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "already attempted"),
+        ):
+            TX.record_start(self.root, "fixture")
+
+    def test_start_observation_requires_new_history(self):
+        """No new samples means no positive runtime observation."""
+        info, database = self.start_fixture()
+        info["State"].update(Running=True, StartedAt="new")
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            with self.assertRaisesRegex(ValueError, "no new measurements"):
+                TX.observe_start(self.root, "fixture")
+            with closing(sqlite3.connect(database)) as db, db:
+                db.execute("INSERT INTO measurements VALUES(2,221)")
+            result = TX.observe_start(self.root, "fixture")
+            self.assertTrue(result["history_verified"])
+            self.assertFalse(result["runtime_verified"])
+            self.assertEqual(result, TX.observe_start(self.root, "fixture"))
+
+    def test_start_observation_rejects_history_rewrite(self):
+        """New samples cannot conceal a rewritten historical prefix."""
+        info, database = self.start_fixture()
+        info["State"].update(Running=True, StartedAt="new")
+        with closing(sqlite3.connect(database)) as db, db:
+            db.execute("UPDATE measurements SET v=0 WHERE id=1")
+            db.execute("INSERT INTO measurements VALUES(2,221)")
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "history or metadata"),
+        ):
+            TX.observe_start(self.root, "fixture")
+        self.assertFalse((self.root / "start-observation.json").exists())
+
+    def test_start_observation_rejects_old_launch(self):
+        """A running container without a new StartedAt is not proof."""
+        info, _ = self.start_fixture()
+        info["State"]["Running"] = True
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "no new armed launch"),
+        ):
+            TX.observe_start(self.root, "fixture")
 
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
