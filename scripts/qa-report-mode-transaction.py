@@ -6,10 +6,12 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import socket
 import stat
+import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -19,12 +21,119 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from writer_fence import (  # noqa: E402
     WriterFenceError,
     quiescent_writer_lease,
-    transaction_gate,
+    update_gate,
 )
 
 OLD = b"SCHEDULED_REPORTS_MODE=enabled\n"
 NEW = b"SCHEDULED_REPORTS_MODE=paused\n"
 PREFIX = "svt-report-mode-tx-qa."
+QA_IMAGE = (
+    "sha256:07de8c4ade6e9a47001d99c8894880ab2478113c132c22e0c97cbd605b3ba668"
+)
+
+
+def marker_module():
+    """Load the existing shared-marker implementation."""
+    spec = importlib.util.spec_from_file_location(
+        "mode_marker", Path(__file__).with_name("writer-fence-marker.py")
+    )
+    if spec is None or spec.loader is None:
+        raise ValueError("marker helper unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def marker_path(root: Path) -> Path:
+    """Use the same durable gate as the monitor and supervisor."""
+    return root / "fence/.svt-update-pending"
+
+
+def own_marker(root: Path) -> None:
+    """Require an exact root-controlled marker, never a foreign update."""
+    path = marker_path(root)
+    protected(path)
+    if marker_module().marker_value(path) != root.name:
+        raise ValueError("foreign startup marker")
+
+
+def prepare_fenced(root: Path) -> dict:
+    """Block starts before durable pause intent is committed."""
+    if os.path.lexists(marker_path(root)):
+        raise ValueError("existing startup marker")
+    if (
+        any(
+            os.path.lexists(root / name)
+            for name in ("before.env", "transaction.json")
+        )
+        or (root / ".env").read_bytes() != OLD
+    ):
+        raise ValueError("existing or unexpected transaction state")
+    marker_module().publish(marker_path(root), root.name)
+    return prepare(root)
+
+
+def recover_fenced(root: Path) -> dict:
+    """Recover configuration while preserving the startup fence."""
+    own_marker(root)
+    return recover(root)
+
+
+def inspect_qa_container(root: Path, name: str) -> dict:
+    """Read only a named stopped, networkless fixture container."""
+    if name != "svt-qa-" + root.name:
+        raise ValueError("unexpected QA container name")
+    result = subprocess.run(
+        ["docker", "inspect", name],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
+    items = json.loads(result.stdout)
+    if not isinstance(items, list) or len(items) != 1:
+        raise ValueError("unexpected container inspection")
+    return items[0]
+
+
+def validate_paused(root: Path, info: dict) -> None:
+    """Require the exact stopped image, mode and two shared mounts."""
+    host = info["HostConfig"]
+    env = info["Config"]["Env"]
+    modes = [v for v in env if v.split("=", 1)[0] == "SCHEDULED_REPORTS_MODE"]
+    if (
+        info["State"]["Running"] is not False
+        or info["Image"] != QA_IMAGE
+        or host["NetworkMode"] != "none"
+        or host["RestartPolicy"]["Name"] != "no"
+        or modes != ["SCHEDULED_REPORTS_MODE=paused"]
+    ):
+        raise ValueError("unverified paused container")
+    for destination, source in (
+        ("/data", root / "data"),
+        ("/run/svt-fence", root / "fence"),
+    ):
+        mounts = [m for m in info["Mounts"] if m["Destination"] == destination]
+        if len(mounts) != 1 or (
+            mounts[0]["Source"] != str(source)
+            or mounts[0]["RW"] is not True
+            or mounts[0]["Type"] != "bind"
+        ):
+            raise ValueError("unverified QA mount")
+
+
+def arm_paused(root: Path, name: str) -> dict:
+    """Release only our startup marker after paused container validation."""
+    own_marker(root)
+    record = read_journal(root)
+    if record["phase"] != "configured" or (root / ".env").read_bytes() != NEW:
+        raise ValueError("configuration not committed")
+    protected(root / "before.env")
+    if (root / "before.env").read_bytes() != OLD:
+        raise ValueError("original configuration rescue changed")
+    validate_paused(root, inspect_qa_container(root, name))
+    marker_module().clear(marker_path(root), root.name)
+    return {**record, "startup_gate_released": True}
 
 
 def sha(data: bytes) -> str:
@@ -157,7 +266,7 @@ def exclusive(root: Path):
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         database = root / "data/qa.sqlite3"
-        with quiescent_writer_lease(database), transaction_gate(database):
+        with quiescent_writer_lease(database), update_gate(database):
             yield
     finally:
         os.close(fd)
@@ -166,18 +275,27 @@ def exclusive(root: Path):
 def main() -> int:
     """Prepare or replay a configuration-only QA transaction."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare", "recover"))
+    parser.add_argument("action", choices=("prepare", "recover", "arm"))
+    parser.add_argument("--container")
     parser.add_argument("--root", required=True, type=Path)
     args = parser.parse_args()
     try:
         require_qa(args.root)
         with exclusive(args.root):
-            result = (
-                prepare(args.root)
-                if args.action == "prepare"
-                else recover(args.root)
-            )
-    except (OSError, ValueError, WriterFenceError) as exc:
+            if args.action == "prepare":
+                result = prepare_fenced(args.root)
+            elif args.action == "recover":
+                result = recover_fenced(args.root)
+            else:
+                result = arm_paused(args.root, args.container)
+    except (
+        OSError,
+        ValueError,
+        WriterFenceError,
+        KeyError,
+        TypeError,
+        subprocess.SubprocessError,
+    ) as exc:
         print(json.dumps({"status": "BLOCKED", "reason": type(exc).__name__}))
         return 3
     print(json.dumps(result, sort_keys=True))
