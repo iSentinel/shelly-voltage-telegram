@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import socket
 import stat
 import subprocess
@@ -124,16 +125,50 @@ def validate_paused(root: Path, info: dict) -> None:
 
 def arm_paused(root: Path, name: str) -> dict:
     """Release only our startup marker after paused container validation."""
-    own_marker(root)
     record = read_journal(root)
     if record["phase"] != "configured" or (root / ".env").read_bytes() != NEW:
         raise ValueError("configuration not committed")
     protected(root / "before.env")
     if (root / "before.env").read_bytes() != OLD:
         raise ValueError("original configuration rescue changed")
-    validate_paused(root, inspect_qa_container(root, name))
-    marker_module().clear(marker_path(root), root.name)
-    return {**record, "startup_gate_released": True}
+    if os.path.lexists(marker_path(root)):
+        own_marker(root)
+    info = inspect_qa_container(root, name)
+    validate_paused(root, info)
+    armed = bind_armed_identity(root, info)
+    if os.path.lexists(marker_path(root)):
+        own_marker(root)
+        marker_module().clear(marker_path(root), root.name)
+    return {**record, **armed, "startup_gate_released": True}
+
+
+def bind_armed_identity(root: Path, info: dict) -> dict:
+    """Persist immutable identity before release; replay only that identity."""
+    identity = info["Id"]
+    if not isinstance(identity, str) or not re.fullmatch(
+        "[a-f0-9]{64}", identity
+    ):
+        raise ValueError("invalid container identity")
+    record = {
+        "container_id": identity,
+        "image_id": QA_IMAGE,
+        "mode": "paused",
+        "runtime_verified": False,
+    }
+    path = root / "armed-container.json"
+    if os.path.lexists(path):
+        protected(path)
+        if (
+            path.stat().st_size > 4096
+            or json.loads(path.read_text()) != record
+        ):
+            raise ValueError("armed container identity changed")
+    else:
+        own_marker(root)
+        atomic_write(
+            path, (json.dumps(record, sort_keys=True) + "\n").encode()
+        )
+    return record
 
 
 def sha(data: bytes) -> str:

@@ -47,6 +47,10 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument("--source-archive-dir", type=Path)
     parser.add_argument("--qa-offline", action="store_true")
     parser.add_argument(
+        "--expected-container-id",
+        help="QA-only: bind startup to a previously armed immutable ID",
+    )
+    parser.add_argument(
         "--expected-report-mode",
         choices=("enabled", "paused"),
         help="QA-only: require the exact container startup report mode",
@@ -245,6 +249,25 @@ def validate_report_mode(info: dict, expected: str) -> None:
         raise BootBlocked("SVT_REPORT_MODE_MISMATCH")
 
 
+def validate_expected_identity(info: dict, args: argparse.Namespace) -> None:
+    """Check optional QA-only identity and report-mode expectations."""
+    expected_id = getattr(args, "expected_container_id", None)
+    if expected_id is not None:
+        if not args.qa_offline:
+            raise BootBlocked("SVT_CONTAINER_ID_QA_ONLY")
+        if (
+            not re.fullmatch("[a-f0-9]{64}", expected_id)
+            or info.get("Id") != expected_id
+            or getattr(args, "expected_report_mode", None) != "paused"
+        ):
+            raise BootBlocked("SVT_ARMED_CONTAINER_ID_MISMATCH")
+    expected = getattr(args, "expected_report_mode", None)
+    if expected is not None:
+        if not args.qa_offline:
+            raise BootBlocked("SVT_REPORT_MODE_QA_ONLY")
+        validate_report_mode(info, expected)
+
+
 def validate_container(info: dict, args: argparse.Namespace) -> None:
     """Refuse a foreign running writer and independent Docker restarts."""
     if info.get("State", {}).get("Running") is not False:
@@ -262,11 +285,7 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
     ]
     if len(shared) != 1:
         raise BootBlocked("SVT_FENCE_MOUNT_MISMATCH")
-    expected = getattr(args, "expected_report_mode", None)
-    if expected is not None:
-        if not args.qa_offline:
-            raise BootBlocked("SVT_REPORT_MODE_QA_ONLY")
-        validate_report_mode(info, expected)
+    validate_expected_identity(info, args)
     if args.qa_offline:
         if not args.container.startswith("svt-qa-"):
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")
@@ -374,7 +393,8 @@ def main() -> int:
         validate_container(inspect(args.container), args)
         signal.signal(signal.SIGTERM, on_signal)
         signal.signal(signal.SIGINT, on_signal)
-        return supervise(args.container, args.database, args.once)
+        target = args.expected_container_id or args.container
+        return supervise(target, args.database, args.once)
     except (BootBlocked, WriterFenceError, OSError, ValueError) as exc:
         code = (
             str(exc)
