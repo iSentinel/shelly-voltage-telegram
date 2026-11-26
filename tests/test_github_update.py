@@ -336,6 +336,26 @@ class ReleaseUpdaterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Telegram.*unresolved"):
                 updater.preflight(self.db, "http://127.0.0.1:8080/ready")
 
+    def test_preflight_blocks_unresolved_scheduled_report(self):
+        """Do not downgrade while an ambiguous report may be delivered."""
+        status = self.settled_three_phase_fixture()
+        for key in (
+            "telegram_report_pending:daily_summary_day",
+            "telegram_report_pending:telegram_weekly_private_sent_7",
+        ):
+            with closing(sqlite3.connect(self.db)) as db, db:
+                db.execute("INSERT INTO meta VALUES(?,?)", (key, "period"))
+            with (
+                patch("urllib.request.urlopen") as request,
+                self.assertRaisesRegex(ValueError, "report delivery"),
+            ):
+                request.return_value.__enter__.return_value = _JsonReply(
+                    status
+                )
+                updater.preflight(self.db, "http://127.0.0.1:8080/ready")
+            with closing(sqlite3.connect(self.db)) as db, db:
+                db.execute("DELETE FROM meta WHERE key=?", (key,))
+
     def test_preflight_checks_the_low_phase_even_if_another_is_newer(self):
         """A healthy aggregate cannot hide a phase outside the upgrade band."""
         status = self.settled_three_phase_fixture()

@@ -1,3 +1,21 @@
+## 2026-11-26 — durable scheduled report delivery intent
+
+- PR #457 exact CI 8/8 PASS. Reproduced slow accepted loopback HTTP
+  acknowledgement in networkless Docker: exit 137 after 20 s,
+  remote accepted but local delivered marker absent.
+- Persist per-stream send intent before requests; atomically settle
+  acknowledged periods; only explicit rejection/cancellation clears an
+  unaccepted intent. Unknown outcomes suppress subsequent automatic sends.
+- New updater preflight rejects unresolved report intents. Old signed
+  releases do not understand these keys; strict rollback guard unchanged.
+- Actual derived Docker image forced-stop/restart QA PASS: persisted
+  reservation, unchanged simulated remote accepted count, no false
+  delivered marker, SQLite quick_check OK, restart stops normally.
+- NEXT: exact CI, operator reconciliation with explicit evidence, and
+  active HTTP shutdown/deadline design. Do not clear reservations
+  automatically or claim exactly-once/fully graceful shutdown.
+- Production .27 unchanged; new code remains unsigned QA only.
+
 ## 2026-11-26 — report worker shutdown and rollback compatibility
 
 - Integrate PR #450 onto PR #456 in a separate unsigned QA branch.

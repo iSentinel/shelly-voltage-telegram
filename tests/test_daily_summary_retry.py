@@ -51,7 +51,9 @@ class DailySummaryRetryTests(unittest.TestCase):
     def test_first_failure_does_not_mark_sent(self):
         """Transport failures must never create a successful day record."""
 
-        self.monitor.telegram.send.side_effect = RuntimeError("offline")
+        self.monitor.telegram.send.side_effect = APP.ScheduledReportRejected(
+            "offline"
+        )
         with self.assertRaisesRegex(RuntimeError, "offline"):
             self.attempt(1000.0)
         self.assertIsNone(self.monitor.last_summary_day)
@@ -60,7 +62,9 @@ class DailySummaryRetryTests(unittest.TestCase):
     def test_failed_send_is_throttled_before_five_minutes(self):
         """An outage must not cause one API attempt per poll."""
 
-        self.monitor.telegram.send.side_effect = RuntimeError("offline")
+        self.monitor.telegram.send.side_effect = APP.ScheduledReportRejected(
+            "offline"
+        )
         with self.assertRaises(RuntimeError):
             self.attempt(1000.0)
         for timestamp in (1000.1, 1001.0, 1100.0, 1299.9):
@@ -71,7 +75,7 @@ class DailySummaryRetryTests(unittest.TestCase):
         """A later accepted API response may mark the summary date."""
 
         self.monitor.telegram.send.side_effect = [
-            RuntimeError("network offline"),
+            APP.ScheduledReportRejected("network offline"),
             110,
         ]
         with self.assertRaises(RuntimeError):
@@ -83,6 +87,46 @@ class DailySummaryRetryTests(unittest.TestCase):
         self.assertIsNotNone(
             self.monitor.storage.get_meta("daily_summary_day")
         )
+
+    def test_ambiguous_send_survives_monitor_restart(self):
+        """A lost acknowledgement must block retry, even after restart."""
+        self.monitor.telegram.send.side_effect = RuntimeError("lost ACK")
+        with self.assertRaisesRegex(RuntimeError, "lost ACK"):
+            self.attempt(1000.0)
+        pending = "telegram_report_pending:daily_summary_day"
+        self.assertIsNotNone(self.monitor.storage.get_meta(pending))
+        self.assertIsNone(self.monitor.storage.get_meta("daily_summary_day"))
+        restarted = APP.Monitor(self.monitor.cfg)
+        restarted.telegram.send = Mock(return_value=123)
+        with patch.object(APP.time, "monotonic", return_value=2000.0):
+            restarted.maybe_daily_summary()
+        restarted.telegram.send.assert_not_called()
+        self.assertIsNotNone(restarted.storage.get_meta(pending))
+
+    def test_explicit_rejection_clears_pending(self):
+        """A proven rejection may be retried after the existing throttle."""
+        self.monitor.telegram.send.side_effect = APP.ScheduledReportRejected(
+            "explicit rejection"
+        )
+        with self.assertRaises(APP.ScheduledReportRejected):
+            self.attempt(1000.0)
+        self.assertIsNone(
+            self.monitor.storage.get_meta(
+                "telegram_report_pending:daily_summary_day"
+            )
+        )
+
+    def test_finish_requires_exact_period(self):
+        """A wrong acknowledgement cannot clear another report intent."""
+        storage = self.monitor.storage
+        self.assertTrue(storage.reserve_report("daily_summary_day", "day1"))
+        with self.assertRaisesRegex(ValueError, "intent changed"):
+            storage.finish_report("daily_summary_day", "day2", accepted=True)
+        self.assertFalse(storage.reserve_report("daily_summary_day", "day2"))
+        self.assertIsNone(storage.get_meta("daily_summary_day"))
+        storage.finish_report("daily_summary_day", "day1", accepted=True)
+        self.assertEqual(storage.get_meta("daily_summary_day"), "day1")
+        self.assertFalse(storage.reserve_report("daily_summary_day", "day1"))
 
     def test_no_daily_summary_when_disabled(self):
         """Disabled options cannot start retries or deliveries."""
