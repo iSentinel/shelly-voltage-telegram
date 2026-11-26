@@ -1,3 +1,18 @@
+## 2026-11-27 — interrupted QA START observation
+
+- Add durable one-shot START intent bound to exact armed ID, old
+  StartedAt, SQLite identity and historical/metadata hashes.
+- Observe already-running QA container without starting or adopting it.
+  Require new StartedAt, unchanged original prefix and additional rows.
+- 53 focused tests and quality gate PASS.
+- Real networkless LXC114: stopped observation refused; separate
+  operator SIGKILL after offline supervisor start, live observation
+  103/124 rows, exact replay with unchanged StartedAt, ordinary
+  synthetic alert only, exit 0, repeat intent refused.
+- NEXT: automatically bind intent to supervisor startup, complete
+  runtime acceptance and interrupted lifecycle review, signed candidate.
+  History observation alone does not authorize deployment.
+
 ## 2026-11-27 — durable armed container identity
 
 - PR #467 exact CI 8/8 PASS.
