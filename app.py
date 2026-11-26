@@ -1625,15 +1625,22 @@ class Telegram:
         payload: dict,
         *,
         post: Callable[[str, dict], dict] | None = None,
+        interrupt_retry: bool = False,
     ) -> dict:
-        """Retry only a Telegram 429 response, once, with a safe delay."""
+        """Retry one Telegram 429, cancelling scheduled work on shutdown."""
 
         send = self._post if post is None else post
+        if interrupt_retry and STOP.is_set():
+            raise RuntimeError("Scheduled report stopped")
         data = send(method, payload)
         if data.get("error_code") == 429:
             delay = self.rate_limit_delay(data)
             logger.warning("Telegram rate limited; retry in {:.1f}s", delay)
-            time.sleep(delay)
+            if interrupt_retry:
+                if STOP.wait(delay):
+                    raise RuntimeError("Scheduled report stopped")
+            else:
+                time.sleep(delay)
             data = send(method, payload)
         if not data.get("ok"):
             raise RuntimeError(safe_telegram_api_error(data))
@@ -1685,6 +1692,7 @@ class Telegram:
                     "sendMessage",
                     payload,
                     post=partial(self._post, session=self.report_session),
+                    interrupt_retry=True,
                 )
         else:
             result = self.call("sendMessage", payload)

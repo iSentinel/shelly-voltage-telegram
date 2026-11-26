@@ -215,6 +215,34 @@ class ScheduledReportIsolationTests(unittest.TestCase):
         self.monitor.run()
         self.finished.set()
 
+    def test_shutdown_interrupts_scheduled_rate_limit_retry(self):
+        """A stopped report must not resend or persist an unaccepted day."""
+        rate_limited = Mock()
+        rate_limited.json.return_value = {
+            "ok": False,
+            "error_code": 429,
+            "parameters": {"retry_after": 30},
+        }
+
+        def reject(*_args, **_kwargs):
+            """Simulate shutdown when the first request gets a 429."""
+            self.stop.set()
+            return rate_limited
+
+        self.monitor.last_summary_attempt = -1000.0
+        self.monitor.telegram.report_session.post = Mock(side_effect=reject)
+        with self.assertRaisesRegex(RuntimeError, "Scheduled report stopped"):
+            self.monitor.maybe_daily_summary()
+        self.monitor.telegram.report_session.post.assert_called_once()
+        self.assertIsNone(self.monitor.storage.get_meta("daily_summary_day"))
+
+    def test_shutdown_prevents_new_scheduled_send(self):
+        """Do not begin a scheduled request after STOP is set."""
+        self.stop.set()
+        with self.assertRaisesRegex(RuntimeError, "Scheduled report stopped"):
+            self.monitor.telegram.send("scheduled", scheduled=True)
+        self.monitor.telegram.report_session.post.assert_not_called()
+
     def test_slow_daily_report_leaves_sampling_and_alert_transport_available(
         self,
     ):
