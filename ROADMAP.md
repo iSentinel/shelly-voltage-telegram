@@ -1,3 +1,14 @@
+## 2026-11-26 — issue #453 public receipt preflight
+
+- Actual signed supervised QA on LXC111 exposed a legacy DynamicUser state
+  alias after the v0.5.28 candidate started. History and PHOTO identity
+  survived; the original operator recovered after explicit path migration.
+- Actual signed rollback to v0.5.27 passed. Production still uses v0.5.27.
+- Reject unsafe public receipt paths before the writer is stopped; document
+  the separate operator-reviewed migration and preserve private state.
+- Keep signed v0.5.28 artifacts immutable. Validate this patch separately;
+  no production activation without exact owner-approved cutover.
+
 ## 2026-11-26 — rollback-compatible 0.5.28-hw release scope
 
 - Integrate PRs #446–449 at b2aad78f8a2ce774168744d962619939d5a7685b

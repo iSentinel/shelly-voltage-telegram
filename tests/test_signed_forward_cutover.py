@@ -1006,6 +1006,67 @@ class ForwardCutoverTests(unittest.TestCase):
         self.assertEqual(CUTOVER.read_pair(self.paths), OLD)
         self.assertFalse(self.paths.marker.exists())
 
+    def test_public_directory_symlink_blocks_before_writer_stop(self):
+        """Keep the original writer when DynamicUser owns the old alias."""
+        old = self.existing_supervisor()
+        private = self.paths.public_state.parent / "private"
+        private.mkdir()
+        marker = private / "status.json"
+        marker.write_text("legacy state")
+        self.paths.public_state.symlink_to(private, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "legacy DynamicUser"):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO, True)
+        self.assertEqual(CUTOVER.read_pair(self.paths), old)
+        self.assertFalse(self.paths.marker.exists())
+        self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
+        self.assertEqual(marker.read_text(), "legacy state")
+        self.assert_history([222])
+
+    def test_dangling_public_directory_symlink_is_rejected(self):
+        """Do not treat a dangling link as an unprovisioned directory."""
+        self.paths.public_state.symlink_to(
+            self.paths.public_state.parent / "missing"
+        )
+        with self.assertRaisesRegex(ValueError, "directory is a symlink"):
+            CUTOVER.public_receipt_preflight(self.paths)
+
+    def test_public_receipt_symlink_blocks_before_writer_stop(self):
+        """Never replace a public receipt link or touch its destination."""
+        self.paths.public_state.mkdir()
+        target = self.paths.state / "deployed.json"
+        original = target.read_bytes()
+        (self.paths.public_state / "deployed.json").symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "receipt is a symlink"):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertEqual(target.read_bytes(), original)
+        self.assertFalse(self.paths.marker.exists())
+        self.assertNotIn(("systemctl", "stop", CUTOVER.MONITOR), self.calls)
+        self.assert_history([222])
+
+    def test_unsafe_public_directory_blocks_before_writer_stop(self):
+        """Honor the protected-directory policy before touching a writer."""
+        self.paths.public_state.mkdir()
+        original = CUTOVER.safe_path.side_effect
+
+        def reject_public(path, **kwargs):
+            if path == self.paths.public_state:
+                raise ValueError("protected path is unsafe")
+            return original(path, **kwargs)
+
+        with (
+            patch.object(CUTOVER, "safe_path", side_effect=reject_public),
+            self.assertRaisesRegex(ValueError, "protected path"),
+        ):
+            CUTOVER.activate(self.paths, self.work, NEW, PHOTO)
+        self.assertEqual(CUTOVER.read_pair(self.paths), OLD)
+        self.assertNotIn(("systemctl", "stop", CUTOVER.MONITOR), self.calls)
+        self.assert_history([222])
+
+    def test_missing_public_state_is_a_read_only_preflight(self):
+        """A clean, absent directory is provisioned only at publication."""
+        CUTOVER.public_receipt_preflight(self.paths)
+        self.assertFalse(self.paths.public_state.exists())
+
     def test_public_receipt_failure_retries_only_the_new_pair(self) -> None:
         """Keep running the new pair if public status cannot be written."""
         with (
