@@ -1,3 +1,16 @@
+## 2026-11-26 — v0.5.28 cutover review packet
+
+- PR #454 exact CI, negative preflight and positive supervised signed
+  update/rollback passed on LXC111.
+- Prepare the exact release/operator identity review packet in
+  docs/ISSUE453_PRODUCTION_CUTOVER_0528.md.
+- Production old checker unit/timer hashes and DynamicUser alias match
+  the signed v0.5.27 baseline. Preserve the dynamic-UID receipt as
+  historical state, not a trusted root-owned input.
+- Production readiness HTTP 503: NO-GO. Obtain fresh physical readiness,
+  backup/restore and specific approval before migration or cutover.
+- No new release tag or production changes.
+
 ## 2026-11-26 — issue #453 public receipt preflight
 
 - Actual signed supervised QA on LXC111 exposed a legacy DynamicUser state
