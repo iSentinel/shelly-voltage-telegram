@@ -127,3 +127,28 @@ without STOP hit the wall-clock budget, left the main monitor running
 and the pending intent intact, and had no surviving network child.
 Temporary QA logging driver was set to json-file for log inspection.
 No live Telegram traffic or signed release changes.
+
+## Protected reconciliation rehearsal
+
+The optional `--protected-qa` mode is still restricted to LXC114,
+using the dedicated root-controlled `/var/lib/svt-report-reconcile-qa`
+layout, not the production database or fence. It exercises the order:
+signed-forward operator lock, updater operator lock, writer lease and
+transaction gate. Operator locks must already exist as protected regular
+inodes. The writer fence directory must be root controlled and the two
+writer lock files must belong to UID 10001. Both pending-update marker
+paths, including dangling links, block reconciliation. The SQLite
+resolution uses synchronous=FULL.
+
+Actual isolated QA on 2026-11-26 refused contention on each of the four
+lock files and refused both pending markers before creating a backup.
+After releasing them, a copy of the active-HTTP cancellation fixture
+was reconciled with 215 measurement rows, original inode and unrelated
+metadata preserved; the pending rescue and its SHA256 matched the audit.
+
+This is a rehearsal of lock ordering, not production authorization.
+Production must additionally verify the exact signed installed pair,
+actual mount identity, stopped supervisor and every other writer,
+protected live paths and the owner's approval of the exact evidence
+and attempt. The current production release does not implement report
+reservations. Do not deploy this helper as a repair for v0.5.27-hw.

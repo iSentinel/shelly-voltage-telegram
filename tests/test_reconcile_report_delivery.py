@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -178,6 +179,46 @@ class ReportRepairTests(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "isolated QA"),
         ):
             REPAIR.require_qa(self.path, self.backup)
+
+    def test_operator_lock_contention(self):
+        """A concurrent release operator prevents repair."""
+        lock = self.path.with_name("operator.lock")
+        lock.touch(mode=0o600)
+        with (
+            patch.object(REPAIR, "protected_info", return_value=lock.stat()),
+            REPAIR.operator_lock(lock),
+            self.assertRaises(BlockingIOError),
+            REPAIR.operator_lock(lock),
+        ):
+            self.fail("second operator acquired the lock")
+
+    def test_pending_marker_including_dangling_symlink(self):
+        """Either kind of update marker blocks protected repair."""
+        root = self.path.parent
+        (root / "fence").mkdir()
+        REPAIR.no_update_pending(root)
+        for marker in (
+            root / "pending-update",
+            root / "fence/.svt-update-pending",
+        ):
+            marker.symlink_to(root / "absent")
+            with self.assertRaisesRegex(ValueError, "update pending"):
+                REPAIR.no_update_pending(root)
+            marker.unlink()
+
+    def test_wrong_protected_fence_environment(self):
+        """Do not accept an arbitrary lock directory in QA mode."""
+        with (
+            patch.object(REPAIR.os, "geteuid", return_value=0),
+            patch.object(
+                REPAIR.socket,
+                "gethostname",
+                return_value="shelly-docker-reboot-qa",
+            ),
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": "/wrong"}),
+            self.assertRaisesRegex(ValueError, "unexpected QA writer fence"),
+        ):
+            REPAIR.require_qa(self.path, self.backup, protected=True)
 
     def test_symlink_database_refused(self):
         """Do not inspect or mutate a database through a link."""
