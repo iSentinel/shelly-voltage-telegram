@@ -1,3 +1,25 @@
+## 2026-11-26 — rollback-compatible 0.5.28-hw release scope
+
+- Integrate PRs #446–449 at b2aad78f8a2ce774168744d962619939d5a7685b
+  before considering #450. The signed v0.5.27-hw archive and locally
+  built candidate have identical hashes for all 28 monitor inputs
+  evaluated by the actual rollback guard.
+- Keep the monitor-input matching rule unchanged. Scheduled report
+  isolation in #450 changes app.py and is deferred to a separate
+  candidate pending a reviewed cross-version rollback contract.
+- Physical three-phase continuity: 86 samples per phase in 15 minutes,
+  maximum gap 11.1 s, readiness HTTP 200, SQLite quick_check OK.
+  This is a point-in-time observation, not a future release gate pass.
+- Verified published source/OCI pairs v0.5.26 and v0.5.27, including
+  signatures and attestations. Source-level disposable SQLite/WAL
+  compatibility through #450 passed, but is not full Docker acceptance.
+- At the #449 head, two unsigned source archives were byte-identical;
+  Ruff 0.14.2 and project quality checks passed.
+- NEXT: exact final-head CI, artifact-specific release review, signed
+  source/OCI publication, isolated real supervised update and rollback,
+  and fresh physical stability plus Telegram checks before production.
+- No production change, release signing, or rollback authorization.
+
 ## 2026-11-10T18:45:01+02:00 Gateway: 24 hourly YASNO tiles + battery windows
 
 - User requested layout resembling a colored hourly Telegram schedule:
