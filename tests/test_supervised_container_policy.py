@@ -136,6 +136,21 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         self.info["Id"] = self.args.expected_container_id
         SUPERVISOR.validate_container(self.info, self.args)
 
+    def test_recovery_layout_requires_one_shot_offline(self):
+        """Recovery fixtures are detected even without expected-ID flags."""
+        root = Path("/var/lib/svt-report-mode-tx-qa.test")
+        self.args.container = "svt-qa-" + root.name
+        self.args.database = root / "data/qa.sqlite3"
+        self.args.fence_dir = root / "fence"
+        self.assertEqual(SUPERVISOR.recovery_qa_root(self.args), root)
+        self.args.once = False
+        with self.assertRaisesRegex(SUPERVISOR.BootBlocked, "LAYOUT"):
+            SUPERVISOR.recovery_qa_root(self.args)
+
+    def test_regular_supervisor_has_no_qa_transaction(self):
+        """Keep existing non-recovery supervisor behavior unchanged."""
+        self.assertIsNone(SUPERVISOR.recovery_qa_root(self.args))
+
     def test_version_pair_requires_exact_match(self) -> None:
         """A valid digest cannot authorize a different source release."""
         record = {"version": "0.5.25-hw", "digest": "sha256:" + "a" * 64}

@@ -1,3 +1,21 @@
+## 2026-11-27 — mandatory QA supervisor START claim
+
+- PR #469 exact CI 8/8 PASS.
+- Automatically detect dedicated recovery QA layout and require
+  offline one-shot supervisor, exact armed identity and START baseline.
+- Persist a consumed START claim before Docker request; reject repeat
+  claims and require the exact claim during read-only observation.
+- 58 focused tests and quality gate PASS; extracted helper to meet
+  function-length policy.
+- Real LXC114: missing intent refused, one verified startup without
+  optional ID flags, history 126/147, ordinary alert only, exit 0.
+  Repeat supervisor refused with unchanged StartedAt.
+- Separate real SIGKILL after durable claim but before Docker start:
+  never-started container, repeat refused, 148-row SQLite unchanged.
+- NEXT: full runtime acceptance and production-specific design;
+  signed candidate preparation and isolated signed QA.
+  No direct Docker guard, production changes or release authorization.
+
 ## 2026-11-27 — interrupted QA START observation
 
 - Add durable one-shot START intent bound to exact armed ID, old
