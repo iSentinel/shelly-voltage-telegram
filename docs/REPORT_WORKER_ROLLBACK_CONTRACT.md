@@ -125,3 +125,34 @@ An existing weekly pending reservation and both opt-in preferences
 were preserved. Both containers exited zero. No live Telegram traffic
 or production restart occurred. Full signed supervisor rehearsal
 is still required.
+
+## Protected supervisor restart rehearsal
+
+The existing start-compose.sh --create-only uses --no-recreate. A
+changed .env followed by a normal service restart does not necessarily
+apply the new mode. Never infer the active mode from the configuration
+file alone. The QA supervisor option --expected-report-mode checks the
+actual container environment for one exact explicit enabled/paused
+value, rejecting absent, duplicate or stale values before Docker start.
+It is deliberately unavailable outside the existing offline QA mode.
+
+LXC114 rehearsal used the actual Compose create-only helper and
+supervised-container.py --qa-offline --once, with a root-owned
+configuration and protected shared writer fence. The old stopped
+container kept enabled after .env changed to paused and was correctly
+refused. Only the disposable stopped QA container was removed and
+recreated with the same verified local unsigned image ID. The subsequent
+paused launch preserved all 20 original measurements and added 21;
+inode, daily delivery marker and weekly pending were retained.
+Ordinary synthetic alert succeeded, no additional report was sent,
+and the container exited zero. A first positive probe did not meet
+its startup assertion; the separate retry with diagnostic logs passed.
+
+For production, a reviewed operator must hold both operator locks,
+verify signed pair and protected config/mounts, fence and stop the
+existing owner, create a validated rescue, and recreate only the exact
+stopped container under an owned transaction. Verify the resolved
+Compose mode and actual environment before starting the sole supervisor.
+Recovery after interruption and production integration of the mode
+guard remain outstanding. Do not simply restart an old container,
+edit a signed artifact, or use --qa-offline on production.
