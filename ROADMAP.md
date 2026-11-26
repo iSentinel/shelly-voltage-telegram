@@ -1,3 +1,21 @@
+## 2026-11-26 — durable recovery-mode config transaction QA
+
+- PR #465 exact CI 8/8 PASS.
+- QA-only prepare/recover journal, exact old/new configuration hashes,
+  atomic fsync publication, exclusive operator/writer/transaction locks.
+- 41 focused tests and quality gate PASS.
+- LXC114 real SIGKILL after config publication before journal commit:
+  replay converged to paused; second replay identical. Active writer
+  refused; database SHA256 and inode unchanged, 41 rows and pending kept.
+- Separate real offline Compose/supervisor start with recovered mode:
+  41/61 history, prefix/inode and pending/daily markers retained;
+  ordinary synthetic alert only, exit 0, pre-runtime rescue retained.
+- Initial QA setup failures: umask-created fence mode and sysfs
+  bonding_masters miscount; corrected on disposable layout.
+- NEXT: full owned startup fence/journal across container recreation,
+  signed pair and production lock integration, signed candidate QA.
+  Configuration-only transaction is not production authorization.
+
 ## 2026-11-26 — protected recovery supervisor rehearsal
 
 - PR #464 exact CI 8/8 PASS.
