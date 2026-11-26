@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from writer_fence import (  # noqa: E402
     WriterFenceError,
     fence_directory,
+    quiescent_writer_lease,
     update_gate,
 )
 
@@ -380,6 +382,63 @@ def on_signal(_signum: int, _frame: object) -> None:
     STOP = True
 
 
+def recovery_qa_root(args: argparse.Namespace) -> Path | None:
+    """Recognize dedicated recovery fixtures without optional CLI flags."""
+    root = args.fence_dir.parent
+    prefix = "svt-report-mode-tx-qa."
+    if not (
+        root.name.startswith(prefix)
+        or args.container.startswith("svt-qa-" + prefix)
+    ):
+        return None
+    if (
+        not args.qa_offline
+        or not args.once
+        or root.parent != Path("/var/lib")
+        or not root.name.startswith(prefix)
+        or args.container != "svt-qa-" + root.name
+        or args.fence_dir != root / "fence"
+        or args.database != root / "data/qa.sqlite3"
+    ):
+        raise BootBlocked("SVT_RECOVERY_QA_LAYOUT_MISMATCH")
+    return root
+
+
+def load_recovery_qa():
+    """Load the dedicated isolated transaction helper only when required."""
+    spec = importlib.util.spec_from_file_location(
+        "qa_report_mode",
+        Path(__file__).with_name("qa-report-mode-transaction.py"),
+    )
+    if spec is None or spec.loader is None:
+        raise BootBlocked("SVT_RECOVERY_QA_HELPER_MISSING")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+def start_recovery_qa(args: argparse.Namespace, root: Path) -> int:
+    """Serialize and consume START before issuing the one Docker request."""
+    helper = load_recovery_qa()
+    helper.require_qa(root)
+    # The monitor must be able to take its owner lease during Docker start.
+    # Keep the operator and update gates, but release owner before start.
+    with helper.exclusive(root, observation=True):
+        if _pending_under_gate(args.database):
+            print("SKIP_PENDING")
+            return 0
+        with quiescent_writer_lease(args.database):
+            identity = helper.claim_start(root, args.container)
+            if args.expected_container_id not in (None, identity):
+                raise BootBlocked("SVT_ARMED_CONTAINER_ID_MISMATCH")
+        if STOP:
+            raise BootBlocked("SVT_START_CLAIMED_WITHOUT_LAUNCH")
+        if docker("start", identity).returncode:
+            raise BootBlocked("SVT_DOCKER_START_FAILED")
+    print("SUPERVISED_START_PASS", flush=True)
+    return 0
+
+
 def main() -> int:
     """Validate the sole-owner policy before starting any container."""
     args = args_parser()
@@ -393,9 +452,20 @@ def main() -> int:
         validate_container(inspect(args.container), args)
         signal.signal(signal.SIGTERM, on_signal)
         signal.signal(signal.SIGINT, on_signal)
+        root = recovery_qa_root(args)
+        if root is not None:
+            return start_recovery_qa(args, root)
         target = args.expected_container_id or args.container
         return supervise(target, args.database, args.once)
-    except (BootBlocked, WriterFenceError, OSError, ValueError) as exc:
+    except (
+        BootBlocked,
+        WriterFenceError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        subprocess.SubprocessError,
+    ) as exc:
         code = (
             str(exc)
             if isinstance(exc, (ValueError, WriterFenceError))

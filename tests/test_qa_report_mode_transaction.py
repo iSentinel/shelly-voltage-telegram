@@ -236,6 +236,7 @@ class ReportModeTransactionTests(unittest.TestCase):
         with patch.object(TX, "inspect_qa_container", return_value=info):
             TX.arm_paused(self.root, "fixture")
             TX.record_start(self.root, "fixture")
+            TX.claim_start(self.root, "fixture")
         return info, database
 
     def test_start_intent_is_not_reissued(self):
@@ -282,6 +283,38 @@ class ReportModeTransactionTests(unittest.TestCase):
         with (
             patch.object(TX, "inspect_qa_container", return_value=info),
             self.assertRaisesRegex(ValueError, "no new armed launch"),
+        ):
+            TX.observe_start(self.root, "fixture")
+
+    def test_claim_cannot_be_reissued(self):
+        """An uncertain Docker request is never automatically retried."""
+        info, _ = self.start_fixture()
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "already claimed"),
+        ):
+            TX.claim_start(self.root, "fixture")
+
+    def test_claim_rejects_changed_baseline(self):
+        """Refuse a stale intent even if the container ID did not change."""
+        info, database = self.start_fixture()
+        (self.root / "start-claim.json").unlink()
+        with closing(sqlite3.connect(database)) as db, db:
+            db.execute("INSERT INTO measurements VALUES(2,221)")
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "intent changed"),
+        ):
+            TX.claim_start(self.root, "fixture")
+
+    def test_observation_requires_consumed_claim(self):
+        """An external start without claim is not accepted."""
+        info, _ = self.start_fixture()
+        (self.root / "start-claim.json").unlink()
+        info["State"].update(Running=True, StartedAt="new")
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaises(FileNotFoundError),
         ):
             TX.observe_start(self.root, "fixture")
 

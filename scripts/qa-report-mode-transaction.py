@@ -261,9 +261,50 @@ def record_start(root: Path, name: str) -> dict:
     return record
 
 
+def claim_start(root: Path, name: str) -> str:
+    """Consume one exact reviewed intent before issuing Docker start."""
+    path = root / "start-claim.json"
+    if os.path.lexists(path):
+        raise ValueError("START already claimed; observe without retry")
+    intent = read_record(root / "start-intent.json")
+    info = start_binding(root, name, running=False)
+    if (
+        intent["container_id"] != info["Id"]
+        or intent["previous_started_at"] != info["State"]["StartedAt"]
+        or intent["baseline"] != history_snapshot(root)
+        or intent.get("deployment_authorized") is not False
+    ):
+        raise ValueError("START intent changed")
+    claim = {
+        "container_id": info["Id"],
+        "intent_sha256": sha((root / "start-intent.json").read_bytes()),
+        "deployment_authorized": False,
+    }
+    atomic_write(path, (json.dumps(claim, sort_keys=True) + "\n").encode())
+    return info["Id"]
+
+
+def verify_claim(root: Path, intent: dict) -> None:
+    """Bind a live observation to the consumed exact START intent."""
+    claim = read_record(root / "start-claim.json")
+    if claim != {
+        "container_id": intent["container_id"],
+        "intent_sha256": sha((root / "start-intent.json").read_bytes()),
+        "deployment_authorized": False,
+    }:
+        raise ValueError("START claim mismatch")
+
+
+def require_growth(snapshot: dict, baseline: dict) -> None:
+    """Refuse a positive observation without additional measurements."""
+    if snapshot["rows"] <= baseline["rows"]:
+        raise ValueError("no new measurements")
+
+
 def observe_start(root: Path, name: str) -> dict:
     """Review an existing QA launch without starting or adopting any writer."""
     intent = read_record(root / "start-intent.json")
+    verify_claim(root, intent)
     info = start_binding(root, name, running=True)
     started = info["State"]["StartedAt"]
     if (
@@ -276,8 +317,7 @@ def observe_start(root: Path, name: str) -> dict:
     for key in ("inode", "device", "prefix_sha256", "metadata_sha256"):
         if snapshot[key] != baseline[key]:
             raise ValueError("runtime history or metadata changed")
-    if snapshot["rows"] <= baseline["rows"]:
-        raise ValueError("no new measurements")
+    require_growth(snapshot, baseline)
     final = start_binding(root, name, running=True)
     if final["Id"] != info["Id"] or final["State"]["StartedAt"] != started:
         raise ValueError("launch changed during review")

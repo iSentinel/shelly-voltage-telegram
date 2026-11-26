@@ -284,3 +284,34 @@ runtime acceptance: runtime_verified and deployment_authorized remain
 false. Production startup ownership, signed verification, full readiness,
 three-phase sampling evidence and durable acceptance integration remain
 outstanding. No automatic retry after an uncertain START is authorized.
+
+## Mandatory one-shot START claim in the dedicated QA supervisor
+
+The supervisor recognizes the dedicated recovery fixture name and
+fence layout without optional expected-ID or expected-mode flags.
+It requires offline one-shot operation and the existing isolated host
+boundary. Under the operator and update gates it verifies the exact
+armed paused container, original StartedAt and unchanged database
+baseline, then durably writes start-claim.json bound to the exact
+START intent hash. The quiescent owner lease is released before
+Docker start so the monitor can acquire it; the update gate remains
+held until the request returns. An existing claim blocks another
+request regardless of whether the first request reached Docker.
+Observation requires the exact consumed claim.
+
+Actual networkless LXC114 on 2026-11-27: missing intent refused;
+supervisor without optional identity flags started the reviewed
+container once, observation verified history growth 126/147 and
+metadata/inode parity, ordinary synthetic alert only, exit 0.
+Repeat supervisor invocation after stop was blocked and StartedAt
+unchanged. A separate fixture was SIGKILLed after durable claim
+publication but before calling Docker start. The container remained
+never-started, repeat invocation refused, database SHA256 unchanged
+(148 baseline rows). 58 focused tests and quality gate passed.
+
+This guard applies to the cooperating QA supervisor and its dedicated
+layout, not direct privileged Docker access or production boot.
+An ambiguous claim requires operator review, even if Docker appears
+never-started. No automatic claim removal or retry is authorized.
+Full runtime acceptance, protected production integration and signed
+candidate qualification remain outstanding.
