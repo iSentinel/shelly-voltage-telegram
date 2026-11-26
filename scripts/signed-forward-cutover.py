@@ -655,6 +655,7 @@ def rollback_preflight(paths: Layout, args: argparse.Namespace) -> dict:
     verify_current_mounts(paths, True)
     updater.preflight(paths.database, READY)
     read_photo(paths, args.photo)
+    public_receipt_preflight(paths)
     if installed_runtime(paths, True)[0] != current:
         raise ValueError("installed release changed during rollback preflight")
     return {
@@ -734,6 +735,7 @@ def capture(
     )
     read_photo(paths, photo)
     updater.preflight(paths.database, READY)
+    public_receipt_preflight(paths)
     verify_current_mounts(paths, previous_supervised)
     capture_receipts(paths, work, previous_supervised)
     state = {
@@ -1597,10 +1599,29 @@ def restore_release_check(modes: dict) -> None:
         run("systemctl", "start", RELEASE_CHECK_TIMER)
 
 
+def public_receipt_preflight(paths: Layout) -> None:
+    """Refuse unsafe public receipt paths before the writer is stopped."""
+    directory = paths.public_state
+    safe_path(directory.parent, folder=True)
+    if directory.is_symlink():
+        raise ValueError(
+            "public receipt directory is a symlink; "
+            "review legacy DynamicUser state migration before cutover"
+        )
+    if directory.exists():
+        safe_path(directory, folder=True)
+    receipt = directory / "deployed.json"
+    if receipt.is_symlink():
+        raise ValueError("public deployment receipt is a symlink")
+    if receipt.exists():
+        safe_path(receipt)
+
+
 def publish_version(paths: Layout, pair: dict) -> None:
     """Publish the read-only receipt only once the new pair is healthy."""
+    public_receipt_preflight(paths)
     paths.public_state.mkdir(mode=0o755, exist_ok=True)
-    safe_path(paths.public_state, folder=True)
+    public_receipt_preflight(paths)
     value = {key: pair[key] for key in ("version", "digest")}
     write_file(
         paths.public_state / "deployed.json",
