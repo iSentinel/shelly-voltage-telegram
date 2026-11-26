@@ -248,7 +248,7 @@ class ScheduledReportIsolationTests(unittest.TestCase):
         stop_patch = patch.object(APP, "STOP", self.stop)
         stop_patch.start()
         self.addCleanup(stop_patch.stop)
-        self.monitor.telegram.report_session.post = Mock(
+        self.monitor.telegram._scheduled_post = Mock(
             side_effect=self.hold_report
         )
         self.monitor.telegram.api_session.post = Mock(
@@ -268,7 +268,7 @@ class ScheduledReportIsolationTests(unittest.TestCase):
         self.report_started.set()
         if not self.release_report.wait(6):
             raise TimeoutError("test did not release the report")
-        return self.accepted()
+        return self.accepted().json()
 
     def record_sample(self):
         """Persist a real monitor sample while the report is pending."""
@@ -284,8 +284,7 @@ class ScheduledReportIsolationTests(unittest.TestCase):
 
     def test_shutdown_interrupts_scheduled_rate_limit_retry(self):
         """A stopped report must not resend or persist an unaccepted day."""
-        rate_limited = Mock()
-        rate_limited.json.return_value = {
+        rate_limited = {
             "ok": False,
             "error_code": 429,
             "parameters": {"retry_after": 30},
@@ -297,10 +296,10 @@ class ScheduledReportIsolationTests(unittest.TestCase):
             return rate_limited
 
         self.monitor.last_summary_attempt = -1000.0
-        self.monitor.telegram.report_session.post = Mock(side_effect=reject)
+        self.monitor.telegram._scheduled_post = Mock(side_effect=reject)
         with self.assertRaisesRegex(RuntimeError, "Scheduled report stopped"):
             self.monitor.maybe_daily_summary()
-        self.monitor.telegram.report_session.post.assert_called_once()
+        self.monitor.telegram._scheduled_post.assert_called_once()
         self.assertIsNone(self.monitor.storage.get_meta("daily_summary_day"))
 
     def test_shutdown_prevents_new_scheduled_send(self):
@@ -308,7 +307,7 @@ class ScheduledReportIsolationTests(unittest.TestCase):
         self.stop.set()
         with self.assertRaisesRegex(RuntimeError, "Scheduled report stopped"):
             self.monitor.telegram.send("scheduled", scheduled=True)
-        self.monitor.telegram.report_session.post.assert_not_called()
+        self.monitor.telegram._scheduled_post.assert_not_called()
 
     def test_slow_daily_report_leaves_sampling_and_alert_transport_available(
         self,
@@ -342,7 +341,7 @@ class ScheduledReportIsolationTests(unittest.TestCase):
         self.assertIsNotNone(
             self.monitor.storage.get_meta("daily_summary_day")
         )
-        self.monitor.telegram.report_session.post.assert_called_once()
+        self.monitor.telegram._scheduled_post.assert_called_once()
         self.monitor.telegram.api_session.post.assert_called_once()
         self.monitor.maybe_weekly_private_reports.assert_not_called()
 

@@ -1,3 +1,19 @@
+## 2026-11-26 — isolated scheduled HTTP deadline
+
+- Separate scheduled HTTP into a bounded subprocess without SQLite
+  access; STOP cancels and reaps it. Keep ordinary transport unchanged.
+- 12-second per-request wall-clock budget, 64 KiB response limit,
+  strict HTTP/API acknowledgement parity, no redirects.
+- 190 focused tests and project quality gate PASS.
+- Networkless LXC114 derived image: active slow HTTP stopped in 266 ms
+  (exit 0), pending identity and SQLite intact. New process did not
+  resend; deadline without STOP left monitor running, child reaped.
+  First aggregate restart probe failed an assertion; separate restart
+  passed. Default QA log driver did not support docker logs, so the
+  isolated test used json-file. Production configuration unchanged.
+- NEXT: exact CI, protected production reconciliation and signed
+  cross-version compatibility. No automatic resend or deployment.
+
 ## 2026-11-26 — unique report reservation identity
 
 - Reserve a random 128-bit logical attempt ID alongside the report period.

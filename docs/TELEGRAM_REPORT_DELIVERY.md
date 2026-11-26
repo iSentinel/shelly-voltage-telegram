@@ -1,8 +1,8 @@
 # Scheduled Telegram report delivery
 
 Daily summaries and subscribed weekly reports run in a separate thread.
-They use their own HTTP session so a slow report can finish while Shelly
-sampling and the usual Telegram connection continue. Several sampling
+They use an isolated HTTP subprocess so a slow report can finish while
+Shelly sampling and the usual Telegram connection continue. Several sampling
 ticks during an active report produce one follow-up check for due work.
 
 The reporting schedule, quiet hours, weekly opt-in and retry limits stay
@@ -99,3 +99,31 @@ Networkless LXC114 QA verified stale runtime acknowledgement and stale
 operator fingerprint rejection for a replacement attempt of the same
 period. The current synthetic attempt was reconciled independently;
 11 original measurement rows and the pending rescue copy were preserved.
+
+## Active request deadline
+
+Each scheduled HTTP attempt now uses a separate subprocess, with a
+12-second wall-clock budget including process startup. The parent polls
+for STOP at most every 100 ms while waiting and kills/reaps the isolated
+network worker on cancellation or timeout. The worker does not access
+SQLite; its request is supplied through stdin rather than command-line
+arguments. Its stderr is suppressed and stdout contains only validated,
+bounded response metadata. The response body is limited to 64 KiB;
+redirects are disabled. An explicit 4xx rejection must agree with the
+HTTP status; a successful response must contain a positive integer ID.
+Ambiguous responses leave the exact durable reservation pending.
+
+The existing interruptible 429 delay is separate from the per-request
+deadline. Ordinary alert/status and long-polling transports are unchanged.
+This does not promise a hard real-time process shutdown bound under
+kernel stalls or when other monitor work is blocked. Cancellation cannot
+undo a remote accepted message and does not authorize automatic resend.
+
+QA on 2026-11-26: seven loopback HTTP transport tests passed. In networkless
+LXC114, the derived image stopped during a streamed accepted response
+in 266 ms (exit 0), preserved its pending attempt and SQLite, and a new
+process using the same database did not resend. A separate active request
+without STOP hit the wall-clock budget, left the main monitor running
+and the pending intent intact, and had no surviving network child.
+Temporary QA logging driver was set to json-file for log inspection.
+No live Telegram traffic or signed release changes.

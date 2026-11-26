@@ -10,6 +10,7 @@ import os
 import secrets
 import signal
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -18,7 +19,6 @@ from collections.abc import Callable
 from contextlib import closing, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1577,6 +1577,107 @@ def telegram_upload_message_id(
     raise RuntimeError(detail)
 
 
+REPORT_HTTP_DEADLINE = 12.0
+REPORT_HTTP_MAX_BODY = 65536
+
+
+def report_response(response: requests.Response) -> dict:
+    """Bound the response and accept only coherent API acknowledgements."""
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=4096):
+        body.extend(chunk)
+        if len(body) > REPORT_HTTP_MAX_BODY:
+            raise ValueError("scheduled response too large")
+    data = json.loads(body)
+    if not isinstance(data, dict):
+        raise ValueError("invalid scheduled response")
+    if response.status_code == 200 and data.get("ok") is True:
+        message_id = data["result"]["message_id"]
+        if type(message_id) is not int or message_id <= 0:
+            raise ValueError("invalid scheduled message ID")
+        return {"ok": True, "result": {"message_id": message_id}}
+    code = data.get("error_code")
+    if (
+        data.get("ok") is False
+        and type(code) is int
+        and 400 <= code < 500
+        and response.status_code == code
+    ):
+        return {
+            "ok": False,
+            "error_code": code,
+            "parameters": {"retry_after": Telegram.rate_limit_delay(data)},
+        }
+    raise ValueError("unconfirmed scheduled response")
+
+
+def scheduled_http_worker() -> None:
+    """Send exactly one request; never access SQLite or log request data."""
+    try:
+        request = json.load(sys.stdin)
+        with requests.post(
+            request["url"],
+            json=request["payload"],
+            timeout=(5, 8),
+            stream=True,
+            allow_redirects=False,
+        ) as response:
+            result = report_response(response)
+        print(json.dumps(result, separators=(",", ":")), flush=True)
+    except Exception:
+        # A failed worker cannot distinguish a lost ACK from non-delivery.
+        sys.exit(3)
+
+
+def wait_report_response(
+    child: subprocess.Popen, request: str, deadline: float
+) -> dict:
+    """Enforce a wall-clock deadline and observe STOP between waits."""
+    pending_input = request
+    while not STOP.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            output, _ = child.communicate(
+                input=pending_input, timeout=min(0.1, remaining)
+            )
+        except subprocess.TimeoutExpired:
+            pending_input = None
+            continue
+        if child.returncode != 0:
+            raise RuntimeError("Scheduled report outcome unknown")
+        data = json.loads(output)
+        if not isinstance(data, dict):
+            raise RuntimeError("Scheduled report outcome unknown")
+        return data
+    raise RuntimeError("Scheduled report interrupted; outcome unknown")
+
+
+def bounded_report_post(url: str, payload: dict) -> dict:
+    """Isolate network I/O so cancellation cannot leave a sending thread."""
+    deadline = time.monotonic() + REPORT_HTTP_DEADLINE
+    request = json.dumps({"url": url, "payload": payload})
+    with subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "from app import scheduled_http_worker; scheduled_http_worker()",
+        ],
+        cwd=Path(__file__).resolve().parent,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ) as child:
+        try:
+            return wait_report_response(child, request, deadline)
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.wait()
+
+
 class ScheduledReportRejected(RuntimeError):
     """A scheduled request was not started or explicitly rejected."""
 
@@ -1594,7 +1695,6 @@ class Telegram:
         self.base = f"https://api.telegram.org/bot{cfg.telegram_token}"
         self.api_session = requests.Session()
         self.updates_session = requests.Session()
-        self.report_session = requests.Session()
         self.api_lock = threading.Lock()
         self.report_lock = threading.Lock()
         self.silent_default = cfg.telegram_silent_default
@@ -1633,6 +1733,10 @@ class Telegram:
         if not isinstance(data, dict):
             raise RuntimeError("Telegram returned invalid JSON object")
         return data
+
+    def _scheduled_post(self, method: str, payload: dict) -> dict:
+        """Use the cancellable isolated transport only for report sends."""
+        return bounded_report_post(f"{self.base}/{method}", payload)
 
     @staticmethod
     def rate_limit_delay(data: dict) -> float:
@@ -1730,7 +1834,7 @@ class Telegram:
                 result = self._call_with_retry(
                     "sendMessage",
                     payload,
-                    post=partial(self._post, session=self.report_session),
+                    post=self._scheduled_post,
                     interrupt_retry=True,
                 )
         else:
