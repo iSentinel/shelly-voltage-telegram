@@ -1,3 +1,16 @@
+## 2026-11-26 — three-phase production voltage window
+
+- Add a separate read-only cutover review helper for a 900-second window
+  across L1/L2/L3: at least 60 samples/phase, at most 30 s gap, all
+  voltages 207–253 V, no overlapping outage, and stock preflight.
+- Ten focused tests and the quality gate passed. Live QA LXC111 passed
+  447 readings/phase with max gap 2.025 s. Production correctly blocked
+  at 52 samples/phase, 361.732 s max gap and L1/L3 below 207 V.
+- Public Telegram embed independently confirmed current PHOTO and stable
+  SQLite identity without credentials. This is partial evidence only;
+  live Bot API channel-ID binding is still unverified.
+- No signed release or installed source changes; no production cutover.
+
 ## 2026-11-26 — v0.5.28 cutover review packet
 
 - PR #454 exact CI, negative preflight and positive supervised signed
