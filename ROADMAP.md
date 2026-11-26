@@ -1,3 +1,34 @@
+## 2026-11-26 — v0.5.28-hw stacked candidate acceptance checkpoint
+
+- Production remains on published v0.5.27-hw. The three-phase meter
+  recovered naturally; read-only readiness and database integrity checks
+  passed, but the complete 15-minute continuity window has not passed.
+  Do not use a shortened window as a substitute.
+- Candidate stack: #446 -> #447 -> #448 -> #449 -> #450. All five PRs
+  have green checks and clean merge status at the observed heads.
+  The final observed source head is
+  `0edf05e735588d58e26fc4bc215e73678cdf6319`.
+  Exact-head CI runs 45433006042 and 45432972044 succeeded.
+- #446 reports reproducible packaging and isolated signed forward
+  upgrade/interruption QA. #447 reports isolated systemd checker
+  activation QA. #448/#449 add signed rollback preflight and execution.
+  These reports are not a new physical production acceptance.
+- #450 changes monitor source and isolates scheduled Telegram delivery.
+  Its passing unit tests do not waive the signed rollback compatibility
+  check: the rollback contract compares monitor inputs and requires
+  separate disposable-database compatibility testing when they differ.
+- Production release-check service currently fails at CHDIR under
+  DynamicUser. Keep the private source directory protected; resolve
+  through the packaged checker and timer installation (#443/#447).
+- NEXT: review the final stacked commit, run disposable database
+  compatibility and interruption/recovery testing for the final
+  monitor inputs, reconcile installed-version receipt semantics, and
+  verify exact signed source/OCI pairs. Obtain artifact-specific owner
+  acceptance before promotion. Do not activate channel graphics until
+  the independent graphic migration and stability gates pass.
+- This checkpoint is documentation only; no release, merge, tag,
+  production restart, Telegram write or database modification is implied.
+
 ## 2026-11-10T18:45:01+02:00 Gateway: 24 hourly YASNO tiles + battery windows
 
 - User requested layout resembling a colored hourly Telegram schedule:
