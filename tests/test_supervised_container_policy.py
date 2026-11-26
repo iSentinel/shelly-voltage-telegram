@@ -123,6 +123,19 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         ):
             SUPERVISOR.validate_container(self.info, self.args)
 
+    def test_armed_container_identity_must_match(self):
+        """The reviewed immutable ID cannot be replaced under its name."""
+        self.args.expected_container_id = "a" * 64
+        self.args.expected_report_mode = "paused"
+        self.info["Id"] = "b" * 64
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "ARMED_CONTAINER_ID_MISMATCH"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+        self.info["Id"] = self.args.expected_container_id
+        SUPERVISOR.validate_container(self.info, self.args)
+
     def test_version_pair_requires_exact_match(self) -> None:
         """A valid digest cannot authorize a different source release."""
         record = {"version": "0.5.25-hw", "digest": "sha256:" + "a" * 64}

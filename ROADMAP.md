@@ -1,3 +1,20 @@
+## 2026-11-27 — durable armed container identity
+
+- PR #467 exact CI 8/8 PASS.
+- Persist exact container ID, pinned QA image and paused mode before
+  releasing owned marker. Replay requires the same stopped container.
+- Optional offline supervisor expected ID checks paused mode and starts
+  by immutable ID, not mutable name. No production path enabled.
+- 49 focused tests and quality gate PASS. Initial function-length
+  violation fixed by extracting the identity validation helper.
+- Real networkless LXC114 SIGKILL before and after marker removal:
+  fence blocks before clear; exact replay after clear succeeds.
+  Wrong ID and same-name replacement refused. Paused runtime history
+  82/103, inode and report markers retained; ordinary alert only.
+- NEXT: durable runtime acceptance and START interruption recovery;
+  automatic signed supervisor binding and candidate preparation.
+  No production changes or signed rollback exception.
+
 ## 2026-11-27 — durable QA recovery startup fence
 
 - PR #466 exact CI 8/8 PASS.

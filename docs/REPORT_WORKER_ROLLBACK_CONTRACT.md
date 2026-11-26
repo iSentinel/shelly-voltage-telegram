@@ -225,3 +225,30 @@ the exact marker was cleared and offline supervisor start succeeded.
 History grew from 61 to 82 rows, original prefix, inode, daily and
 weekly metadata were preserved. Only an ordinary synthetic alert was
 accepted and the container exited zero. 46 focused tests passed.
+
+## Durable armed container identity (QA only)
+
+ARM now writes armed-container.json with the exact immutable Docker
+container ID, pinned local QA image ID and paused mode before clearing
+its owned startup marker. Replay requires the same stopped validated
+container even if the marker was already removed. A replacement under
+the same name is rejected. The optional offline supervisor expectation
+requires that exact ID and paused mode, and starts Docker by immutable
+ID rather than by mutable name.
+
+Real networkless LXC114 QA on 2026-11-27 injected SIGKILL immediately
+before and after marker removal. The first interruption retained the
+fence and supervisor returned SKIP_PENDING. The second retained the
+armed identity with the marker cleared. Exact replay succeeded; wrong
+ID startup and subsequent same-name replacement replay were refused.
+The accepted paused container preserved 82 original measurement rows,
+extended history to 103, preserved inode and daily/weekly markers,
+sent only a synthetic ordinary alert and exited zero.
+
+The expectation is explicit and QA-only; it is not automatically
+enforced by every supervisor invocation. Runtime acceptance is not
+yet durably recorded, and an already-running writer is not adopted.
+A full production transaction must integrate signed receipt verification,
+automatic binding at every startup, operator lock ownership, crash
+recovery around START and independent runtime evidence. The strict
+signed rollback policy remains unchanged.

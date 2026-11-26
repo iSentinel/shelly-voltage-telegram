@@ -100,6 +100,7 @@ class ReportModeTransactionTests(unittest.TestCase):
     def fixture_container(self):
         """Model the exact stopped, isolated QA container."""
         return {
+            "Id": "a" * 64,
             "State": {"Running": False},
             "Image": TX.QA_IMAGE,
             "Config": {"Env": ["SCHEDULED_REPORTS_MODE=paused"]},
@@ -179,6 +180,40 @@ class ReportModeTransactionTests(unittest.TestCase):
         info["Mounts"][0]["Source"] = "/foreign"
         with self.assertRaisesRegex(ValueError, "unverified QA mount"):
             TX.validate_paused(self.root, info)
+
+    def test_arm_replay_requires_same_container(self):
+        """After marker removal only the exact durable ID is accepted."""
+        (self.root / "fence").mkdir()
+        TX.prepare_fenced(self.root)
+        TX.recover_fenced(self.root)
+        info = self.fixture_container()
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            first = TX.arm_paused(self.root, "fixture")
+            self.assertEqual(TX.arm_paused(self.root, "fixture"), first)
+            info["Id"] = "b" * 64
+            with self.assertRaisesRegex(ValueError, "identity changed"):
+                TX.arm_paused(self.root, "fixture")
+
+    def test_interrupt_before_marker_clear_replays_exact_id(self):
+        """A durable ID survives interruption while the fence remains."""
+        (self.root / "fence").mkdir()
+        TX.prepare_fenced(self.root)
+        TX.recover_fenced(self.root)
+        info = self.fixture_container()
+        marker = TX.marker_module()
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            patch.object(TX, "marker_module", return_value=marker),
+            patch.object(marker, "clear", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            TX.arm_paused(self.root, "fixture")
+        self.assertTrue(TX.marker_path(self.root).exists())
+        self.assertTrue((self.root / "armed-container.json").exists())
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            self.assertTrue(
+                TX.arm_paused(self.root, "fixture")["startup_gate_released"]
+            )
 
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
