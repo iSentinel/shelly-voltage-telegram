@@ -156,3 +156,42 @@ Compose mode and actual environment before starting the sole supervisor.
 Recovery after interruption and production integration of the mode
 guard remain outstanding. Do not simply restart an old container,
 edit a signed artifact, or use --qa-offline on production.
+
+## Configuration transaction crash rehearsal (QA only)
+
+The separate qa-report-mode-transaction.py helper models one exact
+enabled-to-paused transition in a protected networkless LXC114 fixture.
+It supports prepare and recover, stores original nonsecret configuration
+bytes and SHA256 identities, and durably publishes both configuration
+and journal using fsync and atomic rename. Operator, quiescent-writer
+and transaction locks exclude an active writer. No production paths
+or live service actions are supported.
+
+Once prepared is durable, recovery rolls forward to paused. It accepts
+only the exact original or intended bytes before configuration commit.
+A configured journal with changed configuration blocks rather than
+silently overwriting it. An orphan rescue created before the journal
+also blocks for manual review. The journal explicitly leaves
+runtime_verified and deployment_authorized false.
+
+Real LXC114 QA on 2026-11-26: active writer lock blocked prepare;
+SIGKILL after mode publication but before journal commit exited 137.
+Recovery completed the configured phase; a repeated replay was identical.
+SQLite SHA256 and inode remained identical, all 41 measurements and
+one pending reservation preserved. A separate actual Compose create-only
+and offline supervisor start consumed the recovered paused configuration,
+added 20 measurements, preserved prefix, inode and pending/daily markers,
+sent only an ordinary synthetic alert and exited zero. A new rescue
+copy was retained before this runtime trial.
+
+Initial setup required correcting a QA-only fence directory created
+under umask 077; the interface check was corrected to use kernel
+interface enumeration rather than counting sysfs bonding_masters.
+Network isolation remained mandatory.
+
+This is not a production transaction: the helper has no durable
+cross-process startup marker spanning the separate container lifecycle,
+signed pair verification, production updater lock coordination, or
+runtime acceptance journal. Those gates and crash tests remain required.
+No automatic re-enable, production application or signed rollback
+exception is implied.

@@ -1,0 +1,106 @@
+"""Exercise durable config-only recovery on disposable files."""
+
+import importlib.util
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "scripts/qa-report-mode-transaction.py"
+)
+SPEC = importlib.util.spec_from_file_location("mode_transaction", SCRIPT)
+assert SPEC and SPEC.loader
+TX = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(TX)
+
+
+class ReportModeTransactionTests(unittest.TestCase):
+    """No Docker or production operations are performed."""
+
+    def setUp(self):
+        """Create a synthetic single-setting configuration."""
+        scope = tempfile.TemporaryDirectory()
+        self.addCleanup(scope.cleanup)
+        self.root = Path(scope.name)
+        self.env = self.root / ".env"
+        self.env.write_bytes(TX.OLD)
+        guard = patch.object(TX, "protected")
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def test_prepare_does_not_change_mode(self):
+        """Persist original bytes and the intended transition."""
+        self.assertEqual(TX.prepare(self.root)["phase"], "prepared")
+        self.assertEqual(self.env.read_bytes(), TX.OLD)
+        self.assertEqual((self.root / "before.env").read_bytes(), TX.OLD)
+
+    def test_recover_prepared_is_idempotent(self):
+        """Complete the pause without claiming runtime acceptance."""
+        TX.prepare(self.root)
+        result = TX.recover(self.root)
+        self.assertEqual(result["phase"], "configured")
+        self.assertFalse(result["runtime_verified"])
+        self.assertFalse(result["deployment_authorized"])
+        self.assertEqual(TX.recover(self.root), result)
+        self.assertEqual(self.env.read_bytes(), TX.NEW)
+
+    def test_interrupt_after_config_write(self):
+        """Recover if atomic config publication preceded journal update."""
+        TX.prepare(self.root)
+        with (
+            patch.object(TX, "save_journal", side_effect=KeyboardInterrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            TX.recover(self.root)
+        self.assertEqual(self.env.read_bytes(), TX.NEW)
+        self.assertEqual(TX.read_journal(self.root)["phase"], "prepared")
+        self.assertEqual(TX.recover(self.root)["phase"], "configured")
+
+    def test_unknown_config_never_overwritten(self):
+        """Fail closed on external configuration changes."""
+        TX.prepare(self.root)
+        self.env.write_bytes(b"foreign")
+        with self.assertRaisesRegex(ValueError, "drift"):
+            TX.recover(self.root)
+        self.assertEqual(self.env.read_bytes(), b"foreign")
+
+    def test_completed_config_drift_blocked(self):
+        """Never silently replay after someone changes a completed mode."""
+        TX.prepare(self.root)
+        TX.recover(self.root)
+        self.env.write_bytes(TX.OLD)
+        with self.assertRaisesRegex(ValueError, "drifted"):
+            TX.recover(self.root)
+        self.assertEqual(self.env.read_bytes(), TX.OLD)
+
+    def test_orphan_rescue_blocks_prepare(self):
+        """A pre-journal crash is not proof of committed intent."""
+        (self.root / "before.env").write_bytes(TX.OLD)
+        with self.assertRaisesRegex(ValueError, "existing"):
+            TX.prepare(self.root)
+        self.assertEqual(self.env.read_bytes(), TX.OLD)
+
+    def test_changed_rescue_blocks_recovery(self):
+        """Require the original exact reviewed configuration."""
+        TX.prepare(self.root)
+        (self.root / "before.env").write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "rescue changed"):
+            TX.recover(self.root)
+
+    def test_invalid_journal_blocks_recovery(self):
+        """Do not accept arbitrary phases or hashes."""
+        TX.prepare(self.root)
+        (self.root / "transaction.json").write_text('{"phase":"verified"}')
+        with self.assertRaisesRegex(ValueError, "unrecognized"):
+            TX.recover(self.root)
+        self.assertEqual(self.env.read_bytes(), TX.OLD)
+
+    def test_host_boundary(self):
+        """Production cannot use the configuration-write prototype."""
+        with (
+            patch.object(TX.socket, "gethostname", return_value="prod"),
+            self.assertRaisesRegex(ValueError, "isolated QA"),
+        ):
+            TX.require_qa(self.root)
