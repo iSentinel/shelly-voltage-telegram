@@ -1,3 +1,18 @@
+## 2026-11-27 — durable QA recovery startup fence
+
+- PR #466 exact CI 8/8 PASS.
+- Publish existing shared pending marker before prepare, retain through
+  configuration recovery, require exact owner and validated stopped
+  paused container before clearing. Foreign/orphan markers fail closed.
+- 46 focused tests and project quality gate PASS.
+- Actual networkless LXC114: old enabled container blocked before and
+  after config recovery; stale arm refused; recreated paused container
+  blocked until arm. Offline supervisor start PASS, history 61/82,
+  inode and pending/daily markers preserved, ordinary alert only.
+- NEXT: journal container identity and runtime acceptance, crash tests
+  at recreation/arm/start boundaries, signed candidate preparation.
+  No production integration or signed release authorization.
+
 ## 2026-11-26 — durable recovery-mode config transaction QA
 
 - PR #465 exact CI 8/8 PASS.

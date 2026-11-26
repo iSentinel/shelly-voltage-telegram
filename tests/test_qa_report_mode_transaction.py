@@ -97,6 +97,89 @@ class ReportModeTransactionTests(unittest.TestCase):
             TX.recover(self.root)
         self.assertEqual(self.env.read_bytes(), TX.OLD)
 
+    def fixture_container(self):
+        """Model the exact stopped, isolated QA container."""
+        return {
+            "State": {"Running": False},
+            "Image": TX.QA_IMAGE,
+            "Config": {"Env": ["SCHEDULED_REPORTS_MODE=paused"]},
+            "HostConfig": {
+                "NetworkMode": "none",
+                "RestartPolicy": {"Name": "no"},
+            },
+            "Mounts": [
+                {
+                    "Destination": dest,
+                    "Source": str(self.root / src),
+                    "RW": True,
+                    "Type": "bind",
+                }
+                for dest, src in (
+                    ("/data", "data"),
+                    ("/run/svt-fence", "fence"),
+                )
+            ],
+        }
+
+    def test_fenced_recovery_keeps_marker(self):
+        """The shared marker survives until paused container review."""
+        (self.root / "fence").mkdir()
+        TX.prepare_fenced(self.root)
+        TX.recover_fenced(self.root)
+        self.assertEqual(
+            TX.marker_path(self.root).read_text().strip(), self.root.name
+        )
+        with patch.object(
+            TX, "inspect_qa_container", return_value=self.fixture_container()
+        ):
+            result = TX.arm_paused(self.root, "fixture")
+        self.assertTrue(result["startup_gate_released"])
+        self.assertFalse(result["runtime_verified"])
+        self.assertFalse(TX.marker_path(self.root).exists())
+
+    def test_foreign_marker_refused(self):
+        """Do not clear or replace another update marker."""
+        (self.root / "fence").mkdir()
+        TX.marker_path(self.root).write_text("foreign")
+        with self.assertRaisesRegex(ValueError, "existing startup"):
+            TX.prepare_fenced(self.root)
+        with self.assertRaisesRegex(ValueError, "foreign startup"):
+            TX.recover_fenced(self.root)
+        self.assertEqual(TX.marker_path(self.root).read_text(), "foreign")
+
+    def test_orphan_marker_is_fail_closed(self):
+        """A crash before journal publication cannot authorize startup."""
+        (self.root / "fence").mkdir()
+        TX.marker_module().publish(TX.marker_path(self.root), self.root.name)
+        with self.assertRaises(FileNotFoundError):
+            TX.recover_fenced(self.root)
+        self.assertTrue(TX.marker_path(self.root).exists())
+
+    def test_stale_enabled_container_keeps_marker(self):
+        """A stale stopped container cannot release the startup fence."""
+        (self.root / "fence").mkdir()
+        TX.prepare_fenced(self.root)
+        TX.recover_fenced(self.root)
+        info = self.fixture_container()
+        info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=enabled"]
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "unverified paused"),
+        ):
+            TX.arm_paused(self.root, "fixture")
+        self.assertTrue(TX.marker_path(self.root).exists())
+
+    def test_wrong_image_or_mount_blocks_arm(self):
+        """Pin the image and the actual database and fence mounts."""
+        info = self.fixture_container()
+        info["Image"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(ValueError, "unverified paused"):
+            TX.validate_paused(self.root, info)
+        info = self.fixture_container()
+        info["Mounts"][0]["Source"] = "/foreign"
+        with self.assertRaisesRegex(ValueError, "unverified QA mount"):
+            TX.validate_paused(self.root, info)
+
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
         with (

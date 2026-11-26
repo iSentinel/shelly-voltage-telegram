@@ -195,3 +195,33 @@ signed pair verification, production updater lock coordination, or
 runtime acceptance journal. Those gates and crash tests remain required.
 No automatic re-enable, production application or signed rollback
 exception is implied.
+
+## Durable startup fence for the QA configuration transaction
+
+The QA transaction now publishes the existing .svt-update-pending
+marker before recording prepared. Recovery retains the marker across
+configuration publication. Both old and recreated containers remain
+blocked by the existing supervisor gate. A separate arm operation
+requires the exact marker owner, configured journal and original
+rescue, a stopped networkless container with the pinned QA image ID,
+one explicit paused mode and the expected writable data/fence mounts.
+Only then may it clear its own marker.
+
+A crash before journal creation leaves an orphan marker and blocks
+automatic recovery. Foreign markers are never replaced or cleared.
+The arm result does not certify runtime readiness. It is not a
+production transaction or signed image approval. Container recreation
+and subsequent supervisor launch remain separate QA operations; a
+durable runtime acceptance record and recovery after interruption of
+those operations still need implementation. Privileged concurrent
+Docker/config changes outside the cooperating operator locks are not
+covered by this rehearsal.
+
+2026-11-27 LXC114: actual supervisor returned SKIP_PENDING for the
+old enabled container in prepared and configured phases, and for the
+recreated paused container before arm. Attempted arm of the stale
+enabled container was refused. After validating the paused container,
+the exact marker was cleared and offline supervisor start succeeded.
+History grew from 61 to 82 rows, original prefix, inode, daily and
+weekly metadata were preserved. Only an ordinary synthetic alert was
+accepted and the container exited zero. 46 focused tests passed.
