@@ -88,3 +88,40 @@ production reconciliation is authorized by this contract.
 - No actual signed report-worker candidate or cross-version supervised
   switch has been performed. The existing strict rollback policy
   remains unchanged.
+
+## Same-runtime recovery profile (preferred for report-only failures)
+
+For failures confined to scheduled reports, use the identical future
+signed runtime in startup mode SCHEDULED_REPORTS_MODE=paused rather
+than downgrading to an older runtime that ignores report intent keys.
+This is a configuration-only recovery profile, not a new permission
+to roll back across differing monitor inputs.
+
+The paused mode skips the scheduled worker entirely, also guards
+the daily, weekly and common delivery entry points, and leaves
+ordinary status/alert transport, commands and sampling active.
+It does not alter subscriptions, delivered-period keys or any
+unresolved reservation. The default is enabled for compatibility;
+an unrecognized mode refuses startup. Changing mode requires a
+controlled restart; Telegram preferences cannot override the pause.
+
+Before production use: release and independently verify the exact
+runtime pair; rehearse protected supervisor restart with a root-owned
+configuration and verify the resolved Compose mode, running image
+digest, mounts, readiness, history and PHOTO. Keep both updater
+locks and normal writer fencing, require a fresh rescue and explicit
+owner approval. A paused runtime is not clearance to delete pending
+markers, resume a cutover or automatically re-enable reports. Use
+the separately reviewed reconciliation procedure before resuming
+the affected stream. A failure elsewhere in the runtime still
+requires an independently reviewed recovery path.
+
+2026-11-26 QA: the same unsigned derived image was started first
+in paused and then enabled on one network-isolated database.
+Paused: ordinary synthetic alert accepted, no scheduled request,
+nine stored samples. Enabled: exactly one synthetic daily report
+accepted, 39 stored samples total, original prefix and inode intact.
+An existing weekly pending reservation and both opt-in preferences
+were preserved. Both containers exited zero. No live Telegram traffic
+or production restart occurred. Full signed supervisor rehearsal
+is still required.
