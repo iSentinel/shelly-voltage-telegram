@@ -358,6 +358,11 @@ def preflight(database: Path, ready_url: str) -> None:
         verify_voltage_samples(db, phases, now)
         if any(key in meta for key in TELEGRAM_PENDING_KEYS):
             raise ValueError("Telegram status publication is unresolved")
+        if db.execute(
+            "SELECT 1 FROM meta WHERE key GLOB 'telegram_report_pending:*' "
+            "LIMIT 1"
+        ).fetchone():
+            raise ValueError("Telegram report delivery is unresolved")
 
 
 def storage_preflight(database: Path, state: Path, docker_root: Path) -> None:
