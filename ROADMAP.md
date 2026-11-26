@@ -1,3 +1,22 @@
+## 2026-11-26 — report worker shutdown and rollback compatibility
+
+- Integrate PR #450 onto PR #456 in a separate unsigned QA branch.
+  Initial 216 focused tests and quality gate passed.
+- Exact signed .28 versus candidate monitor inputs: 27/28 identical;
+  app.py differs. Keep strict signed rollback compatibility unchanged.
+- Networkless LXC114 derived Docker image storage roundtrip passed
+  (3/6/9 rows, WAL, inode, PHOTO and daily summary marker preserved).
+- Reproduced Docker exit 137 at the 20-second stop deadline while the
+  report worker waited for an explicit 30-second HTTP 429 retry.
+- Make scheduled retry delay interruptible and refuse new scheduled
+  sends after STOP. Focused tests 165/165 and quality gate PASS.
+  Same networkless Docker stop probe: exit 0, elapsed <1s (integer
+  clock), no retry, no false delivery marker, SQLite quick_check OK.
+- NEXT: exact CI, in-flight slow HTTP shutdown/ambiguous delivery tests,
+  then a reviewed cross-version signed rollback contract. This is not
+  full shutdown or production release acceptance.
+- Production remains .27. No changes to published signed .28 artifacts.
+
 ## 2026-11-26 — three-phase production voltage window
 
 - Add a separate read-only cutover review helper for a 900-second window

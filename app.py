@@ -14,9 +14,11 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from contextlib import closing, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1561,20 +1563,29 @@ class Telegram:
         self.base = f"https://api.telegram.org/bot{cfg.telegram_token}"
         self.api_session = requests.Session()
         self.updates_session = requests.Session()
+        self.report_session = requests.Session()
         self.api_lock = threading.Lock()
+        self.report_lock = threading.Lock()
         self.silent_default = cfg.telegram_silent_default
         self.quiet_enabled = True
         self.quiet_start_hour = cfg.telegram_quiet_start_hour
         self.quiet_end_hour = cfg.telegram_quiet_end_hour
 
-    def _post(self, method: str, payload: dict) -> dict:
+    def _post(
+        self,
+        method: str,
+        payload: dict,
+        *,
+        session: requests.Session | None = None,
+    ) -> dict:
         """Perform one HTTP request using the appropriate session."""
 
-        session = (
-            self.updates_session
-            if method == "getUpdates"
-            else self.api_session
-        )
+        if session is None:
+            session = (
+                self.updates_session
+                if method == "getUpdates"
+                else self.api_session
+            )
         try:
             response = session.post(
                 f"{self.base}/{method}",
@@ -1608,15 +1619,29 @@ class Telegram:
             return 1.0
         return min(seconds, 30.0)
 
-    def _call_with_retry(self, method: str, payload: dict) -> dict:
-        """Retry only a Telegram 429 response, once, with a safe delay."""
+    def _call_with_retry(
+        self,
+        method: str,
+        payload: dict,
+        *,
+        post: Callable[[str, dict], dict] | None = None,
+        interrupt_retry: bool = False,
+    ) -> dict:
+        """Retry one Telegram 429, cancelling scheduled work on shutdown."""
 
-        data = self._post(method, payload)
+        send = self._post if post is None else post
+        if interrupt_retry and STOP.is_set():
+            raise RuntimeError("Scheduled report stopped")
+        data = send(method, payload)
         if data.get("error_code") == 429:
             delay = self.rate_limit_delay(data)
             logger.warning("Telegram rate limited; retry in {:.1f}s", delay)
-            time.sleep(delay)
-            data = self._post(method, payload)
+            if interrupt_retry:
+                if STOP.wait(delay):
+                    raise RuntimeError("Scheduled report stopped")
+            else:
+                time.sleep(delay)
+            data = send(method, payload)
         if not data.get("ok"):
             raise RuntimeError(safe_telegram_api_error(data))
         return data["result"]
@@ -1648,6 +1673,8 @@ class Telegram:
         notify: bool | None = None,
         reply_markup: dict | None = None,
         chat_id: str | None = None,
+        *,
+        scheduled: bool = False,
     ) -> int:
         """Send a message using the current notification policy."""
 
@@ -1659,7 +1686,16 @@ class Telegram:
         }
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
-        result = self.call("sendMessage", payload)
+        if scheduled:
+            with self.report_lock:
+                result = self._call_with_retry(
+                    "sendMessage",
+                    payload,
+                    post=partial(self._post, session=self.report_session),
+                    interrupt_retry=True,
+                )
+        else:
+            result = self.call("sendMessage", payload)
         return int(result["message_id"])
 
     def send_test(self, text: str, notify: bool) -> int:
@@ -4575,22 +4611,24 @@ class Monitor:
     def maybe_daily_summary(self) -> None:
         """Post one daily summary after the configured local time."""
 
-        if not self.daily_summary_enabled or not self.telegram.enabled:
-            return
-        now = datetime.now(ZoneInfo(self.cfg.timezone))
-        day = now.date().isoformat()
-        due = (now.hour, now.minute) >= (
-            self.daily_summary_hour,
-            self.daily_summary_minute,
-        )
-        if not due or day == self.last_summary_day:
-            return
-        attempt = time.monotonic()
-        if attempt - self.last_summary_attempt < 300.0:
-            return
-        self.last_summary_attempt = attempt
+        with self.config_lock:
+            if not self.daily_summary_enabled or not self.telegram.enabled:
+                return
+            now = datetime.now(ZoneInfo(self.cfg.timezone))
+            day = now.date().isoformat()
+            due = (now.hour, now.minute) >= (
+                self.daily_summary_hour,
+                self.daily_summary_minute,
+            )
+            if not due or day == self.last_summary_day:
+                return
+            attempt = time.monotonic()
+            if attempt - self.last_summary_attempt < 300.0:
+                return
+            self.last_summary_attempt = attempt
+            text = self.daily_summary_text()
         self.telegram.send(
-            self.daily_summary_text(), chat_id=self.telegram.status_chat_id
+            text, chat_id=self.telegram.status_chat_id, scheduled=True
         )
         self.last_summary_day = day
         self.storage.set_meta("daily_summary_day", day)
@@ -4607,6 +4645,8 @@ class Monitor:
         if week_key is None:
             return
         for admin_id in self.cfg.telegram_admin_user_ids:
+            if STOP.is_set():
+                return
             user_id = str(admin_id)
             try:
                 self.send_due_private_weekly(user_id, week_key)
@@ -4620,17 +4660,17 @@ class Monitor:
 
         enabled = f"telegram_weekly_private_enabled_{user_id}"
         delivered = f"telegram_weekly_private_sent_{user_id}"
-        if self.storage.get_meta(enabled) != "1":
-            return
-        if self.storage.get_meta(delivered) == week_key:
-            return
-        now = time.monotonic()
-        if now - self.weekly_digest_attempts.get(user_id, -3600) < 3600:
-            return
-        self.weekly_digest_attempts[user_id] = now
-        self.telegram.send(
-            self.weekly_summary_text(), notify=False, chat_id=user_id
-        )
+        with self.config_lock:
+            if self.storage.get_meta(enabled) != "1":
+                return
+            if self.storage.get_meta(delivered) == week_key:
+                return
+            now = time.monotonic()
+            if now - self.weekly_digest_attempts.get(user_id, -3600) < 3600:
+                return
+            self.weekly_digest_attempts[user_id] = now
+            text = self.weekly_summary_text()
+        self.telegram.send(text, notify=False, chat_id=user_id, scheduled=True)
         self.storage.set_meta(delivered, week_key)
 
     def device_health_text(self) -> str:
@@ -6157,37 +6197,70 @@ class Monitor:
         """Run monitoring until SIGINT/SIGTERM."""
 
         self.initialize()
-        if self.telegram.enabled:
-            threading.Thread(
-                target=self.command_loop,
-                name="telegram-commands",
-                daemon=True,
-            ).start()
+        if not self.telegram.enabled:
+            self.run_monitor_loop()
+            return
+        threading.Thread(
+            target=self.command_loop, name="telegram-commands", daemon=True
+        ).start()
+        wakeup = threading.Event()
+        stopped = threading.Event()
+        reporter = threading.Thread(
+            target=self.report_loop,
+            args=(wakeup, stopped),
+            name="telegram-reports",
+        )
+        reporter.start()
+        try:
+            self.run_monitor_loop(wakeup)
+        finally:
+            stopped.set()
+            wakeup.set()
+            # Keep the process's database ownership through the last delivery.
+            reporter.join()
+
+    def run_monitor_loop(
+        self, report_wakeup: threading.Event | None = None
+    ) -> None:
+        """Sample Shelly and let the report thread check what is due."""
+
         while not STOP.is_set():
             self.last_loop_tick = time.monotonic()
             self.poll_cycle()
             self.maybe_finalize_voltage_episode()
             self.maybe_rotate_stable_recovery_status()
             self.update_status()
+            if report_wakeup is not None:
+                report_wakeup.set()
             self.run_periodic_tasks()
             STOP.wait(self.cfg.poll_interval)
 
-    def run_periodic_tasks(self) -> None:
-        """Run independent jobs despite one Telegram or SQLite failure."""
-
-        jobs = (
-            ("daily_summary", self.maybe_daily_summary),
-            ("weekly_private", self.maybe_weekly_private_reports),
-            ("database", self.maybe_database_maintenance),
-            ("status_cleanup", self.maybe_cleanup_status),
-        )
-        for name, task in jobs:
-            try:
-                task()
-            except Exception as exc:
-                logger.warning(
-                    "Periodic {} failed: {}", name, type(exc).__name__
+    def report_loop(
+        self, wakeup: threading.Event, stopped: threading.Event
+    ) -> None:
+        """Combine sampling ticks while a scheduled send is in progress."""
+        while not stopped.is_set() and not STOP.is_set():
+            wakeup.wait()
+            wakeup.clear()
+            if stopped.is_set() or STOP.is_set():
+                return
+            self.run_periodic_job("daily_summary", self.maybe_daily_summary)
+            if not stopped.is_set() and not STOP.is_set():
+                self.run_periodic_job(
+                    "weekly_private", self.maybe_weekly_private_reports
                 )
+
+    def run_periodic_tasks(self) -> None:
+        """Run maintenance and status cleanup after each sample."""
+        self.run_periodic_job("database", self.maybe_database_maintenance)
+        self.run_periodic_job("status_cleanup", self.maybe_cleanup_status)
+
+    def run_periodic_job(self, name: str, task: Callable[[], None]) -> None:
+        """Keep a maintenance or report failure local to its own job."""
+        try:
+            task()
+        except Exception as exc:
+            logger.warning("Periodic {} failed: {}", name, type(exc).__name__)
 
     def maybe_database_maintenance(self) -> None:
         """Run rollup/checkpoint/optimize no more than once per day."""
