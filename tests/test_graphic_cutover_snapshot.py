@@ -63,6 +63,7 @@ class GraphicCutoverSnapshotTests(unittest.TestCase):
         files = (
             "VERSION",
             "app.py",
+            "writer_fence.py",
             "Dockerfile",
             "compose.yaml",
             "requirements.txt",

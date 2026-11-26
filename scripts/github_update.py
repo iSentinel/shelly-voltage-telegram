@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -21,12 +22,20 @@ REPO = "iSentinel/shelly-voltage-telegram"
 IMAGE = "ghcr.io/isentinel/shelly-voltage-telegram"
 API = f"https://api.github.com/repos/{REPO}/releases"
 DEFAULT_STATE = Path("/var/lib/shelly-voltage-update-check")
+ABSENT_CREDENTIAL = "shelly-version-not-provisioned"
 VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)-hw\Z")
 REQUEST_TIMEOUT = 12
 MAX_RESPONSE_BYTES = 128 * 1024
 SAFE_VOLTAGE_MIN = 207.0
 SAFE_VOLTAGE_MAX = 253.0
 MAX_SAMPLE_AGE = 120
+MIN_RECOVERY_STABLE_SECONDS = 15 * 60
+PHASE_ORDER = ("L1", "L2", "L3")
+TELEGRAM_PENDING_KEYS = (
+    "telegram_graphic_publish_pending",
+    "telegram_legacy_text_confirm_pending",
+    "telegram_recovery_rotation_pending_at",
+)
 MIN_UPDATE_SPACE_BYTES = 768 * 1024 * 1024
 
 
@@ -93,17 +102,26 @@ def published_release(tag: str | None = None) -> dict:
     return release
 
 
-def installed_version(root: Path, state: Path) -> str:
+def version_input(path: Path, absent: str | None) -> str | None:
+    """Read a version input, including an optional systemd fallback."""
+    if not path.is_file():
+        return None
+    value = path.read_text(encoding="utf-8").strip()
+    return None if value == absent else value
+
+
+def installed_version(
+    root: Path, state: Path, *, absent: str | None = None
+) -> str:
     """Prefer deployed or published release to candidate source version."""
 
-    deployed = state / "deployed.json"
-    if deployed.is_file():
-        data = json.loads(deployed.read_text(encoding="utf-8"))
-        version = data["version"]
+    deployed = version_input(state / "deployed.json", absent)
+    if deployed is not None:
+        version = json.loads(deployed)["version"]
     else:
-        release = root / "RELEASE_VERSION"
-        path = release if release.is_file() else root / "VERSION"
-        version = path.read_text(encoding="utf-8").strip()
+        version = version_input(root / "RELEASE_VERSION", absent)
+        if version is None:
+            version = (root / "VERSION").read_text(encoding="utf-8").strip()
     version_tuple(version)
     return version.removeprefix("v")
 
@@ -122,10 +140,15 @@ def atomic_json(path: Path, payload: dict) -> None:
     os.replace(temp, path)
 
 
-def check(root: Path, state: Path) -> dict:
+def check(root: Path, state: Path, credentials: Path | None = None) -> dict:
     """Return release availability; never install anything."""
 
-    current = installed_version(root, state)
+    if credentials is None:
+        current = installed_version(root, state)
+    else:
+        current = installed_version(
+            credentials, credentials, absent=ABSENT_CREDENTIAL
+        )
     release = published_release()
     latest = release["tag_name"].removeprefix("v")
     return {
@@ -177,16 +200,131 @@ def manifest_digest(tag: str) -> str:
     return digest
 
 
-def verify_voltage_sample(db: sqlite3.Connection) -> None:
-    """Require a fresh measurement in the conservative update band."""
+def ready_phases(status: dict) -> tuple[str, ...]:
+    """Require a ready entry for every phase advertised by the monitor."""
+    if "phases" not in status:
+        return ()  # Older readiness endpoints expose a single aggregate.
+    phases = status["phases"]
+    if (
+        not isinstance(phases, dict)
+        or "L1" not in phases
+        or set(phases) - set(PHASE_ORDER)
+        or status.get("unready_phases")
+    ):
+        raise ValueError("invalid or incomplete phase readiness")
+    for health in phases.values():
+        if (
+            not isinstance(health, dict)
+            or health.get("ready") is not True
+            or health.get("connectivity") != "online"
+        ):
+            raise ValueError("a configured phase is offline or stale")
+    return tuple(phase for phase in PHASE_ORDER if phase in phases)
 
-    sample = db.execute(
-        "SELECT ts, voltage FROM measurements ORDER BY ts DESC LIMIT 1"
-    ).fetchone()
-    if not sample or not 0 <= time.time() - sample[0] <= MAX_SAMPLE_AGE:
-        raise ValueError("voltage sample is missing or stale")
-    if not SAFE_VOLTAGE_MIN <= sample[1] <= SAFE_VOLTAGE_MAX:
-        raise ValueError("measured voltage is outside the upgrade band")
+
+def verify_voltage_samples(
+    db: sqlite3.Connection, phases: tuple[str, ...], now: float
+) -> None:
+    """Check each configured phase against freshness and voltage limits."""
+    for phase in phases or (None,):
+        condition, parameters = (
+            (" WHERE phase = ?", (phase,)) if phase else ("", ())
+        )
+        sample = db.execute(
+            "SELECT ts, voltage FROM measurements"
+            + condition
+            + " ORDER BY ts DESC LIMIT 1",
+            parameters,
+        ).fetchone()
+        if not sample or not 0 <= now - sample[0] <= MAX_SAMPLE_AGE:
+            raise ValueError("voltage sample is missing or stale")
+        if not SAFE_VOLTAGE_MIN <= sample[1] <= SAFE_VOLTAGE_MAX:
+            raise ValueError("measured voltage is outside the upgrade band")
+
+
+def recovery_metadata(db: sqlite3.Connection, phases: tuple[str, ...]) -> dict:
+    """Read only the fields needed for an update decision."""
+    keys = (
+        "voltage_episode",
+        "last_voltage_event",
+        "voltage_recovery_stable_since",
+        *TELEGRAM_PENDING_KEYS,
+        *(f"voltage_detector_{phase}" for phase in phases),
+    )
+    placeholders = ",".join("?" for _ in keys)
+    return dict(
+        db.execute(
+            f"SELECT key, value FROM meta WHERE key IN ({placeholders})", keys
+        )
+    )
+
+
+def read_meta_object(value: str | None) -> dict:
+    """Read one recorded object, leaving malformed state unconfirmed."""
+    try:
+        data = json.loads(value or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def timestamp(value: object) -> float:
+    """Reject missing, non-finite or non-positive timestamps."""
+    try:
+        point = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("invalid recovery timestamp") from exc
+    if isinstance(value, bool) or not math.isfinite(point) or point <= 0:
+        raise ValueError("invalid recovery timestamp")
+    return point
+
+
+def verify_recovery(meta: dict, phases: tuple[str, ...], now: float) -> None:
+    """Require a finalized recovery and corroborating normal detectors."""
+    raw_episode = meta.get("voltage_episode")
+    stable = meta.get("voltage_recovery_stable_since")
+    if not raw_episode and not stable:
+        return
+    episode = read_meta_object(raw_episode)
+    event = read_meta_object(meta.get("last_voltage_event"))
+    transitions = episode.get("transitions")
+    if raw_episode and (
+        event.get("kind") != "recovered"
+        or not isinstance(transitions, list)
+        or not transitions
+        or not isinstance(transitions[-1], dict)
+        or transitions[-1].get("kind") != "recovered"
+    ):
+        raise ValueError("a voltage alarm episode is active")
+    try:
+        since = timestamp(stable)
+        event_at = timestamp(event.get("timestamp"))
+        last_at = timestamp(episode.get("last_at"))
+        finalized_at = timestamp(episode.get("finalized_at"))
+    except ValueError as exc:
+        raise ValueError("voltage recovery is not yet stable") from exc
+    if (
+        not phases
+        or event.get("kind") != "recovered"
+        or event.get("phase") not in phases
+        or not event_at
+        == last_at
+        <= since
+        <= now - MIN_RECOVERY_STABLE_SECONDS
+        or not last_at <= finalized_at <= now
+    ):
+        raise ValueError("voltage recovery is not yet stable")
+    verify_phase_detectors(meta, phases)
+
+
+def verify_phase_detectors(meta: dict, phases: tuple[str, ...]) -> None:
+    """Require normal confirmation on every phase after a logged recovery."""
+    for phase in phases:
+        state = read_meta_object(meta.get(f"voltage_detector_{phase}"))
+        if state.get("level") != "normal" or state.get("low") is not False:
+            raise ValueError(
+                "a phase detector has not confirmed normal voltage"
+            )
 
 
 def preflight(database: Path, ready_url: str) -> None:
@@ -201,10 +339,12 @@ def preflight(database: Path, ready_url: str) -> None:
         or status.get("connectivity") != "online"
     ):
         raise ValueError("Shelly is offline or readings are not fresh")
+    phases = ready_phases(status)
     if not database.is_file():
         raise ValueError("SQLite database is missing")
     uri = f"file:{database.resolve()}?mode=ro"
     with closing(sqlite3.connect(uri, uri=True, timeout=5)) as db:
+        db.execute("BEGIN")
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("SQLite integrity check failed")
         open_count = db.execute(
@@ -212,17 +352,12 @@ def preflight(database: Path, ready_url: str) -> None:
         ).fetchone()[0]
         if open_count:
             raise ValueError("an electrical or connectivity outage is active")
-        alarm = db.execute(
-            "SELECT value FROM meta WHERE key='voltage_episode'"
-        ).fetchone()
-        if alarm and alarm[0]:
-            raise ValueError("a voltage alarm episode is active")
-        recovery = db.execute(
-            "SELECT value FROM meta WHERE key='voltage_recovery_stable_since'"
-        ).fetchone()
-        if recovery and recovery[0]:
-            raise ValueError("voltage recovery is not yet stable")
-        verify_voltage_sample(db)
+        now = time.time()
+        meta = recovery_metadata(db, phases)
+        verify_recovery(meta, phases, now)
+        verify_voltage_samples(db, phases, now)
+        if any(key in meta for key in TELEGRAM_PENDING_KEYS):
+            raise ValueError("Telegram status publication is unresolved")
 
 
 def storage_preflight(database: Path, state: Path, docker_root: Path) -> None:
@@ -262,6 +397,16 @@ def parser() -> argparse.ArgumentParser:
     )
     command.add_argument("--state", type=Path, default=DEFAULT_STATE)
     command.add_argument(
+        "--credentials",
+        type=Path,
+        help="Read version files copied by systemd for the scheduled check.",
+    )
+    command.add_argument(
+        "--status-file",
+        type=Path,
+        help="Write the check result here instead of STATE/status.json.",
+    )
+    command.add_argument(
         "--database",
         type=Path,
         default=Path("/var/lib/shelly-voltage/voltage.sqlite3"),
@@ -277,8 +422,8 @@ def main() -> int:
     args = parser().parse_args()
     try:
         if args.action == "check":
-            result = check(args.root, args.state)
-            atomic_json(args.state / "status.json", result)
+            result = check(args.root, args.state, args.credentials)
+            atomic_json(args.status_file or args.state / "status.json", result)
             print(json.dumps(result, sort_keys=True))
         elif args.action == "preflight":
             preflight(args.database, "http://127.0.0.1:8080/ready")

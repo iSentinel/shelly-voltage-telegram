@@ -56,9 +56,27 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
     ru:["Электросеть · Shelly","НА СВЯЗИ","НЕТ СВЯЗИ","УСТАРЕЛО","НЕТ ДАННЫХ","Напряжение","Частота","Последний опрос","Измерено Shelly","Неизвестно, есть ли электричество","Прогноз отключений","Группа ","По плану свет есть","Отключение","Возможно","График не загружен","Неофициальный прогноз · outage-data-ua","График устарел","План не подтверждает наличие электричества. Факт — только свежие данные Shelly.","с","В","Гц","YASNO · график ДТЭК Киев"],
     en:["Power monitor · Shelly","CONNECTED","DISCONNECTED","STALE","NO DATA","Voltage","Frequency","Last sample","Shelly measurement","Actual mains status unknown","Outage forecast","Group ","Scheduled power","Outage","Possible","Schedule unavailable","Unofficial forecast · outage-data-ua","Schedule expired","A forecast is not proof of power. Only fresh Shelly readings are measured.","s","V","Hz","YASNO · DTEK Kyiv forecast"]
   };
+  const emergencyWords={
+    uk:"YASNO · Аварійні відключення: плановий графік не діє",
+    ru:"YASNO · Аварийные отключения: плановый график не действует",
+    en:"YASNO · Emergency shutdowns: planned schedule suspended"
+  };
   let drawn=null;
+  function validEmergency(data,now){
+    if(!data||data.schema!==1||data.src!=="yasno"||
+       data.n!=="emergency"||Object.prototype.hasOwnProperty.call(data,"b")||
+       typeof data.g!=="string"||!/^\d{1,2}\.\d$/.test(data.g))return false;
+    if(typeof data.u!=="number"||!Number.isFinite(data.u)||
+       typeof data.e!=="number"||!Number.isFinite(data.e))return false;
+    if(typeof data.a!=="number"||!Number.isFinite(data.a)||
+       typeof data.d!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(data.d))return false;
+    const span=data.e-data.a;
+    return span>=82800&&span<=90000&&now>=data.a&&now<data.e&&
+      now>=data.u&&now-data.u<=7200;
+  }
   function validBars(data,now){
-    if(!data||data.schema!==1||(data.src!=="community"&&data.src!=="yasno")||typeof data.b!=="string"||
+    if(!data||data.schema!==1||Object.prototype.hasOwnProperty.call(data,"n")||
+       (data.src!=="community"&&data.src!=="yasno")||typeof data.b!=="string"||
        !/^[OX?]{48}$/.test(data.b))return "";
     if(typeof data.u!=="number"||!Number.isFinite(data.u)||
        typeof data.e!=="number"||!Number.isFinite(data.e))return "";
@@ -115,18 +133,19 @@ body{margin:0;padding:0;color:var(--tg-theme-text-color,#eef3fa);font:14px syste
     }
     $("hasLight").textContent=T[12];$("noLight").textContent=T[13];
     $("maybeLight").textContent=T[14];$("disclaimer").textContent=T[18];
+    const emergency=validEmergency(data,now);
     const bars=validBars(data,now);
     drawBars(bars);
     const scheduleVisible=Boolean(bars);
     $("timeline").hidden=!scheduleVisible;
     $("axis").hidden=!scheduleVisible;
     $("legend").hidden=!scheduleVisible;
-    const hasGroup=scheduleVisible&&typeof data.g==="string"&&
+    const hasGroup=(scheduleVisible||emergency)&&typeof data.g==="string"&&
       /^\d{1,2}\.\d$/.test(data.g);
     $("group").hidden=!hasGroup;
     $("group").textContent=hasGroup?T[11]+data.g:"—";
-    $("source").textContent=bars?
-      (data.src==="yasno"?T[22]:T[16]):data&&data.b?T[17]:T[15];
+    $("source").textContent=emergency?emergencyWords[lang]:bars?
+      (data.src==="yasno"?T[22]:T[16]):data&&(data.b||data.n)?T[17]:T[15];
   }
   if(w&&typeof w.onEvent==="function"){
     w.onEvent("publicDataChanged",render);

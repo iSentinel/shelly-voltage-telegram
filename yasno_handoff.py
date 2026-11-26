@@ -17,8 +17,9 @@ from yasno_cache import (
     build_cache,
     canonical_data,
     read_verified_cache,
+    reject_provider_regression,
 )
-from yasno_schedule import parse_schedule
+from yasno_schedule import YasnoDay, YasnoEmergency, parse_provider_state
 
 HANDOFF_DIR_MODE = 0o750
 HANDOFF_FILE_MODE = 0o640
@@ -56,12 +57,13 @@ def verify_file(path: Path, recipient_gid: int) -> None:
 
 def verified_envelope(
     source: str, group: str, now: datetime
-) -> tuple[bytes, datetime]:
+) -> tuple[bytes, datetime, YasnoDay | YasnoEmergency]:
     """Retain captured time; never refresh or invent provenance on copy."""
 
     data, captured = read_verified_cache(source)
-    parse_schedule(data, group, now, captured)
-    return canonical_data(build_cache(data, captured), CACHE_LIMIT), captured
+    result = parse_provider_state(data, group, now, captured)
+    raw = canonical_data(build_cache(data, captured), CACHE_LIMIT)
+    return raw, captured, result
 
 
 @contextmanager
@@ -134,17 +136,23 @@ def handoff(source: str, target: str, group: str, gid: int, mode: str) -> str:
     if Path(source).resolve() == path.resolve():
         raise ValueError("source and recipient paths must differ")
     validate_target(path, gid)
-    raw, captured = verified_envelope(
+    raw, captured, result = verified_envelope(
         source, group, datetime.now(timezone.utc)
     )
     if mode == "dry-run":
         return f"DRY_RUN valid source bytes={len(raw)} no_writes=True"
     if mode == "status":
         cache, captured = read_verified_cache(target)
-        parse_schedule(cache, group, datetime.now(timezone.utc), captured)
-        return "STATUS valid recipient cache"
+        status = parse_provider_state(
+            cache, group, datetime.now(timezone.utc), captured
+        )
+        detail = "STATUS valid recipient cache"
+        if isinstance(status, YasnoEmergency):
+            detail += " status=EmergencyShutdowns"
+        return detail
     with exclusive_lock(path):
         validate_target(path, gid)
+        reject_provider_regression(str(path), result)
         return atomic_export(path, raw, gid, captured)
 
 

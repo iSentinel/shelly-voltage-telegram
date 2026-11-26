@@ -1,0 +1,63 @@
+# Proposed owner-gated release workflows — QA-only branch
+
+This is SOURCE CODE PROPOSAL ONLY, not active GitHub protection.
+No release tag, GHCR image or GitHub environment/ruleset was created.
+
+The unprotected workflows currently ship on GitHub main. On the
+separate QA branch, the proposed `.github/workflows/release.yml`
+binds job `release` to `shelly-release-approval`. The proposed
+`.github/workflows/image.yml` binds stable-tag builds to that
+environment but leaves main/manual development builds on
+`ci-image-build`, with no owner publication reviewer required there.
+The owner review workflow must be usable for a sole-owner repo;
+a self-review prohibition could deadlock. This must be verified
+through a real owner-controlled GitHub Environment configuration.
+
+Single-owner release plan: REST read-only inspection verified that this
+public, personal repository belongs to account iSentinel, user ID
+83760791. A usable v* creation ruleset must have EXACTLY one User
+bypass for ID 83760791 with mode always (not exempt), rather than an
+empty bypass list that would prevent owner tag creation. A mandatory
+shelly-release-approval environment must require only the same owner
+as reviewer and explicitly set prevent_self_review=false, otherwise
+the single user who initiated the tag deployment may deadlock.
+The release environment must also set can_admins_bypass=false to prevent
+force-publishing past a required review. The bypass is only permission
+to create a tag; separate approval of
+the signing/upload job remains mandatory and approval of production
+activation remains a third distinct decision.
+
+Both tag publication jobs run `qa-release-tag-protection.py` BEFORE
+any source signing, OCI registry login, build/push or release upload.
+They fetch all repository/inherited rulesets with **full details**
+and environments via GitHub API. A missing/unauthorized API response,
+no v* tag restriction, no actual required environment reviewer,
+or missing job binding causes fail-closed nonzero exit. The GitHub
+Actions token may lack the administrative GET permission; that
+error MUST block publication rather than be silently ignored.
+
+A job environment with no configured required reviewers may be
+auto-created without protection. Therefore the owner must explicitly
+configure and verify the GitHub ruleset/environment first; merely
+merging these YAML changes or assigning an environment string does
+not create protected release authorization. Merge/rebase of this
+proposal also changes the exact source SHA and reproducible TAR
+checksum, invalidating the old frozen candidate's release identity.
+
+Appropriate order:
+
+1. Review this QA-only workflow patch and run its entire CI matrix.
+2. Under a separately authorized GitHub settings change, configure
+   a mandatory owner-reviewed environment and a v* tag-creation
+   ruleset with deliberate bypass policy.
+3. Re-audit via fresh authenticated GitHub evidence, verify tag job
+   execution can complete after actual owner review.
+4. Establish a NEW exact source SHA/version archive digest, get
+   owner approval for specific signing/publication and perform a
+   protected signed image/source release.
+5. Independently verify Sigstore source, OCI index, SBOM and both
+   platform attestations, then complete isolated writer/cutover QA.
+6. Request separate explicit Owner Approval before LXC110 activation.
+
+No step authorizes unsafe old v0.5.25-hw image rollback, changing
+live SQLite/WAL, or sending public Telegram messages.

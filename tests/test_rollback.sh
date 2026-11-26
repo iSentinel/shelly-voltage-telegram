@@ -57,7 +57,7 @@ for unit in shelly-voltage-compose.service shelly-voltage-backup.service; do
     printf '[Unit]\nDescription=synthetic %s\n' "$unit" \
         > "$OLD_SRC/systemd/$unit"
 done
-for file in app.py compose.yaml Dockerfile requirements.txt; do
+for file in app.py writer_fence.py compose.yaml Dockerfile requirements.txt; do
     printf 'synthetic rollback source\n' > "$OLD_SRC/$file"
 done
 printf '0.4.1-hw\n' > "$OLD_SRC/VERSION"
@@ -122,7 +122,7 @@ test "$(sha256sum "$DB_DIR/voltage.sqlite3" | cut -d' ' -f1)" = "$db_before"
 echo "ROLLBACK_INCOMPLETE_SOURCE_ARCHIVE=REJECTED"
 
 # Every mandatory runtime path must be individually present in the TAR.
-for required_path in VERSION app.py Dockerfile compose.yaml \
+for required_path in VERSION app.py writer_fence.py Dockerfile compose.yaml \
     requirements.txt scripts/backup.sh \
     systemd/shelly-voltage-compose.service \
     systemd/shelly-voltage-backup.service; do
@@ -688,8 +688,8 @@ fi
 exec /usr/bin/gzip "$@"
 MOCK_FAILED_GZIP
 chmod 0755 "$TMP/mock-bin/gzip"
-if PATH="$TMP/mock-bin:$PATH" DATABASE_PATH="$DB_DIR/voltage.sqlite3" \
-    bash -c '
+if PATH="$TMP/mock-bin:$PATH" SVT_ROOT="$TARGET" \
+    DATABASE_PATH="$DB_DIR/voltage.sqlite3" bash -c '
         set -euo pipefail
         source <(sed '\''$d'\'' "$1")
         SNAPSHOT="$2"

@@ -23,7 +23,15 @@ permissions:
   id-token: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      test_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
   build:
+    needs: ci
+    environment: ${{ github.ref_type == 'tag' && 'shelly-release-approval' || 'ci-image-build' }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate manual inputs
@@ -44,10 +52,10 @@ jobs:
               exit 3
             }
           fi
-      - name: Check out requested ref
+      - name: Check out CI-tested immutable commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ needs.ci.outputs.tested_commit }}
           fetch-depth: 0
       - name: Validate signed image release policy
         shell: bash
@@ -64,14 +72,43 @@ jobs:
             --build-ref "${BUILD_REF:-}" \
             --image-tag "${IMAGE_TAG:-}"
 
+      - name: Verify protected GitHub release controls
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_RULESET_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${GH_TOKEN:?RELEASE_RULESET_READ_TOKEN required}"
+          umask 077
+          scratch="$(mktemp -d)"
+          trap 'rm -rf -- "$scratch"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/rulesets?includes_parents=true" --jq ".[].id" | while read -r id; do
+            gh api "repos/$GITHUB_REPOSITORY/rulesets/$id"
+          done | jq -s . > "$scratch/rulesets.json"
+          gh api "repos/$GITHUB_REPOSITORY/environments" > "$scratch/environments.json"
+          gh api "repos/$GITHUB_REPOSITORY" > "$scratch/repo.json"
+          python3 scripts/qa-release-tag-protection.py --qa-only\
+            --version "$(cat VERSION)"\
+            --commit "$(git rev-parse HEAD)"\
+            --repo-json "$scratch/repo.json"\
+            --rulesets-json "$scratch/rulesets.json"\
+            --environments-json "$scratch/environments.json"\
+            --workflows-dir "$GITHUB_WORKSPACE/.github/workflows" --jsonl
+
       - name: Resolve checked-out source
         id: source
         shell: bash
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
+          TESTED_SHA: ${{ needs.ci.outputs.tested_commit }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ && "$sha" == "$TESTED_SHA" ]] || {
+            echo "ERROR: image source differs from CI-tested commit" >&2
+            exit 5
+          }
           short_sha="$(git rev-parse --short=7 HEAD)"
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             version="${IMAGE_TAG:-manual-${short_sha}}"
@@ -137,3 +174,39 @@ jobs:
           }
           image_name="ghcr.io/${IMAGE_REPOSITORY,,}"
           cosign sign --yes "${image_name}@${IMAGE_DIGEST}"
+
+      - name: Verify published release signature anonymously
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          IMAGE_REPOSITORY: ${{ github.repository }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_COMMIT: ${{ steps.source.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 4
+          [[ "$IMAGE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || exit 5
+          [[ "$GITHUB_REF" == refs/tags/v* ]] || exit 6
+          image_name="ghcr.io/${IMAGE_REPOSITORY,,}"
+          identity="https://github.com/$GITHUB_REPOSITORY/.github/workflows/image.yml@$GITHUB_REF"
+          anonymous_config="$(mktemp -d)"
+          trap 'rm -rf -- "$anonymous_config"' EXIT
+          cosign version | grep -Eq '^GitVersion:[[:space:]]+v3\.'
+          for attempt in 1 2 3; do
+            if DOCKER_CONFIG="$anonymous_config" cosign verify \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --certificate-github-workflow-sha "$IMAGE_COMMIT" \
+              --certificate-github-workflow-ref "$GITHUB_REF" \
+              --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+              "${image_name}@${IMAGE_DIGEST}" >"$anonymous_config/verify.out" 2>"$anonymous_config/verify.err"; then
+              break
+            fi
+            if (( attempt == 3 )); then
+              echo "ERROR: public OCI signature not verifiable" >&2
+              sed -n "1,10p" "$anonymous_config/verify.err" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "PUBLIC ANONYMOUS OCI COSIGN VERIFICATION: PASS"

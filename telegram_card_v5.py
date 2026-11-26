@@ -19,7 +19,7 @@ from telegram_card_png import (
     valid_forecast,
 )
 from telegram_schedule_periods import duration_label, schedule_periods
-from telegram_widget_data import numeric
+from telegram_widget_data import numeric, valid_emergency_notice
 
 SCALE = 2
 BACKGROUND = "#0B1422"
@@ -71,7 +71,9 @@ CARD_TEXT = {
         "forecast": "Графік відключень",
         "source": "YASNO · ДТЕК Київ",
         "group": "Група {group}",
-        "no_forecast": "Актуального графіка немає",
+        "no_forecast": "Графік тимчасово недоступний",
+        "emergency": "Аварійні відключення",
+        "emergency_detail": "Плановий графік не діє",
         "checked": "Лише прогноз YASNO · перевірено {time}",
         "O": "Є світло",
         "X": "Відключення",
@@ -103,7 +105,9 @@ CARD_TEXT = {
         "forecast": "График отключений",
         "source": "YASNO · ДТЭК Киев",
         "group": "Группа {group}",
-        "no_forecast": "Актуального графика нет",
+        "no_forecast": "График временно недоступен",
+        "emergency": "Аварийные отключения",
+        "emergency_detail": "Плановый график не действует",
         "checked": "Только прогноз YASNO · проверено {time}",
         "O": "Есть свет",
         "X": "Отключение",
@@ -135,7 +139,9 @@ CARD_TEXT = {
         "forecast": "Outage schedule",
         "source": "YASNO · DTEK Kyiv",
         "group": "Group {group}",
-        "no_forecast": "Current schedule unavailable",
+        "no_forecast": "Schedule temporarily unavailable",
+        "emergency": "Emergency shutdowns",
+        "emergency_detail": "Planned schedule suspended",
         "checked": "YASNO forecast only · checked {time}",
         "O": "Power scheduled",
         "X": "Scheduled off",
@@ -347,6 +353,19 @@ def forecast_legend(painter: Painter) -> None:
         painter.text(x + 21, 577, caption, 21, TEXT, "medium")
 
 
+def strike_elapsed_half(
+    painter: Painter, left: int, y: int, half: int
+) -> None:
+    """Cross a completed half-hour in its exposed colored side."""
+    # The central hour label covers the inner part of each half.
+    x = left + (5 if half == 0 else 44)
+    painter.draw.line(
+        ((x * SCALE, (y + 28) * SCALE), ((x + 16) * SCALE, (y + 7) * SCALE)),
+        fill=MUTED,
+        width=3 * SCALE,
+    )
+
+
 def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
     """Render one labelled hour with both independent half-hour states."""
 
@@ -358,7 +377,9 @@ def hourly_tile(painter: Painter, bars: str, hour: int, current: int) -> None:
         kind = bars[index]
         color = PAST_COLORS[kind] if index < current else SLOT_COLORS[kind]
         painter.rect((left, y, left + 65, y + 35), color, 5)
-        if index == current:
+        if index < current:
+            strike_elapsed_half(painter, left, y, half)
+        elif index == current:
             painter.rect(
                 (left + 1, y + 1, left + 64, y + 34),
                 None,
@@ -420,6 +441,12 @@ def forecast_panel(
     day = datetime.fromtimestamp(now, KYIV).strftime("%d.%m.%Y")
     painter.text(63, 387, f"{painter.labels['source']}  ·  {day}", 19, MUTED)
     if not bars:
+        if valid_emergency_notice(state, now):
+            painter.text(64, 476, painter.labels["emergency"], 34, AMBER)
+            painter.text(
+                64, 530, painter.labels["emergency_detail"], 26, MUTED
+            )
+            return
         painter.text(64, 476, painter.labels["no_forecast"], 34, MUTED)
         return
     painter.rect((737, 356, 898, 396), PANEL_LIGHT, 15)

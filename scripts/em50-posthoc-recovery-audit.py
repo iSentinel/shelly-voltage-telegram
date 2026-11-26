@@ -14,6 +14,8 @@ from urllib.parse import quote
 WINDOW_SECONDS = 900
 MAX_SAMPLE_GAP_SECONDS = 90
 MAX_LATEST_AGE_SECONDS = 45
+MAX_PHASE_EVENT_SKEW_SECONDS = 5
+PHASES = ("L1", "L2", "L3")
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:
@@ -25,7 +27,7 @@ def open_readonly(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(uri, uri=True, timeout=5)
 
 
-def blocked(reason: str, incident_id: int) -> dict:
+def blocked(reason: str, incident_id: int | None) -> dict:
     """Never confuse telemetry-only evidence with a full release gate."""
 
     return {
@@ -143,20 +145,104 @@ def inspect_database(path: Path, incident_id: int, now: float) -> dict:
     }
 
 
+def phase_event(
+    db: sqlite3.Connection, phase: str, incident_id: int, now: float
+) -> tuple[float, float]:
+    """Require a closed latest event and no unresolved outage in this phase."""
+    row = db.execute(
+        "SELECT id,started_at,ended_at FROM outages "
+        "WHERE phase=? ORDER BY id DESC LIMIT 1",
+        (phase,),
+    ).fetchone()
+    if row is None or row[0] != incident_id:
+        raise ValueError("incident is not latest for the requested phase")
+    _, start, end = row
+    if (
+        end is None
+        or db.execute(
+            "SELECT 1 FROM outages WHERE phase=? AND ended_at IS NULL LIMIT 1",
+            (phase,),
+        ).fetchone()
+    ):
+        raise ValueError("phase has an open outage")
+    if not all(math.isfinite(x) for x in (start, end, now)):
+        raise ValueError("invalid incident time")
+    if not 0 < start < end <= now:
+        raise ValueError("invalid incident time")
+    if now - end < WINDOW_SECONDS:
+        raise ValueError("recovery window is not complete")
+    return start, end
+
+
+def inspect_three_phases(
+    path: Path, incident_ids: tuple[int, ...], now: float
+) -> dict:
+    """Check one simultaneous Pro3EM outage in a single read-only snapshot."""
+    if len(incident_ids) != 3 or len(set(incident_ids)) != 3:
+        raise ValueError("three distinct incident IDs required")
+    details = {}
+    starts, ends = [], []
+    with closing(open_readonly(path)) as db:
+        db.execute("BEGIN")
+        for phase, incident_id in zip(PHASES, incident_ids):
+            start, end = phase_event(db, phase, incident_id, now)
+            count, gap, age = inspect_samples(db, end, phase, now)
+            starts.append(start)
+            ends.append(end)
+            details[phase] = {
+                "incident_id": incident_id,
+                "samples_15min": count,
+                "max_gap_seconds": gap,
+                "latest_sample_age_seconds": age,
+            }
+        if any(
+            max(times) - min(times) > MAX_PHASE_EVENT_SKEW_SECONDS
+            for times in (starts, ends)
+        ):
+            raise ValueError("incidents do not form one simultaneous outage")
+    return {
+        "status": "pass",
+        "reason": "15min_all_phase_samples_verified",
+        "scope": "telemetry_only",
+        "phases": details,
+        "telegram_delivery_verified": False,
+        "release_authorized": False,
+    }
+
+
 def main() -> int:
     """Return stable PASS/BLOCKED codes without changing production."""
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True)
-    parser.add_argument("--incident-id", type=int, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--incident-id", type=int)
+    mode.add_argument(
+        "--incident-ids",
+        nargs=3,
+        type=int,
+        metavar=("L1", "L2", "L3"),
+        help="Three IDs for one simultaneous three-phase outage",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     try:
-        if args.incident_id < 1:
-            raise ValueError("incident ID must be positive")
-        result = inspect_database(args.db, args.incident_id, time.time())
+        if args.incident_ids is not None:
+            ids = tuple(args.incident_ids)
+            if any(value < 1 for value in ids):
+                raise ValueError("incident IDs must be positive")
+            result = inspect_three_phases(args.db, ids, time.time())
+        else:
+            if args.incident_id < 1:
+                raise ValueError("incident ID must be positive")
+            result = inspect_database(args.db, args.incident_id, time.time())
     except (ValueError, TypeError, OSError, sqlite3.Error, OverflowError):
-        result = blocked("telemetry_window_unverified", args.incident_id)
+        if args.incident_ids is not None:
+            result = blocked("all_phase_window_unverified", None)
+            del result["incident_id"]
+            result["incident_ids"] = args.incident_ids
+        else:
+            result = blocked("telemetry_window_unverified", args.incident_id)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:

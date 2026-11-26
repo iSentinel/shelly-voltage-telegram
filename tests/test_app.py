@@ -2562,8 +2562,11 @@ class AdvancedFeatureTests(unittest.TestCase):
             monitor.storage.initialize()
             monitor.telegram.quiet_now = Mock(return_value=False)
             monitor.replace_voltage_status = Mock(return_value=True)
+            ticks = iter((100.0, 114.0, 115.0))
             with patch.object(
-                APP.time, "monotonic", side_effect=[100.0, 114.0, 115.0]
+                APP.time,
+                "monotonic",
+                side_effect=lambda: next(ticks, 115.0),
             ):
                 monitor.maybe_low_voltage_alert(179.0, 50.0)
                 monitor.maybe_low_voltage_alert(178.0, 50.0)

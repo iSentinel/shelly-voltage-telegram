@@ -15,6 +15,7 @@ MAX_UNPACKED_BYTES = 600 * 1024 * 1024
 REQUIRED = {
     "VERSION",
     "app.py",
+    "writer_fence.py",
     "Dockerfile",
     "compose.yaml",
     "requirements.txt",

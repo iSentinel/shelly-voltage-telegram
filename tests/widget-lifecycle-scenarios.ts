@@ -65,9 +65,34 @@ const recovered = live(225.2, 'uk', true, {
   L2: { s: 'stale' },
   L3: { s: 'online', v: 223.9, f: 50, t: timestamp },
 });
+// Compute local-day boundaries outside the constrained widget runtime.
+process.env.TZ = 'Europe/Kyiv';
+const kyivNow = new Date();
+const year = kyivNow.getFullYear();
+const month = kyivNow.getMonth();
+const day = kyivNow.getDate();
+const localDay = [
+  String(year), String(month + 1).padStart(2, '0'),
+  String(day).padStart(2, '0'),
+].join('-');
+const midnight = Math.floor(new Date(year, month, day).getTime() / 1000);
+const nextMidnight = Math.floor(
+  new Date(year, month, day + 1).getTime() / 1000,
+);
+const emergency = {
+  ...live(225.2, 'uk', false, recovered.p as Record<string, unknown>),
+  src: 'yasno', g: '10.1', d: localDay, n: 'emergency',
+  a: midnight, u: timestamp - 25, e: nextMidnight,
+};
+const expiredEmergency = { ...emergency, u: timestamp - 8000 };
+const conflictedEmergency = { ...emergency, b: 'O'.repeat(48) };
+const resumed = { ...recovered, src: 'yasno' };
 const expired = { ...recovered, u: timestamp - 8000 };
 const onePhase = live(221.8, 'en', false);
-const steps = [offline, recovered, expired, onePhase];
+const steps = [
+  offline, recovered, emergency, expiredEmergency,
+  conflictedEmergency, resumed, expired, onePhase,
+];
 
 const script: (
   { data: { publicData: string } } | { probe: string }
@@ -85,7 +110,7 @@ const result = await runWidget(html, {
 assert.equal(result.stopped, undefined, 'Widget runtime stopped');
 assert.ok(result.watchesPublicData, 'Widget did not subscribe to data');
 assert.equal(result.requests.length, 0, 'Unexpected network request');
-assert.equal(result.probes.length, 5, 'State-change probes were missing');
+assert.equal(result.probes.length, steps.length + 1, 'State-change probes were missing');
 
 const stages: [string, Partial<Visible>][] = [
   ['initial', {
@@ -103,6 +128,23 @@ const stages: [string, Partial<Visible>][] = [
     voltage: '225.2', phaseL2: '—', phaseL3: '223.9 В',
     multiHidden: false, axisHidden: false, groupHidden: false,
     cells: 48, state: "НА ЗВ'ЯЗКУ", label: 'Напруга',
+  }],
+  ['official emergency', {
+    voltage: '225.2', phaseL2: '—', phaseL3: '223.9 В',
+    axisHidden: true, groupHidden: false, cells: 0,
+    source: 'YASNO · Аварійні відключення: плановий графік не діє',
+  }],
+  ['expired emergency', {
+    voltage: '225.2', axisHidden: true, groupHidden: true,
+    cells: 0, source: 'Графік застарів',
+  }],
+  ['conflicting notice and plan', {
+    voltage: '225.2', axisHidden: true, groupHidden: true,
+    cells: 0, source: 'Графік застарів',
+  }],
+  ['new official plan', {
+    voltage: '225.2', axisHidden: false, groupHidden: false,
+    cells: 48, source: 'YASNO · графік ДТЕК Київ',
   }],
   ['expired schedule', {
     voltage: '225.2', axisHidden: true,

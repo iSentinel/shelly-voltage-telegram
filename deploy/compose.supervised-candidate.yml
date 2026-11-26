@@ -1,0 +1,9 @@
+# Source-only candidate. Must NOT be deployed without exact-head Owner Approval.
+# This layer must be paired with the create-only and sole-owner systemd unit.
+services:
+  shelly-voltage:
+    restart: "no"
+    environment:
+      SVT_WRITER_FENCE_DIR: /run/svt-fence
+    volumes:
+      - /var/lib/shelly-voltage-fence:/run/svt-fence:rw
