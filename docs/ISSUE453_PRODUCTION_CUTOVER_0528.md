@@ -71,7 +71,14 @@ Require HTTP 200 readiness, fresh valid voltage on all phases,
 closed outages, no ambiguous Telegram intents, stable recovery per the
 stock updater and a fresh read-only public PHOTO identity audit.
 Require continuous three-phase coverage for the reviewed observation
-window. Confirm backup space, no pending journal/fence, and no concurrent
+window. Use the separate reviewed read-only operator helper
+`production-voltage-window.py --database /var/lib/shelly-voltage/voltage.sqlite3 --jsonl`.
+It requires all three phases, at least 60 readings per phase, at most
+30 seconds between readings (including the window boundaries),
+207–253 V throughout the last 900 seconds, no overlapping outage,
+and the stock readiness and updater preflight. Exit 0 only confirms
+the observation window; exit 3 blocks cutover. It never authorizes
+deployment. Confirm backup space, no pending journal/fence, and no concurrent
 maintenance. Recheck all gates immediately before switching the writer.
 
 Make a fresh WAL-consistent local backup, validate checksum and
