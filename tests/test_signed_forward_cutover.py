@@ -511,6 +511,82 @@ class ForwardCutoverTests(unittest.TestCase):
         self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
         self.assert_history([222])
 
+    def assert_pending_history(self):
+        """Read unchanged rows and photo without accepting cutover."""
+        self.assertEqual(self.paths.database.stat().st_ino, self.inode)
+        with closing(sqlite3.connect(self.paths.database)) as db:
+            self.assertEqual(
+                db.execute("SELECT value FROM measurements").fetchall(),
+                [(222,)],
+            )
+            self.assertEqual(
+                db.execute(
+                    "SELECT value FROM meta WHERE key=?",
+                    ("telegram_status_media_identity",),
+                ).fetchone(),
+                (f"photo:-101:{PHOTO}",),
+            )
+            with self.assertRaisesRegex(ValueError, "report delivery"):
+                CUTOVER.photo_identity(db, PHOTO)
+
+    def insert_pending_report(self, key: str) -> None:
+        """Persist an unresolved intent without touching photo identity."""
+        with closing(sqlite3.connect(self.paths.database)) as db, db:
+            db.execute(
+                "INSERT INTO meta VALUES (?,?)",
+                (f"telegram_report_pending:{key}", "2026-11-26"),
+            )
+
+    def test_pending_report_blocks_rollback_before_stop(self):
+        """The cutover has its own guard, even with mocked preflight."""
+        pair = self.stage_older_supervisor()
+        self.insert_pending_report("daily_summary_day")
+        with self.assertRaisesRegex(ValueError, "report delivery"):
+            self.activate_older_pair(pair)
+        self.assertNotIn(("systemctl", "stop", CUTOVER.SUPERVISOR), self.calls)
+        self.assertFalse(self.paths.marker.exists())
+        self.assert_pending_history()
+
+    def test_pending_report_after_capture_blocks_pair_switch(self):
+        """Refuse a late reservation before replacing either signed pair."""
+        pair = self.stage_older_supervisor()
+        original = CUTOVER.read_pair(self.paths)
+        backup = CUTOVER.backup_database
+
+        def late_report(paths, work, photo):
+            """Simulate a reservation committed before writer fencing."""
+            self.insert_pending_report("daily_summary_day")
+            backup(paths, work, photo)
+
+        with (
+            patch.object(CUTOVER, "backup_database", side_effect=late_report),
+            self.assertRaisesRegex(ValueError, "report delivery"),
+        ):
+            self.activate_older_pair(pair)
+        self.assertEqual(self.journal()["phase"], "previous-pair-restored")
+        self.assertEqual(CUTOVER.read_pair(self.paths), original)
+        self.assertEqual(
+            self.runtime,
+            (CUTOVER.image_pin(original["digest"]), "running", "no"),
+        )
+        self.assertFalse(self.paths.marker.exists())
+        with closing(sqlite3.connect(self.paths.database)) as db:
+            self.assertEqual(
+                db.execute(
+                    "SELECT value FROM meta WHERE key=?",
+                    ("telegram_report_pending:daily_summary_day",),
+                ).fetchone(),
+                ("2026-11-26",),
+            )
+        self.assert_pending_history()
+
+    def test_backup_photo_guard_blocks_weekly_report_intent(self):
+        """A weekly unresolved report is as unsafe as a daily one."""
+        self.insert_pending_report("telegram_weekly_private_sent_7")
+        with self.assertRaisesRegex(ValueError, "report delivery"):
+            CUTOVER.backup_database(self.paths, self.work, PHOTO)
+        self.assert_pending_history()
+
     def test_supervised_rollback_aborts_when_the_rescue_fails(self):
         """Keep the original pair when its standalone rescue is invalid."""
         pair = self.stage_older_supervisor()

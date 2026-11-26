@@ -477,6 +477,10 @@ def photo_identity(db: sqlite3.Connection, expected: str) -> str:
             ),
         )
     )
+    if db.execute(
+        "SELECT 1 FROM meta WHERE key GLOB 'telegram_report_pending:*' LIMIT 1"
+    ).fetchone():
+        raise ValueError("Telegram report delivery is unresolved")
     marker = meta.get("telegram_status_media_identity", "")
     if (
         meta.get("telegram_status_message_id") != expected
@@ -1678,6 +1682,8 @@ def start_previous(paths: Layout, work: Path, saved: dict) -> None:
     """Bring back only the pre-cutover runtime and its original timer mode."""
     if saved.get("previous_supervised"):
         run("systemctl", "start", SUPERVISOR, timeout=65)
+        # Restore monitoring, but do not certify an unresolved delivery.
+        read_photo(paths, saved["photo"])
         verify_ready(paths, {**saved, "pair": saved["previous"]})
         verify_current_mounts(paths, True)
         restore_release_check(saved.get("release_timer", {}))

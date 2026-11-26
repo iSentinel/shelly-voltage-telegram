@@ -1,3 +1,19 @@
+## 2026-11-26 — stopped-writer report intent guard
+
+- PR #462 exact CI 8/8 PASS.
+- Close the late-report race: reject any report pending key at live
+  photo check and stopped-writer backup/rescue, not only updater preflight.
+- Resume the original supervisor after preboot refusal, but leave
+  previous-pair-restored and do not certify unresolved delivery.
+- 86 focused tests and quality gate PASS; actual networkless QA copies
+  with 215 measurements reject pending rescue and accept reconciled
+  rescue with history/inode parity.
+- Document future signed pair review in
+  docs/REPORT_WORKER_ROLLBACK_CONTRACT.md. Actual .28 comparison:
+  27/28 monitor inputs identical, app.py differs. Strict guard unchanged.
+- NEXT: exact CI, signed compatible recovery target design and real
+  signed-image supervised QA. No production or release changes.
+
 ## 2026-11-26 — protected report reconciliation rehearsal
 
 - PR #461 exact CI 8/8 PASS.
