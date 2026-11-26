@@ -1,3 +1,16 @@
+## 2026-11-26 — protected report reconciliation rehearsal
+
+- PR #461 exact CI 8/8 PASS.
+- Implement QA-only protected lock ordering and safe inode checks,
+  reject pending update markers, require synchronous=FULL.
+- 14 focused tests and quality gate PASS.
+- Real LXC114: all four lock-contention and both marker rejection
+  scenarios blocked before backup. Positive repair of copied fixture
+  preserved 215 measurement rows, inode, original evidence and rescue.
+- NEXT: exact CI, signed cross-version compatibility contract and
+  production-specific stopped-owner/mount/receipt acceptance.
+  Production apply remains disabled; no signed release changes.
+
 ## 2026-11-26 — isolated scheduled HTTP deadline
 
 - Separate scheduled HTTP into a bounded subprocess without SQLite

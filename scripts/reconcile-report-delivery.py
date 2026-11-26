@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -12,13 +13,14 @@ import socket
 import sqlite3
 import stat
 import sys
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from writer_fence import (  # noqa: E402
     WriterFenceError,
+    fence_directory,
     transaction_gate,
     writer_lease,
 )
@@ -27,6 +29,8 @@ PREFIX = "telegram_report_pending:"
 DAILY = "daily_summary_day"
 WEEKLY = re.compile(r"telegram_weekly_private_sent_[1-9][0-9]{0,19}")
 QA_ROOT = Path("/var/tmp")
+QA_PROTECTED = Path("/var/lib/svt-report-reconcile-qa")
+LOCK_NAMES = ("signed-forward.lock", "updater.lock")
 
 
 def valid_period(key: str, period: str) -> bool:
@@ -117,12 +121,14 @@ def inspect(path: Path, key: str) -> dict:
     }
 
 
-def require_qa(path: Path, backup: Path) -> None:
+def require_qa(path: Path, backup: Path, protected: bool = False) -> None:
     """Allow writes only on the isolated QA host and private temp paths."""
     if os.geteuid() != 0 or socket.gethostname() != "shelly-docker-reboot-qa":
         raise ValueError("apply is restricted to the isolated QA host")
-    if os.environ.get("SVT_WRITER_FENCE_DIR"):
-        raise ValueError("QA uses the database-local writer fence")
+    configured = os.environ.get("SVT_WRITER_FENCE_DIR")
+    expected = str(QA_PROTECTED / "fence") if protected else None
+    if (configured or None) != expected:
+        raise ValueError("unexpected QA writer fence")
     for item in (path, backup):
         if (
             not item.is_absolute()
@@ -134,6 +140,74 @@ def require_qa(path: Path, backup: Path) -> None:
     if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o700:
         raise ValueError("backup parent must be root-owned mode 0700")
     database_identity(path)
+
+
+def protected_info(path: Path, *, directory: bool, uid: int = 0):
+    """Verify an ordinary protected inode without following links."""
+    for parent in path.parents:
+        info = parent.lstat()
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != 0
+            or info.st_mode & 0o022
+        ):
+            raise ValueError("unsafe protected ancestor")
+    info = path.lstat()
+    valid = (
+        stat.S_ISDIR(info.st_mode)
+        if directory
+        else (stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
+    )
+    if not valid or info.st_uid != uid or info.st_mode & 0o022:
+        raise ValueError("unsafe protected inode")
+    return info
+
+
+@contextmanager
+def operator_lock(path: Path):
+    """Acquire an existing root-owned operator lock without replacing it."""
+    expected = protected_info(path, directory=False)
+    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) != (expected.st_dev, expected.st_ino):
+            raise ValueError("operator lock changed")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+    finally:
+        os.close(fd)
+
+
+def no_update_pending(root: Path) -> None:
+    """Reject both kinds of pending update, including dangling links."""
+    for marker in (
+        root / "pending-update",
+        root / "fence/.svt-update-pending",
+    ):
+        try:
+            marker.lstat()
+        except FileNotFoundError:
+            continue
+        raise ValueError("update pending")
+
+
+@contextmanager
+def protected_qa_gate(path: Path):
+    """Mirror the production lock order on a dedicated QA-only layout."""
+    root = QA_PROTECTED
+    protected_info(root, directory=True)
+    directory = fence_directory(path)
+    if directory != root / "fence":
+        raise ValueError("unexpected protected fence directory")
+    for name in (".svt-owner.lock", ".svt-transaction.lock"):
+        protected_info(directory / name, directory=False, uid=10001)
+    with (
+        operator_lock(root / LOCK_NAMES[0]),
+        operator_lock(root / LOCK_NAMES[1]),
+    ):
+        no_update_pending(root)
+        yield
+        no_update_pending(root)
 
 
 def save_backup(path: Path, backup: Path, key: str, state: tuple) -> str:
@@ -197,7 +271,16 @@ def settle(
 
 def apply(args: argparse.Namespace) -> dict:
     """Keep the writer excluded and validate the exact state again."""
-    require_qa(args.database, args.backup)
+    protected = getattr(args, "protected_qa", False)
+    require_qa(args.database, args.backup, protected)
+    if protected:
+        with protected_qa_gate(args.database):
+            return apply_locked(args)
+    return apply_locked(args)
+
+
+def apply_locked(args: argparse.Namespace) -> dict:
+    """Settle under the writer and transaction gates, after a rescue."""
     with writer_lease(args.database), transaction_gate(args.database):
         current = inspect(args.database, args.stream)
         if current["fingerprint"] != args.expect_fingerprint:
@@ -215,6 +298,7 @@ def apply(args: argparse.Namespace) -> dict:
             ) as db,
             db,
         ):
+            db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
             if (
                 read_state(db, args.stream) != state
@@ -241,12 +325,15 @@ def options() -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--inspect", action="store_true")
     mode.add_argument("--apply-qa", action="store_true")
+    parser.add_argument("--protected-qa", action="store_true")
     parser.add_argument("--expect-fingerprint")
     parser.add_argument("--outcome", choices=("delivered", "rejected"))
     parser.add_argument("--evidence-ref")
     parser.add_argument("--message-id")
     parser.add_argument("--backup", type=Path)
     args = parser.parse_args()
+    if args.protected_qa and not args.apply_qa:
+        parser.error("--protected-qa requires --apply-qa")
     if args.stream != DAILY and not WEEKLY.fullmatch(args.stream):
         parser.error("unsupported report stream")
     if args.apply_qa and (
