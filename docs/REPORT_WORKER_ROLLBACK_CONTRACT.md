@@ -315,3 +315,34 @@ An ambiguous claim requires operator review, even if Docker appears
 never-started. No automatic claim removal or retry is authorized.
 Full runtime acceptance, protected production integration and signed
 candidate qualification remain outstanding.
+
+## Three-phase runtime acceptance in isolated QA
+
+The qa-report-runtime-acceptance.py helper extends the claimed START
+observation with an actual HTTP readiness request to the immutable
+container ID's loopback endpoint. It requires explicit ready/online
+states for exactly L1/L2/L3 and finite ages no greater than 10 seconds.
+It additionally requires three distinct, fresh post-start measurements
+per phase with 207-253 V and 40-60 Hz in the original SQLite inode.
+The existing history-prefix and selected metadata checks are retained.
+The launch identity is checked again before publishing the durable
+runtime-acceptance.json receipt. Repeated review rechecks the current
+conditions and returns the original receipt for the same launch.
+
+Actual LXC114 QA on 2026-11-27 used the real monitor Pro3EM polling
+cycle and real application readiness handler with synthetic readings.
+The initial missing L3 returned HTTP 503 and acceptance was blocked
+without a runtime receipt. Supplying L3 without restarting allowed
+acceptance: three fresh persisted measurements on each phase, latest
+age 0.92 seconds for each, history and selected metadata preserved.
+Replay returned the same receipt and StartedAt remained unchanged.
+Only an ordinary synthetic alert was accepted; graceful stop exited 0.
+65 focused tests and project quality gate passed.
+
+This is a point-in-time QA receipt, not a continuing health guarantee.
+The short three-sample window is deliberately a synthetic smoke test,
+not the 15-minute production electrical gate. The local QA image is
+unsigned and the fixture mocks external hardware and Telegram.
+qa_runtime_verified is true only for this QA scope; deployment_authorized
+remains false. Production supervisor integration, signed release evidence,
+production reconciliation and explicit authorization are still required.

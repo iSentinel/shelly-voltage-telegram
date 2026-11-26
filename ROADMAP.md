@@ -1,3 +1,19 @@
+## 2026-11-27 — three-phase QA runtime acceptance
+
+- PR #470 exact CI 8/8 PASS.
+- Add QA-only durable runtime acceptance receipt using claimed launch,
+  actual loopback readiness, original history/metadata and inode checks,
+  three fresh post-start samples on each of L1/L2/L3.
+- 65 focused tests and project quality gate PASS.
+- Real networkless LXC114: actual app Pro3EM polling with synthetic
+  readings. Missing L3 returned HTTP 503, acceptance refused; restored
+  L3 without restart, all phases accepted (3 samples each, age 0.92s).
+  Receipt replay identical, StartedAt unchanged, ordinary alert only,
+  exit 0. Original 148-row baseline preserved.
+- NEXT: consolidate production-specific transaction design and
+  release candidate review, independent signed QA and owner approval.
+  Short QA window is not the production electrical gate.
+
 ## 2026-11-27 — mandatory QA supervisor START claim
 
 - PR #469 exact CI 8/8 PASS.
