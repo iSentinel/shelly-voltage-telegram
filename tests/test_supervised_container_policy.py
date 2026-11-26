@@ -97,6 +97,32 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(SUPERVISOR.BootBlocked, "QA_CONTAINER"):
             SUPERVISOR.validate_container(self.info, self.args)
 
+    def test_report_mode_requires_exact_explicit_value(self):
+        """A stale or missing environment cannot certify paused recovery."""
+        self.args.expected_report_mode = "paused"
+        for env in (
+            [],
+            ["SCHEDULED_REPORTS_MODE=enabled"],
+            ["SCHEDULED_REPORTS_MODE=paused"] * 2,
+            ["SCHEDULED_REPORTS_MODE=invalid"],
+        ):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "REPORT_MODE_MISMATCH"
+            ):
+                SUPERVISOR.validate_container(self.info, self.args)
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_report_mode_review_is_qa_only(self):
+        """The prototype cannot authorize a production startup change."""
+        self.args.qa_offline = False
+        self.args.expected_report_mode = "paused"
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "REPORT_MODE_QA_ONLY"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
     def test_version_pair_requires_exact_match(self) -> None:
         """A valid digest cannot authorize a different source release."""
         record = {"version": "0.5.25-hw", "digest": "sha256:" + "a" * 64}

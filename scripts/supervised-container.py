@@ -46,6 +46,11 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument("--require-pair-receipt", action="store_true")
     parser.add_argument("--source-archive-dir", type=Path)
     parser.add_argument("--qa-offline", action="store_true")
+    parser.add_argument(
+        "--expected-report-mode",
+        choices=("enabled", "paused"),
+        help="QA-only: require the exact container startup report mode",
+    )
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
 
@@ -224,6 +229,22 @@ def image_revision(info: dict) -> object:
     return labels.get("org.opencontainers.image.revision")
 
 
+def validate_report_mode(info: dict, expected: str) -> None:
+    """Reject absent, duplicated or stale recovery mode in Docker config."""
+    env = info.get("Config", {}).get("Env")
+    if not isinstance(env, list) or not all(
+        isinstance(item, str) for item in env
+    ):
+        raise BootBlocked("SVT_REPORT_MODE_ENV_INVALID")
+    values = [
+        item.partition("=")[2]
+        for item in env
+        if item.partition("=")[0] == "SCHEDULED_REPORTS_MODE"
+    ]
+    if values != [expected] or expected not in ("enabled", "paused"):
+        raise BootBlocked("SVT_REPORT_MODE_MISMATCH")
+
+
 def validate_container(info: dict, args: argparse.Namespace) -> None:
     """Refuse a foreign running writer and independent Docker restarts."""
     if info.get("State", {}).get("Running") is not False:
@@ -241,6 +262,11 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
     ]
     if len(shared) != 1:
         raise BootBlocked("SVT_FENCE_MOUNT_MISMATCH")
+    expected = getattr(args, "expected_report_mode", None)
+    if expected is not None:
+        if not args.qa_offline:
+            raise BootBlocked("SVT_REPORT_MODE_QA_ONLY")
+        validate_report_mode(info, expected)
     if args.qa_offline:
         if not args.container.startswith("svt-qa-"):
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")

@@ -1,3 +1,18 @@
+## 2026-11-26 — protected recovery supervisor rehearsal
+
+- PR #464 exact CI 8/8 PASS.
+- Discovered create-only --no-recreate retains stale container env
+  after changing .env. Add exact expected mode check in offline QA
+  supervisor only; do not infer actual mode from desired config.
+- 98 focused tests and project quality gate PASS.
+- Actual LXC114 root-controlled Compose config and shared fence:
+  stale enabled container refused; recreated stopped QA container
+  with same unsigned image ID accepted paused mode on repeat probe.
+  History 20/41, inode, delivered marker and weekly pending preserved.
+  No additional report; ordinary synthetic alert and exit 0.
+- NEXT: production transaction/recovery design, signed candidate and
+  full supervised signed QA. No production changes or QA bypass.
+
 ## 2026-11-26 — same-runtime scheduled report recovery profile
 
 - PR #463 exact CI 8/8 PASS.
