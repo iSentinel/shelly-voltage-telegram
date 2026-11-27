@@ -1,6 +1,7 @@
 """Exercise durable config-only recovery on disposable files."""
 
 import importlib.util
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -317,6 +318,77 @@ class ReportModeTransactionTests(unittest.TestCase):
             self.assertRaises(FileNotFoundError),
         ):
             TX.observe_start(self.root, "fixture")
+
+    def restart_fixture(self):
+        """Model a positively observed launch and protected QA receipt."""
+        info, db = self.start_fixture()
+        info["State"].update(Running=True, StartedAt="new")
+        with closing(sqlite3.connect(db)) as connection, connection:
+            connection.execute("INSERT INTO measurements VALUES(2,221)")
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            TX.observe_start(self.root, "fixture")
+            TX.atomic_write(
+                self.root / "runtime-acceptance.json",
+                json.dumps(
+                    {
+                        "container_id": info["Id"],
+                        "started_at": "new",
+                        "qa_runtime_verified": True,
+                        "history_verified": True,
+                        "deployment_authorized": False,
+                    }
+                ).encode(),
+            )
+            TX.seal_restart_policy(self.root, "fixture")
+        info["State"].update(Running=False, ExitCode=0, OOMKilled=False)
+        return info, db
+
+    def test_verified_restart_one_shot(self):
+        """A verified clean stop grants one restart, not endless retries."""
+        info, _ = self.restart_fixture()
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            self.assertEqual(
+                TX.claim_verified_restart(self.root, "fixture"), info["Id"]
+            )
+            with self.assertRaisesRegex(ValueError, "already claimed"):
+                TX.claim_verified_restart(self.root, "fixture")
+            info["State"].update(Running=True, StartedAt="next")
+            self.assertEqual(
+                TX.observe_verified_restart(self.root, "fixture"), info
+            )
+
+    def test_verified_restart_rejects_abnormal_exit(self):
+        """A crash cannot use the clean-stop restart policy."""
+        info, _ = self.restart_fixture()
+        info["State"]["ExitCode"] = 137
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "policy changed"),
+        ):
+            TX.claim_verified_restart(self.root, "fixture")
+        self.assertFalse((self.root / "verified-restart-claim.json").exists())
+
+    def test_verified_restart_rejects_changed_receipt(self):
+        """The accepted launch evidence cannot be replaced."""
+        info, _ = self.restart_fixture()
+        path = self.root / "runtime-acceptance.json"
+        path.write_bytes(path.read_bytes() + b" ")
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "policy changed"),
+        ):
+            TX.claim_verified_restart(self.root, "fixture")
+
+    def test_verified_restart_rejects_history_rewrite(self):
+        """Even a clean stop must retain the reviewed historical prefix."""
+        info, db = self.restart_fixture()
+        with closing(sqlite3.connect(db)) as connection, connection:
+            connection.execute("UPDATE measurements SET v=0 WHERE id=2")
+        with (
+            patch.object(TX, "inspect_qa_container", return_value=info),
+            self.assertRaisesRegex(ValueError, "history changed"),
+        ):
+            TX.claim_verified_restart(self.root, "fixture")
 
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
