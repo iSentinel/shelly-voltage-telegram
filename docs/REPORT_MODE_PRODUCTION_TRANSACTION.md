@@ -518,3 +518,48 @@ The next step is binding the operator to exact stopped container
 identity and reviewed plan, then integrating the immutable
 one-shot START gate with bidirectional transitions. No production
 receipt migration, signing, or deployment authorization.
+
+## Immutable one-shot mode START witness (2026-11-27)
+
+Exact #489 and separate #472 CI 8/8 PASS. Added
+qa-durable-mode-start.py. Under the existing offline operator,
+update and quiescent writer gates, ARM binds an externally pinned
+configured journal, exact target .env and stopped history, owned
+marker, fixed QA image, never-started immutable container ID,
+Config, HostConfig and mount hashes. START rechecks all bindings,
+persists a one-shot claim before releasing the owned marker,
+then issues Docker start by immutable ID under the operator/update
+gates. The previous configuration-only release path now refuses
+an armed transaction without matching claim evidence. Neither
+ARM nor claim is authenticated owner approval.
+
+202 focused tests and quality gate PASS. First actual isolated
+fixture /var/lib/svt-report-mode-tx-qa.ONJAG4: real fixed witness
+started by exact ID, repeated START refused after stop; same-name
+same-image replacement with new ID refused before claim and
+marker release. Database SHA256 unchanged. The replacement was
+never started, removed, and the refused marker retained as evidence.
+This first actual trial preceded the direct-release hardening.
+
+Updated code, second fixture /var/lib/svt-report-mode-tx-qa.QjS5zL:
+direct configuration-only release after ARM refused, marker retained.
+Valid exact-ID START passed; repeated START refused after stop.
+Reverse transition prepared/armed, then actual SIGKILL 137 after
+durable claim and marker release but before Docker start request.
+Retry refused, StartedAt remained zero, SQLite SHA256 unchanged.
+Both disposable witnesses removed; no running QA containers.
+
+The fixed witness command is a benign Python sleep, not Report
+Worker runtime. This tests the launch boundary only. The image is
+the unsigned exact-snapshot QA derivative. Anchors were computed
+from the test fixture, not authenticated owner review. Only selected
+HostConfig fields are semantically checked; full hashes detect
+post-ARM changes but do not independently establish every initial
+security setting or effective .env. The previous configuration-only
+operator is still usable before ARM; root Docker bypass is outside
+the cooperating QA contract. No atomic enforcement across all
+possible launch paths, runtime acceptance or recovery from a
+consumed claim is implied. Next bind real synthetic Report Worker
+probe and effective Compose/runtime policy, verify fresh readiness
+and history after launch, and review signed/owner-bound transaction.
+No production startup or deployment authority.

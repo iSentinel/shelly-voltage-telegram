@@ -1,3 +1,18 @@
+## 2026-11-27 — immutable one-shot mode START witness
+
+- Exact #489 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add pinned ARM and one-shot START witness to durable mode journal,
+  exact stopped image/container/config/HostConfig/mount hashes and
+  history. Claim before marker release, start by immutable ID.
+- Reject direct config-only release after ARM; 202 focused tests
+  and quality gate PASS. Actual isolated exact-ID start/repeat
+  refusal, same-name replacement refusal with fence retained.
+- Updated code real SIGKILL after claim/marker release before Docker
+  START; retry refused, never started, SQLite SHA256 unchanged.
+- NEXT: bind real Report Worker probe and effective Compose/runtime
+  policy; verify readiness/history after launch, signed and owner
+  plan review. Fixed sleep witness only; no production authority.
+
 ## 2026-11-27 — durable bidirectional QA mode operator
 
 - Exact #488 and separate #472 CI 8/8 PASS; .29 tag absent.
