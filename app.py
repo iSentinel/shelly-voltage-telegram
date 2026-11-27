@@ -10,10 +10,12 @@ import os
 import secrets
 import signal
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from contextlib import closing, suppress
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -189,6 +191,7 @@ class Config:
     daily_summary_minute: int
     backup_dir: Path
     telegram_pin_status: bool
+    scheduled_reports_mode: str = "enabled"
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -370,6 +373,9 @@ def monitoring_alert_settings() -> dict[str, object]:
         "daily_summary_hour": int(os.getenv("DAILY_SUMMARY_HOUR", "22")),
         "daily_summary_minute": int(os.getenv("DAILY_SUMMARY_MINUTE", "55")),
         "telegram_pin_status": env_bool("TELEGRAM_PIN_STATUS", False),
+        "scheduled_reports_mode": os.getenv(
+            "SCHEDULED_REPORTS_MODE", "enabled"
+        ),
     }
 
 
@@ -389,6 +395,8 @@ def load_config() -> Config:
     values.update(telegram_settings())
     values.update(monitoring_settings(poll))
     cfg = Config(**values)
+    if cfg.scheduled_reports_mode not in ("enabled", "paused"):
+        raise ValueError("SCHEDULED_REPORTS_MODE must be enabled or paused")
     validate_config(cfg)
     return cfg
 
@@ -683,6 +691,33 @@ class Storage:
             return
         with closing(self.connect()) as conn, conn:
             self.set_meta(key, value, conn)
+
+    def reserve_report(self, delivered: str, period: str) -> str | None:
+        """Reserve a uniquely identified logical delivery before sending."""
+        pending = f"telegram_report_pending:{delivered}"
+        attempt = secrets.token_hex(16)
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            if self.get_meta(delivered, db) == period:
+                return None
+            cursor = db.execute(
+                "INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)",
+                (pending, f"{period}:{attempt}"),
+            )
+            return attempt if cursor.rowcount == 1 else None
+
+    def finish_report(
+        self, delivered: str, period: str, attempt: str, *, accepted: bool
+    ) -> None:
+        """Resolve only the exact reserved report in one transaction."""
+        pending = f"telegram_report_pending:{delivered}"
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            if self.get_meta(pending, db) != f"{period}:{attempt}":
+                raise ValueError("scheduled report intent changed")
+            if accepted:
+                self.set_meta(delivered, period, db)
+            db.execute("DELETE FROM meta WHERE key=?", (pending,))
 
     def reserve_text_post(self) -> str | None:
         """Persist one exclusive intent before sending remote status text."""
@@ -1548,6 +1583,111 @@ def telegram_upload_message_id(
     raise RuntimeError(detail)
 
 
+REPORT_HTTP_DEADLINE = 12.0
+REPORT_HTTP_MAX_BODY = 65536
+
+
+def report_response(response: requests.Response) -> dict:
+    """Bound the response and accept only coherent API acknowledgements."""
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=4096):
+        body.extend(chunk)
+        if len(body) > REPORT_HTTP_MAX_BODY:
+            raise ValueError("scheduled response too large")
+    data = json.loads(body)
+    if not isinstance(data, dict):
+        raise ValueError("invalid scheduled response")
+    if response.status_code == 200 and data.get("ok") is True:
+        message_id = data["result"]["message_id"]
+        if type(message_id) is not int or message_id <= 0:
+            raise ValueError("invalid scheduled message ID")
+        return {"ok": True, "result": {"message_id": message_id}}
+    code = data.get("error_code")
+    if (
+        data.get("ok") is False
+        and type(code) is int
+        and 400 <= code < 500
+        and response.status_code == code
+    ):
+        return {
+            "ok": False,
+            "error_code": code,
+            "parameters": {"retry_after": Telegram.rate_limit_delay(data)},
+        }
+    raise ValueError("unconfirmed scheduled response")
+
+
+def scheduled_http_worker() -> None:
+    """Send exactly one request; never access SQLite or log request data."""
+    try:
+        request = json.load(sys.stdin)
+        with requests.post(
+            request["url"],
+            json=request["payload"],
+            timeout=(5, 8),
+            stream=True,
+            allow_redirects=False,
+        ) as response:
+            result = report_response(response)
+        print(json.dumps(result, separators=(",", ":")), flush=True)
+    except Exception:
+        # A failed worker cannot distinguish a lost ACK from non-delivery.
+        sys.exit(3)
+
+
+def wait_report_response(
+    child: subprocess.Popen, request: str, deadline: float
+) -> dict:
+    """Enforce a wall-clock deadline and observe STOP between waits."""
+    pending_input = request
+    while not STOP.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            output, _ = child.communicate(
+                input=pending_input, timeout=min(0.1, remaining)
+            )
+        except subprocess.TimeoutExpired:
+            pending_input = None
+            continue
+        if child.returncode != 0:
+            raise RuntimeError("Scheduled report outcome unknown")
+        data = json.loads(output)
+        if not isinstance(data, dict):
+            raise RuntimeError("Scheduled report outcome unknown")
+        return data
+    raise RuntimeError("Scheduled report interrupted; outcome unknown")
+
+
+def bounded_report_post(url: str, payload: dict) -> dict:
+    """Isolate network I/O so cancellation cannot leave a sending thread."""
+    deadline = time.monotonic() + REPORT_HTTP_DEADLINE
+    request = json.dumps({"url": url, "payload": payload})
+    with subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "from app import scheduled_http_worker; scheduled_http_worker()",
+        ],
+        cwd=Path(__file__).resolve().parent,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ) as child:
+        try:
+            return wait_report_response(child, request, deadline)
+        finally:
+            if child.poll() is None:
+                child.kill()
+            child.wait()
+
+
+class ScheduledReportRejected(RuntimeError):
+    """A scheduled request was not started or explicitly rejected."""
+
+
 class Telegram:
     """Small Telegram Bot API client with isolated long polling."""
 
@@ -1562,19 +1702,27 @@ class Telegram:
         self.api_session = requests.Session()
         self.updates_session = requests.Session()
         self.api_lock = threading.Lock()
+        self.report_lock = threading.Lock()
         self.silent_default = cfg.telegram_silent_default
         self.quiet_enabled = True
         self.quiet_start_hour = cfg.telegram_quiet_start_hour
         self.quiet_end_hour = cfg.telegram_quiet_end_hour
 
-    def _post(self, method: str, payload: dict) -> dict:
+    def _post(
+        self,
+        method: str,
+        payload: dict,
+        *,
+        session: requests.Session | None = None,
+    ) -> dict:
         """Perform one HTTP request using the appropriate session."""
 
-        session = (
-            self.updates_session
-            if method == "getUpdates"
-            else self.api_session
-        )
+        if session is None:
+            session = (
+                self.updates_session
+                if method == "getUpdates"
+                else self.api_session
+            )
         try:
             response = session.post(
                 f"{self.base}/{method}",
@@ -1592,6 +1740,10 @@ class Telegram:
             raise RuntimeError("Telegram returned invalid JSON object")
         return data
 
+    def _scheduled_post(self, method: str, payload: dict) -> dict:
+        """Use the cancellable isolated transport only for report sends."""
+        return bounded_report_post(f"{self.base}/{method}", payload)
+
     @staticmethod
     def rate_limit_delay(data: dict) -> float:
         """Bound a malformed Telegram 429 retry value without exceptions."""
@@ -1608,16 +1760,38 @@ class Telegram:
             return 1.0
         return min(seconds, 30.0)
 
-    def _call_with_retry(self, method: str, payload: dict) -> dict:
-        """Retry only a Telegram 429 response, once, with a safe delay."""
+    def _call_with_retry(
+        self,
+        method: str,
+        payload: dict,
+        *,
+        post: Callable[[str, dict], dict] | None = None,
+        interrupt_retry: bool = False,
+    ) -> dict:
+        """Retry one Telegram 429, cancelling scheduled work on shutdown."""
 
-        data = self._post(method, payload)
+        send = self._post if post is None else post
+        if interrupt_retry and STOP.is_set():
+            raise ScheduledReportRejected("Scheduled report stopped")
+        data = send(method, payload)
         if data.get("error_code") == 429:
             delay = self.rate_limit_delay(data)
             logger.warning("Telegram rate limited; retry in {:.1f}s", delay)
-            time.sleep(delay)
-            data = self._post(method, payload)
+            if interrupt_retry:
+                if STOP.wait(delay):
+                    raise ScheduledReportRejected("Scheduled report stopped")
+            else:
+                time.sleep(delay)
+            data = send(method, payload)
         if not data.get("ok"):
+            code = data.get("error_code")
+            if (
+                interrupt_retry
+                and data.get("ok") is False
+                and type(code) is int
+                and 400 <= code < 500
+            ):
+                raise ScheduledReportRejected(safe_telegram_api_error(data))
             raise RuntimeError(safe_telegram_api_error(data))
         return data["result"]
 
@@ -1648,6 +1822,8 @@ class Telegram:
         notify: bool | None = None,
         reply_markup: dict | None = None,
         chat_id: str | None = None,
+        *,
+        scheduled: bool = False,
     ) -> int:
         """Send a message using the current notification policy."""
 
@@ -1659,7 +1835,16 @@ class Telegram:
         }
         if reply_markup is not None:
             payload["reply_markup"] = reply_markup
-        result = self.call("sendMessage", payload)
+        if scheduled:
+            with self.report_lock:
+                result = self._call_with_retry(
+                    "sendMessage",
+                    payload,
+                    post=self._scheduled_post,
+                    interrupt_retry=True,
+                )
+        else:
+            result = self.call("sendMessage", payload)
         return int(result["message_id"])
 
     def send_test(self, text: str, notify: bool) -> int:
@@ -4575,38 +4760,74 @@ class Monitor:
     def maybe_daily_summary(self) -> None:
         """Post one daily summary after the configured local time."""
 
-        if not self.daily_summary_enabled or not self.telegram.enabled:
+        if self.cfg.scheduled_reports_mode != "enabled":
             return
-        now = datetime.now(ZoneInfo(self.cfg.timezone))
-        day = now.date().isoformat()
-        due = (now.hour, now.minute) >= (
-            self.daily_summary_hour,
-            self.daily_summary_minute,
-        )
-        if not due or day == self.last_summary_day:
-            return
-        attempt = time.monotonic()
-        if attempt - self.last_summary_attempt < 300.0:
-            return
-        self.last_summary_attempt = attempt
-        self.telegram.send(
-            self.daily_summary_text(), chat_id=self.telegram.status_chat_id
-        )
-        self.last_summary_day = day
-        self.storage.set_meta("daily_summary_day", day)
+        with self.config_lock:
+            if not self.daily_summary_enabled or not self.telegram.enabled:
+                return
+            now = datetime.now(ZoneInfo(self.cfg.timezone))
+            day = now.date().isoformat()
+            due = (now.hour, now.minute) >= (
+                self.daily_summary_hour,
+                self.daily_summary_minute,
+            )
+            if not due or day == self.last_summary_day:
+                return
+            attempt = time.monotonic()
+            if attempt - self.last_summary_attempt < 300.0:
+                return
+            self.last_summary_attempt = attempt
+            text = self.daily_summary_text()
+        if self.deliver_scheduled_report(
+            "daily_summary_day", day, text, self.telegram.status_chat_id
+        ):
+            self.last_summary_day = day
+
+    def deliver_scheduled_report(
+        self,
+        delivered: str,
+        period: str,
+        text: str,
+        chat_id: str,
+        notify: bool | None = None,
+    ) -> bool:
+        """Keep uncertain sends reserved; never assume a lost ACK failed."""
+        if self.cfg.scheduled_reports_mode != "enabled":
+            return False
+        attempt = self.storage.reserve_report(delivered, period)
+        if attempt is None:
+            return False
+        try:
+            message_id = self.telegram.send(
+                text, chat_id=chat_id, notify=notify, scheduled=True
+            )
+            if type(message_id) is not int or message_id <= 0:
+                raise ValueError("invalid scheduled report acknowledgement")
+        except ScheduledReportRejected:
+            self.storage.finish_report(
+                delivered, period, attempt, accepted=False
+            )
+            raise
+        self.storage.finish_report(delivered, period, attempt, accepted=True)
+        return True
 
     def maybe_weekly_private_reports(
         self, local_time: datetime | None = None
     ) -> None:
         """Send due opt-in reports only to authorized private chats."""
 
-        if not self.telegram.enabled:
+        if (
+            not self.telegram.enabled
+            or self.cfg.scheduled_reports_mode != "enabled"
+        ):
             return
         local = local_time or datetime.now(ZoneInfo(self.cfg.timezone))
         week_key = private_weekly_due_key(local)
         if week_key is None:
             return
         for admin_id in self.cfg.telegram_admin_user_ids:
+            if STOP.is_set():
+                return
             user_id = str(admin_id)
             try:
                 self.send_due_private_weekly(user_id, week_key)
@@ -4618,20 +4839,23 @@ class Monitor:
     def send_due_private_weekly(self, user_id: str, week_key: str) -> None:
         """Send at most one successful weekly digest per administrator."""
 
+        if self.cfg.scheduled_reports_mode != "enabled":
+            return
         enabled = f"telegram_weekly_private_enabled_{user_id}"
         delivered = f"telegram_weekly_private_sent_{user_id}"
-        if self.storage.get_meta(enabled) != "1":
-            return
-        if self.storage.get_meta(delivered) == week_key:
-            return
-        now = time.monotonic()
-        if now - self.weekly_digest_attempts.get(user_id, -3600) < 3600:
-            return
-        self.weekly_digest_attempts[user_id] = now
-        self.telegram.send(
-            self.weekly_summary_text(), notify=False, chat_id=user_id
+        with self.config_lock:
+            if self.storage.get_meta(enabled) != "1":
+                return
+            if self.storage.get_meta(delivered) == week_key:
+                return
+            now = time.monotonic()
+            if now - self.weekly_digest_attempts.get(user_id, -3600) < 3600:
+                return
+            self.weekly_digest_attempts[user_id] = now
+            text = self.weekly_summary_text()
+        self.deliver_scheduled_report(
+            delivered, week_key, text, user_id, notify=False
         )
-        self.storage.set_meta(delivered, week_key)
 
     def device_health_text(self) -> str:
         """Render read-only device health for configured phases."""
@@ -6157,37 +6381,74 @@ class Monitor:
         """Run monitoring until SIGINT/SIGTERM."""
 
         self.initialize()
-        if self.telegram.enabled:
-            threading.Thread(
-                target=self.command_loop,
-                name="telegram-commands",
-                daemon=True,
-            ).start()
+        if not self.telegram.enabled:
+            self.run_monitor_loop()
+            return
+        threading.Thread(
+            target=self.command_loop, name="telegram-commands", daemon=True
+        ).start()
+        if self.cfg.scheduled_reports_mode != "enabled":
+            logger.warning("Scheduled reports paused by startup policy")
+            self.run_monitor_loop()
+            return
+        wakeup = threading.Event()
+        stopped = threading.Event()
+        reporter = threading.Thread(
+            target=self.report_loop,
+            args=(wakeup, stopped),
+            name="telegram-reports",
+        )
+        reporter.start()
+        try:
+            self.run_monitor_loop(wakeup)
+        finally:
+            stopped.set()
+            wakeup.set()
+            # Keep the process's database ownership through the last delivery.
+            reporter.join()
+
+    def run_monitor_loop(
+        self, report_wakeup: threading.Event | None = None
+    ) -> None:
+        """Sample Shelly and let the report thread check what is due."""
+
         while not STOP.is_set():
             self.last_loop_tick = time.monotonic()
             self.poll_cycle()
             self.maybe_finalize_voltage_episode()
             self.maybe_rotate_stable_recovery_status()
             self.update_status()
+            if report_wakeup is not None:
+                report_wakeup.set()
             self.run_periodic_tasks()
             STOP.wait(self.cfg.poll_interval)
 
-    def run_periodic_tasks(self) -> None:
-        """Run independent jobs despite one Telegram or SQLite failure."""
-
-        jobs = (
-            ("daily_summary", self.maybe_daily_summary),
-            ("weekly_private", self.maybe_weekly_private_reports),
-            ("database", self.maybe_database_maintenance),
-            ("status_cleanup", self.maybe_cleanup_status),
-        )
-        for name, task in jobs:
-            try:
-                task()
-            except Exception as exc:
-                logger.warning(
-                    "Periodic {} failed: {}", name, type(exc).__name__
+    def report_loop(
+        self, wakeup: threading.Event, stopped: threading.Event
+    ) -> None:
+        """Combine sampling ticks while a scheduled send is in progress."""
+        while not stopped.is_set() and not STOP.is_set():
+            wakeup.wait()
+            wakeup.clear()
+            if stopped.is_set() or STOP.is_set():
+                return
+            self.run_periodic_job("daily_summary", self.maybe_daily_summary)
+            if not stopped.is_set() and not STOP.is_set():
+                self.run_periodic_job(
+                    "weekly_private", self.maybe_weekly_private_reports
                 )
+
+    def run_periodic_tasks(self) -> None:
+        """Run maintenance and status cleanup after each sample."""
+        self.run_periodic_job("database", self.maybe_database_maintenance)
+        self.run_periodic_job("status_cleanup", self.maybe_cleanup_status)
+
+    def run_periodic_job(self, name: str, task: Callable[[], None]) -> None:
+        """Keep a maintenance or report failure local to its own job."""
+        try:
+            task()
+        except Exception as exc:
+            logger.warning("Periodic {} failed: {}", name, type(exc).__name__)
 
     def maybe_database_maintenance(self) -> None:
         """Run rollup/checkpoint/optimize no more than once per day."""

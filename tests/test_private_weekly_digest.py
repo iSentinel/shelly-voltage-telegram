@@ -161,6 +161,19 @@ class PrivateWeeklyDigestTests(unittest.TestCase):
             self.monitor.storage.get_meta("telegram_weekly_private_sent_7")
         )
 
+    def test_ambiguous_weekly_delivery_is_not_repeated_after_restart(self):
+        """Keep an uncertain delivery reserved for this administrator."""
+        self.subscribe()
+        self.monitor.telegram.send.side_effect = RuntimeError("lost ACK")
+        self.monitor.maybe_weekly_private_reports(sunday())
+        pending = "telegram_report_pending:telegram_weekly_private_sent_7"
+        self.assertIsNotNone(self.monitor.storage.get_meta(pending))
+        restarted = make_monitor(self.path)
+        restarted.weekly_summary_text = Mock(return_value="weekly report")
+        restarted.maybe_weekly_private_reports(sunday())
+        restarted.telegram.send.assert_not_called()
+        self.assertIsNotNone(restarted.storage.get_meta(pending))
+
     def test_channel_and_non_admin_cannot_subscribe(self):
         """Ignore subscriptions from a channel or non-administrators."""
 

@@ -1,3 +1,727 @@
+## 2026-11-27 — consolidated Report Worker admission audit
+
+- Exact #502 and narrow #472 CI 8/8 PASS; no new tags.
+- Consolidate 45 overlapping draft PRs in a single review branch
+  against common base f35cfc4; retain original branches and PRs.
+  Narrow #472 is separate and not an ancestor of this stack.
+- Revalidate launch and profile after readiness, capture history
+  afterwards, reject duplicate claim fields; direct probe hash
+  tests and final observation drift tests.
+- 334 focused tests / 29 suites and quality PASS. Narrow .29
+  archive unchanged. No release or production changes.
+- NEXT: review consolidated diff and exact integrated admission
+  evidence; no additional hypothetical incident layers required.
+  Integrated QA, signed feature-capable candidate, recovery and
+  owner approval remain open. Earlier blocked trials not retried.
+
+## 2026-11-27 — committed-WAL rescue qualification
+
+- Exact #501 and narrow #472 CI 8/8 PASS; no new tags.
+- Seven actual SQLite tests exercise the existing backup API:
+  committed WAL rows and schema version retained, uncommitted
+  row excluded, pending intent retained but cutover refused,
+  existing rescue cannot be overwritten.
+- Harden standalone rescue seal: sidecars and identity drift
+  refused before checksum publication. 152 focused tests and
+  quality PASS. No actual production WAL capture.
+- Narrow .29 archive unchanged; consolidate separate release
+  and repair admission gaps. No incident invented.
+- NEXT: audit integrated Report Worker admission prerequisites
+  and consolidate draft stack for review. No signing, deployment
+  or bypass of previously blocked integrated tests.
+
+## 2026-11-27 — underlying synthetic incident artifact review
+
+- Exact #500 and narrow #472 CI 8/8 PASS; no new release tags.
+- Review exact referenced JSON and separate standalone SQLite
+  contents, logical history, pending count and rescue parity.
+- 145 focused tests and quality PASS. Actual isolated fixture:
+  12 evidence files, two measurements and one pending intent;
+  modified observation and sidecar refused, original SHA256
+  unchanged. Synthetic content consistency only.
+- NEXT: review committed-WAL rescue and incident acquisition
+  requirements; consolidate release admission gaps. Actual
+  incident, integrated runtime, signed repair and authority
+  remain unqualified. No production changes.
+
+## 2026-11-27 — closed synthetic incident evidence manifest
+
+- Exact #499 and narrow #472 CI 8/8 PASS; no new release tags.
+- Add closed four-stage evidence chain with exact manifest and
+  record hashes, predecessor binding, chronology, immutable
+  writer/DB/lock identities, stopped/held history parity.
+- 137 focused tests and quality PASS. Real offline synthetic CLI:
+  valid chain accepted, modified bytes and rehashed changed
+  StartedAt rejected. No actual incident or authority claimed.
+- NEXT: underlying artifact verification and admission gap review;
+  real fault, signed repair and integrated qualification remain
+  unfulfilled. No production changes or release authorization.
+
+## 2026-11-27 — installed incident identity evidence contract
+
+- Exact #498 and narrow #472 CI 8/8 PASS; no new release tags.
+- Extend healthy read-only supervisor review with receipt/journal
+  hashes, DB/owner-lock inode, exact container/image/StartedAt;
+  revalidate all bindings and writer lease before returning.
+- 124 focused tests and quality PASS. Separate actual read-only
+  .27 identity observation: original verified journal, same
+  container and inode identities twice, writer held, HTTP 200.
+- Contract distinguishes healthy baseline from actual incident,
+  stopped state, and exact independently approved repair.
+- NEXT: closed incident evidence manifest and admission boundary
+  review; integrated qualification when available. No production
+  fault injection, release authorization or deployment.
+
+## 2026-11-27 — historical signed-pair incident reference (unit-tested)
+
+- Narrow #472 CI 8/8 PASS; #497 CI initially in progress.
+- Add offline incident-reference reviewer with independent hold,
+  scope, receipt, journal and online evidence anchors, retained
+  source and OCI chain/local image validation.
+- 119 focused tests and quality PASS. Integrated LXC114 reference
+  command blocked; not repeated or bypassed.
+- Historical signed .28 reference and synthetic journal do not
+  establish installed pair or failure attribution. No authority.
+- NEXT: exact installed-incident evidence contract and admission
+  review; integrated qualification when available. Production
+  unchanged; narrow .29 remains separate.
+
+## 2026-11-27 — durable isolated incident hold and repair admission
+
+- Exact #496 and narrow #472 CI 8/8 PASS; no new tags.
+- Add protected offline incident hold, exact config/full SQLite
+  history/scope hash receipt, owned marker; no release or START.
+- 187 focused tests and quality PASS. Actual isolated fixture:
+  identical replay, duplicate/wrong anchor refused, real writer
+  lease and competing mode prepare blocked. DB and config hashes
+  preserved; hold marker retained. No Docker start.
+- Document forward repair admission gates; no actual repair
+  candidate or production incident operator qualified.
+- NEXT: bind incident evidence to exact signed installed pair
+  and cutover journal; qualify integrated QA when available.
+  No rollback exception, release or production change.
+
+## 2026-11-27 — general runtime failure recovery contract
+
+- Exact #495 and narrow #472 CI 8/8 PASS; no new tags.
+- Add separate general-fault recovery contract: preboot previous
+  pair review, report-only same-runtime pause review, postboot
+  general/unknown fault forward repair or incident hold review.
+- Add read-only standalone SQLite evidence reviewer; all
+  authorization flags false, classification/parity caller supplied.
+- 180 focused tests and quality PASS. Real offline synthetic
+  CLI: equal 3-row copies, stale 3-row rescue vs 4-row live with
+  pending intent, exact file hashes preserved. No Docker starts.
+- NEXT: qualified forward-repair and incident-hold evidence,
+  bind signed pair/journal and complete integrated QA when
+  available. No downgrade exception or production changes.
+
+## 2026-11-27 — rollback archive identity and admission review
+
+- Exact #494 and narrow #472 CI 8/8 PASS; no new release tags.
+- Harden protected archive member uniqueness and regular-file
+  checks without changing monitor parity or rollback direction.
+- 59 focused tests and quality PASS. Actual exact retained
+  .27/.28/.29 archives: 28/28 monitor input parity. Exact #493
+  unsigned scope has same names but changed app.py: strict
+  rollback NO-GO. Byte review only, no signature reverification.
+- NEXT: general runtime failure recovery contract and admission
+  evidence, separate narrow release owner approval, approved
+  public receipt migration, complete integrated QA when available.
+  No production changes or compatibility override.
+
+## 2026-11-27 — exact Report Worker candidate scope review
+
+- Exact #493 and narrow #472 CI 8/8 PASS. .29/.30 tags absent.
+- Exact #493 unsigned review snapshot, 648 Git-verified files,
+  reproducible SHA256 0baf9e0a9bf6f9c78353e830d3ed0004e116b16b1092b07ede802583852f8afb.
+- All 29 previous smoke build inputs unchanged; two narrow
+  receipt preflight/publication functions match .29 AST.
+- 108 focused tests and quality PASS. Narrow .29 archive unchanged.
+- NO-GO for Report Worker release: integrated operator/runtime
+  acceptance, signed pair, production recovery/rollback and owner
+  contract not qualified. No new version, tag or signing.
+- NEXT: recovery/rollback contract and candidate admission review;
+  integrated qualification when available, separate approved
+  legacy receipt migration. Production remains .27, healthy.
+
+## 2026-11-27 — durable synthetic report delivery evidence
+
+- Exact #492 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Add stopped delivery review tied to exact launch/acceptance,
+  accepted history, synthetic events and pending report marker.
+- Bind resumed delivery to prior paused receipt and exact stopped
+  baseline; write-once evidence and identical replay.
+- 224 focused tests and quality gate PASS. Integrated Docker QA
+  still pending; previous blocked execution not retried.
+- NEXT: review signed feature-capable candidate and owner policy;
+  qualify complete runtime and delivery integration when available.
+  No production changes or real Telegram delivery proof.
+
+## 2026-11-27 — durable Report Worker launch/acceptance receipt
+
+- Exact #491 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Persist token-scoped launch receipt after successful one-shot
+  START, bind ARM, immutable ID and observed StartedAt.
+- Observe only matching launch, retain first acceptance and full
+  accepted SQLite row prefix; recheck fresh readiness on replay.
+- 216 focused tests and quality gate PASS. Integrated Docker
+  qualification still pending; earlier blocked call not repeated.
+- NEXT: durable resumed report-delivery evidence, integrated
+  qualification when available, signed/owner-bound policy.
+  No production startup or deployment authorization.
+
+## 2026-11-27 — fixed Report Worker START profile (unit-tested)
+
+- Exact #490 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Add fixed QA runtime validator with exact synthetic probe hashes,
+  closed source/resolved Compose, effective environment, immutable
+  START binding and readiness/history observation.
+- Retain original probe bytes in repository, verify both probe hashes.
+- 209 focused tests and quality gate PASS. Actual integrated Docker
+  START not executed: integration tool call blocked, no bypass.
+- NEXT: actual integrated Compose/runtime qualification, durable
+  acceptance and resumed delivery evidence; signed candidate and
+  owner-bound production contract. No production changes.
+
+## 2026-11-27 — immutable one-shot mode START witness
+
+- Exact #489 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add pinned ARM and one-shot START witness to durable mode journal,
+  exact stopped image/container/config/HostConfig/mount hashes and
+  history. Claim before marker release, start by immutable ID.
+- Reject direct config-only release after ARM; 202 focused tests
+  and quality gate PASS. Actual isolated exact-ID start/repeat
+  refusal, same-name replacement refusal with fence retained.
+- Updated code real SIGKILL after claim/marker release before Docker
+  START; retry refused, never started, SQLite SHA256 unchanged.
+- NEXT: bind real Report Worker probe and effective Compose/runtime
+  policy; verify readiness/history after launch, signed and owner
+  plan review. Fixed sleep witness only; no production authority.
+
+## 2026-11-27 — durable bidirectional QA mode operator
+
+- Exact #488 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add token-scoped prepare/recover/release operator, protected
+  stopped history/config hashes, owned fence and durable phases.
+  No Docker start or deployment authorization.
+- 195 focused tests and quality gate PASS. Real isolated SIGKILL
+  before marker, after config, before marker clear; recovery PASS.
+  Pending fence refused actual writer_lease. Reverse transition
+  reproduced .env and retained SQLite SHA256. No Docker start.
+- NEXT: bind operator to exact stopped container/image and reviewed
+  plan; integrate one-shot START gate with bidirectional transition
+  and signed feature-capable candidate. Production untouched.
+
+## 2026-11-27 — same-database mode transition fault-injection QA
+
+- Exact #487 and #472 CI 8/8 PASS; narrow .29 tag absent.
+- Real offline LXC114 same unsigned image and database, initial
+  enabled -> paused -> enabled, 60/144/204 rows, same inode,
+  all previous row-prefix hashes preserved, SQLite quick_check OK.
+- Config publication SIGKILL 137 before journal completion, owned
+  marker and exact history recovery PASS; paused writer SIGKILL
+  137, prior history and report metadata retained.
+- Real reservation/delivery methods with loopback API: two distinct
+  reports and three ordinary notifications across stages, no duplicate
+  daily/pending weekly delivery, no paused report. Pending retained.
+- Initial docker logs unsupported; graceful initial stop completed;
+  subsequent QA containers explicitly used json-file logging.
+- NEXT: reusable protected transaction operator with complete crash
+  boundary and owner-plan binding, separate signed runtime qualification.
+  One-off rehearsal only; no production migration or authorization.
+
+## 2026-11-27 — exact unsigned Report Worker QA candidate
+
+- Exact #486 and separate #472 CI 8/8 PASS; .29/.30 tags absent.
+- Reproducible unsigned git snapshot of exact #486, 637 files,
+  SHA256 01f230c138dd6c0626c27a95e83df606b52162856b40e0d21be0c640dc39d9bc.
+- 29 build inputs compared to .28 including VERSION; only app.py
+  changed. Offline COPY-only derived QA image; all 26 runtime
+  files match snapshot. No new release identity.
+- Actual paused and enabled smoke on separate disposable databases:
+  25/34 rows per phase, readiness and SQLite PASS, graceful stop,
+  ordinary-only paused and one synthetic report enabled.
+- In-image 41 final focused tests PASS; initial 2s deadline test
+  intermittent failure, isolated retry PASS, test-only 5s budget
+  and longer trickle; revised HTTP suite 7/7 PASS. Runtime unchanged.
+- NEXT: protected same-database mode transition and fault injection,
+  bind owner-reviewed exact plan and signed feature-capable pair.
+  No full release build, signature, publication or deployment.
+
+## 2026-11-27 — actual DynamicUser state and signed mode-plan binding
+
+- Exact #485 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Actual offline DynamicUser service created private state and public
+  alias; relocate dedicated test private state into QA fixture and
+  migrate with unchanged receipt hash. Not a live-path migration.
+- Add pinned mode-plan review of exact receipt/config, stopped runtime,
+  SQLite identity, online proof, retained archive and offline OCI.
+  Require known static pause implementation in signed source.
+- 186 focused tests and quality gate PASS. Current unsigned app
+  matches static feature; real signed .28 pair specifically refused
+  missing feature, exit 3, config/receipt/SQLite SHA256 unchanged,
+  never started. No runtime or owner authorization.
+- NEXT: prepare feature-capable candidate review and owner-bound
+  transaction operator, signed runtime qualification, separate
+  production receipt migration approval. Narrow .29 unchanged.
+
+## 2026-11-27 — durable legacy public receipt migration QA
+
+- Exact #484 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add isolated prepare/recover migration rehearsal with private
+  receipt fingerprint, exact legacy alias and staged replacement
+  inode; never copy private receipt or authorize deployment.
+- 181 focused tests and quality gate PASS; seven new tests also
+  pass as nobody. Real QA systemd active timer refused prepare.
+- Real SIGKILL after durable unlink before rename: private receipt
+  SHA256 unchanged; exact staged directory published on recovery;
+  repeated recovery PASS. Test units removed, no Docker start.
+- NEXT: bind exact same-runtime plan to verified feature-capable
+  pair and owner review, implement protected transaction operator.
+  Separately prepare production receipt migration approval and
+  qualify signed release. QA utility not production operator.
+  Production alias/timer unchanged; narrow .29 awaiting approval.
+
+## 2026-11-27 — exact same-runtime mode transition planning
+
+- Exact #483 and separate #472 CI 8/8 PASS; no .29 release tag.
+- Add read-only offline QA planner: preserve unrelated config bytes,
+  exact source/target SHA256, pair, image/container and SQLite identity.
+  Reject duplicate/complex/missing mode assignments; no authorization.
+- 174 focused tests and quality gate PASS. Real isolated Compose
+  source/target config differs only in report mode; inverse reproduces
+  original bytes. .env, receipt and SQLite hashes unchanged;
+  disposable container never started.
+- Production has no explicit report-mode assignment. Legacy public
+  symlink/private target confirmed, old timer enabled/active and
+  DynamicUser checker failed status 200. Separate migration blocked.
+- NEXT: rehearse authorized legacy receipt migration independently,
+  bind production plan to fresh verified receipt/owner evidence,
+  implement protected same-runtime transition and signed candidate QA.
+  Narrow .29 candidate unchanged, no deployment authorization.
+
+## 2026-11-27 — installed supervisor review and release scope
+
+- Exact #482 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Real read-only installed .27 review: private pair/verified journal,
+  retained archive, 34 signed inputs, exclusive systemd owner,
+  mounted SQLite/fence, local OCI pin/revision, live owner lease,
+  no pending markers, stable runtime identity PASS.
+- Public receipt preflight remains BLOCKED (legacy DynamicUser
+  alias). Separate from healthy monitor. No migration or deployment.
+- Add review-installed-supervisor.py and six focused tests; total
+  167 focused tests and quality gate PASS. Temporary review files
+  removed. Initial missing-lock test used a mock by mistake; fixed.
+- Consolidate distinct release scopes in
+  docs/REPORT_WORKER_RELEASE_SCOPE.md. Report Worker changes runtime
+  and must not use strict-parity downgrade to .28.
+- NEXT: design production same-runtime recovery transaction with
+  explicit signed/owner-bound policy, then signed candidate QA;
+  resolve receipt migration separately under approved maintenance.
+
+## 2026-11-27 — protected QA journal and effective Compose provenance
+
+- Exact #481 and separate #472 CI 8/8 PASS.
+- Read-only production spot check: .27 receipt equals verified
+  cutover journal pair; retained archive SHA256 matches, mode 0600.
+- Bind QA policy, token-scoped synthetic journal, retained source,
+  Compose source and resolved plan to second external SHA256.
+- Compare closed actual Compose plan and inspected effective
+  environment, original image command and selected HostConfig.
+- 161 focused tests and quality gate PASS. Real isolated .28
+  Compose create-only review PASS; wrong anchor, changed journal
+  and changed Compose source refused. No runtime start.
+- NEXT: consolidate release scope, production-specific read-only
+  transaction/unit verification, separately signed report-worker
+  qualification. QA journal not production provenance. No
+  deployment authorization; narrow .29 candidate unchanged.
+
+## 2026-11-27 — bound offline pair review, schema v2
+
+- Corrected exact #479/#480 and separate #472 CI 8/8 PASS.
+- Export full identity after actual online .28 pair reverification;
+  independently pin evidence SHA256 for offline review.
+- Bind schema v2 to protected receipt, source archive, closed QA
+  configuration, exact stopped Docker ID and image, ten OCI layers,
+  selected restrictive HostConfig; v1 remains unchanged.
+- 153 focused tests and quality gate PASS. Actual LXC114 bound
+  offline review PASS with synthetic receipt derived from real
+  signed-pair evidence. Wrong anchor and pending marker refused;
+  no Docker start, no fabricated RepoDigests.
+- NEXT: production receipt/transaction provenance, resolved Compose
+  and comprehensive runtime configuration checks, separately
+  signed report-worker qualification. No deployment authorization.
+
+## 2026-11-27 — preserved offline OCI byte chain
+
+- Reverify published .28 source signature, OCI signature and
+  attestations against exact commit and signed index: PASS.
+- Preserve raw OCI index, amd64 child, config and ten compressed
+  blobs via Skopeo; transfer to protected offline LXC114.
+- Verify exact hashes, descriptor sizes, decompressed DiffIDs and
+  actual local image ID/platform/revision/ordered layers.
+- 146 focused tests and quality gate PASS; real offline chain PASS,
+  tampered index and pending marker refused. RepoDigests stays empty.
+- NEXT: bind online signature evidence and offline bytes to protected
+  signed-pair policy, effective config and HostConfig. Policy v1
+  unchanged; no startup, release or production authorization.
+
+## 2026-11-27 — versioned signed-pair policy review
+
+- Exact #478 and #472 CI 8/8 PASS; .29 tag absent.
+- Implement read-only QA schema v1, bind protected receipt, exact pair,
+  retained archive, private config, Docker Config and image identity.
+- Reject unconfirmed RepoDigests, changed pair, duplicate JSON keys,
+  mount drift and unauthorized mode; no startup/deploy authority.
+- 140 focused tests and quality gate PASS. Synthetic positive proof
+  only; real isolated imported .28 image without RepoDigests refused,
+  disposable container never started, missing policy and non-QA refused.
+- NEXT: verified offline OCI transfer and end-to-end signed pair review,
+  effective config resolution and HostConfig/production mount policy.
+  Pending-marker check added after Docker trial; repeat exact CLI QA.
+  No production changes or signing authorization.
+
+## 2026-11-27 — automatic generation boot evidence
+
+- Exact #477 and separate #472 CI 8/8 PASS. No .29 tag.
+- Exact #477 enabled isolated systemd fixture: automatic generation
+  two START after real LXC114 reboot; same ID, prior evidence hashes
+  retained, all phases ready (age .634s), 856 stopped rows preserved.
+- Second real reboot without new seal: automatic START refused exit 3,
+  unchanged StartedAt, SQLite and journal hashes, inode and integrity.
+  History 793/823/856/964; ordinary synthetic alerts only.
+- Disabled and removed dedicated unit and disposable container.
+- NEXT: signed-pair policy schema and production transaction binding,
+  negative receipt/identity/mount tests, then isolated signed QA.
+  Production paused remains blocked; no release authorization.
+
+## 2026-11-27 — append-only QA restart generations
+
+- Exact #476 and separate #472 CI 8/8 PASS; no .29 release tag.
+- Repeat #476 isolated reboot: init PID changed, SHA256 unchanged,
+  manually supervised restart PASS, stopped history 670/694,
+  third START refused.
+- Explicit next-generation seal after fresh acceptance; bind prior
+  policy/claim/acceptance hashes, reject gaps/orphans/drift. Bound to
+  eight restart generations, no old claim reset. Each acceptance
+  now binds exact claim SHA256.
+- 128 focused tests and quality gate PASS.
+- Real new-code isolated Docker: initial plus two reviewed restarts,
+  same ID, first generation evidence unchanged; 694/724/757/793 rows,
+  all phases fresh, three ordinary alerts, no reports. Generation 3
+  SIGKILL before Docker request, retry refused, SHA256 unchanged.
+- NEXT: multi-generation guest reboot and automatic boot boundary,
+  signed production design and qualification. Exact #476 SIGKILL
+  not repeated separately; superseding revision tested. No production
+  changes or release authorization.
+
+## 2026-11-27 — guest reboot, restart interruption and stopped baseline
+
+- Exact #475 and separate #472 CI 8/8 PASS. No .29 tag.
+- Real isolated guest reboot on #475: init PID changed, database and
+  policy SHA256 unchanged, no Docker autostart, manual systemd
+  restart accepted; 394/421/451 rows, third START refused exit 3.
+- Separate #475 SIGKILL after restart claim before Docker start:
+  retry refused, StartedAt unchanged, SQLite and policy SHA256
+  unchanged (481 rows).
+- Close seal-to-stop history gap with full stopped baseline in
+  restart claim and acceptance; reject old claim without baseline.
+- 124 focused tests and quality gate PASS. New code real offline
+  Docker restart: 505/553/586 rows, all 553 stopped rows verified,
+  three fresh samples per phase, ordinary alerts only, exit 0.
+- NEXT: generation-bound persistent policy design, repeat reboot
+  and interruption tests on revised code, signed qualification.
+  No automatic boot acceptance or production changes.
+
+## 2026-11-27 — persistent verified restart policy QA
+
+- Exact PR #474 and separate #472 CI 8/8 PASS. No .29 release tag.
+- Seal one explicit QA restart after positive three-phase acceptance.
+  Bind exact container/image, mode, StartedAt, eight evidence hashes,
+  database inode/history; require clean stop and durable restart claim.
+- 122 focused tests and quality gate PASS.
+- Actual offline LXC114 systemctl restart PASS; repeated with temporary
+  unit file because initial transient unit unloaded on stop.
+  Third START rejected by claim (exit 3), unchanged StartedAt.
+  History 331/358/394; inode and selected metadata retained; after
+  restart three fresh samples per phase (age .932s), two ordinary
+  alerts and no reports, clean exit 0.
+- NEXT: real isolated guest reboot and restart-claim interruption
+  tests, multi-generation policy design and signed qualification.
+  Production paused still unavailable; .29 candidate unchanged.
+
+## 2026-11-27 — production report-mode boundary
+
+- Exact PR #473 CI 8/8 PASS. Separate narrow #472 CI 8/8 PASS,
+  revised exact owner review packet prepared, publication not approved.
+- Fail closed on unapproved production report mode at both resolved
+  Compose preboot plan and every normal supervisor start.
+- 118 focused tests and quality gate PASS. Real networkless Docker
+  inspect default/enabled accepted, paused/invalid refused, no starts.
+  Actual resolved Compose paused plan refused after isolated retry.
+- Document production transaction design in
+  docs/REPORT_MODE_PRODUCTION_TRANSACTION.md: durable signed pair,
+  protected configuration, startup claim and persistent verified mode.
+- NEXT: implement persistent policy and owned transaction in isolated
+  QA, verify systemd process restart/reboot boundaries, signed QA.
+  Production pause remains unavailable. No production changes.
+
+## 2026-11-27 — supervisor revalidation on every normal START
+
+- PR #471 exact CI 8/8 PASS.
+- Keep narrow updater candidate separate from report-worker runtime.
+- Revalidate stopped container, signed receipt (non-QA mode) and
+  writer ownership under each startup gate; start and wait by pinned ID.
+- 108 focused tests and quality gate PASS.
+- Real networkless LXC114 disposable sleep container first start PASS;
+  replacement under identical name and image refused, never started.
+- NEXT: protected production recovery-mode transaction design,
+  signed-pair integration and real signed supervisor QA.
+  No production service or signed release changes.
+
+## 2026-11-27 — three-phase QA runtime acceptance
+
+- PR #470 exact CI 8/8 PASS.
+- Add QA-only durable runtime acceptance receipt using claimed launch,
+  actual loopback readiness, original history/metadata and inode checks,
+  three fresh post-start samples on each of L1/L2/L3.
+- 65 focused tests and project quality gate PASS.
+- Real networkless LXC114: actual app Pro3EM polling with synthetic
+  readings. Missing L3 returned HTTP 503, acceptance refused; restored
+  L3 without restart, all phases accepted (3 samples each, age 0.92s).
+  Receipt replay identical, StartedAt unchanged, ordinary alert only,
+  exit 0. Original 148-row baseline preserved.
+- NEXT: consolidate production-specific transaction design and
+  release candidate review, independent signed QA and owner approval.
+  Short QA window is not the production electrical gate.
+
+## 2026-11-27 — mandatory QA supervisor START claim
+
+- PR #469 exact CI 8/8 PASS.
+- Automatically detect dedicated recovery QA layout and require
+  offline one-shot supervisor, exact armed identity and START baseline.
+- Persist a consumed START claim before Docker request; reject repeat
+  claims and require the exact claim during read-only observation.
+- 58 focused tests and quality gate PASS; extracted helper to meet
+  function-length policy.
+- Real LXC114: missing intent refused, one verified startup without
+  optional ID flags, history 126/147, ordinary alert only, exit 0.
+  Repeat supervisor refused with unchanged StartedAt.
+- Separate real SIGKILL after durable claim but before Docker start:
+  never-started container, repeat refused, 148-row SQLite unchanged.
+- NEXT: full runtime acceptance and production-specific design;
+  signed candidate preparation and isolated signed QA.
+  No direct Docker guard, production changes or release authorization.
+
+## 2026-11-27 — interrupted QA START observation
+
+- Add durable one-shot START intent bound to exact armed ID, old
+  StartedAt, SQLite identity and historical/metadata hashes.
+- Observe already-running QA container without starting or adopting it.
+  Require new StartedAt, unchanged original prefix and additional rows.
+- 53 focused tests and quality gate PASS.
+- Real networkless LXC114: stopped observation refused; separate
+  operator SIGKILL after offline supervisor start, live observation
+  103/124 rows, exact replay with unchanged StartedAt, ordinary
+  synthetic alert only, exit 0, repeat intent refused.
+- NEXT: automatically bind intent to supervisor startup, complete
+  runtime acceptance and interrupted lifecycle review, signed candidate.
+  History observation alone does not authorize deployment.
+
+## 2026-11-27 — durable armed container identity
+
+- PR #467 exact CI 8/8 PASS.
+- Persist exact container ID, pinned QA image and paused mode before
+  releasing owned marker. Replay requires the same stopped container.
+- Optional offline supervisor expected ID checks paused mode and starts
+  by immutable ID, not mutable name. No production path enabled.
+- 49 focused tests and quality gate PASS. Initial function-length
+  violation fixed by extracting the identity validation helper.
+- Real networkless LXC114 SIGKILL before and after marker removal:
+  fence blocks before clear; exact replay after clear succeeds.
+  Wrong ID and same-name replacement refused. Paused runtime history
+  82/103, inode and report markers retained; ordinary alert only.
+- NEXT: durable runtime acceptance and START interruption recovery;
+  automatic signed supervisor binding and candidate preparation.
+  No production changes or signed rollback exception.
+
+## 2026-11-27 — durable QA recovery startup fence
+
+- PR #466 exact CI 8/8 PASS.
+- Publish existing shared pending marker before prepare, retain through
+  configuration recovery, require exact owner and validated stopped
+  paused container before clearing. Foreign/orphan markers fail closed.
+- 46 focused tests and project quality gate PASS.
+- Actual networkless LXC114: old enabled container blocked before and
+  after config recovery; stale arm refused; recreated paused container
+  blocked until arm. Offline supervisor start PASS, history 61/82,
+  inode and pending/daily markers preserved, ordinary alert only.
+- NEXT: journal container identity and runtime acceptance, crash tests
+  at recreation/arm/start boundaries, signed candidate preparation.
+  No production integration or signed release authorization.
+
+## 2026-11-26 — durable recovery-mode config transaction QA
+
+- PR #465 exact CI 8/8 PASS.
+- QA-only prepare/recover journal, exact old/new configuration hashes,
+  atomic fsync publication, exclusive operator/writer/transaction locks.
+- 41 focused tests and quality gate PASS.
+- LXC114 real SIGKILL after config publication before journal commit:
+  replay converged to paused; second replay identical. Active writer
+  refused; database SHA256 and inode unchanged, 41 rows and pending kept.
+- Separate real offline Compose/supervisor start with recovered mode:
+  41/61 history, prefix/inode and pending/daily markers retained;
+  ordinary synthetic alert only, exit 0, pre-runtime rescue retained.
+- Initial QA setup failures: umask-created fence mode and sysfs
+  bonding_masters miscount; corrected on disposable layout.
+- NEXT: full owned startup fence/journal across container recreation,
+  signed pair and production lock integration, signed candidate QA.
+  Configuration-only transaction is not production authorization.
+
+## 2026-11-26 — protected recovery supervisor rehearsal
+
+- PR #464 exact CI 8/8 PASS.
+- Discovered create-only --no-recreate retains stale container env
+  after changing .env. Add exact expected mode check in offline QA
+  supervisor only; do not infer actual mode from desired config.
+- 98 focused tests and project quality gate PASS.
+- Actual LXC114 root-controlled Compose config and shared fence:
+  stale enabled container refused; recreated stopped QA container
+  with same unsigned image ID accepted paused mode on repeat probe.
+  History 20/41, inode, delivered marker and weekly pending preserved.
+  No additional report; ordinary synthetic alert and exit 0.
+- NEXT: production transaction/recovery design, signed candidate and
+  full supervised signed QA. No production changes or QA bypass.
+
+## 2026-11-26 — same-runtime scheduled report recovery profile
+
+- PR #463 exact CI 8/8 PASS.
+- Add immutable startup policy SCHEDULED_REPORTS_MODE=enabled|paused.
+  Paused prevents the report worker and direct scheduled delivery
+  without changing pending, opt-in or delivered markers.
+- 195 focused tests and project quality gate PASS.
+- Real networkless LXC114 same-image paused/enabled restart: ordinary
+  alert accepted while paused, no scheduled delivery; enabled accepts
+  one synthetic daily report. History 9/39, prefix and inode match,
+  weekly pending and both preferences preserved, both exit 0.
+- Prefer identical signed runtime plus paused profile for report-only
+  recovery. No relaxed signed rollback guard, no signed candidate yet.
+- NEXT: exact CI, root-protected configuration/restart acceptance and
+  signed candidate preparation. Production apply remains disabled.
+
+## 2026-11-26 — stopped-writer report intent guard
+
+- PR #462 exact CI 8/8 PASS.
+- Close the late-report race: reject any report pending key at live
+  photo check and stopped-writer backup/rescue, not only updater preflight.
+- Resume the original supervisor after preboot refusal, but leave
+  previous-pair-restored and do not certify unresolved delivery.
+- 86 focused tests and quality gate PASS; actual networkless QA copies
+  with 215 measurements reject pending rescue and accept reconciled
+  rescue with history/inode parity.
+- Document future signed pair review in
+  docs/REPORT_WORKER_ROLLBACK_CONTRACT.md. Actual .28 comparison:
+  27/28 monitor inputs identical, app.py differs. Strict guard unchanged.
+- NEXT: exact CI, signed compatible recovery target design and real
+  signed-image supervised QA. No production or release changes.
+
+## 2026-11-26 — protected report reconciliation rehearsal
+
+- PR #461 exact CI 8/8 PASS.
+- Implement QA-only protected lock ordering and safe inode checks,
+  reject pending update markers, require synchronous=FULL.
+- 14 focused tests and quality gate PASS.
+- Real LXC114: all four lock-contention and both marker rejection
+  scenarios blocked before backup. Positive repair of copied fixture
+  preserved 215 measurement rows, inode, original evidence and rescue.
+- NEXT: exact CI, signed cross-version compatibility contract and
+  production-specific stopped-owner/mount/receipt acceptance.
+  Production apply remains disabled; no signed release changes.
+
+## 2026-11-26 — isolated scheduled HTTP deadline
+
+- Separate scheduled HTTP into a bounded subprocess without SQLite
+  access; STOP cancels and reaps it. Keep ordinary transport unchanged.
+- 12-second per-request wall-clock budget, 64 KiB response limit,
+  strict HTTP/API acknowledgement parity, no redirects.
+- 190 focused tests and project quality gate PASS.
+- Networkless LXC114 derived image: active slow HTTP stopped in 266 ms
+  (exit 0), pending identity and SQLite intact. New process did not
+  resend; deadline without STOP left monitor running, child reaped.
+  First aggregate restart probe failed an assertion; separate restart
+  passed. Default QA log driver did not support docker logs, so the
+  isolated test used json-file. Production configuration unchanged.
+- NEXT: exact CI, protected production reconciliation and signed
+  cross-version compatibility. No automatic resend or deployment.
+
+## 2026-11-26 — unique report reservation identity
+
+- Reserve a random 128-bit logical attempt ID alongside the report period.
+  Require exact period and ID for both runtime and operator completion.
+- Reject stale acknowledgements and review fingerprints even for the same
+  period; never automatically reinterpret legacy period-only reservations.
+- 220 focused tests and quality gate PASS. Networkless LXC114 derived
+  Docker QA verified stale runtime ACK and stale operator review refusal,
+  correct current resolution and 11 preserved historical measurements.
+- Initial QA-only build context file mode prevented unprivileged import;
+  rebuilt with readable app.py and reran successfully.
+- NEXT: exact CI, active HTTP shutdown/deadline design, protected
+  production reconciliation and cross-version rollback contract.
+  No production writes or signed release changes.
+
+## 2026-11-26 — operator report reconciliation prototype
+
+- PR #458 exact CI 8/8 PASS.
+- Add read-only inspection and explicit QA-only reconciliation tool.
+  Require exact state fingerprint, writer/transaction gates, new private
+  rescue and operator-attested evidence; atomically settle and audit.
+- Nine focused tests and quality gate PASS. Actual LXC114 copy of
+  SIGKILL fixture: stale fingerprint refused, delivered outcome with
+  simulated message 42 committed, 11 measurement rows preserved,
+  original evidence and pending rescue intact.
+- NEXT: unique per-attempt reservation identity, protected production
+  fences/approval design, active HTTP deadline and crash acceptance.
+  Period-only evidence cannot identify a later retry of the same period.
+- No production reconciliation, signed release or rollback authorization.
+
+## 2026-11-26 — durable scheduled report delivery intent
+
+- PR #457 exact CI 8/8 PASS. Reproduced slow accepted loopback HTTP
+  acknowledgement in networkless Docker: exit 137 after 20 s,
+  remote accepted but local delivered marker absent.
+- Persist per-stream send intent before requests; atomically settle
+  acknowledged periods; only explicit rejection/cancellation clears an
+  unaccepted intent. Unknown outcomes suppress subsequent automatic sends.
+- New updater preflight rejects unresolved report intents. Old signed
+  releases do not understand these keys; strict rollback guard unchanged.
+- Actual derived Docker image forced-stop/restart QA PASS: persisted
+  reservation, unchanged simulated remote accepted count, no false
+  delivered marker, SQLite quick_check OK, restart stops normally.
+- NEXT: exact CI, operator reconciliation with explicit evidence, and
+  active HTTP shutdown/deadline design. Do not clear reservations
+  automatically or claim exactly-once/fully graceful shutdown.
+- Production .27 unchanged; new code remains unsigned QA only.
+
+## 2026-11-26 — report worker shutdown and rollback compatibility
+
+- Integrate PR #450 onto PR #456 in a separate unsigned QA branch.
+  Initial 216 focused tests and quality gate passed.
+- Exact signed .28 versus candidate monitor inputs: 27/28 identical;
+  app.py differs. Keep strict signed rollback compatibility unchanged.
+- Networkless LXC114 derived Docker image storage roundtrip passed
+  (3/6/9 rows, WAL, inode, PHOTO and daily summary marker preserved).
+- Reproduced Docker exit 137 at the 20-second stop deadline while the
+  report worker waited for an explicit 30-second HTTP 429 retry.
+- Make scheduled retry delay interruptible and refuse new scheduled
+  sends after STOP. Focused tests 165/165 and quality gate PASS.
+  Same networkless Docker stop probe: exit 0, elapsed <1s (integer
+  clock), no retry, no false delivery marker, SQLite quick_check OK.
+- NEXT: exact CI, in-flight slow HTTP shutdown/ambiguous delivery tests,
+  then a reviewed cross-version signed rollback contract. This is not
+  full shutdown or production release acceptance.
+- Production remains .27. No changes to published signed .28 artifacts.
+
 ## 2026-11-26 — three-phase production voltage window
 
 - Add a separate read-only cutover review helper for a 900-second window

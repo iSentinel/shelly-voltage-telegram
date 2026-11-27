@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from writer_fence import (  # noqa: E402
     WriterFenceError,
     fence_directory,
+    quiescent_writer_lease,
     update_gate,
 )
 
@@ -46,6 +48,15 @@ def args_parser() -> argparse.Namespace:
     parser.add_argument("--require-pair-receipt", action="store_true")
     parser.add_argument("--source-archive-dir", type=Path)
     parser.add_argument("--qa-offline", action="store_true")
+    parser.add_argument(
+        "--expected-container-id",
+        help="QA-only: bind startup to a previously armed immutable ID",
+    )
+    parser.add_argument(
+        "--expected-report-mode",
+        choices=("enabled", "paused"),
+        help="QA-only: require the exact container startup report mode",
+    )
     parser.add_argument("--once", action="store_true")
     return parser.parse_args()
 
@@ -224,6 +235,57 @@ def image_revision(info: dict) -> object:
     return labels.get("org.opencontainers.image.revision")
 
 
+def validate_report_mode(info: dict, expected: str) -> None:
+    """Reject absent, duplicated or stale recovery mode in Docker config."""
+    env = info.get("Config", {}).get("Env")
+    if not isinstance(env, list) or not all(
+        isinstance(item, str) for item in env
+    ):
+        raise BootBlocked("SVT_REPORT_MODE_ENV_INVALID")
+    values = [
+        item.partition("=")[2]
+        for item in env
+        if item.partition("=")[0] == "SCHEDULED_REPORTS_MODE"
+    ]
+    if values != [expected] or expected not in ("enabled", "paused"):
+        raise BootBlocked("SVT_REPORT_MODE_MISMATCH")
+
+
+def production_report_policy(info: dict) -> None:
+    """Allow default/enabled only until signed recovery is integrated."""
+    env = info.get("Config", {}).get("Env")
+    if not isinstance(env, list) or not all(
+        isinstance(item, str) for item in env
+    ):
+        raise BootBlocked("SVT_REPORT_MODE_ENV_INVALID")
+    entries = [
+        item
+        for item in env
+        if item.partition("=")[0] == "SCHEDULED_REPORTS_MODE"
+    ]
+    if entries not in ([], ["SCHEDULED_REPORTS_MODE=enabled"]):
+        raise BootBlocked("SVT_REPORT_MODE_PRODUCTION_RECOVERY_UNAVAILABLE")
+
+
+def validate_expected_identity(info: dict, args: argparse.Namespace) -> None:
+    """Check optional QA-only identity and report-mode expectations."""
+    expected_id = getattr(args, "expected_container_id", None)
+    if expected_id is not None:
+        if not args.qa_offline:
+            raise BootBlocked("SVT_CONTAINER_ID_QA_ONLY")
+        if (
+            not re.fullmatch("[a-f0-9]{64}", expected_id)
+            or info.get("Id") != expected_id
+            or getattr(args, "expected_report_mode", None) != "paused"
+        ):
+            raise BootBlocked("SVT_ARMED_CONTAINER_ID_MISMATCH")
+    expected = getattr(args, "expected_report_mode", None)
+    if expected is not None:
+        if not args.qa_offline:
+            raise BootBlocked("SVT_REPORT_MODE_QA_ONLY")
+        validate_report_mode(info, expected)
+
+
 def validate_container(info: dict, args: argparse.Namespace) -> None:
     """Refuse a foreign running writer and independent Docker restarts."""
     if info.get("State", {}).get("Running") is not False:
@@ -241,6 +303,9 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
     ]
     if len(shared) != 1:
         raise BootBlocked("SVT_FENCE_MOUNT_MISMATCH")
+    validate_expected_identity(info, args)
+    if not args.qa_offline:
+        production_report_policy(info)
     if args.qa_offline:
         if not args.container.startswith("svt-qa-"):
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")
@@ -278,12 +343,28 @@ def pending(database: Path) -> bool:
         return _pending_under_gate(database)
 
 
-def start_if_clear(name: str, database: Path) -> bool:
-    """Hold one transaction lock across pending check and Docker start."""
-    with update_gate(database):
-        if _pending_under_gate(database):
+def checked_identity(info: dict, args: argparse.Namespace) -> str:
+    """Validate current policy and obtain an immutable Docker identity."""
+    validate_container(info, args)
+    identity = info.get("Id")
+    if not isinstance(identity, str) or not re.fullmatch(
+        "[a-f0-9]{64}", identity
+    ):
+        raise BootBlocked("SVT_CONTAINER_ID_INVALID")
+    return identity
+
+
+def start_if_clear(args: argparse.Namespace, identity: str) -> bool:
+    """Revalidate the exact container inside each shared startup gate."""
+    with update_gate(args.database):
+        if _pending_under_gate(args.database):
             return False
-        started = docker("start", name)
+        with quiescent_writer_lease(args.database):
+            if checked_identity(inspect(args.container), args) != identity:
+                raise BootBlocked("SVT_CONTAINER_ID_CHANGED")
+        if STOP:
+            return False
+        started = docker("start", identity)
         if started.returncode:
             raise BootBlocked("SVT_DOCKER_START_FAILED")
     return True
@@ -308,17 +389,17 @@ def wait_container(name: str) -> int:
             child.wait(timeout=5)
 
 
-def supervise(name: str, database: Path, once: bool) -> int:
+def supervise(args: argparse.Namespace, identity: str) -> int:
     """Restart only after a shared-gate check; stop on any pending update."""
     attempts = 0
     while not STOP:
-        if not start_if_clear(name, database):
+        if not start_if_clear(args, identity):
             print("SKIP_PENDING")
             return 0
         print("SUPERVISED_START_PASS", flush=True)
-        if once:
+        if args.once:
             return 0
-        result = wait_container(name)
+        result = wait_container(identity)
         if STOP:
             return 0
         attempts += 1
@@ -335,6 +416,66 @@ def on_signal(_signum: int, _frame: object) -> None:
     STOP = True
 
 
+def recovery_qa_root(args: argparse.Namespace) -> Path | None:
+    """Recognize dedicated recovery fixtures without optional CLI flags."""
+    root = args.fence_dir.parent
+    prefix = "svt-report-mode-tx-qa."
+    if not (
+        root.name.startswith(prefix)
+        or args.container.startswith("svt-qa-" + prefix)
+    ):
+        return None
+    if (
+        not args.qa_offline
+        or not args.once
+        or root.parent != Path("/var/lib")
+        or not root.name.startswith(prefix)
+        or args.container != "svt-qa-" + root.name
+        or args.fence_dir != root / "fence"
+        or args.database != root / "data/qa.sqlite3"
+    ):
+        raise BootBlocked("SVT_RECOVERY_QA_LAYOUT_MISMATCH")
+    return root
+
+
+def load_recovery_qa():
+    """Load the dedicated isolated transaction helper only when required."""
+    spec = importlib.util.spec_from_file_location(
+        "qa_report_mode",
+        Path(__file__).with_name("qa-report-mode-transaction.py"),
+    )
+    if spec is None or spec.loader is None:
+        raise BootBlocked("SVT_RECOVERY_QA_HELPER_MISSING")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+def start_recovery_qa(args: argparse.Namespace, root: Path) -> int:
+    """Serialize and consume START before issuing the one Docker request."""
+    helper = load_recovery_qa()
+    helper.require_qa(root)
+    # The monitor must be able to take its owner lease during Docker start.
+    # Keep the operator and update gates, but release owner before start.
+    with helper.exclusive(root, observation=True):
+        if _pending_under_gate(args.database):
+            print("SKIP_PENDING")
+            return 0
+        with quiescent_writer_lease(args.database):
+            if os.path.lexists(root / "verified-restart-policy.json"):
+                identity = helper.claim_verified_restart(root, args.container)
+            else:
+                identity = helper.claim_start(root, args.container)
+            if args.expected_container_id not in (None, identity):
+                raise BootBlocked("SVT_ARMED_CONTAINER_ID_MISMATCH")
+        if STOP:
+            raise BootBlocked("SVT_START_CLAIMED_WITHOUT_LAUNCH")
+        if docker("start", identity).returncode:
+            raise BootBlocked("SVT_DOCKER_START_FAILED")
+    print("SUPERVISED_START_PASS", flush=True)
+    return 0
+
+
 def main() -> int:
     """Validate the sole-owner policy before starting any container."""
     args = args_parser()
@@ -345,11 +486,22 @@ def main() -> int:
             raise BootBlocked("SVT_FENCE_DIR_INVALID")
         os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
         fence_directory(args.database)
-        validate_container(inspect(args.container), args)
+        identity = checked_identity(inspect(args.container), args)
         signal.signal(signal.SIGTERM, on_signal)
         signal.signal(signal.SIGINT, on_signal)
-        return supervise(args.container, args.database, args.once)
-    except (BootBlocked, WriterFenceError, OSError, ValueError) as exc:
+        root = recovery_qa_root(args)
+        if root is not None:
+            return start_recovery_qa(args, root)
+        return supervise(args, identity)
+    except (
+        BootBlocked,
+        WriterFenceError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        subprocess.SubprocessError,
+    ) as exc:
         code = (
             str(exc)
             if isinstance(exc, (ValueError, WriterFenceError))

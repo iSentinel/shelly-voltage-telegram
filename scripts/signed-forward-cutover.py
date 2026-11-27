@@ -477,6 +477,10 @@ def photo_identity(db: sqlite3.Connection, expected: str) -> str:
             ),
         )
     )
+    if db.execute(
+        "SELECT 1 FROM meta WHERE key GLOB 'telegram_report_pending:*' LIMIT 1"
+    ).fetchone():
+        raise ValueError("Telegram report delivery is unresolved")
     marker = meta.get("telegram_status_media_identity", "")
     if (
         meta.get("telegram_status_message_id") != expected
@@ -607,39 +611,49 @@ def verify_installed_supervisor(paths: Layout, receipt: dict) -> None:
         raise ValueError("an existing writer-fence update is pending")
 
 
+def archive_input_names(tar, prefix: str) -> dict:
+    """Require exactly one ordinary member per protected input path."""
+    members = {}
+    for member in tar:
+        if not member.name.startswith(prefix):
+            continue
+        name = member.name.removeprefix(prefix)
+        relevant = (
+            name in MONITOR_FILES
+            or name in ROLLBACK_SUPERVISOR_FILES
+            or ("/" not in name and name.endswith(".py"))
+        )
+        if not relevant:
+            continue
+        if name in members or not member.isfile():
+            raise ValueError("ambiguous archived monitor or supervisor file")
+        members[name] = member
+    if not members.keys() >= MONITOR_FILES:
+        raise ValueError("signed archive lacks monitor build inputs")
+    if not members.keys() >= ROLLBACK_SUPERVISOR_FILES:
+        raise ValueError("signed archive lacks supervisor files")
+    return members
+
+
 def archived_monitor_inputs(
     archive: Path, version: str, approved_sha: str
 ) -> dict[str, str]:
-    """Hash the Python sources and build inputs without extracting files."""
+    """Hash exact Python/build inputs without extracting files."""
     prefix = f"shelly-voltage-telegram-{version}/"
     inputs = {}
-    supervisor = set()
     with archive.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != approved_sha:
             raise ValueError("rollback source archive changed")
         stream.seek(0)
         with tarfile.open(fileobj=stream, mode="r:gz") as tar:
-            for member in tar:
-                if not member.name.startswith(prefix):
-                    continue
-                name = member.name.removeprefix(prefix)
-                if not member.isfile():
-                    continue
+            members = archive_input_names(tar, prefix)
+            for name, member in members.items():
                 if name in ROLLBACK_SUPERVISOR_FILES:
-                    supervisor.add(name)
-                if name in MONITOR_FILES or (
-                    "/" not in name and name.endswith(".py")
-                ):
-                    if name in inputs:
-                        raise ValueError("duplicate archived monitor file")
-                    with tar.extractfile(member) as source:
-                        inputs[name] = hashlib.file_digest(
-                            source, "sha256"
-                        ).hexdigest()
-    if not inputs.keys() >= MONITOR_FILES:
-        raise ValueError("signed archive lacks monitor build inputs")
-    if supervisor != ROLLBACK_SUPERVISOR_FILES:
-        raise ValueError("signed archive lacks supervisor files")
+                    continue
+                with tar.extractfile(member) as source:
+                    inputs[name] = hashlib.file_digest(
+                        source, "sha256"
+                    ).hexdigest()
     return inputs
 
 
@@ -905,6 +919,11 @@ def validate_compose(
     paths: Layout, monitor: dict, pin: str, supervised=False
 ) -> None:
     """Verify that the candidate uses the intended pin and existing data."""
+    if (
+        monitor["environment"].get("SCHEDULED_REPORTS_MODE", "enabled")
+        != "enabled"
+    ):
+        raise ValueError("candidate production report recovery is unavailable")
     if monitor["image"] != pin or monitor["restart"] != "no":
         raise ValueError(
             "effective Compose plan violates the signed pin or restart policy"
@@ -1073,10 +1092,19 @@ def freeze(paths: Layout, work: Path, saved: dict) -> None:
         seal_rollback_rescue(work, saved["photo"])
 
 
+def standalone_rescue_identity(path: Path) -> tuple:
+    """Refuse sidecars and bind the exact standalone rescue file."""
+    info = safe_path(path)
+    for suffix in ("-wal", "-shm", "-journal"):
+        if os.path.lexists(str(path) + suffix):
+            raise ValueError("rollback rescue has SQLite sidecars")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
 def seal_rollback_rescue(work: Path, photo: str) -> None:
     """Check the standalone rescue and record its checksum before switching."""
     backup = work / "database-before.sqlite3"
-    safe_path(backup)
+    identity = standalone_rescue_identity(backup)
     with closing(
         sqlite3.connect(backup.as_uri() + "?mode=ro&immutable=1", uri=True)
     ) as db:
@@ -1087,6 +1115,8 @@ def seal_rollback_rescue(work: Path, photo: str) -> None:
         photo_identity(db, photo)
     with backup.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if standalone_rescue_identity(backup) != identity:
+        raise ValueError("rollback rescue changed during review")
     write_file(
         backup.with_suffix(".sqlite3.sha256"),
         f"{digest}  {backup.name}\n".encode(),
@@ -1678,6 +1708,8 @@ def start_previous(paths: Layout, work: Path, saved: dict) -> None:
     """Bring back only the pre-cutover runtime and its original timer mode."""
     if saved.get("previous_supervised"):
         run("systemctl", "start", SUPERVISOR, timeout=65)
+        # Restore monitoring, but do not certify an unresolved delivery.
+        read_photo(paths, saved["photo"])
         verify_ready(paths, {**saved, "pair": saved["previous"]})
         verify_current_mounts(paths, True)
         restore_release_check(saved.get("release_timer", {}))

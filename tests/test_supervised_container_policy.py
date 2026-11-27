@@ -44,6 +44,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             once=True,
         )
         self.info = {
+            "Id": "a" * 64,
             "State": {"Running": False},
             "HostConfig": {
                 "RestartPolicy": {"Name": "no"},
@@ -56,7 +57,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                     "RW": True,
                 },
             ],
-            "Config": {"Image": "qa-offline-synthetic"},
+            "Config": {"Image": "qa-offline-synthetic", "Env": []},
         }
 
     def test_foreign_running_writer_refused(self) -> None:
@@ -96,6 +97,106 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
         self.args.container = "shelly-voltage-bot"
         with self.assertRaisesRegex(SUPERVISOR.BootBlocked, "QA_CONTAINER"):
             SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_report_mode_requires_exact_explicit_value(self):
+        """A stale or missing environment cannot certify paused recovery."""
+        self.args.expected_report_mode = "paused"
+        for env in (
+            [],
+            ["SCHEDULED_REPORTS_MODE=enabled"],
+            ["SCHEDULED_REPORTS_MODE=paused"] * 2,
+            ["SCHEDULED_REPORTS_MODE=invalid"],
+        ):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "REPORT_MODE_MISMATCH"
+            ):
+                SUPERVISOR.validate_container(self.info, self.args)
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_report_mode_review_is_qa_only(self):
+        """The prototype cannot authorize a production startup change."""
+        self.args.qa_offline = False
+        self.args.expected_report_mode = "paused"
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "REPORT_MODE_QA_ONLY"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_production_mode_default_and_explicit_enabled(self):
+        """Keep existing default enabled, never infer an approved pause."""
+        for env in ([], ["SCHEDULED_REPORTS_MODE=enabled"]):
+            self.info["Config"]["Env"] = env
+            SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_mode_refuses_unapproved_configuration(self):
+        """Reject paused, invalid, bare and duplicate production settings."""
+        for env in (
+            ["SCHEDULED_REPORTS_MODE=paused"],
+            ["SCHEDULED_REPORTS_MODE=invalid"],
+            ["SCHEDULED_REPORTS_MODE"],
+            ["SCHEDULED_REPORTS_MODE=enabled"] * 2,
+            [
+                "SCHEDULED_REPORTS_MODE=enabled",
+                "SCHEDULED_REPORTS_MODE=paused",
+            ],
+        ):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "PRODUCTION_RECOVERY_UNAVAILABLE"
+            ):
+                SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_mode_invalid_env_shape(self):
+        """Do not interpret malformed Docker inspection as default mode."""
+        for env in (None, "SCHEDULED_REPORTS_MODE=enabled", [True]):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "REPORT_MODE_ENV_INVALID"
+            ):
+                SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_pause_refused_before_receipt_use(self):
+        """Even a valid signed receipt cannot itself authorize pause."""
+        self.args.qa_offline = False
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        with (
+            patch.object(SUPERVISOR, "verify_receipt") as receipt,
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "PRODUCTION_RECOVERY_UNAVAILABLE"
+            ),
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+        receipt.assert_not_called()
+
+    def test_armed_container_identity_must_match(self):
+        """The reviewed immutable ID cannot be replaced under its name."""
+        self.args.expected_container_id = "a" * 64
+        self.args.expected_report_mode = "paused"
+        self.info["Id"] = "b" * 64
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        with self.assertRaisesRegex(
+            SUPERVISOR.BootBlocked, "ARMED_CONTAINER_ID_MISMATCH"
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+        self.info["Id"] = self.args.expected_container_id
+        SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_recovery_layout_requires_one_shot_offline(self):
+        """Recovery fixtures are detected even without expected-ID flags."""
+        root = Path("/var/lib/svt-report-mode-tx-qa.test")
+        self.args.container = "svt-qa-" + root.name
+        self.args.database = root / "data/qa.sqlite3"
+        self.args.fence_dir = root / "fence"
+        self.assertEqual(SUPERVISOR.recovery_qa_root(self.args), root)
+        self.args.once = False
+        with self.assertRaisesRegex(SUPERVISOR.BootBlocked, "LAYOUT"):
+            SUPERVISOR.recovery_qa_root(self.args)
+
+    def test_regular_supervisor_has_no_qa_transaction(self):
+        """Keep existing non-recovery supervisor behavior unchanged."""
+        self.assertIsNone(SUPERVISOR.recovery_qa_root(self.args))
 
     def test_version_pair_requires_exact_match(self) -> None:
         """A valid digest cannot authorize a different source release."""
@@ -323,7 +424,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
 
         def docker_start(*args):
             nonlocal thread
-            self.assertEqual(args, ("start", self.args.container))
+            self.assertEqual(args, ("start", self.info["Id"]))
             thread = threading.Thread(target=updater, daemon=True)
             thread.start()
             self.assertTrue(attempting.wait(1))
@@ -332,15 +433,39 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
 
         with (
             patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
             patch.object(SUPERVISOR, "docker", side_effect=docker_start),
         ):
             self.assertTrue(
-                SUPERVISOR.start_if_clear(self.args.container, self.db)
+                SUPERVISOR.start_if_clear(self.args, self.info["Id"])
             )
         self.assertIsNotNone(thread)
         thread.join(timeout=2)
         self.assertFalse(thread.is_alive())
         self.assertTrue(acquired.is_set())
+
+    def test_replaced_container_refused_under_start_gate(self):
+        """A new container under the approved name cannot be started."""
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+            self.assertRaisesRegex(SUPERVISOR.BootBlocked, "ID_CHANGED"),
+        ):
+            SUPERVISOR.start_if_clear(self.args, "b" * 64)
+        docker_call.assert_not_called()
+
+    def test_changed_restart_policy_refused_at_next_start(self):
+        """Revalidate restart ownership even after initial approval."""
+        self.info["HostConfig"]["RestartPolicy"]["Name"] = "always"
+        with (
+            patch.dict(os.environ, {"SVT_WRITER_FENCE_DIR": ""}),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
+            patch.object(SUPERVISOR, "docker") as docker_call,
+            self.assertRaisesRegex(SUPERVISOR.BootBlocked, "UNFENCED"),
+        ):
+            SUPERVISOR.start_if_clear(self.args, self.info["Id"])
+        docker_call.assert_not_called()
 
     def test_pending_prevents_docker_start_while_gate_is_owned(self):
         """Refuse any Docker call when pending is already published."""
@@ -353,7 +478,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             ),
             patch.object(SUPERVISOR, "docker") as docker_call,
         ):
-            started = SUPERVISOR.start_if_clear(self.args.container, self.db)
+            started = SUPERVISOR.start_if_clear(self.args, self.info["Id"])
         self.assertFalse(started)
         docker_call.assert_not_called()
 
@@ -364,6 +489,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             patch.object(
                 SUPERVISOR, "_pending_under_gate", return_value=False
             ),
+            patch.object(SUPERVISOR, "inspect", return_value=self.info),
             patch.object(
                 SUPERVISOR,
                 "docker",
@@ -373,7 +499,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 SUPERVISOR.BootBlocked, "SVT_DOCKER_START_FAILED"
             ),
         ):
-            SUPERVISOR.start_if_clear(self.args.container, self.db)
+            SUPERVISOR.start_if_clear(self.args, self.info["Id"])
 
     def test_symlink_pending_rejected_before_docker_start(self):
         """Even a dangling marker blocks a new owner before Docker."""
@@ -386,7 +512,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                 SUPERVISOR.BootBlocked, "SVT_PENDING_MARKER_UNSAFE"
             ),
         ):
-            SUPERVISOR.start_if_clear(self.args.container, self.db)
+            SUPERVISOR.start_if_clear(self.args, self.info["Id"])
         docker_call.assert_not_called()
 
     def test_dangling_symlink_pending_marker_fails_closed(self) -> None:
