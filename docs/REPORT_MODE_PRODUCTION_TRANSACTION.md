@@ -75,3 +75,36 @@ boot binding and full interruption/reboot tests are not implemented.
 Signed report-worker source/image qualification and explicit owner
 review remain mandatory. This change is excluded from the narrow
 v0.5.29-hw source candidate.
+
+## Isolated persistent verified restart rehearsal
+
+The QA supervisor now recognizes a protected verified-restart policy
+in the dedicated offline recovery layout. An explicit --seal-restart
+review requires a current positive three-phase acceptance of the first
+claimed launch. The policy binds the exact container/image, paused mode,
+accepted StartedAt, hashes of eight protected transaction/configuration
+inputs, and a fresh database history/metadata snapshot. A clean exit
+with no OOM, unchanged policy and preserved historical prefix is
+required before consuming one durable restart claim. The subsequent
+review requires the new StartedAt, unchanged history and real fresh
+three-phase readiness. A third launch is forbidden; no claim is reset
+automatically. This is a deliberately one-shot QA prototype, not an
+unlimited restart policy or production authorization.
+
+2026-11-27: 122 focused tests and project quality gate PASS. Actual
+networkless LXC114 systemd restart on a disposable unsigned image
+passed first and second launches with the same ID and new StartedAt.
+The first transient unit was unloaded after stop, so its third-start
+failure did not demonstrate the guard. Repeated using an explicit
+temporary /run/systemd/system unit: third start exited 3 with
+"verified restart already claimed", unchanged StartedAt, stopped
+container. History 331/358/394 rows, inode unchanged, SQLite OK;
+three fresh measurements per phase, age 0.932s after restart.
+Two ordinary synthetic notifications, no scheduled reports, exit 0
+on clean stop. QA unit and disposable container removed; evidence
+retained in /var/lib/svt-report-mode-tx-qa.TyvmMZ.
+
+Full guest reboot, crash between verified restart claim and Docker
+request, general multi-generation restart acceptance and signed
+production integration remain outstanding. Production boundary still
+rejects paused, and the narrow v0.5.29-hw candidate is unchanged.

@@ -462,7 +462,10 @@ def start_recovery_qa(args: argparse.Namespace, root: Path) -> int:
             print("SKIP_PENDING")
             return 0
         with quiescent_writer_lease(args.database):
-            identity = helper.claim_start(root, args.container)
+            if os.path.lexists(root / "verified-restart-policy.json"):
+                identity = helper.claim_verified_restart(root, args.container)
+            else:
+                identity = helper.claim_start(root, args.container)
             if args.expected_container_id not in (None, identity):
                 raise BootBlocked("SVT_ARMED_CONTAINER_ID_MISMATCH")
         if STOP:

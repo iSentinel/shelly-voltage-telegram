@@ -1,3 +1,20 @@
+## 2026-11-27 — persistent verified restart policy QA
+
+- Exact PR #474 and separate #472 CI 8/8 PASS. No .29 release tag.
+- Seal one explicit QA restart after positive three-phase acceptance.
+  Bind exact container/image, mode, StartedAt, eight evidence hashes,
+  database inode/history; require clean stop and durable restart claim.
+- 122 focused tests and quality gate PASS.
+- Actual offline LXC114 systemctl restart PASS; repeated with temporary
+  unit file because initial transient unit unloaded on stop.
+  Third START rejected by claim (exit 3), unchanged StartedAt.
+  History 331/358/394; inode and selected metadata retained; after
+  restart three fresh samples per phase (age .932s), two ordinary
+  alerts and no reports, clean exit 0.
+- NEXT: real isolated guest reboot and restart-claim interruption
+  tests, multi-generation policy design and signed qualification.
+  Production paused still unavailable; .29 candidate unchanged.
+
 ## 2026-11-27 — production report-mode boundary
 
 - Exact PR #473 CI 8/8 PASS. Separate narrow #472 CI 8/8 PASS,

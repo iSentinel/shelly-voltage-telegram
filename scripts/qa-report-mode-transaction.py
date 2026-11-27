@@ -284,6 +284,123 @@ def claim_start(root: Path, name: str) -> str:
     return info["Id"]
 
 
+POLICY_INPUTS = (
+    ".env",
+    "transaction.json",
+    "before.env",
+    "armed-container.json",
+    "start-intent.json",
+    "start-claim.json",
+    "start-observation.json",
+    "runtime-acceptance.json",
+)
+
+
+def policy_inputs(root: Path) -> dict:
+    """Hash protected evidence without exposing its contents."""
+    result = {}
+    for name in POLICY_INPUTS:
+        path = root / name
+        protected(path)
+        if path.stat().st_size > 4096:
+            raise ValueError("oversized policy input")
+        result[name] = sha(path.read_bytes())
+    return result
+
+
+def seal_restart_policy(root: Path, name: str) -> dict:
+    """Bind a single QA restart to a positively reviewed running launch."""
+    info = start_binding(root, name, running=True)
+    acceptance = read_record(root / "runtime-acceptance.json")
+    observation = observe_start(root, name)
+    if (
+        acceptance.get("qa_runtime_verified") is not True
+        or acceptance.get("deployment_authorized") is not False
+        or acceptance.get("history_verified") is not True
+        or acceptance["container_id"] != info["Id"]
+        or acceptance["started_at"] != observation["started_at"]
+        or info["State"]["StartedAt"] != observation["started_at"]
+    ):
+        raise ValueError("runtime acceptance not bound")
+    path = root / "verified-restart-policy.json"
+    if os.path.lexists(path):
+        raise ValueError("restart policy already sealed")
+    record = {
+        "container_id": info["Id"],
+        "accepted_started_at": observation["started_at"],
+        "image_id": QA_IMAGE,
+        "mode": "paused",
+        "inputs": policy_inputs(root),
+        "baseline": history_snapshot(root),
+        "deployment_authorized": False,
+    }
+    atomic_write(path, (json.dumps(record, sort_keys=True) + "\n").encode())
+    return record
+
+
+def verify_restart_history(root: Path, baseline: dict) -> None:
+    """Refuse loss, replacement or rewriting since the accepted launch."""
+    snapshot = history_snapshot(root, baseline["last_id"])
+    for key in ("inode", "device", "prefix_sha256", "metadata_sha256"):
+        if snapshot[key] != baseline[key]:
+            raise ValueError("verified restart history changed")
+    if snapshot["rows"] < baseline["rows"]:
+        raise ValueError("verified restart history lost")
+
+
+def claim_verified_restart(root: Path, name: str) -> str:
+    """Consume a protected one-shot restart of the cleanly stopped ID."""
+    path = root / "verified-restart-claim.json"
+    if os.path.lexists(path):
+        raise ValueError("verified restart already claimed")
+    policy = read_record(root / "verified-restart-policy.json")
+    info = start_binding(root, name, running=False)
+    if (
+        policy["container_id"] != info["Id"]
+        or policy["accepted_started_at"] != info["State"]["StartedAt"]
+        or info["State"]["ExitCode"] != 0
+        or info["State"].get("OOMKilled") is not False
+        or policy["image_id"] != QA_IMAGE
+        or policy["mode"] != "paused"
+        or policy["deployment_authorized"] is not False
+        or policy["inputs"] != policy_inputs(root)
+    ):
+        raise ValueError("verified restart policy changed")
+    verify_restart_history(root, policy["baseline"])
+    claim = {
+        "container_id": info["Id"],
+        "policy_sha256": sha(
+            (root / "verified-restart-policy.json").read_bytes()
+        ),
+        "deployment_authorized": False,
+    }
+    atomic_write(path, (json.dumps(claim, sort_keys=True) + "\n").encode())
+    return info["Id"]
+
+
+def observe_verified_restart(root: Path, name: str) -> dict:
+    """Review the second launch without permitting a third launch."""
+    path = root / "verified-restart-policy.json"
+    policy = read_record(path)
+    claim = read_record(root / "verified-restart-claim.json")
+    info = start_binding(root, name, running=True)
+    if (
+        claim
+        != {
+            "container_id": info["Id"],
+            "policy_sha256": sha(path.read_bytes()),
+            "deployment_authorized": False,
+        }
+        or policy["container_id"] != info["Id"]
+        or policy["accepted_started_at"] == info["State"]["StartedAt"]
+        or policy["inputs"] != policy_inputs(root)
+        or policy["deployment_authorized"] is not False
+    ):
+        raise ValueError("verified restart observation mismatch")
+    verify_restart_history(root, policy["baseline"])
+    return info
+
+
 def verify_claim(root: Path, intent: dict) -> None:
     """Bind a live observation to the consumed exact START intent."""
     claim = read_record(root / "start-claim.json")

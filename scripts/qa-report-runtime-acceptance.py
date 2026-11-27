@@ -160,16 +160,60 @@ def accept(root: Path, name: str) -> dict:
     return result
 
 
+def accept_restart(root: Path, name: str) -> dict:
+    """Recheck fresh three-phase telemetry after the one reviewed restart."""
+    info = TX.observe_verified_restart(root, name)
+    identity, started = info["Id"], info["State"]["StartedAt"]
+    policy = TX.read_record(root / "verified-restart-policy.json")
+    fetch_ready(identity)
+    phases = live_phase_evidence(root, policy, started)
+    final = TX.observe_verified_restart(root, name)
+    if final["Id"] != identity or final["State"]["StartedAt"] != started:
+        raise ValueError("restart launch changed during acceptance")
+    result = {
+        "container_id": identity,
+        "started_at": started,
+        "qa_restart_verified": True,
+        "deployment_authorized": False,
+        "phases": phases,
+        "observed_at": time.time(),
+    }
+    path = root / "verified-restart-acceptance.json"
+    if os.path.lexists(path):
+        prior = TX.read_record(path)
+        if any(
+            prior.get(k) != result[k]
+            for k in (
+                "container_id",
+                "started_at",
+                "qa_restart_verified",
+                "deployment_authorized",
+            )
+        ):
+            raise ValueError("restart acceptance changed")
+        return prior
+    TX.atomic_write(path, (json.dumps(result, sort_keys=True) + "\n").encode())
+    return result
+
+
 def main() -> int:
     """Review a live isolated fixture without launching or changing it."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--container", required=True)
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--seal-restart", action="store_true")
+    action.add_argument("--review-restart", action="store_true")
     args = parser.parse_args()
     try:
         TX.require_qa(args.root)
         with TX.exclusive(args.root, observation=True):
-            result = accept(args.root, args.container)
+            if args.review_restart:
+                result = accept_restart(args.root, args.container)
+            else:
+                result = accept(args.root, args.container)
+                if args.seal_restart:
+                    result = TX.seal_restart_policy(args.root, args.container)
     except (
         OSError,
         ValueError,
