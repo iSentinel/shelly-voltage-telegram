@@ -249,3 +249,51 @@ Narrow .29 archive hash reverified unchanged. No release
 version, signing, deployment, or reuse of stale image evidence.
 Next: review exact candidate build and integrated acceptance
 requirements; keep blocked execution boundaries intact.
+
+## Corrected ACK local image qualification (2026-11-27)
+
+Exact #505 and narrow #472 CI 8/8 PASS. Local-only build
+from the #504 reviewed runtime input set; #505 changes only
+documentation and a migration test fixture. All 26 Python and
+VERSION inputs compared to the pinned #504 source scope manifest
+before transfer and again inside offline LXC114. Context tar SHA256
+3cb4ae813b7f63752fa7e7ec35c8aaa4a80068b6b83c8549e432dc900b2b490c.
+Build context /var/tmp/svt-ack-build-inputs.D57Ogh on host.
+QA directory /var/lib/svt-report-ack-build-qa.wHAy72.
+
+The local COPY-only Dockerfile uses cached signed .28 image ID
+sha256:fb88ffb1ee3deb33fa8c95b54d231d80ea0a7a9f0319513552f7ee2a555c74ac.
+Built with legacy builder, network none, pull false, no registry
+publication or tag. Derived unsigned image ID:
+sha256:e37eeb2f2235acc17d5316c0a4789f4b629fe34cf86805bfdfabe7720c3571d3.
+Result PASS_LOCAL_UNSIGNED_BUILD_ONLY.
+
+Saved Docker archive verified by reading its config and final
+layer without creating or launching a runtime container.
+Config SHA256 equals the new image ID; config DiffIDs match local
+inspect. First ten DiffIDs equal cached .28; one new layer:
+sha256:fbcecce52c711731cf107560dd4ca6ef29ed222e6062d9c135d687eace0cfe05.
+Final layer byte SHA256 equals its DiffID; all 26 regular file
+contents match the exact reviewed inputs. Runtime user, workdir,
+entrypoint, command and environment match the base image.
+Linux amd64 only. Existing base layers were compared by recorded
+DiffID, not independently rehashed in this archive review.
+Saved image.tar SHA256
+1ad90972aae0c5328032dc9281577906a77400afaf8010262b01f70198eb8c8f.
+image-evidence.json SHA256
+54742bbfd76f260a6f42acf4a978d741742b3f0e606c47f4c493c16d3c4e1880.
+PASS_LOCAL_UNSIGNED_IMAGE_CONTENTS_ONLY.
+
+The regular release workflow publishes images to GHCR even for
+manual builds, so it was not dispatched. The complete Dockerfile
+also resolves apt packages and ranged Python requirements at build
+time; a future full build needs actual dependency/SBOM/provenance
+review, both amd64 and arm64, exact source/OCI binding and signing.
+Local overlay qualification is not proof of a reproducible full
+release build. No image start, test execution inside the new image,
+or integrated acceptance is claimed. Historical START profile
+continues to pin the earlier image; do not silently replace that
+identity or reuse its accepted evidence. Review a separate exact
+candidate profile before any permitted integrated qualification.
+Previously blocked integration commands not repeated or bypassed.
+No new version, signing, merge, deployment or production changes.

@@ -1,3 +1,18 @@
+## 2026-11-27 — corrected ACK local unsigned image qualification
+
+- Exact #505 and narrow #472 CI 8/8 PASS; no new tags.
+- Offline COPY-only build from cached signed .28 and verified
+  #504 runtime bytes, new unsigned local image e37eeb2f.
+- Verify saved config identity, ten base DiffID prefix and
+  exact new layer hash; 26/26 runtime files match reviewed inputs.
+  No container launch, no GHCR publication, no full release build.
+- NEXT: exact candidate profile review and integrated acceptance
+  requirements for new image; retain historical image pins and
+  evidence, no reuse of earlier runtime acceptance.
+- Full multiarch release build, signed pair, integrated runtime
+  qualification and approvals remain open. No blocked trial
+  repeated; production unchanged.
+
 ## 2026-11-27 — corrected ACK source qualification
 
 - Exact #504 and narrow #472 CI 8/8 PASS; no new tags.
