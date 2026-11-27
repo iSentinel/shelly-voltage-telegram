@@ -1,3 +1,20 @@
+## 2026-11-27 — protected QA journal and effective Compose provenance
+
+- Exact #481 and separate #472 CI 8/8 PASS.
+- Read-only production spot check: .27 receipt equals verified
+  cutover journal pair; retained archive SHA256 matches, mode 0600.
+- Bind QA policy, token-scoped synthetic journal, retained source,
+  Compose source and resolved plan to second external SHA256.
+- Compare closed actual Compose plan and inspected effective
+  environment, original image command and selected HostConfig.
+- 161 focused tests and quality gate PASS. Real isolated .28
+  Compose create-only review PASS; wrong anchor, changed journal
+  and changed Compose source refused. No runtime start.
+- NEXT: consolidate release scope, production-specific read-only
+  transaction/unit verification, separately signed report-worker
+  qualification. QA journal not production provenance. No
+  deployment authorization; narrow .29 candidate unchanged.
+
 ## 2026-11-27 — bound offline pair review, schema v2
 
 - Corrected exact #479/#480 and separate #472 CI 8/8 PASS.

@@ -347,3 +347,48 @@ signed report-worker candidate. The fixture's exact single-line
 The existing signed .28 app does not implement the new report
 worker pause; this is byte and policy review only, not runtime
 acceptance. No production changes or release authorization.
+
+## Protected QA journal and effective Compose provenance
+
+2026-11-27: exact #481 and #472 CI 8/8 PASS. A read-only production
+spot check found the installed .27 receipt equal to the retained
+cutover journal pair, phase verified, both files mode 0600, and
+retained archive SHA256 matching the receipt. This spot check does
+not revalidate the complete production unit and lock contract.
+
+The separate qa-compose-provenance.py requires the existing v2
+bound pair proof and a second independently supplied SHA256 for a
+QA provenance record. The record pins the policy, Compose source,
+resolved Compose plan and token-scoped verified journal. The
+journal must explicitly identify itself as a synthetic QA fixture,
+match the exact receipt and retain the original source archive.
+Resolve Compose with a fixed environment and compare the entire
+closed single-service profile. Compare the inspected environment
+against image defaults plus resolved overrides, the image-default
+command/entrypoint/workdir/healthcheck/stop signal/volumes, and
+additional selected security-relevant HostConfig settings.
+This is a read-only review, not an installation or startup command.
+
+161 focused tests and project quality gate PASS. Actual isolated
+LXC114 fixture /var/lib/svt-report-mode-tx-qa.1PIzMX used real
+Docker Compose create --no-build --pull never, exact imported
+signed .28 image ID, original image command, verified source
+and ten-layer evidence, synthetic journal and receipt. The full
+resolved Compose plan and inspected config matched. Wrong external
+provenance anchor, changed journal bytes and changed Compose
+source bytes were refused. Container never started and was removed.
+Provenance SHA256:
+0033883c506dcc0c2aec76fd9f03641aaca053fe7b04a713d844b14d849aad99.
+
+The QA journal was constructed for the test rather than emitted
+by a genuine cutover. The externally supplied anchor was calculated
+from this test fixture, not independently signed by an owner.
+The exact QA Compose profile is intentionally restrictive, tied to
+the tested Compose normalization and offline image ID, not a
+production Compose policy. It cannot prove a container actually ran
+the report worker or independently establish installed production
+transaction provenance. The .28 image predates report pause support.
+Next consolidate release scope and implement production-specific
+read-only transaction/unit verification using existing signed-forward
+guards, then qualify a separately signed report-worker candidate.
+Do not enable production paused or loosen rollback.
