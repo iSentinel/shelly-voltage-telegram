@@ -118,3 +118,57 @@ verified and which require a real incident or qualified repair.
 No real incident, repair candidate, production hold, signature
 reverification or integrated Docker qualification is implied.
 Previously blocked integration commands were not repeated.
+
+## Underlying synthetic artifact review (2026-11-27)
+
+Exact #500 and narrow #472 CI 8/8 PASS. Added
+qa-incident-artifacts.py on top of the four-stage manifest.
+It resolves only fixed protected fixture filenames, verifies exact
+receipt/journal/observation/capture/hold JSON bytes and closed
+claims, recomputes the current and independent rescue SQLite
+logical dumps and raw fingerprints, verifies the declared DB
+inode, pending count, exact history and rescue parity, and rejects
+standalone copies with sidecars. Nested JSON claim comparison is
+type-sensitive. The CLI uses a dedicated offline QA directory;
+databases are limited to 16 MiB each. It does not write data.
+
+145 focused tests and quality gate PASS (eight new tests).
+Actual offline fixture /var/lib/svt-incident-manifest-qa.msc4PY,
+manifest SHA256
+3b609918ee41ce4945810f3c2d7c66d67d8f85f935a4779b7ca04e374cb82170:
+12 evidence files (10 JSON and two separate SQLite copies),
+two measurement rows and one pending intent, actual file and
+logical hash checks PASS. Modified observation bytes and a
+synthetic WAL sidecar refused, exact original file hashes
+reverified. PASS_REAL_OFFLINE_SYNTHETIC_ARTIFACT_REVIEW.
+
+This is not independent authentication of receipt claims. The
+receipt/journal/observation/hold declarations are synthetic;
+the DB inode identifies a disposable copy, not the deployed DB.
+The capture declaration explicitly describes standalone copies,
+not acquisition or verification of committed WAL frames. No
+actual writer lease or hold is verified by this reviewer.
+A positive result checks content consistency only; it does
+not prove fault attribution, source/OCI signatures, actual
+installation, quiescence, repair suitability or authority.
+The immutable read-only SQLite mode is restricted to these
+standalone copies; it is not a live database inspection method.
+
+## Remaining admission gaps
+
+- Actual installed incident and contemporaneous fault evidence:
+  unavailable; healthy production baseline is not an incident.
+- Live committed WAL acquisition and protected stopped-state
+  evidence: not qualified; standalone parity does not substitute.
+- Historical signed reference integration and Report Worker
+  START/acceptance/delivery integration: earlier execution calls
+  blocked, not repeated or bypassed.
+- Actual signed repair candidate and integrated forward-repair
+  qualification: absent. No version assignment or release request.
+- Narrow .29 publication approval, separate production receipt
+  migration and deployment authorization remain distinct.
+
+Next: independently review incident evidence acquisition and
+WAL-consistent rescue requirements, without manufacturing a
+production incident. Consolidate admission gaps before further
+release work. Production unchanged.
