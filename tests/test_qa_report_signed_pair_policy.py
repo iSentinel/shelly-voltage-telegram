@@ -3,6 +3,7 @@
 import copy
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,12 +30,28 @@ class SignedPairPolicyTests(unittest.TestCase):
         self.addCleanup(patch.stopall)
         patch.object(QA.TX, "protected").start()
         patch.object(QA.SUP, "require_root_ancestors").start()
+        self.mock_fixture_ownership()
         patch.object(
             QA.SUP, "source_version", return_value="0.5.99-hw"
         ).start()
         self.make_pair()
         self.make_container()
         self.write_policy()
+
+    def mock_fixture_ownership(self):
+        """Model root ownership only for synthetic files on non-root CI."""
+        original = Path.lstat
+
+        def fixture_stat(path):
+            """Preserve real mode, size and links while modeling owner."""
+            actual = original(path)
+            if path.is_relative_to(self.root):
+                values = list(actual)
+                values[4] = 0
+                return os.stat_result(values)
+            return actual
+
+        patch.object(Path, "lstat", fixture_stat).start()
 
     def write(self, name, data):
         """Write a private fixture input."""
