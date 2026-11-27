@@ -1,3 +1,18 @@
+## 2026-11-27 — general runtime failure recovery contract
+
+- Exact #495 and narrow #472 CI 8/8 PASS; no new tags.
+- Add separate general-fault recovery contract: preboot previous
+  pair review, report-only same-runtime pause review, postboot
+  general/unknown fault forward repair or incident hold review.
+- Add read-only standalone SQLite evidence reviewer; all
+  authorization flags false, classification/parity caller supplied.
+- 180 focused tests and quality PASS. Real offline synthetic
+  CLI: equal 3-row copies, stale 3-row rescue vs 4-row live with
+  pending intent, exact file hashes preserved. No Docker starts.
+- NEXT: qualified forward-repair and incident-hold evidence,
+  bind signed pair/journal and complete integrated QA when
+  available. No downgrade exception or production changes.
+
 ## 2026-11-27 — rollback archive identity and admission review
 
 - Exact #494 and narrow #472 CI 8/8 PASS; no new release tags.
