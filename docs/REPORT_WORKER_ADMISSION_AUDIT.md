@@ -59,3 +59,39 @@ the narrow publication decision independent. If integration remains
 unavailable, maintain explicit NO-GO and limit further work to
 independent useful review/test corrections; do not fabricate
 qualification or retry blocked execution through another route.
+
+## Scheduled acknowledgement review correction (2026-11-27)
+
+Exact consolidated #503 and narrow #472 CI 8/8 PASS. Review
+identified that the scheduled HTTP response parser silently
+accepted duplicate JSON fields (last value wins), and accepted
+success with an error code or rejection with a result. A
+contradictory 429 could therefore be classified as a definite
+rejection and retried. Reject duplicate keys recursively,
+nonstandard JSON constants, success carrying error_code, and
+rejection carrying result. The worker exits with unknown outcome;
+existing pending-intent semantics remain unchanged. Ordinary
+Telegram status/command transport is unchanged.
+
+12 scheduled HTTP tests PASS, including five new loopback tests.
+A real synthetic contradictory 429 received exactly one request;
+the SQLite pending marker survived and another delivery attempt
+returned false without a second request. No actual Telegram calls.
+116 additional tests in eight related suites PASS, total 128.
+Quality gate PASS (378 files).
+
+Runtime byte identity has changed:
+- previous app.py SHA256 b9eea01ae7c5072a1bec2a0449c70640b58e3ebee10b42247a12baf9ede125b8
+- corrected app.py SHA256 7052a862cff39338b26b6c253a4878050fcd8985c298158b0f26cfdb8b87a61d
+
+The earlier unsigned local image, fixed START profile, source
+scope archive and same-database smoke evidence refer to the
+previous runtime. Do not claim they qualify this correction.
+No image was rebuilt or retagged; the fixed historical image
+identity is unchanged. A new exact candidate needs an explicit
+source/build-input review, rebuilt image identity and integrated
+qualification when available. Previously blocked integration
+commands were not repeated or bypassed.
+
+Narrow .29 archive SHA256 unchanged. No production changes,
+release version assignment, merge, signing or authorization.
