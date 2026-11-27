@@ -1,3 +1,18 @@
+## 2026-11-27 — exact Report Worker candidate scope review
+
+- Exact #493 and narrow #472 CI 8/8 PASS. .29/.30 tags absent.
+- Exact #493 unsigned review snapshot, 648 Git-verified files,
+  reproducible SHA256 0baf9e0a9bf6f9c78353e830d3ed0004e116b16b1092b07ede802583852f8afb.
+- All 29 previous smoke build inputs unchanged; two narrow
+  receipt preflight/publication functions match .29 AST.
+- 108 focused tests and quality PASS. Narrow .29 archive unchanged.
+- NO-GO for Report Worker release: integrated operator/runtime
+  acceptance, signed pair, production recovery/rollback and owner
+  contract not qualified. No new version, tag or signing.
+- NEXT: recovery/rollback contract and candidate admission review;
+  integrated qualification when available, separate approved
+  legacy receipt migration. Production remains .27, healthy.
+
 ## 2026-11-27 — durable synthetic report delivery evidence
 
 - Exact #492 and narrow #472 CI 8/8 PASS; .29 tag absent.
