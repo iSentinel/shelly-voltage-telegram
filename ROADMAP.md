@@ -1,3 +1,17 @@
+## 2026-11-27 — rollback archive identity and admission review
+
+- Exact #494 and narrow #472 CI 8/8 PASS; no new release tags.
+- Harden protected archive member uniqueness and regular-file
+  checks without changing monitor parity or rollback direction.
+- 59 focused tests and quality PASS. Actual exact retained
+  .27/.28/.29 archives: 28/28 monitor input parity. Exact #493
+  unsigned scope has same names but changed app.py: strict
+  rollback NO-GO. Byte review only, no signature reverification.
+- NEXT: general runtime failure recovery contract and admission
+  evidence, separate narrow release owner approval, approved
+  public receipt migration, complete integrated QA when available.
+  No production changes or compatibility override.
+
 ## 2026-11-27 — exact Report Worker candidate scope review
 
 - Exact #493 and narrow #472 CI 8/8 PASS. .29/.30 tags absent.
