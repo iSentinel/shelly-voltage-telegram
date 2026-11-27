@@ -1,3 +1,17 @@
+## 2026-11-27 — durable bidirectional QA mode operator
+
+- Exact #488 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add token-scoped prepare/recover/release operator, protected
+  stopped history/config hashes, owned fence and durable phases.
+  No Docker start or deployment authorization.
+- 195 focused tests and quality gate PASS. Real isolated SIGKILL
+  before marker, after config, before marker clear; recovery PASS.
+  Pending fence refused actual writer_lease. Reverse transition
+  reproduced .env and retained SQLite SHA256. No Docker start.
+- NEXT: bind operator to exact stopped container/image and reviewed
+  plan; integrate one-shot START gate with bidirectional transition
+  and signed feature-capable candidate. Production untouched.
+
 ## 2026-11-27 — same-database mode transition fault-injection QA
 
 - Exact #487 and #472 CI 8/8 PASS; narrow .29 tag absent.

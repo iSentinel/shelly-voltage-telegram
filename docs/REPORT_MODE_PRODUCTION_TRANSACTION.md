@@ -472,3 +472,49 @@ transaction or actual operator authorization. Next review the
 feature-capable candidate and owner-bound transaction contract,
 then qualify signed runtime and separately approved migration.
 Do not promote the QA verifier or permit production paused yet.
+
+## Durable bidirectional QA mode operator (2026-11-27)
+
+Exact #488 and separate #472 CI 8/8 PASS. Added
+qa-durable-mode-operator.py, using existing protected QA boundary,
+operator lock, quiescent writer lease, update gate, atomic file
+publication and owned marker helpers. A token-scoped closed journal
+records source/target configuration hashes and stopped history.
+Prepare commits intent before the marker. Recover accepts only
+the exact reversible old/new bytes and unchanged stopped baseline;
+it publishes a missing marker only for the prepared old-config
+state. Configuration remains fenced until explicit release.
+Release writes the durable released phase before clearing only
+the owned marker. It can finish an interrupted clear, never
+launches Docker and grants neither startup nor deployment authority.
+A subsequent transaction requires all previous journals released.
+
+195 focused tests and quality gate PASS; nine new tests cover
+bidirectionality, interrupted publication and clear, config/history
+drift, foreign/missing markers and unfinished/released intent.
+Real LXC114 fixture /var/lib/svt-report-mode-tx-qa.l9PsHm,
+a disposable SQLite backup of the previous 204-row QA database,
+three-setting synthetic configuration:
+- SIGKILL 137 after journal publication before marker publication.
+- SIGKILL 137 after target config publication before configured
+  checkpoint; recovery preserved the exact marker and baseline.
+- Existing writer_lease refused entry with SVT_UPDATE_PENDING.
+- SIGKILL 137 after release checkpoint before marker clear;
+  release recovery and repeated release succeeded.
+- Reverse paused-to-enabled transaction reproduced original .env
+  byte for byte, and SQLite file SHA256 remained unchanged.
+Result PASS_REAL_DURABLE_BIDIRECTIONAL_MODE_OPERATOR. No Docker
+container started during this test.
+
+This is only a QA configuration operator, not the production
+startup transaction. The pre-marker interval is protected by the
+cooperating operator/writer/update locks during the call, but not
+by a durable marker if killed there; recovery must refuse changed
+history. A released record is not a START claim. The operator does
+not yet bind the actual stopped container/image, authenticated
+owner review, signed pair or exact start authorization and does
+not cover every possible interruption within filesystem syscalls.
+The next step is binding the operator to exact stopped container
+identity and reviewed plan, then integrating the immutable
+one-shot START gate with bidirectional transitions. No production
+receipt migration, signing, or deployment authorization.
