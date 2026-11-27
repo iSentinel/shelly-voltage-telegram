@@ -163,3 +163,37 @@ current signed pair and cutover-journal binding for the incident
 evidence, and prepare qualification evidence only for a real
 identified repair. Previously blocked integrated Docker trial
 was not repeated. Production and narrow .29 unchanged.
+
+## Historical signed-pair reference binding (2026-11-27)
+
+Added qa-incident-signed-reference.py, an offline QA-only reviewer.
+It requires independently supplied exact hold, scope, receipt,
+cutover journal and historical online evidence SHA256 anchors.
+It rechecks the hold before and after reference validation,
+checks receipt aliases, verifies the closed synthetic journal
+and retained source archive, recomputes the offline OCI chain
+and compares the local image identity, revision and ordered layers.
+It never starts, stops, retags, or releases a writer.
+
+119 focused tests and quality gate PASS, including six new unit
+tests covering receipt anchors, alias drift, the reference
+verification calls, closed journal fields, hold drift and
+non-authorizing result flags. The proposed integrated LXC114
+reference-validation command was blocked by the execution safety
+system and was not retried or bypassed. No real integrated
+reference review is claimed for this revision.
+
+The retained .28 signed pair is a historical QA reference, not
+the failed or installed Report Worker pair. The cutover journal
+is synthetic. Offline verification does not reverify signatures.
+The held source scope describes the unsigned #493 snapshot and
+must not be conflated with .28. There is no claim of installed
+pair verification, failure attribution, owner approval or
+production recovery qualification. All authorization flags false.
+An actual incident needs a separately authenticated installed
+pair, original cutover journal, writer identity, and failure
+evidence before forward repair can be admitted.
+
+Next: define the exact installed-incident evidence contract and
+review missing admission proofs; qualify integrated checks only
+when available. No production changes or release authorization.
