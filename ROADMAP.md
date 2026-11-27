@@ -1,3 +1,23 @@
+## 2026-11-27 — v0.5.29-hw metadata correction
+
+- Initial exact-head push CI failed: release notes absent and source
+  metadata inconsistent with the new VERSION. Add versioned release
+  notes, changelog and candidate/publication distinction in READMEs.
+- The original unsigned archive is superseded. Rebuild from the new
+  exact commit and repeat manifest, monitor parity and CI review.
+- No old tag or artifact modified; publication still requires approval.
+
+## 2026-11-27 — separate narrow v0.5.29-hw review
+
+- Prepare the updater-only candidate from exact #456 checkpoint,
+  excluding the report-worker and recovery QA stack.
+- Bump VERSION and RELEASE_VERSION together; keep LIVE_VERSION.
+- Retain strict archived monitor input compatibility; verify against
+  both signed .27 and .28 archives before owner review.
+- NEXT: exact CI, owner publication approval, signed image and
+  supervised QA, separate production cutover review.
+  No tag, publication, or activation is authorized by this checkpoint.
+
 ## 2026-11-26 — three-phase production voltage window
 
 - Add a separate read-only cutover review helper for a 900-second window
