@@ -1,3 +1,22 @@
+## 2026-11-27 — installed supervisor review and release scope
+
+- Exact #482 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Real read-only installed .27 review: private pair/verified journal,
+  retained archive, 34 signed inputs, exclusive systemd owner,
+  mounted SQLite/fence, local OCI pin/revision, live owner lease,
+  no pending markers, stable runtime identity PASS.
+- Public receipt preflight remains BLOCKED (legacy DynamicUser
+  alias). Separate from healthy monitor. No migration or deployment.
+- Add review-installed-supervisor.py and six focused tests; total
+  167 focused tests and quality gate PASS. Temporary review files
+  removed. Initial missing-lock test used a mock by mistake; fixed.
+- Consolidate distinct release scopes in
+  docs/REPORT_WORKER_RELEASE_SCOPE.md. Report Worker changes runtime
+  and must not use strict-parity downgrade to .28.
+- NEXT: design production same-runtime recovery transaction with
+  explicit signed/owner-bound policy, then signed candidate QA;
+  resolve receipt migration separately under approved maintenance.
+
 ## 2026-11-27 — protected QA journal and effective Compose provenance
 
 - Exact #481 and separate #472 CI 8/8 PASS.
