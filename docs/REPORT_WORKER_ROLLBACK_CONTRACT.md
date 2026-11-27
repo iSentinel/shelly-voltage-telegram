@@ -367,3 +367,51 @@ remaining never-started. This test proves Docker identity mechanics,
 not a full signed production restart or protection from privileged
 direct Docker commands. The change is not included in the separate
 v0.5.29-hw narrow updater candidate.
+
+## Exact archive identity and admission review (2026-11-27)
+
+Exact #494 and narrow #472 CI 8/8 PASS. Hardened the existing
+archived_monitor_inputs reader: require exactly one regular archive
+member for every protected monitor and supervisor path. Reject
+duplicate supervisor entries and nonregular protected entries even
+if a regular member also exists. The runtime equality set and
+strict rollback direction are unchanged; supervisor presence
+does not imply equality or full installed-unit qualification.
+
+Six new archive tests, 47 cutover tests and six installed supervisor
+review tests PASS (59 total), quality gate PASS. The new reader
+verified retained .27, .28 and narrow unsigned .29 source archive
+bytes against the independently recorded hashes. All 28 monitor
+input hashes match across those three archives. The exact #493
+unsigned scope manifest (pinned SHA256
+dbcc40f10d2a7b2d2b394ce0bc8cd76c59e708d9e8b2f334c582998e71aff312)
+has the same 28-name parity set, with app.py alone changed.
+Result PASS_EXACT_ARCHIVE_PARITY_REVIEW_ONLY. This is byte review,
+not signature reverification, rollback execution or authorization.
+
+### Admission decisions
+
+- Narrow .29: publication-only owner review remains separate;
+  parity prerequisite passes, unsigned archive unchanged. A signed
+  source/OCI pair and separately approved production preflight and
+  migration are required before deployment.
+- Report Worker: strict downgrade to .27/.28/.29 is NO-GO.
+  Same-runtime paused recovery is the preferred report-only path,
+  but complete production recovery and restart ownership are not
+  qualified. The general runtime failure recovery path must also
+  be reviewed; a pause cannot repair unrelated application faults.
+- A versioned Report Worker release cannot be admitted on CI,
+  unsigned smoke, or a self-generated review hash alone. Require
+  exact integrated transaction/acceptance/delivery qualification,
+  approved recovery contract including a general failure path,
+  full release build and independent signed-pair verification
+  before activation. Publication and deployment approvals remain
+  distinct. No compatibility override is introduced.
+- Keep unresolved report intent rejection and stopped-writer
+  rescue/history checks mandatory. Never restore a stale rescue
+  after the candidate might have written to the database.
+
+Production .27 remained Healthy, readiness HTTP 200, restart 0.
+Legacy public alias still present and checker exit 200; no migration
+or deployment. QA no running containers. Previously blocked
+integrated runtime command was not retried or bypassed.

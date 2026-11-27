@@ -611,39 +611,49 @@ def verify_installed_supervisor(paths: Layout, receipt: dict) -> None:
         raise ValueError("an existing writer-fence update is pending")
 
 
+def archive_input_names(tar, prefix: str) -> dict:
+    """Require exactly one ordinary member per protected input path."""
+    members = {}
+    for member in tar:
+        if not member.name.startswith(prefix):
+            continue
+        name = member.name.removeprefix(prefix)
+        relevant = (
+            name in MONITOR_FILES
+            or name in ROLLBACK_SUPERVISOR_FILES
+            or ("/" not in name and name.endswith(".py"))
+        )
+        if not relevant:
+            continue
+        if name in members or not member.isfile():
+            raise ValueError("ambiguous archived monitor or supervisor file")
+        members[name] = member
+    if not members.keys() >= MONITOR_FILES:
+        raise ValueError("signed archive lacks monitor build inputs")
+    if not members.keys() >= ROLLBACK_SUPERVISOR_FILES:
+        raise ValueError("signed archive lacks supervisor files")
+    return members
+
+
 def archived_monitor_inputs(
     archive: Path, version: str, approved_sha: str
 ) -> dict[str, str]:
-    """Hash the Python sources and build inputs without extracting files."""
+    """Hash exact Python/build inputs without extracting files."""
     prefix = f"shelly-voltage-telegram-{version}/"
     inputs = {}
-    supervisor = set()
     with archive.open("rb") as stream:
         if hashlib.file_digest(stream, "sha256").hexdigest() != approved_sha:
             raise ValueError("rollback source archive changed")
         stream.seek(0)
         with tarfile.open(fileobj=stream, mode="r:gz") as tar:
-            for member in tar:
-                if not member.name.startswith(prefix):
-                    continue
-                name = member.name.removeprefix(prefix)
-                if not member.isfile():
-                    continue
+            members = archive_input_names(tar, prefix)
+            for name, member in members.items():
                 if name in ROLLBACK_SUPERVISOR_FILES:
-                    supervisor.add(name)
-                if name in MONITOR_FILES or (
-                    "/" not in name and name.endswith(".py")
-                ):
-                    if name in inputs:
-                        raise ValueError("duplicate archived monitor file")
-                    with tar.extractfile(member) as source:
-                        inputs[name] = hashlib.file_digest(
-                            source, "sha256"
-                        ).hexdigest()
-    if not inputs.keys() >= MONITOR_FILES:
-        raise ValueError("signed archive lacks monitor build inputs")
-    if supervisor != ROLLBACK_SUPERVISOR_FILES:
-        raise ValueError("signed archive lacks supervisor files")
+                    continue
+                with tar.extractfile(member) as source:
+                    inputs[name] = hashlib.file_digest(
+                        source, "sha256"
+                    ).hexdigest()
     return inputs
 
 
