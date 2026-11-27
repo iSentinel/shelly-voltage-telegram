@@ -1,3 +1,17 @@
+## 2026-11-27 — preserved offline OCI byte chain
+
+- Reverify published .28 source signature, OCI signature and
+  attestations against exact commit and signed index: PASS.
+- Preserve raw OCI index, amd64 child, config and ten compressed
+  blobs via Skopeo; transfer to protected offline LXC114.
+- Verify exact hashes, descriptor sizes, decompressed DiffIDs and
+  actual local image ID/platform/revision/ordered layers.
+- 146 focused tests and quality gate PASS; real offline chain PASS,
+  tampered index and pending marker refused. RepoDigests stays empty.
+- NEXT: bind online signature evidence and offline bytes to protected
+  signed-pair policy, effective config and HostConfig. Policy v1
+  unchanged; no startup, release or production authorization.
+
 ## 2026-11-27 — versioned signed-pair policy review
 
 - Exact #478 and #472 CI 8/8 PASS; .29 tag absent.
