@@ -1,3 +1,20 @@
+## 2026-11-27 — actual DynamicUser state and signed mode-plan binding
+
+- Exact #485 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Actual offline DynamicUser service created private state and public
+  alias; relocate dedicated test private state into QA fixture and
+  migrate with unchanged receipt hash. Not a live-path migration.
+- Add pinned mode-plan review of exact receipt/config, stopped runtime,
+  SQLite identity, online proof, retained archive and offline OCI.
+  Require known static pause implementation in signed source.
+- 186 focused tests and quality gate PASS. Current unsigned app
+  matches static feature; real signed .28 pair specifically refused
+  missing feature, exit 3, config/receipt/SQLite SHA256 unchanged,
+  never started. No runtime or owner authorization.
+- NEXT: prepare feature-capable candidate review and owner-bound
+  transaction operator, signed runtime qualification, separate
+  production receipt migration approval. Narrow .29 unchanged.
+
 ## 2026-11-27 — durable legacy public receipt migration QA
 
 - Exact #484 and separate #472 CI 8/8 PASS; .29 tag absent.
