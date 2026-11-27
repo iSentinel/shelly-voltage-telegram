@@ -1,3 +1,18 @@
+## 2026-11-27 — durable isolated incident hold and repair admission
+
+- Exact #496 and narrow #472 CI 8/8 PASS; no new tags.
+- Add protected offline incident hold, exact config/full SQLite
+  history/scope hash receipt, owned marker; no release or START.
+- 187 focused tests and quality PASS. Actual isolated fixture:
+  identical replay, duplicate/wrong anchor refused, real writer
+  lease and competing mode prepare blocked. DB and config hashes
+  preserved; hold marker retained. No Docker start.
+- Document forward repair admission gates; no actual repair
+  candidate or production incident operator qualified.
+- NEXT: bind incident evidence to exact signed installed pair
+  and cutover journal; qualify integrated QA when available.
+  No rollback exception, release or production change.
+
 ## 2026-11-27 — general runtime failure recovery contract
 
 - Exact #495 and narrow #472 CI 8/8 PASS; no new tags.
