@@ -164,9 +164,9 @@ def accept_restart(root: Path, name: str) -> dict:
     """Recheck fresh three-phase telemetry after the one reviewed restart."""
     info = TX.observe_verified_restart(root, name)
     identity, started = info["Id"], info["State"]["StartedAt"]
-    policy = TX.read_record(root / "verified-restart-policy.json")
+    claim = TX.read_record(root / "verified-restart-claim.json")
     fetch_ready(identity)
-    phases = live_phase_evidence(root, policy, started)
+    phases = live_phase_evidence(root, claim, started)
     final = TX.observe_verified_restart(root, name)
     if final["Id"] != identity or final["State"]["StartedAt"] != started:
         raise ValueError("restart launch changed during acceptance")
@@ -174,6 +174,7 @@ def accept_restart(root: Path, name: str) -> dict:
         "container_id": identity,
         "started_at": started,
         "qa_restart_verified": True,
+        "stopped_baseline_rows": claim["baseline"]["rows"],
         "deployment_authorized": False,
         "phases": phases,
         "observed_at": time.time(),
@@ -187,6 +188,7 @@ def accept_restart(root: Path, name: str) -> dict:
                 "container_id",
                 "started_at",
                 "qa_restart_verified",
+                "stopped_baseline_rows",
                 "deployment_authorized",
             )
         ):

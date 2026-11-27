@@ -108,3 +108,39 @@ Full guest reboot, crash between verified restart claim and Docker
 request, general multi-generation restart acceptance and signed
 production integration remain outstanding. Production boundary still
 rejects paused, and the narrow v0.5.29-hw candidate is unchanged.
+
+## Guest reboot and stopped-writer restart baseline
+
+2026-11-27 exact #475 (8a16835235397f72618fb4577072001e33c9849f),
+CI 8/8 PASS. Real isolated LXC114 reboot changed host-visible init
+PID 651694 to 1368060. The cleanly stopped QA database and sealed
+policy SHA256 matched before and after guest reboot; Docker did not
+autostart either test or historical containers. A manual systemd
+start consumed the verified restart claim and passed three-phase
+acceptance (three samples per phase, age .922s). A third start
+failed with exit 3 and unchanged StartedAt. History 394/421/451,
+inode and metadata retained. Evidence:
+ /var/lib/svt-report-mode-tx-qa.irZ90l.
+Separate SIGKILL after durable restart claim but before Docker
+request preserved the original StartedAt and stopped container,
+refused the retry, and retained both database and policy SHA256
+(481 rows). Evidence: /var/lib/svt-report-mode-tx-qa.9JrQ45.
+
+The next revision closes the history window between policy seal
+and clean stop. Capture the complete stopped baseline under the
+existing operator, update and quiescent writer gates in the restart
+claim. Review must preserve both sealed and stopped history and
+require fresh phase samples beyond the stopped last ID. Claims
+without the new baseline fail closed. This does not prove the
+integrity of rows before the stopped snapshot was captured.
+124 focused tests and project quality gate PASS. New exact code
+on networkless LXC114: 505 rows at seal, 553 at stop and 586 after
+restart; preserved inode and metadata, fresh samples age .824s,
+two ordinary synthetic notifications only, exit 0. Evidence:
+ /var/lib/svt-report-mode-tx-qa.r6L35v.
+
+The reboot and SIGKILL evidence above is from #475, not a repeat
+of those scenarios on the revised baseline code. The guest unit
+was manually started after reboot, not enabled for boot; no claim
+of automatic boot coverage. Production pause remains blocked.
+Multi-generation policy and signed qualification remain outstanding.

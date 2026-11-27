@@ -1,3 +1,21 @@
+## 2026-11-27 — guest reboot, restart interruption and stopped baseline
+
+- Exact #475 and separate #472 CI 8/8 PASS. No .29 tag.
+- Real isolated guest reboot on #475: init PID changed, database and
+  policy SHA256 unchanged, no Docker autostart, manual systemd
+  restart accepted; 394/421/451 rows, third START refused exit 3.
+- Separate #475 SIGKILL after restart claim before Docker start:
+  retry refused, StartedAt unchanged, SQLite and policy SHA256
+  unchanged (481 rows).
+- Close seal-to-stop history gap with full stopped baseline in
+  restart claim and acceptance; reject old claim without baseline.
+- 124 focused tests and quality gate PASS. New code real offline
+  Docker restart: 505/553/586 rows, all 553 stopped rows verified,
+  three fresh samples per phase, ordinary alerts only, exit 0.
+- NEXT: generation-bound persistent policy design, repeat reboot
+  and interruption tests on revised code, signed qualification.
+  No automatic boot acceptance or production changes.
+
 ## 2026-11-27 — persistent verified restart policy QA
 
 - Exact PR #474 and separate #472 CI 8/8 PASS. No .29 release tag.
