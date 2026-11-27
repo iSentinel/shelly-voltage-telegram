@@ -101,14 +101,17 @@ class ReportHTTPDeadlineTests(unittest.TestCase):
     def test_slow_body_hits_total_deadline(self):
         """A trickle of data cannot extend the wall-clock budget."""
         self.server.slow = True
+        # Leave time for the transport child to import on a cold runner.
+        # The response takes much longer than the complete deadline.
+        self.server.body["padding"] = "a" * 128
         started = time.monotonic()
         with (
-            patch.object(APP, "REPORT_HTTP_DEADLINE", 2.0),
+            patch.object(APP, "REPORT_HTTP_DEADLINE", 5.0),
             self.assertRaisesRegex(RuntimeError, "outcome unknown"),
         ):
             self.send()
         self.assertTrue(self.server.accepted.is_set())
-        self.assertLess(time.monotonic() - started, 4.0)
+        self.assertLess(time.monotonic() - started, 7.0)
 
     def test_stop_cancels_active_http(self):
         """Cancel an already accepted request without a second send."""

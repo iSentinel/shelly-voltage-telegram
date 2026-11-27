@@ -55,3 +55,47 @@ Public receipt preflight remains false: existing legacy DynamicUser
 state path is an independent cutover blocker. Do not alter that
 path during audit or infer that a healthy monitor authorizes migration.
 Existing narrow .29 review and release approval remain separate.
+
+## Exact unsigned QA snapshot and runtime smoke (2026-11-27)
+
+Exact #486 commit 24d5341392a1f2a7a4f374ef6e0276240b53201e
+and narrow #472 CI 8/8 PASS. Two clean git archive + gzip -n
+exports under different umasks were byte-identical:
+SHA256 01f230c138dd6c0626c27a95e83df606b52162856b40e0d21be0c640dc39d9bc.
+637 files; 29 compared build inputs including VERSION; only app.py
+differs from the signed .28 archive, SHA256
+b9eea01ae7c5072a1bec2a0449c70640b58e3ebee10b42247a12baf9ede125b8.
+Evidence /var/tmp/svt-report-worker-candidate.iBVyZ0.
+
+Offline LXC114 built a derived unsigned QA image on the cached .28
+image ID using a local COPY-only Dockerfile, --network none and
+--pull=false. Image ID:
+sha256:6b3f263cb444ce6b7424fd14563c85cb5a82253ad8ac74eecb7469d0bbe38541.
+All 26 Python/VERSION files inside matched exact snapshot bytes.
+This is not a full release Dockerfile rebuild, signed OCI image,
+or a new release version; VERSION remains .28. No tag was created.
+
+In-image recovery-mode tests 5/5, daily retry 15/15, weekly digest
+14/14. HTTP deadline suite initially 6/7: the slow-body test's
+two-second synthetic budget expired before loopback server accepted.
+An unchanged isolated retry passed. A test-only revision increases
+the synthetic budget to five seconds, adds a deliberately longer
+trickle response, and asserts elapsed <7s; production deadline
+remains 12s. Complete revised suite inside the same image 7/7 PASS.
+The cause of the first failure was not independently established;
+cold startup/scheduling is a plausible explanation. 41/41 final
+targeted in-image tests, with the revised deadline test distinguished
+from the exact original snapshot.
+
+Actual isolated runtime smoke using the existing synthetic meter and
+loopback Telegram probe (original monitor methods plus test mocks):
+paused 25 measurements per phase, readiness age .0086s, one ordinary
+alert and zero reports, graceful exit 0 and SQLite quick_check OK.
+Enabled on a separate fresh database: 34 measurements per phase,
+readiness age .0429s, one synthetic report, graceful exit 0 and
+SQLite quick_check OK. Both disposable containers removed. Evidence
+/var/lib/svt-report-candidate-qa.z1sBHT. No production data or external
+Telegram delivery. Not a same-database transition or signed cutover.
+The next stage is the protected same-runtime transaction with
+explicit owner-bound review, real same-database transition and
+fault injection. No publication or production authorization.
