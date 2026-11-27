@@ -131,17 +131,38 @@ def check_runtime(paths: CUT.Layout, pair: dict, identity: list[str]) -> None:
         raise ValueError("installed runtime pair mismatch")
 
 
-def review(paths: CUT.Layout) -> dict:
-    """Bracket read-only checks; do not authorize any cutover or restart."""
-    identity = runtime_identity()
-    pair, _, supervised = CUT.installed_runtime(paths, True)
-    if not supervised or CUT.state_of(CUT.MONITOR) != "inactive":
-        raise ValueError("startup owner not exclusive")
-    work = CUT.installed_transaction(paths, pair)
-    count = source_inputs(paths, pair, work)
-    check_runtime(paths, pair, identity)
-    if not owner_held(paths.fence / ".svt-owner.lock"):
-        raise ValueError("live writer lease unconfirmed")
+def file_identity(path: Path) -> dict:
+    """Record an ordinary single-linked inode without opening SQLite."""
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("unsafe installed evidence inode")
+    return {"device": info.st_dev, "inode": info.st_ino}
+
+
+def evidence_binding(paths: CUT.Layout, work: Path) -> dict:
+    """Bind exact existing journal, receipt and live inode identities."""
+    return {
+        "receipt_sha256": sha(paths.state / "deployed.json"),
+        "journal_sha256": sha(work / "transaction.json"),
+        "database_identity": file_identity(paths.database),
+        "writer_lock_identity": file_identity(paths.fence / ".svt-owner.lock"),
+    }
+
+
+def check_stable(paths, work, pair, identity, binding):
+    """Reject identity drift and loss of the observed writer lease."""
+    if (
+        CUT.installed_runtime(paths, True)[0] != pair
+        or runtime_identity() != identity
+        or CUT.installed_transaction(paths, pair) != work
+        or evidence_binding(paths, work) != binding
+        or not owner_held(paths.fence / ".svt-owner.lock")
+    ):
+        raise ValueError("installed runtime changed during review")
+
+
+def check_reload():
+    """Require both startup units to reflect their on-disk definitions."""
     for unit in (CUT.SUPERVISOR, CUT.MONITOR):
         if (
             CUT.run(
@@ -150,20 +171,37 @@ def review(paths: CUT.Layout) -> dict:
             != "no"
         ):
             raise ValueError("unit reload pending")
+
+
+def review(paths: CUT.Layout) -> dict:
+    """Bracket read-only checks; do not authorize any cutover or restart."""
+    identity = runtime_identity()
+    pair, _, supervised = CUT.installed_runtime(paths, True)
+    if not supervised or CUT.state_of(CUT.MONITOR) != "inactive":
+        raise ValueError("startup owner not exclusive")
+    work = CUT.installed_transaction(paths, pair)
+    binding = evidence_binding(paths, work)
+    count = source_inputs(paths, pair, work)
+    check_runtime(paths, pair, identity)
+    if not owner_held(paths.fence / ".svt-owner.lock"):
+        raise ValueError("live writer lease unconfirmed")
+    check_reload()
     try:
         CUT.public_receipt_preflight(paths)
     except (OSError, ValueError):
         public = False
     else:
         public = True
-    if (
-        CUT.installed_runtime(paths, True)[0] != pair
-        or runtime_identity() != identity
-    ):
-        raise ValueError("installed runtime changed during review")
+    check_stable(paths, work, pair, identity, binding)
     return {
         "status": "PASS_INSTALLED_SUPERVISOR_REVIEW_ONLY",
         "version": pair["version"],
+        "container_id": identity[0],
+        "image_id": identity[1],
+        "started_at": identity[2],
+        **binding,
+        "fault_attribution_verified": False,
+        "incident_hold_verified": False,
         "signed_inputs_match": count,
         "writer_lease_held": True,
         "public_receipt_preflight": public,

@@ -42,6 +42,15 @@ class InstalledReviewTests(unittest.TestCase):
         patch.object(
             QA.CUT, "installed_transaction", return_value=Path("/qa")
         ).start()
+        self.binding = {
+            "receipt_sha256": "a" * 64,
+            "journal_sha256": "b" * 64,
+            "database_identity": {"device": 1, "inode": 2},
+            "writer_lock_identity": {"device": 1, "inode": 3},
+        }
+        self.bound = patch.object(
+            QA, "evidence_binding", return_value=self.binding
+        ).start()
         patch.object(QA, "source_inputs", return_value=34).start()
         patch.object(QA, "check_runtime").start()
         self.real_owner = QA.owner_held
@@ -57,6 +66,8 @@ class InstalledReviewTests(unittest.TestCase):
             "deployment_authorized",
             "startup_authorized",
             "signatures_reverified",
+            "fault_attribution_verified",
+            "incident_hold_verified",
         ):
             self.assertIs(result[key], False)
 
@@ -90,3 +101,47 @@ class InstalledReviewTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 self.real_owner(path)
             self.assertFalse(os.path.lexists(path))
+
+    def test_binding_reported(self):
+        """Expose exact receipt, journal and writer/DB identity only."""
+        result = QA.review(self.paths)
+        for key, value in self.binding.items():
+            self.assertEqual(result[key], value)
+        self.assertEqual(result["container_id"], self.identity[0])
+        self.assertEqual(result["image_id"], self.identity[1])
+        self.assertEqual(result["started_at"], self.identity[2])
+
+    def test_journal_bytes_changed(self):
+        """Same parsed pair is not sufficient if the journal bytes drift."""
+        changed = dict(self.binding, journal_sha256="c" * 64)
+        self.bound.side_effect = [self.binding, changed]
+        with self.assertRaisesRegex(ValueError, "changed during review"):
+            QA.review(self.paths)
+
+    def test_writer_inode_changed(self):
+        """Refuse replacement of the observed writer lock inode."""
+        changed = dict(
+            self.binding, writer_lock_identity={"device": 1, "inode": 5}
+        )
+        self.bound.side_effect = [self.binding, changed]
+        with self.assertRaisesRegex(ValueError, "changed during review"):
+            QA.review(self.paths)
+
+    def test_lease_lost(self):
+        """A lease held initially must still be held at final review."""
+        self.owner.side_effect = [True, False]
+        with self.assertRaisesRegex(ValueError, "changed during review"):
+            QA.review(self.paths)
+
+    def test_file_identity_refuses_link(self):
+        """An inode alias is not a valid installed evidence path."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "data"
+            path.write_bytes(b"synthetic")
+            alias = path.with_name("alias")
+            alias.symlink_to(path)
+            self.assertEqual(
+                QA.file_identity(path)["inode"], path.stat().st_ino
+            )
+            with self.assertRaisesRegex(ValueError, "unsafe installed"):
+                QA.file_identity(alias)
