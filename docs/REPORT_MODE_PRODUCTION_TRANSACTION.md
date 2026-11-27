@@ -634,3 +634,33 @@ a point-in-time observation, not continuous readiness or proof of
 resumed delivery. Next: qualify integrated runtime when available,
 bind final delivery evidence and separately approved signed pair.
 Production remains on .27; no migration or activation performed.
+
+## Stopped synthetic report delivery evidence (2026-11-27)
+
+Exact #492 and narrow #472 CI 8/8 PASS. New QA-only delivery
+action in qa-durable-report-start.py and helper
+qa-report-delivery-evidence.py review an already accepted, cleanly
+stopped exact container under existing quiescent operator gates.
+Require the original ARM, launch and acceptance binding, released
+journal, effective runtime profile, accepted database prefix and
+externally supplied acceptance hash. Review the bounded synthetic
+API event log and report markers. PAUSED permits only ordinary-paused
+and retains the baseline report metadata. ENABLED requires exactly
+ordinary-paused, resumed-report, ordinary-resumed and the new
+weekly delivered marker. The earlier paused receipt hash, its
+full stopped history (matching the resumed baseline) and exact
+unresolved pending marker hash must match. Persist token-scoped
+delivery evidence once; identical replay retains the bytes.
+
+224 focused tests and quality gate PASS; eight new unit tests
+exercise synthetic sequences, missing pending, duplicates,
+predecessor and history drift, and actual receipt file replay.
+No live integrated Docker trial was performed and the earlier
+blocked integration call was not repeated. The probe event log is
+a synthetic application-writable fixture, not an authenticated
+Telegram ACK or tamper-proof remote delivery proof. The receipts
+are local QA evidence only. Exact stopped runtime and real log/DB
+validation remain to be qualified in the integrated trial.
+Next review signed candidate and owner policy, and qualify the
+complete integration when available. No production deployment,
+Telegram send, or release authorization.

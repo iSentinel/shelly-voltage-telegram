@@ -1,3 +1,16 @@
+## 2026-11-27 — durable synthetic report delivery evidence
+
+- Exact #492 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Add stopped delivery review tied to exact launch/acceptance,
+  accepted history, synthetic events and pending report marker.
+- Bind resumed delivery to prior paused receipt and exact stopped
+  baseline; write-once evidence and identical replay.
+- 224 focused tests and quality gate PASS. Integrated Docker QA
+  still pending; previous blocked execution not retried.
+- NEXT: review signed feature-capable candidate and owner policy;
+  qualify complete runtime and delivery integration when available.
+  No production changes or real Telegram delivery proof.
+
 ## 2026-11-27 — durable Report Worker launch/acceptance receipt
 
 - Exact #491 and narrow #472 CI 8/8 PASS; .29 tag absent.

@@ -20,6 +20,7 @@ TX = START.TX
 CP = OP.load("qa-compose-provenance")
 READY = OP.load("qa-report-runtime-acceptance")
 RECEIPT = OP.load("qa-report-launch-receipt")
+DELIVERY = OP.load("qa-report-delivery-evidence")
 PROBE = {
     "probe.py": (
         "013c82431b17d149c8ca9720f2d914bb2084c2640cc09d2b2525c612bef8b3ef"
@@ -270,13 +271,56 @@ def record_launch(root, token, anchor, identity):
     return RECEIPT.save_launch(START, root, token, anchor, identity)
 
 
+def delivery(args):
+    """Review the exact stopped accepted launch under quiescent gates."""
+    root, token = args.root, args.token
+    record, journal = launch_evidence(root, token, args.anchor)
+    info = TX.inspect_qa_container(root, "svt-qa-" + root.name)
+    if (
+        info["Id"] != record["container_id"]
+        or info["State"]["Running"] is not False
+        or info["State"]["ExitCode"] != 0
+    ):
+        raise ValueError("accepted runtime not cleanly stopped")
+    RECEIPT.check_launch(START, root, token, args.anchor, info)
+    check_observed(root, info, record, journal)
+    accepted = RECEIPT.read(START, root, token, "acceptance")
+    if (
+        accepted["arm_sha256"] != args.anchor
+        or accepted["container_id"] != info["Id"]
+        or accepted["started_at"] != info["State"]["StartedAt"]
+        or accepted["launch_sha256"]
+        != TX.sha(START.read_bytes(START.path_for(root, token, "launch")))
+    ):
+        raise ValueError("acceptance launch mismatch")
+    result = DELIVERY.evidence(
+        START,
+        root,
+        token,
+        journal["target"],
+        args.acceptance_sha256,
+        args.prior_token,
+        args.prior_sha256,
+    )
+    return {
+        "delivery_sha256": DELIVERY.persist(START, root, token, result),
+        "synthetic_api_only": True,
+        "telegram_delivery_verified": False,
+    }
+
+
 def arguments():
     """Parse explicit isolated review, start, and observation actions."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--token", required=True)
     parser.add_argument("--anchor", required=True)
-    parser.add_argument("action", choices=("arm", "start", "observe"))
+    parser.add_argument(
+        "action", choices=("arm", "start", "observe", "delivery")
+    )
+    parser.add_argument("--acceptance-sha256")
+    parser.add_argument("--prior-token")
+    parser.add_argument("--prior-sha256")
     return parser.parse_args()
 
 
@@ -294,6 +338,8 @@ def execute(args):
     with TX.exclusive(args.root, observation=args.action == "observe"):
         if args.action == "arm":
             return START.arm(args.root, args.token, args.anchor, bind=binding)
+        if args.action == "delivery":
+            return delivery(args)
         return observe(args.root, args.token, args.anchor)
 
 
