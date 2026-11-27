@@ -438,3 +438,37 @@ active/enabled, DynamicUser checker failed with ExecMainStatus=200.
 Production monitor healthy, restart count zero. No legacy checker
 or path changes performed. Migration remains separately approved
 maintenance, not part of same-runtime mode planning.
+
+## Bind a reviewed mode plan to signed source capability
+
+2026-11-27: exact #485 and #472 CI 8/8 PASS. New read-only
+qa-review-mode-plan.py recomputes the canonical externally pinned
+plan from protected receipt and .env bytes, stopped local container,
+image ID and database device/inode. It checks the restrictive
+offline host profile, explicit source mode, expected data/fence
+mounts, independently pinned online evidence, retained source
+archive and OCI byte chain. It requires the known static pause
+branch in the exact archived app.py, Config default and report/monitor
+loop methods. It does not execute the archive or establish behavior.
+No runtime qualification, owner approval, startup or deployment
+authorization can be granted by this verifier.
+
+186 focused tests and project quality gate PASS. Static check
+matches the current unsigned Report Worker source and refuses old
+or incomplete pause branch. Actual LXC114 fixture
+/var/lib/svt-report-mode-tx-qa.6TeIVC: real signed .28 archive,
+ten preserved OCI layers, existing independently pinned online
+evidence, synthetic receipt and stopped Docker fixture passed
+identity checks but refused specifically because the signed source
+does not contain the feature. Exit 3, original .env, receipt and
+database SHA256 unchanged, container never started and removed.
+Result PASS_SIGNED_OLD_RUNTIME_FEATURE_REFUSED.
+
+The exact AST check is deliberately tied to the current implementation,
+not a general proof of feature semantics. A positive end-to-end
+review on a feature-capable signed pair remains outstanding. The
+plan does not bind all process overrides or provide a production
+transaction or actual operator authorization. Next review the
+feature-capable candidate and owner-bound transaction contract,
+then qualify signed runtime and separately approved migration.
+Do not promote the QA verifier or permit production paused yet.

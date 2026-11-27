@@ -127,3 +127,22 @@ and owner approval, reverify unit bytes and pair, and use the
 approved maintenance fence. The QA utility must not be repointed
 at production. Signed release publication and activation remain
 distinct gates.
+
+### Actual DynamicUser-created private state (2026-11-27)
+
+Exact #485 CI 8/8 PASS. On isolated LXC114 a uniquely named
+DynamicUser=yes service with StateDirectory and StateDirectoryMode=0750
+ran successfully. systemd created the root-owned public symlink and
+the private directory owned by dynamic UID 65412, mode 0750, with
+a synthetic receipt mode 0644 owned by that UID. After the test
+service was stopped, its private directory was moved into a dedicated
+QA fixture and the equivalent literal legacy alias was created there.
+The existing migration prepare/recover code passed with the actual
+systemd-created private inode and receipt bytes preserved. New public
+directory empty, root-owned 0755. Evidence:
+ /var/lib/svt-legacy-receipt-qa.4q5xB5.
+Result PASS_MIGRATION_OF_REAL_DYNAMICUSER_PRIVATE_STATE.
+This is not a migration at the live systemd StateDirectory path:
+the private state was relocated into the isolated fixture before
+rehearsal, and the retired-unit checks used dedicated test units.
+No production state or units were modified.
