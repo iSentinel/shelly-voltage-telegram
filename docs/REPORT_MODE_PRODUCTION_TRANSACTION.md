@@ -392,3 +392,49 @@ Next consolidate release scope and implement production-specific
 read-only transaction/unit verification using existing signed-forward
 guards, then qualify a separately signed report-worker candidate.
 Do not enable production paused or loosen rollback.
+
+## Exact same-runtime transition planning
+
+2026-11-27: exact #483 and #472 CI 8/8 PASS. Added the read-only
+qa-same-runtime-recovery-plan.py. It computes both private config
+hashes for an explicit enabled/paused transition, preserving every
+unrelated byte, and binds the full pair identity, previous container,
+image ID and database device/inode to a canonical plan SHA256.
+Only one explicit canonical assignment is accepted; duplicate keys,
+interpolation, complex quoting and noncanonical mode assignments
+fail closed. This conservative subset intentionally refuses absent
+mode (including legacy default-enabled configuration). No private
+configuration values are emitted. The CLI is restricted to a protected
+offline QA fixture and does not write configuration or start Docker.
+
+174 focused tests and quality gate PASS. Actual LXC114 fixture
+/var/lib/svt-report-mode-tx-qa.JpdeTV used a synthetic multi-setting
+.env, synthetic receipt derived from the verified .28 pair, real
+stopped Docker image/container metadata and a disposable SQLite file.
+Resolved Compose plans differed only in SCHEDULED_REPORTS_MODE.
+Reverse transition reproduced every original byte. Original .env,
+receipt and database SHA256 remained unchanged. Container never
+started and was removed. Result PASS_REAL_QA_MODE_PLAN_NO_START.
+Plan SHA256:
+c206d4a6e208301107049400dd0778d60bfc08dbaadba287aa93bd6b2afea57c.
+
+The supplied fixture identity is not independently authenticated by
+the planner; it does not check signatures, lock ownership, live
+configuration provenance, report support in the image, or owner
+approval. A plan hash is not an authorization. The actual .28 image
+predates the report-mode feature. Production has zero explicit mode
+assignments and remains untouched. A future production operator must
+bind its reviewed plan to fresh verified evidence, exact receipt bytes,
+a signed feature-capable pair, owner authorization, full stopped
+history and protected transaction gates. The default/absent mode
+case requires a separate reviewed configuration policy.
+
+## Independent public receipt blocker
+
+Read-only LXC110 review confirmed the legacy root-owned public
+symlink still targets private/shelly-voltage-update-check; private
+directory mode 0750 and private receipt present. Old checker timer
+active/enabled, DynamicUser checker failed with ExecMainStatus=200.
+Production monitor healthy, restart count zero. No legacy checker
+or path changes performed. Migration remains separately approved
+maintenance, not part of same-runtime mode planning.
