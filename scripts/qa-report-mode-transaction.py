@@ -368,6 +368,7 @@ def claim_verified_restart(root: Path, name: str) -> str:
         raise ValueError("verified restart policy changed")
     verify_restart_history(root, policy["baseline"])
     claim = {
+        "baseline": history_snapshot(root),
         "container_id": info["Id"],
         "policy_sha256": sha(
             (root / "verified-restart-policy.json").read_bytes()
@@ -384,9 +385,13 @@ def observe_verified_restart(root: Path, name: str) -> dict:
     policy = read_record(path)
     claim = read_record(root / "verified-restart-claim.json")
     info = start_binding(root, name, running=True)
+    baseline = claim.get("baseline")
     if (
-        claim
+        not isinstance(baseline, dict)
+        or set(baseline) != set(policy["baseline"])
+        or claim
         != {
+            "baseline": baseline,
             "container_id": info["Id"],
             "policy_sha256": sha(path.read_bytes()),
             "deployment_authorized": False,
@@ -398,6 +403,7 @@ def observe_verified_restart(root: Path, name: str) -> dict:
     ):
         raise ValueError("verified restart observation mismatch")
     verify_restart_history(root, policy["baseline"])
+    verify_restart_history(root, baseline)
     return info
 
 

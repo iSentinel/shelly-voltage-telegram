@@ -390,6 +390,36 @@ class ReportModeTransactionTests(unittest.TestCase):
         ):
             TX.claim_verified_restart(self.root, "fixture")
 
+    def test_restart_claim_covers_rows_added_after_seal(self):
+        """All clean-stop rows, not just sealed rows, must survive restart."""
+        info, db = self.restart_fixture()
+        with closing(sqlite3.connect(db)) as connection, connection:
+            connection.execute("INSERT INTO measurements VALUES(3,222)")
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            TX.claim_verified_restart(self.root, "fixture")
+            claim = TX.read_record(self.root / "verified-restart-claim.json")
+            self.assertEqual(claim["baseline"]["rows"], 3)
+            self.assertEqual(claim["baseline"]["last_id"], 3)
+            info["State"].update(Running=True, StartedAt="next")
+            with closing(sqlite3.connect(db)) as connection, connection:
+                connection.execute("UPDATE measurements SET v=0 WHERE id=3")
+                connection.execute("INSERT INTO measurements VALUES(4,223)")
+            with self.assertRaisesRegex(ValueError, "history changed"):
+                TX.observe_verified_restart(self.root, "fixture")
+
+    def test_restart_observation_rejects_legacy_claim(self):
+        """An older claim without stopped history cannot certify restart."""
+        info, _ = self.restart_fixture()
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            TX.claim_verified_restart(self.root, "fixture")
+            path = self.root / "verified-restart-claim.json"
+            claim = TX.read_record(path)
+            del claim["baseline"]
+            TX.atomic_write(path, json.dumps(claim).encode())
+            info["State"].update(Running=True, StartedAt="next")
+            with self.assertRaisesRegex(ValueError, "observation mismatch"):
+                TX.observe_verified_restart(self.root, "fixture")
+
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
         with (
