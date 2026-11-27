@@ -144,3 +144,44 @@ of those scenarios on the revised baseline code. The guest unit
 was manually started after reboot, not enabled for boot; no claim
 of automatic boot coverage. Production pause remains blocked.
 Multi-generation policy and signed qualification remain outstanding.
+
+## Append-only QA restart generations
+
+Exact #476 (24df603cbf11b1e0b51b857313d727f0f31a950c) CI 8/8
+PASS. Repeated isolated LXC114 guest reboot: init PID 1368060
+to 1379307, stopped database and policy SHA256 unchanged, manual
+supervisor restart accepted all 670 stopped rows and added history
+to 694. All three phases fresh (.876s); third start refused.
+Evidence: /var/lib/svt-report-mode-tx-qa.28KGsg.
+
+This revision permits an explicit --seal-next-restart review of the
+current accepted launch. It creates a new generation without deleting
+or overwriting earlier policy, claim or acceptance. Each next policy
+binds the SHA256 digest of the preceding generation's three protected
+records. The latest contiguous generation is selected; gaps, orphan
+records, changed earlier evidence and repeated claims fail closed.
+Each acceptance binds the exact consumed claim hash, full stopped
+history and current three-phase readiness. Older acceptance receipts
+without claim_sha256 cannot authorize the next generation.
+The prototype is bounded to eight restart generations and remains
+offline QA-only. This is not protection against a privileged actor
+rewriting an entire chain or bypassing the cooperating supervisor.
+
+128 focused tests and project quality gate PASS. Actual isolated
+Docker QA on the new code: initial launch plus two separately
+approved restarts on the same container ID. Original generation
+policy/claim/acceptance SHA256 remained unchanged. History at initial
+start and the three restart claims: 694/724/757/793 rows; inode
+and selected metadata preserved. First and second restart phase
+ages .941s and .939s, three fresh samples each phase, three ordinary
+synthetic alerts and no scheduled reports. A real SIGKILL after
+generation three's durable claim but before Docker request left the
+container stopped with unchanged StartedAt, the database and policy
+SHA256 unchanged (793 rows), retry refused exit 3 and no acceptance.
+Evidence: /var/lib/svt-report-mode-tx-qa.TKkf4l.
+
+The revised-code reboot evidence is #476, not the new generation
+revision; the SIGKILL evidence is from the new revision, not an
+independent repeat on exact #476. Automatic boot enablement and
+multi-generation reboot tests remain outstanding. No production
+pause or deployment authorized; narrow v0.5.29-hw unchanged.

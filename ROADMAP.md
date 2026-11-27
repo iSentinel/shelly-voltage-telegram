@@ -1,3 +1,23 @@
+## 2026-11-27 — append-only QA restart generations
+
+- Exact #476 and separate #472 CI 8/8 PASS; no .29 release tag.
+- Repeat #476 isolated reboot: init PID changed, SHA256 unchanged,
+  manually supervised restart PASS, stopped history 670/694,
+  third START refused.
+- Explicit next-generation seal after fresh acceptance; bind prior
+  policy/claim/acceptance hashes, reject gaps/orphans/drift. Bound to
+  eight restart generations, no old claim reset. Each acceptance
+  now binds exact claim SHA256.
+- 128 focused tests and quality gate PASS.
+- Real new-code isolated Docker: initial plus two reviewed restarts,
+  same ID, first generation evidence unchanged; 694/724/757/793 rows,
+  all phases fresh, three ordinary alerts, no reports. Generation 3
+  SIGKILL before Docker request, retry refused, SHA256 unchanged.
+- NEXT: multi-generation guest reboot and automatic boot boundary,
+  signed production design and qualification. Exact #476 SIGKILL
+  not repeated separately; superseding revision tested. No production
+  changes or release authorization.
+
 ## 2026-11-27 — guest reboot, restart interruption and stopped baseline
 
 - Exact #475 and separate #472 CI 8/8 PASS. No .29 tag.

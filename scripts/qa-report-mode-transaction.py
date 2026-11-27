@@ -308,6 +308,60 @@ def policy_inputs(root: Path) -> dict:
     return result
 
 
+MAX_RESTART_GENERATIONS = 8
+
+
+def restart_record(root: Path, generation: int, kind: str) -> Path:
+    """Keep generation one compatible and later evidence append-only."""
+    if not 1 <= generation <= MAX_RESTART_GENERATIONS:
+        raise ValueError("restart generation limit")
+    if kind not in ("policy", "claim", "acceptance"):
+        raise ValueError("invalid restart record kind")
+    prefix = (
+        "verified-restart"
+        if generation == 1
+        else (f"verified-restart-g{generation:02d}")
+    )
+    return root / f"{prefix}-{kind}.json"
+
+
+def generation_digest(root: Path, generation: int) -> str:
+    """Bind exact protected policy, claim and acceptance bytes."""
+    hashes = {}
+    for kind in ("policy", "claim", "acceptance"):
+        path = restart_record(root, generation, kind)
+        read_record(path)
+        hashes[kind] = sha(path.read_bytes())
+    return sha(json.dumps(hashes, sort_keys=True).encode())
+
+
+def current_generation(root: Path) -> int:
+    """Find the last contiguous generation; never fall back on gaps."""
+    current = 0
+    for number in range(1, MAX_RESTART_GENERATIONS + 1):
+        path = restart_record(root, number, "policy")
+        if not os.path.lexists(path):
+            if any(
+                os.path.lexists(restart_record(root, number, kind))
+                for kind in ("claim", "acceptance")
+            ):
+                raise ValueError("orphan restart evidence")
+            continue
+        if number != current + 1:
+            raise ValueError("restart generation gap")
+        record = read_record(path)
+        if os.path.lexists(
+            restart_record(root, number, "acceptance")
+        ) and not os.path.lexists(restart_record(root, number, "claim")):
+            raise ValueError("orphan restart acceptance")
+        if number > 1 and record.get("previous_sha256") != generation_digest(
+            root, current
+        ):
+            raise ValueError("previous generation changed")
+        current = number
+    return current
+
+
 def seal_restart_policy(root: Path, name: str) -> dict:
     """Bind a single QA restart to a positively reviewed running launch."""
     info = start_binding(root, name, running=True)
@@ -322,8 +376,8 @@ def seal_restart_policy(root: Path, name: str) -> dict:
         or info["State"]["StartedAt"] != observation["started_at"]
     ):
         raise ValueError("runtime acceptance not bound")
-    path = root / "verified-restart-policy.json"
-    if os.path.lexists(path):
+    path = restart_record(root, 1, "policy")
+    if current_generation(root):
         raise ValueError("restart policy already sealed")
     record = {
         "container_id": info["Id"],
@@ -350,10 +404,12 @@ def verify_restart_history(root: Path, baseline: dict) -> None:
 
 def claim_verified_restart(root: Path, name: str) -> str:
     """Consume a protected one-shot restart of the cleanly stopped ID."""
-    path = root / "verified-restart-claim.json"
+    generation = current_generation(root)
+    path = restart_record(root, generation, "claim")
     if os.path.lexists(path):
         raise ValueError("verified restart already claimed")
-    policy = read_record(root / "verified-restart-policy.json")
+    policy_path = restart_record(root, generation, "policy")
+    policy = read_record(policy_path)
     info = start_binding(root, name, running=False)
     if (
         policy["container_id"] != info["Id"]
@@ -370,9 +426,7 @@ def claim_verified_restart(root: Path, name: str) -> str:
     claim = {
         "baseline": history_snapshot(root),
         "container_id": info["Id"],
-        "policy_sha256": sha(
-            (root / "verified-restart-policy.json").read_bytes()
-        ),
+        "policy_sha256": sha(policy_path.read_bytes()),
         "deployment_authorized": False,
     }
     atomic_write(path, (json.dumps(claim, sort_keys=True) + "\n").encode())
@@ -381,9 +435,10 @@ def claim_verified_restart(root: Path, name: str) -> str:
 
 def observe_verified_restart(root: Path, name: str) -> dict:
     """Review the second launch without permitting a third launch."""
-    path = root / "verified-restart-policy.json"
+    generation = current_generation(root)
+    path = restart_record(root, generation, "policy")
     policy = read_record(path)
-    claim = read_record(root / "verified-restart-claim.json")
+    claim = read_record(restart_record(root, generation, "claim"))
     info = start_binding(root, name, running=True)
     baseline = claim.get("baseline")
     if (
@@ -405,6 +460,38 @@ def observe_verified_restart(root: Path, name: str) -> dict:
     verify_restart_history(root, policy["baseline"])
     verify_restart_history(root, baseline)
     return info
+
+
+def seal_next_restart_policy(root: Path, name: str) -> dict:
+    """Authorize one more QA restart only from current accepted evidence."""
+    generation = current_generation(root)
+    target = restart_record(root, generation + 1, "policy")
+    info = observe_verified_restart(root, name)
+    acceptance = read_record(restart_record(root, generation, "acceptance"))
+    claim_path = restart_record(root, generation, "claim")
+    claim = read_record(claim_path)
+    if (
+        acceptance.get("qa_restart_verified") is not True
+        or acceptance.get("deployment_authorized") is not False
+        or acceptance.get("container_id") != info["Id"]
+        or acceptance.get("started_at") != info["State"]["StartedAt"]
+        or acceptance.get("stopped_baseline_rows") != claim["baseline"]["rows"]
+        or acceptance.get("claim_sha256") != sha(claim_path.read_bytes())
+        or os.path.lexists(target)
+    ):
+        raise ValueError("current restart acceptance not bound")
+    record = {
+        "container_id": info["Id"],
+        "accepted_started_at": info["State"]["StartedAt"],
+        "image_id": QA_IMAGE,
+        "mode": "paused",
+        "inputs": policy_inputs(root),
+        "baseline": history_snapshot(root),
+        "deployment_authorized": False,
+        "previous_sha256": generation_digest(root, generation),
+    }
+    atomic_write(target, (json.dumps(record, sort_keys=True) + "\n").encode())
+    return record
 
 
 def verify_claim(root: Path, intent: dict) -> None:
