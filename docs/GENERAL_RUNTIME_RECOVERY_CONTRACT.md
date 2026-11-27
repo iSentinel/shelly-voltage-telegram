@@ -89,3 +89,77 @@ candidate and incident-hold ownership, independently bind real
 signed pair and journal evidence, qualify integrated QA when
 available. Previously blocked integrated execution not repeated.
 Production remains .27; no migration, signing or deployment.
+
+## Durable isolated incident hold and repair admission (2026-11-27)
+
+Exact #496 and narrow #472 CI 8/8 PASS. New qa-incident-hold.py
+uses the existing offline QA host boundary, operator lock,
+quiescent writer lease and update gate. It requires a standalone
+synthetic database, an exact caller-pinned scope review hash and
+explicit general-runtime/unknown classification. It publishes a
+distinct owned incident marker before committing a protected
+journal binding full logical SQLite history, inode, configuration
+hash and review hash. Inspection requires an externally supplied
+exact receipt hash, unchanged evidence and the original marker.
+The tool has no release, restore, service stop or START action.
+
+If publication is interrupted before the journal is committed,
+the orphan marker remains and preparation/inspection fail closed;
+manual review is required. This is not an authenticated incident
+classification, signed pair, production hold or guarantee against
+privileged noncooperating Docker access. The fixture is already
+stopped; live quiescence and production WAL acquisition are not
+provided by this tool.
+
+187 focused tests and quality gate PASS, seven new tests covering
+actual marker and journal files, replay, foreign or missing
+marker, changed history, wrong receipt anchor and simulated
+journal publication failure.
+
+Actual offline LXC114 fixture /var/lib/svt-report-mode-tx-qa.YIGHUe:
+four synthetic rows and one unresolved intent. Bound the retained
+exact #493 scope review hash
+dbcc40f10d2a7b2d2b394ce0bc8cd76c59e708d9e8b2f334c582998e71aff312.
+Hold receipt SHA256
+18d40b0acd61fcc74adb7f57c39988732dc7f06a0bafe8892a9ec9804d1ab99c.
+Prepare/inspect results identical; duplicate prepare and wrong
+receipt anchor refused. Real writer_lease refused with
+SVT_UPDATE_PENDING; competing mode prepare refused. SQLite and
+.env SHA256 unchanged. No Docker launch; exact hold marker retained.
+PASS_REAL_QA_INCIDENT_HOLD_REVIEW. Orphan marker recovery was
+unit-tested with simulated failure, not real SIGKILL in this run.
+
+### Forward repair admission checklist
+
+A future repair must have its own exact source commit, reproducible
+release archive hash, independently verified source and OCI pair,
+and a version strictly newer than the failed installed release.
+The original failed pair and journal, current incident evidence,
+repair diff and exact operator revision must be bound together.
+Do not treat a newly signed but behaviorally unreviewed image
+or an older compatible-looking runtime as a qualified repair.
+
+Before any activation, require:
+- explicit root-cause or failure-scope review with evidence;
+- retained report reservation/reconciliation semantics, PHOTO
+  identity, ordinary monitor behavior and SQLite schema compatibility;
+- fresh current-DB rescue including WAL-committed history, validated
+  under the stopped-writer boundary, no replacement by stale rescue;
+- a real isolated forward repair rehearsal using the failed runtime
+  and exact proposed repair, one database, full current history
+  and report/status metadata, including unresolved intent refusal
+  or a separately reviewed reconciliation outcome;
+- crash tests before and after each ownership handoff, durable
+  one-shot startup and readiness/history/delivery acceptance;
+- an independently reviewed way to finish or retain the incident
+  hold without unauthorized marker removal or automatic retry;
+- separate owner approval for the exact repair and production
+  operation, with current electrical and hardware readiness.
+
+No actual forward repair candidate exists or is qualified yet.
+The checklist is proposed admission policy, not a recovery
+implementation or an exception to strict rollback. Next review
+current signed pair and cutover-journal binding for the incident
+evidence, and prepare qualification evidence only for a real
+identified repair. Previously blocked integrated Docker trial
+was not repeated. Production and narrow .29 unchanged.
