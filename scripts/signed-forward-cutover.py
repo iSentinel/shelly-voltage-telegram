@@ -909,6 +909,11 @@ def validate_compose(
     paths: Layout, monitor: dict, pin: str, supervised=False
 ) -> None:
     """Verify that the candidate uses the intended pin and existing data."""
+    if (
+        monitor["environment"].get("SCHEDULED_REPORTS_MODE", "enabled")
+        != "enabled"
+    ):
+        raise ValueError("candidate production report recovery is unavailable")
     if monitor["image"] != pin or monitor["restart"] != "no":
         raise ValueError(
             "effective Compose plan violates the signed pin or restart policy"

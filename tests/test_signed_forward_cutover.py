@@ -390,6 +390,18 @@ class ForwardCutoverTests(unittest.TestCase):
         )
         return args, pair
 
+    def test_cutover_plan_refuses_unapproved_report_mode(self):
+        """Block before stopping the previous writer, not at candidate boot."""
+        monitor = json.loads(self.compose_config())["services"][
+            "shelly-voltage"
+        ]
+        for mode in ("paused", "invalid", None, ""):
+            monitor["environment"]["SCHEDULED_REPORTS_MODE"] = mode
+            with self.assertRaisesRegex(ValueError, "report recovery"):
+                CUTOVER.validate_compose(
+                    self.paths, monitor, CUTOVER.image_pin(NEW["digest"])
+                )
+
     def test_rollback_preflight_reads_live_state_without_a_lease_or_write(
         self,
     ):

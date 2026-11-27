@@ -251,6 +251,22 @@ def validate_report_mode(info: dict, expected: str) -> None:
         raise BootBlocked("SVT_REPORT_MODE_MISMATCH")
 
 
+def production_report_policy(info: dict) -> None:
+    """Allow default/enabled only until signed recovery is integrated."""
+    env = info.get("Config", {}).get("Env")
+    if not isinstance(env, list) or not all(
+        isinstance(item, str) for item in env
+    ):
+        raise BootBlocked("SVT_REPORT_MODE_ENV_INVALID")
+    entries = [
+        item
+        for item in env
+        if item.partition("=")[0] == "SCHEDULED_REPORTS_MODE"
+    ]
+    if entries not in ([], ["SCHEDULED_REPORTS_MODE=enabled"]):
+        raise BootBlocked("SVT_REPORT_MODE_PRODUCTION_RECOVERY_UNAVAILABLE")
+
+
 def validate_expected_identity(info: dict, args: argparse.Namespace) -> None:
     """Check optional QA-only identity and report-mode expectations."""
     expected_id = getattr(args, "expected_container_id", None)
@@ -288,6 +304,8 @@ def validate_container(info: dict, args: argparse.Namespace) -> None:
     if len(shared) != 1:
         raise BootBlocked("SVT_FENCE_MOUNT_MISMATCH")
     validate_expected_identity(info, args)
+    if not args.qa_offline:
+        production_report_policy(info)
     if args.qa_offline:
         if not args.container.startswith("svt-qa-"):
             raise BootBlocked("SVT_QA_CONTAINER_UNSAFE")

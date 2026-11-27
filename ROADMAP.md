@@ -1,3 +1,19 @@
+## 2026-11-27 — production report-mode boundary
+
+- Exact PR #473 CI 8/8 PASS. Separate narrow #472 CI 8/8 PASS,
+  revised exact owner review packet prepared, publication not approved.
+- Fail closed on unapproved production report mode at both resolved
+  Compose preboot plan and every normal supervisor start.
+- 118 focused tests and quality gate PASS. Real networkless Docker
+  inspect default/enabled accepted, paused/invalid refused, no starts.
+  Actual resolved Compose paused plan refused after isolated retry.
+- Document production transaction design in
+  docs/REPORT_MODE_PRODUCTION_TRANSACTION.md: durable signed pair,
+  protected configuration, startup claim and persistent verified mode.
+- NEXT: implement persistent policy and owned transaction in isolated
+  QA, verify systemd process restart/reboot boundaries, signed QA.
+  Production pause remains unavailable. No production changes.
+
 ## 2026-11-27 — supervisor revalidation on every normal START
 
 - PR #471 exact CI 8/8 PASS.

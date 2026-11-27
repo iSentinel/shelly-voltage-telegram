@@ -57,7 +57,7 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
                     "RW": True,
                 },
             ],
-            "Config": {"Image": "qa-offline-synthetic"},
+            "Config": {"Image": "qa-offline-synthetic", "Env": []},
         }
 
     def test_foreign_running_writer_refused(self) -> None:
@@ -123,6 +123,52 @@ class SupervisedContainerPolicyTests(unittest.TestCase):
             SUPERVISOR.BootBlocked, "REPORT_MODE_QA_ONLY"
         ):
             SUPERVISOR.validate_container(self.info, self.args)
+
+    def test_production_mode_default_and_explicit_enabled(self):
+        """Keep existing default enabled, never infer an approved pause."""
+        for env in ([], ["SCHEDULED_REPORTS_MODE=enabled"]):
+            self.info["Config"]["Env"] = env
+            SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_mode_refuses_unapproved_configuration(self):
+        """Reject paused, invalid, bare and duplicate production settings."""
+        for env in (
+            ["SCHEDULED_REPORTS_MODE=paused"],
+            ["SCHEDULED_REPORTS_MODE=invalid"],
+            ["SCHEDULED_REPORTS_MODE"],
+            ["SCHEDULED_REPORTS_MODE=enabled"] * 2,
+            [
+                "SCHEDULED_REPORTS_MODE=enabled",
+                "SCHEDULED_REPORTS_MODE=paused",
+            ],
+        ):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "PRODUCTION_RECOVERY_UNAVAILABLE"
+            ):
+                SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_mode_invalid_env_shape(self):
+        """Do not interpret malformed Docker inspection as default mode."""
+        for env in (None, "SCHEDULED_REPORTS_MODE=enabled", [True]):
+            self.info["Config"]["Env"] = env
+            with self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "REPORT_MODE_ENV_INVALID"
+            ):
+                SUPERVISOR.production_report_policy(self.info)
+
+    def test_production_pause_refused_before_receipt_use(self):
+        """Even a valid signed receipt cannot itself authorize pause."""
+        self.args.qa_offline = False
+        self.info["Config"]["Env"] = ["SCHEDULED_REPORTS_MODE=paused"]
+        with (
+            patch.object(SUPERVISOR, "verify_receipt") as receipt,
+            self.assertRaisesRegex(
+                SUPERVISOR.BootBlocked, "PRODUCTION_RECOVERY_UNAVAILABLE"
+            ),
+        ):
+            SUPERVISOR.validate_container(self.info, self.args)
+        receipt.assert_not_called()
 
     def test_armed_container_identity_must_match(self):
         """The reviewed immutable ID cannot be replaced under its name."""
