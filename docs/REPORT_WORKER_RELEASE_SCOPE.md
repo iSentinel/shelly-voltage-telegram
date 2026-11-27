@@ -209,3 +209,43 @@ zero unresolved report intents. This is a limited voltage/history
 observation, not the full cutover authorization. Legacy public
 alias still present, checker ExecMainStatus=200 (exit-code).
 No production migration or restart performed.
+
+## Corrected ACK source qualification (2026-11-27)
+
+Exact #504 commit 35babcfc673ddfe2b1302c0cb760d69d68687a01
+and narrow #472 CI 8/8 PASS. Two git archive + gzip -n exports
+under different umasks match byte for byte. All 664 regular
+files and executable bits match the exact Git tree. All 29
+build-input names match the earlier #493 manifest; 28 hashes
+unchanged, only app.py changed to
+7052a862cff39338b26b6c253a4878050fcd8985c298158b0f26cfdb8b87a61d.
+Both retained probe file fingerprints unchanged. AST equality
+of public_receipt_preflight and publish_version with #472
+confirmed after correcting an audit-only wrong file lookup.
+
+Unsigned source review archive SHA256
+dd79f8b391d75db4b90c7fbc50cd262dce6724b6029c88c830bda4c5b9cac86b.
+Review manifest SHA256
+a3d979232200f7dad24bb7643eb8b97667d6ff83cc2e0418ed171ddd813549c4.
+Protected evidence: /var/tmp/svt-report-ack-scope.5Yic9k.
+PASS_UPDATED_UNSIGNED_SOURCE_REVIEW_ONLY.
+This is not release packaging, a signed artifact, or a rebuilt
+image. The older QA image and fixed START profile do not qualify
+the changed runtime. No Docker build or integrated launch here.
+
+The initial consolidated regression under umask 077 exposed
+five errors in the synthetic legacy migration test fixture:
+mkdir(mode=0750) was masked to 0700. Explicit fixture chmod
+restores the intended directory mode. The production/QA helper
+checks remain unchanged. The seven migration tests pass under
+both umask 022 and 077. After the test-only correction, 339
+focused tests in 29 suites pass under ordinary umask 022;
+quality gate PASS. This test-only correction is subsequent to
+the archived exact #504 snapshot; runtime inputs are unchanged.
+Regression log SHA256
+f9b908f3bbd32bd1e29825cad68e96bffbd2a69056f93baf8494e4e7adeb9f0c.
+
+Narrow .29 archive hash reverified unchanged. No release
+version, signing, deployment, or reuse of stale image evidence.
+Next: review exact candidate build and integrated acceptance
+requirements; keep blocked execution boundaries intact.
