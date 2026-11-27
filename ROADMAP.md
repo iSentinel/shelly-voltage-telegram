@@ -1,3 +1,17 @@
+## 2026-11-27 — historical signed-pair incident reference (unit-tested)
+
+- Narrow #472 CI 8/8 PASS; #497 CI initially in progress.
+- Add offline incident-reference reviewer with independent hold,
+  scope, receipt, journal and online evidence anchors, retained
+  source and OCI chain/local image validation.
+- 119 focused tests and quality PASS. Integrated LXC114 reference
+  command blocked; not repeated or bypassed.
+- Historical signed .28 reference and synthetic journal do not
+  establish installed pair or failure attribution. No authority.
+- NEXT: exact installed-incident evidence contract and admission
+  review; integrated qualification when available. Production
+  unchanged; narrow .29 remains separate.
+
 ## 2026-11-27 — durable isolated incident hold and repair admission
 
 - Exact #496 and narrow #472 CI 8/8 PASS; no new tags.
