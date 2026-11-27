@@ -1,3 +1,19 @@
+## 2026-11-27 — committed-WAL rescue qualification
+
+- Exact #501 and narrow #472 CI 8/8 PASS; no new tags.
+- Seven actual SQLite tests exercise the existing backup API:
+  committed WAL rows and schema version retained, uncommitted
+  row excluded, pending intent retained but cutover refused,
+  existing rescue cannot be overwritten.
+- Harden standalone rescue seal: sidecars and identity drift
+  refused before checksum publication. 152 focused tests and
+  quality PASS. No actual production WAL capture.
+- Narrow .29 archive unchanged; consolidate separate release
+  and repair admission gaps. No incident invented.
+- NEXT: audit integrated Report Worker admission prerequisites
+  and consolidate draft stack for review. No signing, deployment
+  or bypass of previously blocked integrated tests.
+
 ## 2026-11-27 — underlying synthetic incident artifact review
 
 - Exact #500 and narrow #472 CI 8/8 PASS; no new release tags.

@@ -172,3 +172,52 @@ Next: independently review incident evidence acquisition and
 WAL-consistent rescue requirements, without manufacturing a
 production incident. Consolidate admission gaps before further
 release work. Production unchanged.
+
+## Committed-WAL rescue qualification (2026-11-27)
+
+Exact #501 and narrow #472 CI 8/8 PASS. Seven new tests invoke
+the existing signed-forward-cutover backup_database and
+seal_rollback_rescue helpers against disposable SQLite files.
+Disable WAL autocheckpoint, retain an open synthetic connection,
+checkpoint the initial row, then commit a second row and
+user_version=42 in WAL. The main-file-only immutable view sees
+one row; the normal read-only SQLite Backup API retains both rows
+and user_version. Source main/WAL hashes remain unchanged.
+An uncommitted third row is absent from the backup. A committed
+pending report intent survives backup but blocks the existing
+photo/cutover guard; the failed capture is not a qualified or
+sealed rescue. A duplicate capture cannot overwrite the first.
+
+Harden seal_rollback_rescue to reject WAL, SHM or rollback-journal
+sidecars before and after reading the standalone rescue. Compare
+device, inode, size and mtime across integrity/photo checking
+and hashing; refuse identity drift before checksum publication.
+No production guard is relaxed, and no restoration is added.
+152 focused tests and quality gate PASS. Tests run on real
+temporary SQLite files on the development host; service lifecycle
+and changed-identity fault are modeled where applicable.
+This is SQLite backup/standalone seal qualification, not a
+production WAL capture or proof that a failed writer is quiescent.
+The source is protected by the existing cooperating stopped-writer
+boundary in production; adversarial root changes are out of scope.
+
+### Release admission consolidation
+
+| Track | Remaining decision or evidence |
+| --- | --- |
+| Narrow .29 publication | Exact existing Owner Approval, protected release signing |
+| Narrow .29 production | Separate approval, public receipt migration, current preflight and signed pair |
+| Report Worker | Integrated START/acceptance/delivery trial, signed feature-capable pair, qualified recovery and owner approval |
+| General incident repair | Actual fault and contemporaneous installed evidence, qualified repair and stopped-writer handoff |
+
+The isolated WAL tests close a backup API regression gap, not the
+general incident acquisition gap. Do not manufacture a production
+incident to complete optional incident evidence. The existing .29
+archive SHA256 was rechecked unchanged. No new version, signing,
+migration or deployment. Previously blocked integration commands
+were not repeated or bypassed.
+
+Next: audit the integrated Report Worker admission prerequisites
+against existing evidence and consolidate the draft stack for
+review without inventing new incident evidence. Actual execution
+qualification remains pending where unavailable.

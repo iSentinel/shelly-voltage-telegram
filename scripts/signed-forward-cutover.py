@@ -1092,10 +1092,19 @@ def freeze(paths: Layout, work: Path, saved: dict) -> None:
         seal_rollback_rescue(work, saved["photo"])
 
 
+def standalone_rescue_identity(path: Path) -> tuple:
+    """Refuse sidecars and bind the exact standalone rescue file."""
+    info = safe_path(path)
+    for suffix in ("-wal", "-shm", "-journal"):
+        if os.path.lexists(str(path) + suffix):
+            raise ValueError("rollback rescue has SQLite sidecars")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+
 def seal_rollback_rescue(work: Path, photo: str) -> None:
     """Check the standalone rescue and record its checksum before switching."""
     backup = work / "database-before.sqlite3"
-    safe_path(backup)
+    identity = standalone_rescue_identity(backup)
     with closing(
         sqlite3.connect(backup.as_uri() + "?mode=ro&immutable=1", uri=True)
     ) as db:
@@ -1106,6 +1115,8 @@ def seal_rollback_rescue(work: Path, photo: str) -> None:
         photo_identity(db, photo)
     with backup.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if standalone_rescue_identity(backup) != identity:
+        raise ValueError("rollback rescue changed during review")
     write_file(
         backup.with_suffix(".sqlite3.sha256"),
         f"{digest}  {backup.name}\n".encode(),
