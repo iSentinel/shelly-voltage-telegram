@@ -1,3 +1,18 @@
+## 2026-11-27 — installed incident identity evidence contract
+
+- Exact #498 and narrow #472 CI 8/8 PASS; no new release tags.
+- Extend healthy read-only supervisor review with receipt/journal
+  hashes, DB/owner-lock inode, exact container/image/StartedAt;
+  revalidate all bindings and writer lease before returning.
+- 124 focused tests and quality PASS. Separate actual read-only
+  .27 identity observation: original verified journal, same
+  container and inode identities twice, writer held, HTTP 200.
+- Contract distinguishes healthy baseline from actual incident,
+  stopped state, and exact independently approved repair.
+- NEXT: closed incident evidence manifest and admission boundary
+  review; integrated qualification when available. No production
+  fault injection, release authorization or deployment.
+
 ## 2026-11-27 — historical signed-pair incident reference (unit-tested)
 
 - Narrow #472 CI 8/8 PASS; #497 CI initially in progress.
