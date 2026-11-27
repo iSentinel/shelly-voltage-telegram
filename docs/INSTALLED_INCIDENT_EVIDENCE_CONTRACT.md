@@ -77,3 +77,44 @@ review its admission boundary using synthetic inputs; do not mark
 an actual incident or repair qualified without a real identified
 fault and integrated evidence. Earlier blocked integration calls
 were not retried or bypassed.
+
+## Closed synthetic incident manifest (2026-11-27)
+
+Added qa-incident-manifest.py, a structural QA reviewer with a
+closed schema for baseline, fault, stopped and hold records.
+Each exact serialized record is anchored by SHA256 in the pinned
+manifest and links to the previous record. The chain requires
+strictly increasing integer UTC epoch timestamps, identical
+container/image/StartedAt and receipt/journal fingerprints,
+database and writer-lock device/inode, explicit synthetic scope,
+and matching stopped/held history hashes. Unknown fields,
+duplicate JSON keys, nonfinite constants, invalid hashes,
+missing stages and invalid counts are refused.
+
+The CLI requires protected private files in a dedicated offline
+LXC114 fixture. It reads only five fixed JSON filenames.
+The references to observation, WAL capture, rescue and hold
+receipt are fingerprints, not verified underlying artifacts.
+Claims of quiescence, classification, readiness and identity
+are synthetic fixture assertions, not authenticated observations.
+Timestamp resolution is seconds; same-second stages require a
+future reviewed schema change rather than an invented timestamp.
+A restart or changed inode requires a new review chain.
+All authorization, actual incident and repair qualification
+flags are explicitly false.
+
+137 focused tests and quality gate PASS (13 new tests).
+Actual offline fixture /var/lib/svt-incident-manifest-qa.VAAy3X:
+valid four-stage chain, manifest SHA256
+b15e6972675b6db4e053cbb1c6cb6ac9fa36e87deb2c3f13f836d174ed813c3a.
+Changed record bytes refused; newly hashed chain with changed
+StartedAt refused; original five evidence files restored from
+synthetic fixture copies and exact checksums matched. The
+reviewer itself writes nothing. Result
+PASS_REAL_OFFLINE_SYNTHETIC_MANIFEST_CLI.
+
+Next: evaluate which underlying artifacts can be independently
+verified and which require a real incident or qualified repair.
+No real incident, repair candidate, production hold, signature
+reverification or integrated Docker qualification is implied.
+Previously blocked integration commands were not repeated.

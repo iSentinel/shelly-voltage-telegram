@@ -1,3 +1,16 @@
+## 2026-11-27 — closed synthetic incident evidence manifest
+
+- Exact #499 and narrow #472 CI 8/8 PASS; no new release tags.
+- Add closed four-stage evidence chain with exact manifest and
+  record hashes, predecessor binding, chronology, immutable
+  writer/DB/lock identities, stopped/held history parity.
+- 137 focused tests and quality PASS. Real offline synthetic CLI:
+  valid chain accepted, modified bytes and rehashed changed
+  StartedAt rejected. No actual incident or authority claimed.
+- NEXT: underlying artifact verification and admission gap review;
+  real fault, signed repair and integrated qualification remain
+  unfulfilled. No production changes or release authorization.
+
 ## 2026-11-27 — installed incident identity evidence contract
 
 - Exact #498 and narrow #472 CI 8/8 PASS; no new release tags.
