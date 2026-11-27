@@ -149,3 +149,63 @@ actual lost ACK). No production data or Telegram traffic was used.
 The unsigned image is not a signed feature-capable pair. The next
 step is to formalize the transaction and test its recovery/fencing
 boundaries, then qualify a separately approved signed candidate.
+
+## Exact candidate scope review (2026-11-27 18:05 Europe/Kyiv)
+
+Decision: NO_GO_UNSIGNED_SCOPE_REVIEW_ONLY. This is an exact
+engineering review packet, not a release candidate approval request.
+
+Reviewed Report Worker source: #493, commit
+8f1df6da3bbba454e3345244c762a7f64e5b4a9c, CI 8/8 PASS, CLEAN.
+Against signed .28: 55 files, +10755/-95 lines. Two git archive
+exports with different umasks were byte-identical. All 648 archived
+regular files checked individually against the exact Git blobs.
+Unsigned review archive (not the release packaging format) SHA256:
+0baf9e0a9bf6f9c78353e830d3ed0004e116b16b1092b07ede802583852f8afb.
+Review directory /var/tmp/svt-report-scope-review.vyi5wm;
+scope-review.json SHA256:
+dbcc40f10d2a7b2d2b394ce0bc8cd76c59e708d9e8b2f334c582998e71aff312.
+
+All 29 previously compared runtime/build inputs match the earlier
+unsigned #486 smoke snapshot. Against signed .28, app.py alone
+differs in that input set; its SHA256 remains
+b9eea01ae7c5072a1bec2a0449c70640b58e3ebee10b42247a12baf9ede125b8.
+This confirms byte continuity, not equivalence of complete installer,
+supervisor, operator code, or independently rebuilt OCI images.
+AST comparison of public_receipt_preflight and publish_version
+against exact narrow .29 confirms those two functions match.
+The additional report guards are distinct from narrow .29.
+
+### Release decisions and remaining gates
+
+| Gate | Status |
+| --- | --- |
+| Exact source review and CI | PASS |
+| Earlier unsigned image smoke and same-database rehearsal | PASS, limited scope |
+| New durable operator, launch, acceptance and delivery | Unit/CI PASS; integrated trial pending |
+| Full release Dockerfile rebuild and signed source/OCI pair | NOT DONE |
+| Signed same-runtime recovery and owner-bound production policy | NOT QUALIFIED |
+| Legacy public receipt migration in production | BLOCKED |
+| Strict rollback with changed app.py | NO-GO |
+| Separate exact owner approval | NOT RECEIVED |
+
+Do not assign a new release version, create a tag, sign, publish,
+or deploy the Report Worker stack yet. Do not relax production's
+default/enabled-only guard or the strict runtime parity check.
+A combined integration command was previously blocked and was
+not retried or bypassed. The next independent engineering task is
+review of the recovery/rollback contract and candidate admission
+criteria; complete integrated qualification when available.
+
+The separate narrow .29 archive hash was reverified:
+06ac8440bcb4555f59a73f495b6fdffe0ad22f23c0e0de3d76d29998724cc497.
+Exact #472 CI 8/8 PASS; .29 and .30 tags absent. Its original
+publication-only approval packet remains unchanged.
+
+108 focused tests rerun and quality gate PASS. Read-only production
+review: .27 Healthy, restart count zero, 86 measurements per phase
+over 900 seconds, max gap 11.15s, all voltages in 207-253V,
+zero unresolved report intents. This is a limited voltage/history
+observation, not the full cutover authorization. Legacy public
+alias still present, checker ExecMainStatus=200 (exit-code).
+No production migration or restart performed.
