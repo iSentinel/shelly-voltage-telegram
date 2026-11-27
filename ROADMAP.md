@@ -1,3 +1,21 @@
+## 2026-11-27 — exact unsigned Report Worker QA candidate
+
+- Exact #486 and separate #472 CI 8/8 PASS; .29/.30 tags absent.
+- Reproducible unsigned git snapshot of exact #486, 637 files,
+  SHA256 01f230c138dd6c0626c27a95e83df606b52162856b40e0d21be0c640dc39d9bc.
+- 29 build inputs compared to .28 including VERSION; only app.py
+  changed. Offline COPY-only derived QA image; all 26 runtime
+  files match snapshot. No new release identity.
+- Actual paused and enabled smoke on separate disposable databases:
+  25/34 rows per phase, readiness and SQLite PASS, graceful stop,
+  ordinary-only paused and one synthetic report enabled.
+- In-image 41 final focused tests PASS; initial 2s deadline test
+  intermittent failure, isolated retry PASS, test-only 5s budget
+  and longer trickle; revised HTTP suite 7/7 PASS. Runtime unchanged.
+- NEXT: protected same-database mode transition and fault injection,
+  bind owner-reviewed exact plan and signed feature-capable pair.
+  No full release build, signature, publication or deployment.
+
 ## 2026-11-27 — actual DynamicUser state and signed mode-plan binding
 
 - Exact #485 and separate #472 CI 8/8 PASS; .29 tag absent.
