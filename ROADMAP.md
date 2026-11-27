@@ -1,3 +1,17 @@
+## 2026-11-27 — underlying synthetic incident artifact review
+
+- Exact #500 and narrow #472 CI 8/8 PASS; no new release tags.
+- Review exact referenced JSON and separate standalone SQLite
+  contents, logical history, pending count and rescue parity.
+- 145 focused tests and quality PASS. Actual isolated fixture:
+  12 evidence files, two measurements and one pending intent;
+  modified observation and sidecar refused, original SHA256
+  unchanged. Synthetic content consistency only.
+- NEXT: review committed-WAL rescue and incident acquisition
+  requirements; consolidate release admission gaps. Actual
+  incident, integrated runtime, signed repair and authority
+  remain unqualified. No production changes.
+
 ## 2026-11-27 — closed synthetic incident evidence manifest
 
 - Exact #499 and narrow #472 CI 8/8 PASS; no new release tags.
