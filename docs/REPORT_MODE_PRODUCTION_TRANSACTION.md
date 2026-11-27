@@ -185,3 +185,48 @@ revision; the SIGKILL evidence is from the new revision, not an
 independent repeat on exact #476. Automatic boot enablement and
 multi-generation reboot tests remain outstanding. No production
 pause or deployment authorized; narrow v0.5.29-hw unchanged.
+
+## Automatic multi-generation guest boot evidence
+
+Exact #477 (068dcfde41bcc03f8563a203544aa319d4c04a7b), CI 8/8
+PASS. On 2026-11-27, the isolated LXC114 fixture
+/var/lib/svt-report-mode-tx-qa.OlfpNk ran the initial launch and
+first explicitly reviewed restart, then sealed generation two and
+cleanly stopped. A dedicated enabled systemd oneshot unit with
+Requires/After=docker.service, Restart=no and an exact fixture
+ExecStart/ExecStop was installed solely for the rehearsal.
+
+First pct reboot changed init PID 1379307 to 1392382. Without
+manual start, the enabled unit consumed generation two and started
+the same Docker ID. The prior evidence SHA256s matched. Actual app
+readiness and three fresh samples per phase passed (age .634s);
+856 stopped rows were preserved. Three ordinary synthetic alerts
+and no scheduled reports across the three launches. Clean exit 0.
+
+After a second clean stop with no new generation seal, a second
+pct reboot changed init PID 1392382 to 1393988. The enabled unit
+automatically failed with exit 3: verified restart already claimed.
+The same Docker container remained stopped with unchanged StartedAt.
+SQLite SHA256, all recorded policy/claim/acceptance SHA256s and
+database inode matched; quick_check OK. History across the fixture:
+793/823/856/964 rows. No other container started. The dedicated
+unit was disabled and removed and the disposable container removed.
+
+This proves automatic boot behavior only for the unsigned, offline,
+bounded QA fixture, including refusal of a consumed claim. No
+production service, host reboot, production database or release
+identity was changed. The enabled unit was a test fixture, not
+an installation procedure for production.
+
+## Next integration boundary
+
+Before enabling production recovery, derive a separately reviewed
+candidate with an explicitly versioned signed-pair policy schema.
+Validate protected installed receipt, signed archive/image identity,
+effective Compose environment and exact Docker mounts on every
+startup. Preserve the existing updater and transaction gate lock
+ordering and fail closed for foreign markers, uncertain claim,
+legacy schema and signed pair drift. Test these boundaries against
+synthetic receipts first, then an actual signed pair in isolated QA.
+Do not substitute QA image IDs or the short QA readiness window for
+production acceptance. Keep v0.5.29-hw narrow candidate unchanged.
