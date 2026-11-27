@@ -1,3 +1,10 @@
+## 0.5.29-hw - public receipt preflight and electrical review
+
+- Refuse unsafe receipt paths before supervised cutover.
+- Add a read-only three-phase electrical observation window.
+- Keep monitor inputs identical and preserve strict rollback checks.
+- Exclude the experimental scheduled-report worker from this candidate.
+
 ## 0.5.28-hw - supervised updates and release checks
 
 - Upgrade an already supervised monitor with a signed source archive

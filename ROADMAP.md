@@ -1,3 +1,12 @@
+## 2026-11-27 — v0.5.29-hw metadata correction
+
+- Initial exact-head push CI failed: release notes absent and source
+  metadata inconsistent with the new VERSION. Add versioned release
+  notes, changelog and candidate/publication distinction in READMEs.
+- The original unsigned archive is superseded. Rebuild from the new
+  exact commit and repeat manifest, monitor parity and CI review.
+- No old tag or artifact modified; publication still requires approval.
+
 ## 2026-11-27 — separate narrow v0.5.29-hw review
 
 - Prepare the updater-only candidate from exact #456 checkpoint,

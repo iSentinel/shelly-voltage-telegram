@@ -34,7 +34,7 @@
 `/start` opens the bot menu. Status includes voltage and active settings.
 Pro EM-50 and other single-phase models show `L`; Pro 3EM shows `L1/L2/L3`.
 See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
-Версія джерел релізу: `0.5.23-hw`. Підписані артефакти перевіряйте в [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); остання перевірена production-версія: `0.5.22-hw`. Публікація не означає встановлення.
+Кандидат релізу: `0.5.29-hw`. Останній опублікований реліз: `0.5.28-hw`. Підписані артефакти перевіряйте в [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases); остання перевірена production-версія: `0.5.27-hw`. Публікація не означає встановлення.
 
 ## Що робить проєкт
 
@@ -55,9 +55,9 @@ See [usage and compatibility / справка](docs/TELEGRAM_MENU.md).
 
 ## Статус проєкту
 
-- Поточна версія джерел релізу: **`0.5.23-hw`** (встановлення окремо).
+- Поточна версія джерел релізу: **`0.5.29-hw`** (встановлення окремо).
 - Підписаний реліз: перевіряйте [GitHub Releases](https://github.com/iSentinel/shelly-voltage-telegram/releases) і незмінний підпис Cosign.
-- Тестова production-інсталяція використовує **`0.5.22-hw`** із фізичним Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
+- Тестова production-інсталяція використовує **`0.5.27-hw`** із фізичним Shelly Pro EM-50; останнім повністю апаратно підтвердженим checkpoint залишається `0.5.6-hw`.
 - Апаратно підтверджений live checkpoint: **`0.5.6-hw`**.
 - Candidate `0.5.9-hw` після 15 хвилин стабільного відновлення беззвучно замінює recovery-повідомлення новим актуальним статусом.
 - Candidate `0.5.10-hw` додає read-only польову перевірку природної 15-хвилинної ротації статусу після відновлення.
