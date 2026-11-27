@@ -130,3 +130,12 @@ class DurableModeTests(unittest.TestCase):
         QA.release(self.root, self.token)
         with self.assertRaises(ValueError):
             QA.recover(self.root, self.token)
+
+    def test_armed_release_requires_claim(self):
+        """The configuration-only path cannot release an armed fence."""
+        self.prepare()
+        QA.recover(self.root, self.token)
+        (self.root / f"start-{self.token}-arm.json").write_text("{}")
+        with self.assertRaisesRegex(ValueError, "requires START claim"):
+            QA.release(self.root, self.token)
+        self.assertTrue(self.marker.exists())

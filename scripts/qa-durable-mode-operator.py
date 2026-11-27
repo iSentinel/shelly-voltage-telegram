@@ -183,8 +183,38 @@ def recover(root, token):
     return record
 
 
-def release(root, token):
+def check_armed_release(root, token, claim_sha):
+    """Refuse the configuration-only release path after an ARM exists."""
+    arm = root / f"start-{token}-arm.json"
+    claim = root / f"start-{token}-claim.json"
+    if not os.path.lexists(arm) and not os.path.lexists(claim):
+        if claim_sha is not None:
+            raise ValueError("unexpected START claim")
+        return
+    if claim_sha is None:
+        raise ValueError("armed mode requires START claim")
+    for path in (arm, claim):
+        TX.protected(path)
+    arm_raw = PLAN.private_input(arm, 8192)
+    claim_raw = PLAN.private_input(claim, 8192)
+    armed = json.loads(arm_raw, object_pairs_hook=PLAN.unique_object)
+    claimed = json.loads(claim_raw, object_pairs_hook=PLAN.unique_object)
+    if (
+        TX.sha(claim_raw) != claim_sha
+        or claimed
+        != {
+            "arm_sha256": TX.sha(arm_raw),
+            "container_id": armed["container_id"],
+            "deployment_authorized": False,
+        }
+        or armed.get("deployment_authorized") is not False
+    ):
+        raise ValueError("START claim evidence mismatch")
+
+
+def release(root, token, *, claim_sha=None):
     """Remove only an owned fence after durable completion; not a start."""
+    check_armed_release(root, token, claim_sha)
     record = read(root, token)
     if record["phase"] not in ("configured", "released"):
         raise ValueError("mode transaction not configured")
