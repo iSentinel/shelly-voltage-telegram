@@ -1,3 +1,17 @@
+## 2026-11-27 — corrected ACK source qualification
+
+- Exact #504 and narrow #472 CI 8/8 PASS; no new tags.
+- Reproducible exact #504 unsigned source snapshot, 664 files
+  checked against Git, 29 build inputs, only app.py changed
+  relative to earlier smoke scope; retained probes unchanged.
+- Fix test fixture mode under restrictive umask; migration 7/7
+  under both 022 and 077. 339 focused tests / 29 suites and
+  quality PASS after test-only correction.
+- NEXT: review exact candidate build and integrated acceptance
+  requirements. Old image remains historical; no new image,
+  release version, signing or deployment. No retry of previously
+  blocked integrated commands. Narrow .29 archive unchanged.
+
 ## 2026-11-27 — scheduled HTTP ambiguous ACK correction
 
 - Exact #503 and narrow #472 CI 8/8 PASS.

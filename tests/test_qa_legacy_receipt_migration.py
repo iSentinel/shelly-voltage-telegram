@@ -28,6 +28,7 @@ class MigrationTests(unittest.TestCase):
         self.target = self.root / QA.TARGET
         self.target.parent.mkdir(mode=0o700)
         self.target.mkdir(mode=0o750)
+        self.target.chmod(0o750)
         self.receipt = self.target / "deployed.json"
         self.receipt.write_bytes(b'{"synthetic":true}\n')
         self.receipt.chmod(0o600)
