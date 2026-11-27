@@ -164,7 +164,9 @@ def accept_restart(root: Path, name: str) -> dict:
     """Recheck fresh three-phase telemetry after the one reviewed restart."""
     info = TX.observe_verified_restart(root, name)
     identity, started = info["Id"], info["State"]["StartedAt"]
-    claim = TX.read_record(root / "verified-restart-claim.json")
+    generation = TX.current_generation(root)
+    claim_path = TX.restart_record(root, generation, "claim")
+    claim = TX.read_record(claim_path)
     fetch_ready(identity)
     phases = live_phase_evidence(root, claim, started)
     final = TX.observe_verified_restart(root, name)
@@ -175,11 +177,12 @@ def accept_restart(root: Path, name: str) -> dict:
         "started_at": started,
         "qa_restart_verified": True,
         "stopped_baseline_rows": claim["baseline"]["rows"],
+        "claim_sha256": TX.sha(claim_path.read_bytes()),
         "deployment_authorized": False,
         "phases": phases,
         "observed_at": time.time(),
     }
-    path = root / "verified-restart-acceptance.json"
+    path = TX.restart_record(root, generation, "acceptance")
     if os.path.lexists(path):
         prior = TX.read_record(path)
         if any(
@@ -189,6 +192,7 @@ def accept_restart(root: Path, name: str) -> dict:
                 "started_at",
                 "qa_restart_verified",
                 "stopped_baseline_rows",
+                "claim_sha256",
                 "deployment_authorized",
             )
         ):
@@ -206,12 +210,17 @@ def main() -> int:
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--seal-restart", action="store_true")
     action.add_argument("--review-restart", action="store_true")
+    action.add_argument("--seal-next-restart", action="store_true")
     args = parser.parse_args()
     try:
         TX.require_qa(args.root)
         with TX.exclusive(args.root, observation=True):
-            if args.review_restart:
+            if args.review_restart or args.seal_next_restart:
                 result = accept_restart(args.root, args.container)
+                if args.seal_next_restart:
+                    result = TX.seal_next_restart_policy(
+                        args.root, args.container
+                    )
             else:
                 result = accept(args.root, args.container)
                 if args.seal_restart:

@@ -420,6 +420,70 @@ class ReportModeTransactionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "observation mismatch"):
                 TX.observe_verified_restart(self.root, "fixture")
 
+    def next_generation_fixture(self):
+        """Accept the first restart and seal a separate next generation."""
+        info, db = self.restart_fixture()
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            TX.claim_verified_restart(self.root, "fixture")
+            info["State"].update(Running=True, StartedAt="next")
+            with closing(sqlite3.connect(db)) as connection, connection:
+                connection.execute("INSERT INTO measurements VALUES(3,222)")
+            claim = TX.restart_record(self.root, 1, "claim")
+            receipt = {
+                "container_id": info["Id"],
+                "started_at": "next",
+                "qa_restart_verified": True,
+                "deployment_authorized": False,
+                "stopped_baseline_rows": 2,
+                "claim_sha256": TX.sha(claim.read_bytes()),
+            }
+            TX.atomic_write(
+                TX.restart_record(self.root, 1, "acceptance"),
+                json.dumps(receipt).encode(),
+            )
+            TX.seal_next_restart_policy(self.root, "fixture")
+        return info, db
+
+    def test_next_generation_preserves_old_evidence(self):
+        """Consume generation two without resetting any earlier claim."""
+        info, _ = self.next_generation_fixture()
+        previous = TX.generation_digest(self.root, 1)
+        self.assertEqual(TX.current_generation(self.root), 2)
+        with patch.object(TX, "inspect_qa_container", return_value=info):
+            with self.assertRaises(FileNotFoundError):
+                TX.seal_next_restart_policy(self.root, "fixture")
+            info["State"].update(Running=False, ExitCode=0, OOMKilled=False)
+            TX.claim_verified_restart(self.root, "fixture")
+            with self.assertRaisesRegex(ValueError, "already claimed"):
+                TX.claim_verified_restart(self.root, "fixture")
+            info["State"].update(Running=True, StartedAt="third")
+            TX.observe_verified_restart(self.root, "fixture")
+        self.assertEqual(TX.generation_digest(self.root, 1), previous)
+
+    def test_generation_chain_rejects_prior_tampering(self):
+        """Do not select an active policy after older evidence changes."""
+        self.next_generation_fixture()
+        path = TX.restart_record(self.root, 1, "acceptance")
+        path.write_bytes(path.read_bytes() + b" ")
+        with self.assertRaisesRegex(ValueError, "previous generation changed"):
+            TX.current_generation(self.root)
+
+    def test_generation_chain_rejects_gap(self):
+        """A skipped generation is not an alternative startup path."""
+        self.next_generation_fixture()
+        TX.restart_record(self.root, 2, "policy").rename(
+            TX.restart_record(self.root, 3, "policy")
+        )
+        with self.assertRaisesRegex(ValueError, "generation gap"):
+            TX.current_generation(self.root)
+
+    def test_generation_chain_rejects_orphan(self):
+        """An acceptance cannot exist without its own consumed claim."""
+        self.next_generation_fixture()
+        TX.atomic_write(TX.restart_record(self.root, 2, "acceptance"), b"{}")
+        with self.assertRaisesRegex(ValueError, "orphan restart acceptance"):
+            TX.current_generation(self.root)
+
     def test_host_boundary(self):
         """Production cannot use the configuration-write prototype."""
         with (
