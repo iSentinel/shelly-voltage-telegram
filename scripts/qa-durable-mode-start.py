@@ -140,7 +140,7 @@ def claim(root, token, arm_sha, *, bind=None):
     return record["container_id"]
 
 
-def start(root, token, anchor, *, bind=None):
+def start(root, token, anchor, *, bind=None, on_started=None):
     """Keep both gates while issuing one immutable Docker request."""
     with TX.exclusive(root, observation=True):
         with TX.quiescent_writer_lease(root / "data/qa.sqlite3"):
@@ -151,6 +151,8 @@ def start(root, token, anchor, *, bind=None):
             capture_output=True,
             timeout=20,
         )
+        if on_started is not None:
+            on_started(root, token, anchor, identity)
     return {"container_id": identity, "claim_consumed": True}
 
 

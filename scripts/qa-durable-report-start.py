@@ -19,6 +19,7 @@ OP = START.OP
 TX = START.TX
 CP = OP.load("qa-compose-provenance")
 READY = OP.load("qa-report-runtime-acceptance")
+RECEIPT = OP.load("qa-report-launch-receipt")
 PROBE = {
     "probe.py": (
         "013c82431b17d149c8ca9720f2d914bb2084c2640cc09d2b2525c612bef8b3ef"
@@ -228,7 +229,9 @@ def observe(root, token, anchor):
         or state["StartedAt"] == "0001-01-01T00:00:00Z"
     ):
         raise ValueError("claimed runtime not running")
-    history = check_observed(root, info, record, journal)
+    RECEIPT.check_launch(START, root, token, anchor, info)
+    check_observed(root, info, record, journal)
+    history = TX.history_snapshot(root)
     old = journal["baseline"]
     READY.fetch_ready(info["Id"])
     phases = READY.live_phase_evidence(root, journal, state["StartedAt"])
@@ -239,7 +242,7 @@ def observe(root, token, anchor):
         or not final["State"]["Running"]
     ):
         raise ValueError("runtime changed during observation")
-    return {
+    result = {
         "container_id": info["Id"],
         "started_at": state["StartedAt"],
         "baseline_rows": old["rows"],
@@ -247,6 +250,24 @@ def observe(root, token, anchor):
         "phases": phases,
         "qa_runtime_verified": True,
     }
+    return persist_acceptance(root, token, anchor, result, history)
+
+
+def persist_acceptance(root, token, anchor, result, history):
+    """Persist and report the immutable first accepted observation."""
+    acceptance = RECEIPT.accept(START, root, token, anchor, result, history)
+    return {
+        **result,
+        "acceptance_sha256": TX.sha(
+            START.read_bytes(START.path_for(root, token, "acceptance"))
+        ),
+        "accepted_rows": acceptance["history"]["rows"],
+    }
+
+
+def record_launch(root, token, anchor, identity):
+    """Persist the launch result before releasing operator gates."""
+    return RECEIPT.save_launch(START, root, token, anchor, identity)
 
 
 def arguments():
@@ -263,7 +284,13 @@ def execute(args):
     """Select the fixed runtime profile under existing protected gates."""
     TX.require_qa(args.root)
     if args.action == "start":
-        return START.start(args.root, args.token, args.anchor, bind=binding)
+        return START.start(
+            args.root,
+            args.token,
+            args.anchor,
+            bind=binding,
+            on_started=record_launch,
+        )
     with TX.exclusive(args.root, observation=args.action == "observe"):
         if args.action == "arm":
             return START.arm(args.root, args.token, args.anchor, bind=binding)

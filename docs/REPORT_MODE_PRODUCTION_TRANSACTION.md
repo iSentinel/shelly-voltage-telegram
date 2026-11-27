@@ -603,3 +603,34 @@ durable runtime acceptance or verify resumed delivery metadata.
 Next complete the integrated runtime qualification when available,
 then bind a reviewed signed feature-capable pair and owner policy.
 No production migration, startup or deployment authorization.
+
+## Durable launch and runtime acceptance receipt (2026-11-27)
+
+Exact #491 and narrow #472 CI 8/8 PASS. The fixed Report Worker
+QA profile now records a token-scoped launch receipt after the
+single Docker START request returns successfully, under existing
+operator/update gates. It binds the reviewed ARM hash, immutable
+container identity, observed StartedAt and zero restart count.
+Missing receipt or a different StartedAt/restart count blocks
+observation; no implicit retry or reconstruction from a claim.
+
+After existing live identity, Compose, probe, history and readiness
+checks, the observer captures a full SQLite history snapshot and
+persists the first acceptance receipt with its exact launch hash,
+ARM hash, phase evidence and observed timestamp. Repeated fresh
+observations retain the first receipt bytes and verify its accepted
+row prefix and database identity. No acceptance authorizes startup
+or deployment. Receipts are protected local files, not signed
+owner approvals; direct root/Docker interference is outside the
+cooperating transaction contract.
+
+216 focused tests and quality gate PASS; seven new unit tests use
+real receipt files and modeled Docker/history observations. Actual
+integrated Report Worker START/acceptance remains untested. The
+previous blocked integration call was not repeated or bypassed.
+A crash after Docker START but before receipt publication leaves
+an unaccepted launch requiring explicit review. A receipt records
+a point-in-time observation, not continuous readiness or proof of
+resumed delivery. Next: qualify integrated runtime when available,
+bind final delivery evidence and separately approved signed pair.
+Production remains on .27; no migration or activation performed.
