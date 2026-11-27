@@ -1,3 +1,16 @@
+## 2026-11-27 — durable Report Worker launch/acceptance receipt
+
+- Exact #491 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Persist token-scoped launch receipt after successful one-shot
+  START, bind ARM, immutable ID and observed StartedAt.
+- Observe only matching launch, retain first acceptance and full
+  accepted SQLite row prefix; recheck fresh readiness on replay.
+- 216 focused tests and quality gate PASS. Integrated Docker
+  qualification still pending; earlier blocked call not repeated.
+- NEXT: durable resumed report-delivery evidence, integrated
+  qualification when available, signed/owner-bound policy.
+  No production startup or deployment authorization.
+
 ## 2026-11-27 — fixed Report Worker START profile (unit-tested)
 
 - Exact #490 and narrow #472 CI 8/8 PASS; .29 tag absent.
