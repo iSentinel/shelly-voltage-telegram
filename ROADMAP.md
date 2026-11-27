@@ -1,3 +1,17 @@
+## 2026-11-27 — automatic generation boot evidence
+
+- Exact #477 and separate #472 CI 8/8 PASS. No .29 tag.
+- Exact #477 enabled isolated systemd fixture: automatic generation
+  two START after real LXC114 reboot; same ID, prior evidence hashes
+  retained, all phases ready (age .634s), 856 stopped rows preserved.
+- Second real reboot without new seal: automatic START refused exit 3,
+  unchanged StartedAt, SQLite and journal hashes, inode and integrity.
+  History 793/823/856/964; ordinary synthetic alerts only.
+- Disabled and removed dedicated unit and disposable container.
+- NEXT: signed-pair policy schema and production transaction binding,
+  negative receipt/identity/mount tests, then isolated signed QA.
+  Production paused remains blocked; no release authorization.
+
 ## 2026-11-27 — append-only QA restart generations
 
 - Exact #476 and separate #472 CI 8/8 PASS; no .29 release tag.
