@@ -1,3 +1,16 @@
+## 2026-11-27 — supervisor revalidation on every normal START
+
+- PR #471 exact CI 8/8 PASS.
+- Keep narrow updater candidate separate from report-worker runtime.
+- Revalidate stopped container, signed receipt (non-QA mode) and
+  writer ownership under each startup gate; start and wait by pinned ID.
+- 108 focused tests and quality gate PASS.
+- Real networkless LXC114 disposable sleep container first start PASS;
+  replacement under identical name and image refused, never started.
+- NEXT: protected production recovery-mode transaction design,
+  signed-pair integration and real signed supervisor QA.
+  No production service or signed release changes.
+
 ## 2026-11-27 — three-phase QA runtime acceptance
 
 - PR #470 exact CI 8/8 PASS.

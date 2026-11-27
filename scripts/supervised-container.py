@@ -325,12 +325,28 @@ def pending(database: Path) -> bool:
         return _pending_under_gate(database)
 
 
-def start_if_clear(name: str, database: Path) -> bool:
-    """Hold one transaction lock across pending check and Docker start."""
-    with update_gate(database):
-        if _pending_under_gate(database):
+def checked_identity(info: dict, args: argparse.Namespace) -> str:
+    """Validate current policy and obtain an immutable Docker identity."""
+    validate_container(info, args)
+    identity = info.get("Id")
+    if not isinstance(identity, str) or not re.fullmatch(
+        "[a-f0-9]{64}", identity
+    ):
+        raise BootBlocked("SVT_CONTAINER_ID_INVALID")
+    return identity
+
+
+def start_if_clear(args: argparse.Namespace, identity: str) -> bool:
+    """Revalidate the exact container inside each shared startup gate."""
+    with update_gate(args.database):
+        if _pending_under_gate(args.database):
             return False
-        started = docker("start", name)
+        with quiescent_writer_lease(args.database):
+            if checked_identity(inspect(args.container), args) != identity:
+                raise BootBlocked("SVT_CONTAINER_ID_CHANGED")
+        if STOP:
+            return False
+        started = docker("start", identity)
         if started.returncode:
             raise BootBlocked("SVT_DOCKER_START_FAILED")
     return True
@@ -355,17 +371,17 @@ def wait_container(name: str) -> int:
             child.wait(timeout=5)
 
 
-def supervise(name: str, database: Path, once: bool) -> int:
+def supervise(args: argparse.Namespace, identity: str) -> int:
     """Restart only after a shared-gate check; stop on any pending update."""
     attempts = 0
     while not STOP:
-        if not start_if_clear(name, database):
+        if not start_if_clear(args, identity):
             print("SKIP_PENDING")
             return 0
         print("SUPERVISED_START_PASS", flush=True)
-        if once:
+        if args.once:
             return 0
-        result = wait_container(name)
+        result = wait_container(identity)
         if STOP:
             return 0
         attempts += 1
@@ -449,14 +465,13 @@ def main() -> int:
             raise BootBlocked("SVT_FENCE_DIR_INVALID")
         os.environ["SVT_WRITER_FENCE_DIR"] = str(args.fence_dir)
         fence_directory(args.database)
-        validate_container(inspect(args.container), args)
+        identity = checked_identity(inspect(args.container), args)
         signal.signal(signal.SIGTERM, on_signal)
         signal.signal(signal.SIGINT, on_signal)
         root = recovery_qa_root(args)
         if root is not None:
             return start_recovery_qa(args, root)
-        target = args.expected_container_id or args.container
-        return supervise(target, args.database, args.once)
+        return supervise(args, identity)
     except (
         BootBlocked,
         WriterFenceError,
