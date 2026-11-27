@@ -1,3 +1,19 @@
+## 2026-11-27 — consolidated Report Worker admission audit
+
+- Exact #502 and narrow #472 CI 8/8 PASS; no new tags.
+- Consolidate 45 overlapping draft PRs in a single review branch
+  against common base f35cfc4; retain original branches and PRs.
+  Narrow #472 is separate and not an ancestor of this stack.
+- Revalidate launch and profile after readiness, capture history
+  afterwards, reject duplicate claim fields; direct probe hash
+  tests and final observation drift tests.
+- 334 focused tests / 29 suites and quality PASS. Narrow .29
+  archive unchanged. No release or production changes.
+- NEXT: review consolidated diff and exact integrated admission
+  evidence; no additional hypothetical incident layers required.
+  Integrated QA, signed feature-capable candidate, recovery and
+  owner approval remain open. Earlier blocked trials not retried.
+
 ## 2026-11-27 — committed-WAL rescue qualification
 
 - Exact #501 and narrow #472 CI 8/8 PASS; no new tags.

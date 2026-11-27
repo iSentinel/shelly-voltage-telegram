@@ -174,7 +174,10 @@ def launch_evidence(root, token, anchor):
     if TX.sha(arm) != anchor:
         raise ValueError("arm anchor mismatch")
     record = json.loads(arm, object_pairs_hook=OP.PLAN.unique_object)
-    claim = json.loads(START.read_bytes(START.path_for(root, token, "claim")))
+    claim = json.loads(
+        START.read_bytes(START.path_for(root, token, "claim")),
+        object_pairs_hook=OP.PLAN.unique_object,
+    )
     if claim != {
         "arm_sha256": anchor,
         "container_id": record["container_id"],
@@ -232,7 +235,6 @@ def observe(root, token, anchor):
         raise ValueError("claimed runtime not running")
     RECEIPT.check_launch(START, root, token, anchor, info)
     check_observed(root, info, record, journal)
-    history = TX.history_snapshot(root)
     old = journal["baseline"]
     READY.fetch_ready(info["Id"])
     phases = READY.live_phase_evidence(root, journal, state["StartedAt"])
@@ -243,6 +245,9 @@ def observe(root, token, anchor):
         or not final["State"]["Running"]
     ):
         raise ValueError("runtime changed during observation")
+    RECEIPT.check_launch(START, root, token, anchor, final)
+    check_observed(root, final, record, journal)
+    history = TX.history_snapshot(root)
     result = {
         "container_id": info["Id"],
         "started_at": state["StartedAt"],
