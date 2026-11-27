@@ -1,3 +1,21 @@
+## 2026-11-27 — same-database mode transition fault-injection QA
+
+- Exact #487 and #472 CI 8/8 PASS; narrow .29 tag absent.
+- Real offline LXC114 same unsigned image and database, initial
+  enabled -> paused -> enabled, 60/144/204 rows, same inode,
+  all previous row-prefix hashes preserved, SQLite quick_check OK.
+- Config publication SIGKILL 137 before journal completion, owned
+  marker and exact history recovery PASS; paused writer SIGKILL
+  137, prior history and report metadata retained.
+- Real reservation/delivery methods with loopback API: two distinct
+  reports and three ordinary notifications across stages, no duplicate
+  daily/pending weekly delivery, no paused report. Pending retained.
+- Initial docker logs unsupported; graceful initial stop completed;
+  subsequent QA containers explicitly used json-file logging.
+- NEXT: reusable protected transaction operator with complete crash
+  boundary and owner-plan binding, separate signed runtime qualification.
+  One-off rehearsal only; no production migration or authorization.
+
 ## 2026-11-27 — exact unsigned Report Worker QA candidate
 
 - Exact #486 and separate #472 CI 8/8 PASS; .29/.30 tags absent.

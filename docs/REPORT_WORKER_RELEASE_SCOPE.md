@@ -99,3 +99,53 @@ Telegram delivery. Not a same-database transition or signed cutover.
 The next stage is the protected same-runtime transaction with
 explicit owner-bound review, real same-database transition and
 fault injection. No publication or production authorization.
+
+## Same-database mode transition fault-injection evidence (2026-11-27)
+
+Exact #487 and #472 CI 8/8 PASS. Actual isolated LXC114 fixture
+/var/lib/svt-report-mode-tx-qa.xc0jjl used the previously qualified
+unsigned QA image sha256:6b3f263cb444ce6b7424fd14563c85cb5a82253ad8ac74eecb7469d0bbe38541.
+The one-off probe used real report reservation, delivery and monitor
+methods with synthetic meter, loopback Telegram API and selected
+initialization/maintenance mocks. The same database was retained
+through three disposable container instances with the same image ID.
+
+Initial enabled launch acknowledged one daily report and created a
+weekly reservation using the actual reservation method. Three phases
+ready; graceful exit 0. The initial stop script then aborted because
+the inherited Docker logging driver did not support docker logs;
+the container was removed, the original database and graceful marker
+remained, and subsequent runs explicitly used json-file logging.
+No initial launch was repeated.
+
+The one-off transition script used existing operator, quiescent writer
+and update-gate locks, a durable config/history journal and the exact
+owned pending marker. Real SIGKILL (137) after atomic paused config
+publication left the marker and prepared record. Recovery verified
+the stopped history and exact old/new config, recorded configured
+and cleared only its marker. Paused runtime reached readiness and
+ordinary alert delivery; daily duplicate, pending weekly duplicate
+and new weekly report were refused. Actual Docker SIGKILL (137)
+then stopped the paused writer. The next stopped snapshot verified
+all original 60 rows, inode and report metadata. A second protected
+config switch restored enabled mode; actual resumed runtime refused
+the previously delivered daily and pending weekly sends, acknowledged
+a new weekly report, and stopped cleanly.
+
+Rows: 60 -> 144 -> 204, final 68 per phase; SQLite inode 42590
+and device 64542 unchanged. Exact earlier row-prefix hashes matched.
+The paused metadata fingerprint matched initial; the final metadata
+contains the original daily delivered marker, unresolved weekly
+reservation and new weekly delivered marker. Five synthetic deliveries:
+initial report, initial ordinary, paused ordinary, resumed report,
+resumed ordinary. SQLite quick_check OK. All three phases ready in
+each launch. Result PASS_SAME_DATABASE_MODE_TRANSITION.
+
+This was a controlled QA rehearsal, not a reusable transaction operator.
+The one-off scripts and journal are not an authenticated owner approval,
+do not implement every crash boundary or startup authorization, and
+the initial reservation was created without attempting HTTP (not an
+actual lost ACK). No production data or Telegram traffic was used.
+The unsigned image is not a signed feature-capable pair. The next
+step is to formalize the transaction and test its recovery/fencing
+boundaries, then qualify a separately approved signed candidate.
