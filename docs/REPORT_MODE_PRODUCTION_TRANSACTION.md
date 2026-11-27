@@ -266,3 +266,44 @@ production transaction. The present strict two-mount QA policy is not
 a production profile, does not prove the .env was resolved into the
 inspected environment, and does not reverify signatures. Production
 paused and all release/rollback guards remain unchanged.
+
+## Preserved offline OCI byte chain
+
+2026-11-27: online verification of the existing v0.5.28-hw signed
+source/OCI pair returned PASS_SIGNED_SOURCE_OCI_PAIR_ONLY, with source
+signature, OCI signature and attestations verified. Exact commit
+59588e38b9a7ae59f14ac056451fe3c20f8a69d2. Skopeo retrieved the raw
+index and copied the Linux amd64 child with --preserve-digests to
+a directory. Index SHA256
+03e83600d633301c59bbe2fa247d7982d95133ad4ca96907828688711c3de249,
+manifest SHA256
+c1e9ad704ce8ae377cadaaef4a48002f362279f5e74bd959d1aa840c25df4ee1,
+config SHA256
+fb88ffb1ee3deb33fa8c95b54d231d80ea0a7a9f0319513552f7ee2a555c74ac.
+Ten compressed layers, total 80666954 bytes.
+
+New read-only qa-offline-oci-proof.py verifies exact index/manifest/
+config bytes, descriptor sizes, compressed layer digests, decompressed
+DiffIDs, platform and revision, then compares ordered DiffIDs and
+config ID with the local image inspect. It accepts only protected
+paths and the dedicated offline QA boundary; pending markers refuse
+review. The initial host-side review under /var/tmp was correctly
+refused by protected-parent checks. Transferred raw bytes to
+/var/lib/svt-report-mode-tx-qa.zIpIJT in LXC114. The full chain
+matched the previously imported image, with RepoDigests still empty.
+Tampered index and pending marker negative checks passed; no Docker
+container started. 146 focused tests and quality gate PASS.
+
+Online signature evidence:
+ /var/tmp/svt-oci-offline-review.K6hZy2/pair-reverification.json.
+Offline byte proof:
+ /var/lib/svt-report-mode-tx-qa.zIpIJT/offline-proof.json.
+
+The offline verifier requires an independently trusted index digest
+and commit; it does not cryptographically reverify signatures itself,
+does not inspect extracted filesystem bytes in Docker storage, and
+is Linux amd64/gzip only. The verified byte chain is distinct from
+the policy v1 RepoDigests requirement, which remains unchanged.
+Next bind both proofs and protected transaction evidence, test the
+exact signed-pair policy CLI, and validate effective configuration
+and HostConfig. No startup or production authorization.
