@@ -307,3 +307,43 @@ the policy v1 RepoDigests requirement, which remains unchanged.
 Next bind both proofs and protected transaction evidence, test the
 exact signed-pair policy CLI, and validate effective configuration
 and HostConfig. No startup or production authorization.
+
+## Bound offline pair review, schema v2
+
+Exact corrected #479 and #480 CI 8/8 PASS. New online exporter runs
+the existing cryptographic source/OCI pair verifier and emits the
+full version, commit, index digest and source archive SHA256, with
+all three proof flags and no deployment authorization. On 2026-11-27
+it reverified published v0.5.28-hw and produced evidence SHA256
+af38f12db7357e3a7ab7b50778e4869caf7a8071d9364dada402fbade2714dd2.
+Retained on connected host at
+/var/tmp/svt-oci-offline-review.K6hZy2/online-evidence.json.
+
+The separate offline schema v2 review requires the independent
+operator-supplied evidence hash, exact full signed pair, retained
+archive, closed QA configuration, stopped immutable local config
+ID, ordered layer chain and selected restrictive HostConfig fields.
+It preserves v1's registry pin requirement for v1; v2 checks an exact
+local image ID and recomputes the offline chain instead. The online
+evidence is a trusted operator-transferred record, not a signed
+statement in its own right. The QA verifier does not reverify
+signatures offline or authorize startup.
+
+153 focused tests and quality gate PASS. Real isolated LXC114
+/var/lib/svt-report-mode-tx-qa.zgLPef: actual signed source archive,
+ten preserved OCI layers and imported local .28 image verified.
+A synthetic installed-pair receipt was constructed for this fixture
+from the verified online evidence; it is not a real installed
+production receipt. The stopped container was created by exact local
+image ID, no network, no restart, read-only root, all capabilities
+dropped, user 10001:10001. Wrong external anchor and pending marker
+were refused. RepoDigests remained empty. The disposable container
+never started and was removed.
+
+Remaining: production transaction/receipt provenance, effective
+Compose plan and full security-relevant runtime configuration,
+signed report-worker candidate. The fixture's exact single-line
+.env and selected HostConfig are not a general production policy.
+The existing signed .28 app does not implement the new report
+worker pause; this is byte and policy review only, not runtime
+acceptance. No production changes or release authorization.

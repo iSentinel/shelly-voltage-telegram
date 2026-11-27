@@ -1,3 +1,19 @@
+## 2026-11-27 — bound offline pair review, schema v2
+
+- Corrected exact #479/#480 and separate #472 CI 8/8 PASS.
+- Export full identity after actual online .28 pair reverification;
+  independently pin evidence SHA256 for offline review.
+- Bind schema v2 to protected receipt, source archive, closed QA
+  configuration, exact stopped Docker ID and image, ten OCI layers,
+  selected restrictive HostConfig; v1 remains unchanged.
+- 153 focused tests and quality gate PASS. Actual LXC114 bound
+  offline review PASS with synthetic receipt derived from real
+  signed-pair evidence. Wrong anchor and pending marker refused;
+  no Docker start, no fabricated RepoDigests.
+- NEXT: production receipt/transaction provenance, resolved Compose
+  and comprehensive runtime configuration checks, separately
+  signed report-worker qualification. No deployment authorization.
+
 ## 2026-11-27 — preserved offline OCI byte chain
 
 - Reverify published .28 source signature, OCI signature and
