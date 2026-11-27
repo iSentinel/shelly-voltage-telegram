@@ -1,0 +1,61 @@
+"""Exercise real report reservation and delivery with a local fake API."""
+import json
+import os
+import pathlib
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import Mock
+from test_app import APP, config
+from writer_fence import writer_lease
+
+p = pathlib.Path('/data/qa.sqlite3')
+stage = os.environ['QA_STAGE']
+mode = os.environ['SCHEDULED_REPORTS_MODE']
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_POST(self):
+        payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        with open('/data/accepted', 'a') as f:
+            f.write(payload['text'] + '\n')
+        body = json.dumps({'ok': True, 'result': {'message_id': 42}}).encode()
+        self.send_response(200)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+server = ThreadingHTTPServer(('127.0.0.1', 18766), Handler)
+threading.Thread(target=server.serve_forever, daemon=True).start()
+m = APP.Monitor(config(database_path=p, poll_interval=.1,
+    telegram_token='qa-fake', telegram_chat_id='qa-fake',
+    telegram_admin_user_ids=('7',), scheduled_reports_mode=mode,
+    shelly_meter_type='pro3em', offline_after_failures=10000, health_port=8080))
+m.initialize = Mock()
+m.command_loop = Mock()
+m.update_status = Mock()
+m.run_periodic_tasks = Mock()
+m.daily_summary_enabled = False
+m.shelly.read_phases = lambda: {'L1': (219.,50.,1.), 'L2': (220.,50.,1.), 'L3': (221.,50.,1.)}
+m.telegram.base = 'http://127.0.0.1:18766'
+APP.install_signals()
+def deliver(key, period, text):
+    return m.deliver_scheduled_report(key, period, text, 'qa-fake')
+
+with writer_lease(p):
+    m.storage.initialize()
+    if stage == 'initial':
+        assert deliver('daily_summary_day', '2026-11-27', 'initial-report')
+        assert m.storage.reserve_report('telegram_weekly_private_sent_7', '2026-W48')
+    else:
+        assert not deliver('daily_summary_day', '2026-11-27', 'duplicate-daily')
+        assert not deliver('telegram_weekly_private_sent_7', '2026-W48', 'duplicate-pending')
+        if stage == 'paused':
+            assert not deliver('telegram_weekly_private_sent_8', '2026-W48', 'paused-report')
+        else:
+            assert deliver('telegram_weekly_private_sent_8', '2026-W48', 'resumed-report')
+    m.telegram.send('ordinary-' + stage)
+    APP.start_health_server(m)
+    m.run()
+pathlib.Path('/data/graceful-' + stage).write_text('1')
