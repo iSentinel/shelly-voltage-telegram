@@ -1,3 +1,20 @@
+## 2026-11-27 — durable legacy public receipt migration QA
+
+- Exact #484 and separate #472 CI 8/8 PASS; .29 tag absent.
+- Add isolated prepare/recover migration rehearsal with private
+  receipt fingerprint, exact legacy alias and staged replacement
+  inode; never copy private receipt or authorize deployment.
+- 181 focused tests and quality gate PASS; seven new tests also
+  pass as nobody. Real QA systemd active timer refused prepare.
+- Real SIGKILL after durable unlink before rename: private receipt
+  SHA256 unchanged; exact staged directory published on recovery;
+  repeated recovery PASS. Test units removed, no Docker start.
+- NEXT: bind exact same-runtime plan to verified feature-capable
+  pair and owner review, implement protected transaction operator.
+  Separately prepare production receipt migration approval and
+  qualify signed release. QA utility not production operator.
+  Production alias/timer unchanged; narrow .29 awaiting approval.
+
 ## 2026-11-27 — exact same-runtime mode transition planning
 
 - Exact #483 and separate #472 CI 8/8 PASS; no .29 release tag.
