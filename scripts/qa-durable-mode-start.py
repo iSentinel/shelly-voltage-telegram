@@ -82,7 +82,7 @@ def validate(root, info, record):
         raise ValueError("witness mounts changed")
 
 
-def binding(root, token, journal_sha):
+def binding(root, token, journal_sha, *, validator=None):
     """Recheck stopped history, exact journal, marker and Docker identity."""
     raw = read_bytes(OP.journal_path(root, token))
     if TX.sha(raw) != journal_sha:
@@ -94,8 +94,9 @@ def binding(root, token, journal_sha):
     if TX.sha(OP.config(root)) != record["new_sha256"]:
         raise ValueError("target config drift")
     info = TX.inspect_qa_container(root, "svt-qa-" + root.name)
-    validate(root, info, record)
+    extra = (validator or validate)(root, info, record) or {}
     return {
+        **extra,
         "schema": 1,
         "journal_sha256": journal_sha,
         "container_id": info["Id"],
@@ -108,15 +109,15 @@ def binding(root, token, journal_sha):
     }
 
 
-def arm(root, token, journal_sha):
+def arm(root, token, journal_sha, *, bind=None):
     """Record immutable reviewed target while the fence is still present."""
-    record = binding(root, token, journal_sha)
+    record = (bind or binding)(root, token, journal_sha)
     path = path_for(root, token, "arm")
     write_once(path, record)
     return {"arm_sha256": TX.sha(read_bytes(path)), **record}
 
 
-def claim(root, token, arm_sha):
+def claim(root, token, arm_sha, *, bind=None):
     """Consume the exact externally pinned arm before releasing the fence."""
     path = path_for(root, token, "claim")
     if os.path.lexists(path):
@@ -125,7 +126,7 @@ def claim(root, token, arm_sha):
     if TX.sha(raw) != arm_sha:
         raise ValueError("arm anchor mismatch")
     record = json.loads(raw, object_pairs_hook=OP.PLAN.unique_object)
-    if binding(root, token, record["journal_sha256"]) != record:
+    if (bind or binding)(root, token, record["journal_sha256"]) != record:
         raise ValueError("armed witness changed")
     write_once(
         path,
@@ -139,11 +140,11 @@ def claim(root, token, arm_sha):
     return record["container_id"]
 
 
-def start(root, token, anchor):
+def start(root, token, anchor, *, bind=None):
     """Keep both gates while issuing one immutable Docker request."""
     with TX.exclusive(root, observation=True):
         with TX.quiescent_writer_lease(root / "data/qa.sqlite3"):
-            identity = claim(root, token, anchor)
+            identity = claim(root, token, anchor, bind=bind)
         subprocess.run(
             ["docker", "start", identity],
             check=True,

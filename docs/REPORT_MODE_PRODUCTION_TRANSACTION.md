@@ -563,3 +563,43 @@ consumed claim is implied. Next bind real synthetic Report Worker
 probe and effective Compose/runtime policy, verify fresh readiness
 and history after launch, and review signed/owner-bound transaction.
 No production startup or deployment authority.
+
+## Fixed Report Worker START profile (2026-11-27)
+
+Exact #490 and narrow #472 CI 8/8 PASS. Added
+qa-durable-report-start.py, reusing the immutable one-shot ARM/claim
+mechanism through an explicit trusted validator callback. The
+existing witness CLI keeps its original fixed witness validator.
+The new QA-only profile requires the exact unsigned QA image ID,
+canonical single-line mode config, a closed JSON Compose source
+and its resolved single-service plan, restricted HostConfig,
+effective image-default environment plus the expected overrides,
+and exactly three mounts (data/fence RW, synthetic probe RO).
+It pins both probe files and Compose source/resolved hashes along
+with the stopped container/config/host/mount and journal evidence.
+Observation checks the claimed running ID, StartedAt, released
+journal, probe/Compose/config evidence, original SQLite row prefix,
+paused report metadata and fresh three-phase readiness and samples.
+It is a point-in-time QA observation, not authorization.
+
+209 focused tests and quality gate PASS (seven new unit tests).
+The original exact synthetic probe bytes are retained as
+tests/fixtures/report-worker/probe.py.txt (copy as probe.py in a
+future isolated fixture) together with the already tracked
+tests/test_app.py. Both hashes match the fixed profile. The
+text extension preserves the original evidence bytes rather
+than treating the historical one-off probe as maintained code.
+
+Actual integrated Docker Compose creation and runtime START
+were NOT tested in this revision: the proposed combined
+integration tool call was blocked by the execution safety
+system and was not retried or bypassed. No positive real
+runtime acceptance is claimed. Exact Compose normalization and
+actual container inspection remain unqualified for this profile.
+The fixture input is synthetic, not signed release provenance;
+the callback is internal trusted code, not a user-selectable
+production launch mode. Observation does not yet create a
+durable runtime acceptance or verify resumed delivery metadata.
+Next complete the integrated runtime qualification when available,
+then bind a reviewed signed feature-capable pair and owner policy.
+No production migration, startup or deployment authorization.

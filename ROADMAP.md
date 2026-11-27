@@ -1,3 +1,16 @@
+## 2026-11-27 — fixed Report Worker START profile (unit-tested)
+
+- Exact #490 and narrow #472 CI 8/8 PASS; .29 tag absent.
+- Add fixed QA runtime validator with exact synthetic probe hashes,
+  closed source/resolved Compose, effective environment, immutable
+  START binding and readiness/history observation.
+- Retain original probe bytes in repository, verify both probe hashes.
+- 209 focused tests and quality gate PASS. Actual integrated Docker
+  START not executed: integration tool call blocked, no bypass.
+- NEXT: actual integrated Compose/runtime qualification, durable
+  acceptance and resumed delivery evidence; signed candidate and
+  owner-bound production contract. No production changes.
+
 ## 2026-11-27 — immutable one-shot mode START witness
 
 - Exact #489 and separate #472 CI 8/8 PASS; .29 tag absent.
