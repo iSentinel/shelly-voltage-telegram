@@ -346,3 +346,24 @@ unsigned and the fixture mocks external hardware and Telegram.
 qa_runtime_verified is true only for this QA scope; deployment_authorized
 remains false. Production supervisor integration, signed release evidence,
 production reconciliation and explicit authorization are still required.
+
+## Revalidate normal supervisor starts
+
+The existing normal supervisor initially validated a container once,
+then retried Docker start by mutable name after an exit. The report
+worker integration branch now pins the initially validated container
+ID and rechecks the live stopped-container policy (including signed
+receipt in non-QA mode) under the shared update gate on each start.
+A quiescent writer lease is required during validation, released before
+Docker start so the runtime may obtain its own owner lease. Both start
+and wait use the pinned ID. Pending updates still block startup.
+An unexpected replacement or changed restart policy fails closed.
+
+2026-11-27: 108 focused tests and quality gate passed. Real networkless
+LXC114 disposable sleep-process container: first offline supervisor
+start passed; after stop/removal, a replacement using the same name
+and image was rejected by the same start helper, with the replacement
+remaining never-started. This test proves Docker identity mechanics,
+not a full signed production restart or protection from privileged
+direct Docker commands. The change is not included in the separate
+v0.5.29-hw narrow updater candidate.
