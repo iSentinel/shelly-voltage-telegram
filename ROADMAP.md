@@ -1,3 +1,21 @@
+## 2026-11-27 — exact same-runtime mode transition planning
+
+- Exact #483 and separate #472 CI 8/8 PASS; no .29 release tag.
+- Add read-only offline QA planner: preserve unrelated config bytes,
+  exact source/target SHA256, pair, image/container and SQLite identity.
+  Reject duplicate/complex/missing mode assignments; no authorization.
+- 174 focused tests and quality gate PASS. Real isolated Compose
+  source/target config differs only in report mode; inverse reproduces
+  original bytes. .env, receipt and SQLite hashes unchanged;
+  disposable container never started.
+- Production has no explicit report-mode assignment. Legacy public
+  symlink/private target confirmed, old timer enabled/active and
+  DynamicUser checker failed status 200. Separate migration blocked.
+- NEXT: rehearse authorized legacy receipt migration independently,
+  bind production plan to fresh verified receipt/owner evidence,
+  implement protected same-runtime transition and signed candidate QA.
+  Narrow .29 candidate unchanged, no deployment authorization.
+
 ## 2026-11-27 — installed supervisor review and release scope
 
 - Exact #482 and separate #472 CI 8/8 PASS; .29 tag absent.
