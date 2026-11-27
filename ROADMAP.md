@@ -1,3 +1,18 @@
+## 2026-11-27 — versioned signed-pair policy review
+
+- Exact #478 and #472 CI 8/8 PASS; .29 tag absent.
+- Implement read-only QA schema v1, bind protected receipt, exact pair,
+  retained archive, private config, Docker Config and image identity.
+- Reject unconfirmed RepoDigests, changed pair, duplicate JSON keys,
+  mount drift and unauthorized mode; no startup/deploy authority.
+- 140 focused tests and quality gate PASS. Synthetic positive proof
+  only; real isolated imported .28 image without RepoDigests refused,
+  disposable container never started, missing policy and non-QA refused.
+- NEXT: verified offline OCI transfer and end-to-end signed pair review,
+  effective config resolution and HostConfig/production mount policy.
+  Pending-marker check added after Docker trial; repeat exact CLI QA.
+  No production changes or signing authorization.
+
 ## 2026-11-27 — automatic generation boot evidence
 
 - Exact #477 and separate #472 CI 8/8 PASS. No .29 tag.

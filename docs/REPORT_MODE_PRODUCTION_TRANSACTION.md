@@ -230,3 +230,39 @@ legacy schema and signed pair drift. Test these boundaries against
 synthetic receipts first, then an actual signed pair in isolated QA.
 Do not substitute QA image IDs or the short QA readiness window for
 production acceptance. Keep v0.5.29-hw narrow candidate unchanged.
+
+## Versioned signed-pair policy review (QA only)
+
+Exact #478 and #472 CI 8/8 PASS. The new
+qa-report-signed-pair-policy.py is a read-only, offline QA verifier,
+not a startup operator. Its closed schema v1 binds the exact private
+receipt bytes, installed pair tuple, retained archive hash, private
+configuration hash, effective Docker Config hash, container ID and
+local image ID. It checks the existing pair proof fields and source
+version, receipt aliases, matching OCI revision and repository digest,
+explicit paused mode, stopped/no-restart/networkless container, and
+exact two writable data/fence bind mounts. Duplicate JSON keys, foreign
+pair, changed source, configuration or identity fail closed. The CLI
+uses existing protected operator/writer/update gates and refuses an
+update pending marker. Successful review explicitly returns
+startup_authorized=false, deployment_authorized=false and
+signatures_reverified=false. It does not create an authorization.
+
+140 focused tests and project quality gate PASS. Positive pair-binding
+tests use synthetic receipt/image metadata, not real signatures.
+Actual LXC114 imported .28 image (fb88ffb1...c74ac) has the expected
+revision but no RepoDigests; check_image refused it. A real disposable
+container made from that image was never started; CLI refused missing
+policy and invocation outside isolated QA. Evidence fixture
+/var/lib/svt-report-mode-tx-qa.nuSJDJ. No digest was fabricated or
+reattached. The final CLI pending-marker check was added after that
+Docker trial; it was not separately exercised on the real fixture.
+
+Next: preserve and verify OCI manifest/digest evidence through the
+offline transfer, check protected signed source and installed
+transaction end to end, validate additional security-relevant
+HostConfig and production mounts, and bind this review to the owned
+production transaction. The present strict two-mount QA policy is not
+a production profile, does not prove the .env was resolved into the
+inspected environment, and does not reverify signatures. Production
+paused and all release/rollback guards remain unchanged.
