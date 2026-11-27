@@ -1,3 +1,17 @@
+## 2026-11-27 — scheduled HTTP ambiguous ACK correction
+
+- Exact #503 and narrow #472 CI 8/8 PASS.
+- Reject duplicate JSON keys, nonstandard constants, conflicting
+  success/error and rejection/result fields in scheduled ACKs.
+- 128 tests / 9 suites PASS, including real loopback ambiguous
+  429: one request, pending marker retained, retry refused.
+- app.py changed; previous unsigned image and fixed QA START
+  profile are historical, not qualification of this revision.
+- NEXT: review exact new source/build inputs and candidate identity,
+  complete integrated qualification when available. No replay
+  of blocked commands, merge, signing or production changes.
+  Narrow .29 archive unchanged; owner approval still pending.
+
 ## 2026-11-27 — consolidated Report Worker admission audit
 
 - Exact #502 and narrow #472 CI 8/8 PASS; no new tags.

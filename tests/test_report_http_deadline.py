@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import threading
 import time
 import unittest
 from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import patch
 
-from test_app import APP
+from test_app import APP, config
 
 
 class ReportHTTPHandler(BaseHTTPRequestHandler):
@@ -23,7 +25,10 @@ class ReportHTTPHandler(BaseHTTPRequestHandler):
         """Accept a request and return the configured fake response."""
         self.rfile.read(int(self.headers["Content-Length"]))
         self.server.accepted.set()
-        body = json.dumps(self.server.body).encode()
+        self.server.requests_seen += 1
+        body = self.server.raw_body
+        if body is None:
+            body = json.dumps(self.server.body).encode()
         self.send_response(self.server.status)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -50,6 +55,8 @@ class ReportHTTPDeadlineTests(unittest.TestCase):
         server.status = 200
         server.body = {"ok": True, "result": {"message_id": 42}}
         server.slow = False
+        server.raw_body = None
+        server.requests_seen = 0
         self.stop = threading.Event()
         self.addCleanup(server.server_close)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -133,3 +140,63 @@ class ReportHTTPDeadlineTests(unittest.TestCase):
             thread.join(timeout=6)
         self.assertTrue(self.server.accepted.is_set())
         self.assertLess(time.monotonic() - started, 7.0)
+
+    def test_duplicate_ack_is_ambiguous(self):
+        """Duplicate nested message IDs cannot resolve delivery."""
+        self.server.raw_body = (
+            b'{"ok":true,"result":{"message_id":1,"message_id":42}}'
+        )
+        with self.assertRaisesRegex(RuntimeError, "outcome unknown"):
+            self.send()
+
+    def test_conflicting_success_is_ambiguous(self):
+        """A successful response cannot also carry an error code."""
+        self.server.body["error_code"] = 429
+        with self.assertRaisesRegex(RuntimeError, "outcome unknown"):
+            self.send()
+
+    def test_conflicting_rejection_is_ambiguous(self):
+        """An error cannot also claim a delivered message."""
+        self.server.status = 429
+        self.server.body["ok"] = False
+        self.server.body["error_code"] = 429
+        with self.assertRaisesRegex(RuntimeError, "outcome unknown"):
+            self.send()
+
+    def test_nonfinite_ack_is_ambiguous(self):
+        """Nonstandard JSON constants do not form a valid ACK."""
+        self.server.raw_body = (
+            b'{"ok":true,"result":{"message_id":42},"extra":NaN}'
+        )
+        with self.assertRaisesRegex(RuntimeError, "outcome unknown"):
+            self.send()
+
+    def test_duplicate_rejection_retains_pending(self):
+        """A contradictory 429 never permits a repeat or clears intent."""
+        self.server.status = 429
+        self.server.raw_body = (
+            b'{"ok":true,"ok":false,"error_code":429,'
+            b'"parameters":{"retry_after":0}}'
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            monitor = APP.Monitor(
+                config(
+                    database_path=Path(tmp) / "history.sqlite3",
+                    telegram_token="fake-token",
+                    telegram_chat_id="fake-chat",
+                )
+            )
+            monitor.storage.initialize()
+            monitor.telegram.base = self.url.rsplit("/", 1)[0]
+            key, period = "daily_summary_day", "2026-11-27"
+            with self.assertRaisesRegex(RuntimeError, "outcome unknown"):
+                monitor.deliver_scheduled_report(key, period, "report", "fake")
+            pending = monitor.storage.get_meta(
+                "telegram_report_pending:" + key
+            )
+            self.assertTrue(pending.startswith(period + ":"))
+            self.assertFalse(
+                monitor.deliver_scheduled_report(key, period, "report", "fake")
+            )
+            self.assertIsNone(monitor.storage.get_meta(key))
+            self.assertEqual(self.server.requests_seen, 1)

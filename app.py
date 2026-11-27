@@ -1587,6 +1587,21 @@ REPORT_HTTP_DEADLINE = 12.0
 REPORT_HTTP_MAX_BODY = 65536
 
 
+def unique_report_fields(pairs: list[tuple[str, object]]) -> dict:
+    """Reject ambiguous acknowledgement fields, including nested objects."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate scheduled response field")
+        result[key] = value
+    return result
+
+
+def reject_report_constant(value: str) -> None:
+    """Reject nonstandard JSON numeric constants in scheduled replies."""
+    raise ValueError("invalid scheduled response constant")
+
+
 def report_response(response: requests.Response) -> dict:
     """Bound the response and accept only coherent API acknowledgements."""
     body = bytearray()
@@ -1594,10 +1609,18 @@ def report_response(response: requests.Response) -> dict:
         body.extend(chunk)
         if len(body) > REPORT_HTTP_MAX_BODY:
             raise ValueError("scheduled response too large")
-    data = json.loads(body)
+    data = json.loads(
+        body,
+        object_pairs_hook=unique_report_fields,
+        parse_constant=reject_report_constant,
+    )
     if not isinstance(data, dict):
         raise ValueError("invalid scheduled response")
-    if response.status_code == 200 and data.get("ok") is True:
+    if (
+        response.status_code == 200
+        and data.get("ok") is True
+        and "error_code" not in data
+    ):
         message_id = data["result"]["message_id"]
         if type(message_id) is not int or message_id <= 0:
             raise ValueError("invalid scheduled message ID")
@@ -1605,6 +1628,7 @@ def report_response(response: requests.Response) -> dict:
     code = data.get("error_code")
     if (
         data.get("ok") is False
+        and "result" not in data
         and type(code) is int
         and 400 <= code < 500
         and response.status_code == code
