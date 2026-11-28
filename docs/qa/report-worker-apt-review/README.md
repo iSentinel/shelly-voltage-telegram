@@ -329,3 +329,49 @@ resolution and available space; then actual QA package
 installation and image inventory checks before native/runtime
 qualification. No production change, release, signing or
 repetition of previously blocked integrated trials.
+
+## Offline base OCI layout staging and builder readiness
+
+2026-11-28. Exact #517 and narrow #472 CI 8/8 PASS.
+Read-only QA114 discovery: Docker 26.1.5 amd64 overlay2,
+legacy builder selected by the CLI, no Buildx or standalone
+BuildKit binaries, no exact standalone base config IDs, and
+no visible binfmt_misc registrations. Embedded BuildKit has
+not been executed or qualified. Available space approximately
+1.1 GiB; no running containers, loopback only. No builder
+configuration or guest packages changed.
+
+Added scripts/qa-stage-offline-base-layout.py, a non-executing
+OCI archive preparation CLI. It binds the retained original
+multiarch index digest, exact platform manifest, original
+config, four compressed layers and four expanded DiffIDs.
+Each output contains a newly generated single-platform index
+and OCI layout marker, plus six original digest-addressed
+blobs. The new index is not the upstream multiarch index;
+the original platform manifest and config bytes are unchanged.
+
+Four new focused tests and 14 existing context/staging tests
+PASS; quality gate PASS. Both platform archives generated
+twice with byte-identical output. Independent archive review
+checked eight regular members per archive, all six descriptor
+sizes and digests and all four expanded layer DiffIDs. Original
+manifest, config and compressed layers match retained inputs
+byte for byte.
+
+AMD64 archive SHA256:
+d72e07356e597f7f0511a7e6dc6d2edf5af0c240e4fbd514ca6704c176e1d9b7
+ARM64 archive SHA256:
+773a58e94acedd6799e0ff7ea135ed8587c73b568c1b97f9ab310bd9bea5db26
+Review SHA256:
+331cc242444a05568348b5f32d104bee798bfa739399c2656c0d7295bad32fbe
+Protected raw archives: /var/tmp/svt-base-layout-review.AMtKZx
+
+Next: qualify an isolated compatible builder with sufficient
+storage, explicit offline local OCI resolution that preserves
+platform manifest identity, and a reviewed native/emulated
+platform strategy. Current recipe FROM still references the
+registry digest; the layout is an input artifact, not proof
+that the builder resolves this reference offline. No Docker
+load, builder install, image build, runtime execution or
+deployment was attempted. Earlier blocked integrated trials
+were not repeated. Frozen narrow .29 remains separate.

@@ -1,0 +1,29 @@
+{
+  "build_executed": false,
+  "builder_verified": false,
+  "image_loaded": false,
+  "platforms": {
+    "amd64": {
+      "archive_sha256": "d72e07356e597f7f0511a7e6dc6d2edf5af0c240e4fbd514ca6704c176e1d9b7",
+      "blobs_verified": 6,
+      "bytes": 43089920,
+      "index_sha256": "0e59a7dd9a26dce92f16530de5c8a18d35821b8c2afe3be876d08b2c6541214d",
+      "layer_diffids_verified": 4,
+      "original_config_digest": "sha256:bdfc738a8a869292ec1b01f1b8e620db533e09d1fe68fe980a7118b22dae9cec",
+      "original_manifest_digest": "sha256:aaf08c5490d52cd92bc27142a5215b1e47355a5eaf9adfad2a0fbc022d0b5490",
+      "reproducible": true
+    },
+    "arm64": {
+      "archive_sha256": "773a58e94acedd6799e0ff7ea135ed8587c73b568c1b97f9ab310bd9bea5db26",
+      "blobs_verified": 6,
+      "bytes": 43356160,
+      "index_sha256": "bcc67324ae186749e39f8a5d3966feddd24de998eef48cd1ba11f81676f81af3",
+      "layer_diffids_verified": 4,
+      "original_config_digest": "sha256:03e07c1a31b1330bcca830eb9ca263608aef404b6581281e3e4b1ee401dcf4d4",
+      "original_manifest_digest": "sha256:7b58e4266b99c869d2225c050345f7c7fec255d9e3baeca19ea7de9411411c91",
+      "reproducible": true
+    }
+  },
+  "release_authorized": false,
+  "status": "PASS_OFFLINE_OCI_LAYOUT_BYTES_ONLY"
+}
