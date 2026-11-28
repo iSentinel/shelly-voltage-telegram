@@ -211,3 +211,58 @@ trials were not repeated.
 Next: design the full build input consumption and provenance
 review using the verified byte sets, recheck freshness, and
 qualify native execution and full build before signing.
+
+## Deterministic platform-specific build input staging
+
+2026-11-28. Exact #515 and narrow #472 CI 8/8 PASS.
+New QA CLI scripts/qa-stage-report-build-inputs.py stages local
+reviewed bytes only, without Docker, package installation or
+network access. It binds the fixed build-input manifest and
+source-scope manifest hashes, verifies all ten linked evidence
+files, checks the exact 29 original build inputs and retains
+26 runtime files. Each platform bundle includes 16 DEBs, eight
+wheels, a hash-pinned requirements lock and an input manifest.
+The base layer identities are recorded, not embedded.
+
+Usage on the development host (output must not already exist):
+
+    python3 scripts/qa-stage-report-build-inputs.py --arch amd64 \
+        --scope /var/tmp/svt-report-ack-scope.5Yic9k/scope-review.json \
+        --debs /var/tmp/svt-apt-upgrade-artifacts.93liz9 \
+        --wheels /var/tmp/svt-wheel-review.dpEiTf/wheels \
+        --output /var/tmp/report-amd64-inputs.tar
+
+Repeat with arm64 and a distinct output filename. Output is a
+QA artifact, not an executable Docker build context: no Dockerfile
+is included and no build or deployment permission is conveyed.
+The fixed source scope is retained externally on the development
+host; this CLI cannot qualify an arbitrary future source revision.
+
+Eight focused unit tests PASS: exact bytes, changed content,
+incorrect length, absent/symlink input, unsafe filename,
+deterministic archive, long filename and existing output refusal.
+An initial Ruff overlength error was corrected. First real
+staging exposed the USTAR filename limit for a wheel; switched
+to deterministic PAX with fixed metadata and added the long-name
+regression. No partial published archive survived the failure.
+
+Actual full sets staged twice per target, archives byte-identical
+within each architecture. Independently inspected 52 regular
+members per archive and matched all 51 manifest-listed file
+hashes. Missing DEB directory refused without output.
+AMD64 archive SHA256:
+82a852e1ad112d0fb20b5d74372cb8f097201ff9dc2f4f00faba3ddf831b8ba6
+ARM64 archive SHA256:
+834d08430354578e9dd8db59748c1743dda1c2c52b601001e1b092299eb3765f
+Staging review SHA256:
+56d39da62e3e8d0e65087b9f67593e309cb05bcb6976eab3ccad613b416165f5
+Protected raw archives:
+ /var/tmp/svt-report-build-context.ThYU21
+
+Next: review a separate offline QA build recipe consuming
+only the verified platform bundle and exact base identity;
+recheck snapshot freshness at use. Actual APT installation,
+native runtime, full multiarchitecture build, security assessment
+and signing remain open. No release Dockerfile, production,
+historical START profile or frozen narrow .29 changes.
+Previously blocked integrated trials were not repeated.

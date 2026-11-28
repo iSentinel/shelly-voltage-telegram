@@ -1,0 +1,26 @@
+{
+  "amd64": {
+    "archive_sha256": "82a852e1ad112d0fb20b5d74372cb8f097201ff9dc2f4f00faba3ddf831b8ba6",
+    "bytes": 37703680,
+    "counts": {
+      "debs": 16,
+      "runtime": 26,
+      "wheels": 8
+    },
+    "manifest_sha256": "e3f37839f4935151a46ea5ed578c2448f9a8deb92e7db7b25c34094c77beda7f",
+    "reproducible": true,
+    "verified_files": 51
+  },
+  "arm64": {
+    "archive_sha256": "834d08430354578e9dd8db59748c1743dda1c2c52b601001e1b092299eb3765f",
+    "bytes": 36556800,
+    "counts": {
+      "debs": 16,
+      "runtime": 26,
+      "wheels": 8
+    },
+    "manifest_sha256": "08d9c7cab437b4c9106275d54df49e905e2fea0de59f36ec519f17f6f79a065e",
+    "reproducible": true,
+    "verified_files": 51
+  }
+}
