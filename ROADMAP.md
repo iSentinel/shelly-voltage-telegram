@@ -1,3 +1,16 @@
+## 2026-11-28 — multiarchitecture OCI platform binding
+
+- Exact #507 and narrow #472 CI 8/8 PASS; no new tags.
+- Review full release prerequisites: local candidate is amd64
+  only; apt and Python dependencies still need full build review.
+- Harden OCI verification: separate manifest identity per platform,
+  match config OS and architecture before revision/attestations.
+- Four new negative tests; 49 focused tests and quality gate PASS.
+- NEXT: review full build dependency and provenance qualification;
+  integrated runtime, multiarch build, signed pair and approval
+  remain open. No repeat of blocked integration or deployment.
+- Keep frozen narrow .29 archive and historical START unchanged.
+
 ## 2026-11-28 — corrected ACK static image profile review
 
 - Exact #506 and narrow #472 CI 8/8 PASS; no new tags.

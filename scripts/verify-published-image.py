@@ -91,6 +91,8 @@ def platform_manifests(index: dict[str, Any]) -> dict[str, dict]:
             output[str(arch)] = item
     if set(output) != set(ARCHITECTURES):
         raise ValueError("Release is missing an amd64 or arm64 image")
+    if len({item["digest"] for item in output.values()}) != len(output):
+        raise ValueError("Architectures share an image manifest")
     return output
 
 
@@ -156,6 +158,8 @@ def verify_image(token: str, index: dict, commit: str) -> None:
         digest = image["digest"]
         platform = fetch_object(token, digest, "manifests")
         config = fetch_object(token, platform["config"]["digest"], "blobs")
+        if config.get("os") != "linux" or config.get("architecture") != arch:
+            raise ValueError(f"OCI config platform mismatch on linux/{arch}")
         if image_revision(config) != commit:
             raise ValueError(f"Unexpected source revision on linux/{arch}")
         attestation = attestation_descriptor(index, digest)
