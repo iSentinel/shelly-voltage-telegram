@@ -1,3 +1,17 @@
+## 2026-11-28 — actual embedded builder capability probe
+
+- Exact #518 and narrow #472 CI 8/8 PASS.
+- Signed snapshot Buildx DEB and binary verified; temporary
+  isolated QA114 CLI works without system package installation.
+- Docker driver reports embedded BuildKit v0.0.0+unknown;
+  AMD64/386 only, no ARM64 advertised.
+- Actual independent COPY-only OCI layout resolver probe
+  refused: unknown scheme oci-layout, exit 1, output absent.
+- NEXT: qualify compatible standalone builder and sufficient
+  isolated storage, explicit local OCI resolution and ARM64
+  strategy. Application build/runtime/signing remain open.
+- No production change or repetition of blocked integration.
+
 ## 2026-11-28 — offline base OCI layout staging
 
 - Exact #517 and narrow #472 CI 8/8 PASS.

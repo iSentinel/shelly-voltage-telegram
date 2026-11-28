@@ -375,3 +375,47 @@ that the builder resolves this reference offline. No Docker
 load, builder install, image build, runtime execution or
 deployment was attempted. Earlier blocked integrated trials
 were not repeated. Frozen narrow .29 remains separate.
+
+## Actual embedded builder capability and OCI resolver probe
+
+2026-11-28. Exact #518 and narrow #472 CI 8/8 PASS.
+Verified docker-buildx 0.13.1+ds1-3 amd64 against the
+previously signed trixie snapshot index; downloaded exact
+DEB, checked size and SHA256, extracted without installing
+the package or running its maintainer scripts. The verified
+plugin binary was transferred to a private temporary
+DOCKER_CONFIG on isolated QA114, not a system plugin path.
+
+The temporary Buildx CLI works and inspect default reports
+the Docker driver running with BuildKit v0.0.0+unknown.
+Reported platforms: amd64, amd64/v2, amd64/v3 and 386;
+ARM64 not advertised. The isolated QA has only loopback and
+no running containers. No daemon configuration changed.
+
+Executed one minimal independent resolver probe using the
+verified AMD64 local OCI layout, exact platform manifest,
+network-none, pull=false, and local output. Dockerfile:
+FROM named context, FROM scratch, COPY one os-release file.
+No RUN instruction, app source, package installation or
+application launch. Probe refused with exit 1:
+unknown scheme oci-layout: not found.
+The intended output file is absent. The embedded backend
+is therefore not qualified for the reviewed offline recipe.
+No alternate resolution or integration trial was attempted.
+The probe may have created ordinary builder cache; existing
+historical artifacts were not removed. Available space fell
+to approximately 914 MiB after staging and probe.
+
+Evidence: builder-capability-review.json, original probe log
+and backend inspection log adjacent to this README. Raw
+DEB and extracted plugin: /var/tmp/svt-buildx-review.IjmtMS.
+QA temporary plugin, OCI data and probe:
+ /var/tmp/svt-buildx-cli-review.FASTLm
+
+Next: qualify a compatible standalone BuildKit backend and
+sufficient isolated storage, with reviewed artifact integrity
+and explicit local OCI resolution. ARM64 needs a supported
+native or emulated platform strategy. The stable snapshot
+recency policy remains open. No actual application build,
+runtime qualification, release, signing, production change
+or repetition of earlier blocked integrated trials.
