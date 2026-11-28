@@ -1,3 +1,18 @@
+## 2026-11-28 — base layer integrity and declared font closure
+
+- Exact #512 and narrow #472 CI 8/8 PASS.
+- Eight downloaded base layers verified compressed and uncompressed;
+  both base inventories 87 packages, libc6 2.41-12+deb13u4.
+- Three font DEBs verified, declared dependency and Breaks review
+  PASS for both targets; historical amd64 package set 90/90 exact.
+- New 20261127 snapshot metadata signatures PASS; updates/security
+  unexpired at observation. Proposed freshness admission rules;
+  old expired snapshot remains archival evidence only.
+- NEXT: review new snapshot indexes, package resolution and base
+  security-version gaps; full build, native runtime and signing open.
+- No APT installation/config change, production mutation or repeat
+  of blocked integrated qualification.
+
 ## 2026-11-28 — pinned base and Debian font artifact review
 
 - Verified actual pinned Docker Hub index, platform manifests

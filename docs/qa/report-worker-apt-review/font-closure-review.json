@@ -1,0 +1,165 @@
+{
+  "amd64": {
+    "base_count": 87,
+    "breaks_checks": [
+      {
+        "clause": "fonts-noto (<< 2015-05-11+cjk-1~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-hinted (<< 20181130-2~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-unhinted (<< 20201027-1~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-core (<< 20201027-2~)",
+        "conflict": false,
+        "package": "fonts-noto-mono",
+        "target_version": "20201225-2"
+      },
+      {
+        "clause": "fonts-noto-unhinted (<< 20201027-3~)",
+        "conflict": false,
+        "package": "fonts-noto-mono",
+        "target_version": null
+      }
+    ],
+    "expected_count": 90,
+    "packages": {
+      "fonts-inter": {
+        "Architecture": "all",
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null,
+        "SHA256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "Size": "4616468",
+        "Version": "4.1+ds-1"
+      },
+      "fonts-noto-core": {
+        "Architecture": "all",
+        "Breaks": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)",
+        "Conflicts": null,
+        "Depends": "fonts-noto-mono",
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)",
+        "SHA256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "Size": "12188336",
+        "Version": "20201225-2"
+      },
+      "fonts-noto-mono": {
+        "Architecture": "all",
+        "Breaks": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)",
+        "Conflicts": null,
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-mono_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)",
+        "SHA256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+        "Size": "397580",
+        "Version": "20201225-2"
+      }
+    }
+  },
+  "arm64": {
+    "base_count": 87,
+    "breaks_checks": [
+      {
+        "clause": "fonts-noto (<< 2015-05-11+cjk-1~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-hinted (<< 20181130-2~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-unhinted (<< 20201027-1~)",
+        "conflict": false,
+        "package": "fonts-noto-core",
+        "target_version": null
+      },
+      {
+        "clause": "fonts-noto-core (<< 20201027-2~)",
+        "conflict": false,
+        "package": "fonts-noto-mono",
+        "target_version": "20201225-2"
+      },
+      {
+        "clause": "fonts-noto-unhinted (<< 20201027-3~)",
+        "conflict": false,
+        "package": "fonts-noto-mono",
+        "target_version": null
+      }
+    ],
+    "expected_count": 90,
+    "packages": {
+      "fonts-inter": {
+        "Architecture": "all",
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null,
+        "SHA256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "Size": "4616468",
+        "Version": "4.1+ds-1"
+      },
+      "fonts-noto-core": {
+        "Architecture": "all",
+        "Breaks": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)",
+        "Conflicts": null,
+        "Depends": "fonts-noto-mono",
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)",
+        "SHA256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "Size": "12188336",
+        "Version": "20201225-2"
+      },
+      "fonts-noto-mono": {
+        "Architecture": "all",
+        "Breaks": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)",
+        "Conflicts": null,
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-mono_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)",
+        "SHA256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+        "Size": "397580",
+        "Version": "20201225-2"
+      }
+    }
+  },
+  "historical_actual_only": [],
+  "historical_amd64_exact_match": true,
+  "historical_expected_only": []
+}

@@ -1,0 +1,926 @@
+{
+  "amd64": {
+    "dpkg_status_sha256": "549d2ac7b781004351ab05654edabef851dfa81df458a3680bfd0db4b8e3ea09",
+    "layers": [
+      {
+        "diff_id": "sha256:a5d6d345f6afa08d7c31272055746d60a838b290bfcc82c0a23e8e984d61a933",
+        "digest": "sha256:6fc242d221a673263eabd14a9ad9584d3177c96e5cb504c891497338e2f912f5",
+        "size": 29855236
+      },
+      {
+        "diff_id": "sha256:b9baa14e993c683240d519adebb39657df4d2b973dc2f3fee23cd51367806e2b",
+        "digest": "sha256:789960dca7c613e9d8872d4790f2ec423b8fe17f52989c6225982f28696e7315",
+        "size": 1289759
+      },
+      {
+        "diff_id": "sha256:1217eb836a36d0c4be6a310113a777ecb9d7e9c24197a407665c8884cc5369a4",
+        "digest": "sha256:7d824d9f832184c4084576664b622717cb0eb579b504f2079d3b4ac36454761f",
+        "size": 11923889
+      },
+      {
+        "diff_id": "sha256:3929d22d8aa43d69f436bbc47ef472db875440b850dbc4e80dd272a3adf673d2",
+        "digest": "sha256:6f058ad03f0cab30c01926ad20e38348fe53783080f5309e4bfc4d2709c5fbaf",
+        "size": 251
+      }
+    ],
+    "packages": [
+      {
+        "architecture": "all",
+        "name": "adduser",
+        "version": "3.152"
+      },
+      {
+        "architecture": "amd64",
+        "name": "apt",
+        "version": "3.0.3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "base-files",
+        "version": "13.8+deb13u7"
+      },
+      {
+        "architecture": "amd64",
+        "name": "base-passwd",
+        "version": "3.6.7"
+      },
+      {
+        "architecture": "amd64",
+        "name": "bash",
+        "version": "5.2.37-2+b10"
+      },
+      {
+        "architecture": "amd64",
+        "name": "bsdutils",
+        "version": "1:2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "ca-certificates",
+        "version": "20250419+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "coreutils",
+        "version": "9.7-3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "dash",
+        "version": "0.5.12-12"
+      },
+      {
+        "architecture": "all",
+        "name": "debconf",
+        "version": "1.5.91"
+      },
+      {
+        "architecture": "all",
+        "name": "debian-archive-keyring",
+        "version": "2025.1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "debianutils",
+        "version": "5.23.2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "diffutils",
+        "version": "1:3.10-4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "dpkg",
+        "version": "1.22.22"
+      },
+      {
+        "architecture": "amd64",
+        "name": "findutils",
+        "version": "4.10.0-3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "gcc-14-base",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "amd64",
+        "name": "grep",
+        "version": "3.11-4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "gzip",
+        "version": "1.13-1+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "hostname",
+        "version": "3.25"
+      },
+      {
+        "architecture": "all",
+        "name": "init-system-helpers",
+        "version": "1.69~deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libacl1",
+        "version": "2.3.2-2+b1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libapt-pkg7.0",
+        "version": "3.0.3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libattr1",
+        "version": "1:2.5.2-3"
+      },
+      {
+        "architecture": "all",
+        "name": "libaudit-common",
+        "version": "1:4.0.2-2+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libaudit1",
+        "version": "1:4.0.2-2+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libblkid1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libbsd0",
+        "version": "0.12.2-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libbz2-1.0",
+        "version": "1.0.8-6"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libc-bin",
+        "version": "2.41-12+deb13u4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libc6",
+        "version": "2.41-12+deb13u4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libcap-ng0",
+        "version": "0.8.5-4+b1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libcap2",
+        "version": "1:2.75-10+deb13u1+b3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libcrypt1",
+        "version": "1:4.4.38-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libdb5.3t64",
+        "version": "5.3.28+dfsg2-9"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libdebconfclient0",
+        "version": "0.280"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libffi8",
+        "version": "3.4.8-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libgcc-s1",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libgdbm6t64",
+        "version": "1.24-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libgmp10",
+        "version": "2:6.3.0+dfsg-3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libhogweed6t64",
+        "version": "3.10.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "liblastlog2-2",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "liblz4-1",
+        "version": "1.10.0-4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "liblzma5",
+        "version": "5.8.1-1+deb13u2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libmd0",
+        "version": "1.1.0-2+b1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libmount1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libncursesw6",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libnettle8t64",
+        "version": "3.10.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libpam-modules",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libpam-modules-bin",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "all",
+        "name": "libpam-runtime",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libpam0g",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libpcre2-8-0",
+        "version": "10.46-1~deb13u3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libreadline8t64",
+        "version": "8.2-6"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libseccomp2",
+        "version": "2.6.0-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libselinux1",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "all",
+        "name": "libsemanage-common",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libsemanage2",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libsepol2",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libsmartcols1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libsqlite3-0",
+        "version": "3.46.1-7+deb13u2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libssl3t64",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libstdc++6",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libsystemd0",
+        "version": "257.13-1~deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libtinfo6",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libudev1",
+        "version": "257.13-1~deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libuuid1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libxxhash0",
+        "version": "0.8.3-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "libzstd1",
+        "version": "1.5.7+dfsg-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "login",
+        "version": "1:4.16.0-2+really2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "login.defs",
+        "version": "1:4.17.4-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "mawk",
+        "version": "1.3.4.20250131-1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "mount",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "ncurses-base",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "ncurses-bin",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "all",
+        "name": "netbase",
+        "version": "6.5"
+      },
+      {
+        "architecture": "amd64",
+        "name": "openssl",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "amd64",
+        "name": "passwd",
+        "version": "1:4.17.4-2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "perl-base",
+        "version": "5.40.1-6+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "readline-common",
+        "version": "8.2-6"
+      },
+      {
+        "architecture": "amd64",
+        "name": "sed",
+        "version": "4.9-2+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "sqv",
+        "version": "1.3.0-3+b2"
+      },
+      {
+        "architecture": "amd64",
+        "name": "sysvinit-utils",
+        "version": "3.14-4"
+      },
+      {
+        "architecture": "amd64",
+        "name": "tar",
+        "version": "1.35+dfsg-3.1"
+      },
+      {
+        "architecture": "all",
+        "name": "tzdata",
+        "version": "2026e-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "util-linux",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "amd64",
+        "name": "zlib1g",
+        "version": "1:1.3.dfsg+really1.3.1-1+b1"
+      }
+    ]
+  },
+  "arm64": {
+    "dpkg_status_sha256": "a00c02a00e5bffdb801948c60b3acb2eab447096af04cf1273ba8f8de9cfc623",
+    "layers": [
+      {
+        "diff_id": "sha256:685889762157cefb6370119253b3c709f70bb2622402052065c92243e3d9105f",
+        "digest": "sha256:2b70e040f7d132c8d366ee0223462552686510fb372ea5a83822973c30f19e36",
+        "size": 30213496
+      },
+      {
+        "diff_id": "sha256:ff0168d8c96ef0dfa946895bfaf814152095996c042df0952509a9411da3963b",
+        "digest": "sha256:b09e3727000c35ae6c3abe484cb954c8df08f895eff51f09df26b891a0468d24",
+        "size": 1270186
+      },
+      {
+        "diff_id": "sha256:da0f622bdc5d88b9d5d41b56391a60c6f83904342cbd4d3ce6b4cee12d05d95e",
+        "digest": "sha256:3ebe763086bb4dfda359318669d08c4fc8f072eaae49af4ad7a125595b29feb3",
+        "size": 11856881
+      },
+      {
+        "diff_id": "sha256:e02d6be4fd33214ddcfd685fead3fa28a46658c86858adb77cd2206264c89602",
+        "digest": "sha256:3a038b6d1fa12b6c9a602e667271f13cf48adce187d2ad813c33dfe1004f7e37",
+        "size": 251
+      }
+    ],
+    "packages": [
+      {
+        "architecture": "all",
+        "name": "adduser",
+        "version": "3.152"
+      },
+      {
+        "architecture": "arm64",
+        "name": "apt",
+        "version": "3.0.3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "base-files",
+        "version": "13.8+deb13u7"
+      },
+      {
+        "architecture": "arm64",
+        "name": "base-passwd",
+        "version": "3.6.7"
+      },
+      {
+        "architecture": "arm64",
+        "name": "bash",
+        "version": "5.2.37-2+b10"
+      },
+      {
+        "architecture": "arm64",
+        "name": "bsdutils",
+        "version": "1:2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "ca-certificates",
+        "version": "20250419+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "coreutils",
+        "version": "9.7-3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "dash",
+        "version": "0.5.12-12"
+      },
+      {
+        "architecture": "all",
+        "name": "debconf",
+        "version": "1.5.91"
+      },
+      {
+        "architecture": "all",
+        "name": "debian-archive-keyring",
+        "version": "2025.1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "debianutils",
+        "version": "5.23.2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "diffutils",
+        "version": "1:3.10-4"
+      },
+      {
+        "architecture": "arm64",
+        "name": "dpkg",
+        "version": "1.22.22"
+      },
+      {
+        "architecture": "arm64",
+        "name": "findutils",
+        "version": "4.10.0-3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "gcc-14-base",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "arm64",
+        "name": "grep",
+        "version": "3.11-4+b1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "gzip",
+        "version": "1.13-1+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "hostname",
+        "version": "3.25"
+      },
+      {
+        "architecture": "all",
+        "name": "init-system-helpers",
+        "version": "1.69~deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libacl1",
+        "version": "2.3.2-2+b1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libapt-pkg7.0",
+        "version": "3.0.3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libattr1",
+        "version": "1:2.5.2-3"
+      },
+      {
+        "architecture": "all",
+        "name": "libaudit-common",
+        "version": "1:4.0.2-2+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libaudit1",
+        "version": "1:4.0.2-2+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libblkid1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libbsd0",
+        "version": "0.12.2-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libbz2-1.0",
+        "version": "1.0.8-6"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libc-bin",
+        "version": "2.41-12+deb13u4"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libc6",
+        "version": "2.41-12+deb13u4"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libcap-ng0",
+        "version": "0.8.5-4+b1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libcap2",
+        "version": "1:2.75-10+deb13u1+b3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libcrypt1",
+        "version": "1:4.4.38-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libdb5.3t64",
+        "version": "5.3.28+dfsg2-9"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libdebconfclient0",
+        "version": "0.280"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libffi8",
+        "version": "3.4.8-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libgcc-s1",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libgdbm6t64",
+        "version": "1.24-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libgmp10",
+        "version": "2:6.3.0+dfsg-3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libhogweed6t64",
+        "version": "3.10.1-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "liblastlog2-2",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "liblz4-1",
+        "version": "1.10.0-4"
+      },
+      {
+        "architecture": "arm64",
+        "name": "liblzma5",
+        "version": "5.8.1-1+deb13u2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libmd0",
+        "version": "1.1.0-2+b1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libmount1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libncursesw6",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libnettle8t64",
+        "version": "3.10.1-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libpam-modules",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libpam-modules-bin",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "all",
+        "name": "libpam-runtime",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libpam0g",
+        "version": "1.7.0-5"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libpcre2-8-0",
+        "version": "10.46-1~deb13u3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libreadline8t64",
+        "version": "8.2-6"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libseccomp2",
+        "version": "2.6.0-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libselinux1",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "all",
+        "name": "libsemanage-common",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libsemanage2",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libsepol2",
+        "version": "3.8.1-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libsmartcols1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libsqlite3-0",
+        "version": "3.46.1-7+deb13u2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libssl3t64",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libstdc++6",
+        "version": "14.2.0-19"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libsystemd0",
+        "version": "257.13-1~deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libtinfo6",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libudev1",
+        "version": "257.13-1~deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libuuid1",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libxxhash0",
+        "version": "0.8.3-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "libzstd1",
+        "version": "1.5.7+dfsg-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "login",
+        "version": "1:4.16.0-2+really2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "login.defs",
+        "version": "1:4.17.4-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "mawk",
+        "version": "1.3.4.20250131-1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "mount",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "ncurses-base",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "ncurses-bin",
+        "version": "6.5+20250216-2"
+      },
+      {
+        "architecture": "all",
+        "name": "netbase",
+        "version": "6.5"
+      },
+      {
+        "architecture": "arm64",
+        "name": "openssl",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "openssl-provider-legacy",
+        "version": "3.5.7-1~deb13u3"
+      },
+      {
+        "architecture": "arm64",
+        "name": "passwd",
+        "version": "1:4.17.4-2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "perl-base",
+        "version": "5.40.1-6+deb13u1"
+      },
+      {
+        "architecture": "all",
+        "name": "readline-common",
+        "version": "8.2-6"
+      },
+      {
+        "architecture": "arm64",
+        "name": "sed",
+        "version": "4.9-2+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "sqv",
+        "version": "1.3.0-3+b2"
+      },
+      {
+        "architecture": "arm64",
+        "name": "sysvinit-utils",
+        "version": "3.14-4"
+      },
+      {
+        "architecture": "arm64",
+        "name": "tar",
+        "version": "1.35+dfsg-3.1"
+      },
+      {
+        "architecture": "all",
+        "name": "tzdata",
+        "version": "2026e-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "util-linux",
+        "version": "2.41.5-0+deb13u1"
+      },
+      {
+        "architecture": "arm64",
+        "name": "zlib1g",
+        "version": "1:1.3.dfsg+really1.3.1-1+b1"
+      }
+    ]
+  }
+}
