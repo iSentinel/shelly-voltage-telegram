@@ -1,0 +1,19 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Solving dependencies...
+Some packages could not be installed. This may mean that you have
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ fonts-noto-core : Depends: fonts-noto-mono but it is not installable
+E: Unable to correct problems, you have held broken packages.
+E: The following information from --solver 3.0 may provide additional context:
+   Unable to satisfy dependencies. Reached two conflicting decisions:
+   1. fonts-noto-core:arm64=20201225-2 is selected for install
+   2. fonts-noto-core:arm64 Depends fonts-noto-mono
+      but none of the choices are installable:
+      [no choices]

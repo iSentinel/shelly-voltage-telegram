@@ -1,0 +1,295 @@
+{
+  "apt_version": "3.0.4",
+  "artifact_review_sha256": "bc9ac82ce083b7eb559be0e3f11bd8323b5a57471d2032d8f189defa4a21fb83",
+  "build_authorized": false,
+  "installed": false,
+  "maintainer_scripts_executed": false,
+  "native_runtime_verified": false,
+  "platforms": {
+    "amd64": {
+      "missing_dependency_exit": 100,
+      "missing_dependency_log_sha256": "4c095bf8446d5b016a4ce3d98affbed7edace6afa68fe742fbe544bd399ca6b2",
+      "operations": {
+        "Conf": {
+          "apt": {
+            "architecture": "amd64",
+            "version": "3.0.4"
+          },
+          "base-files": {
+            "architecture": "amd64",
+            "version": "13.8+deb13u8"
+          },
+          "fonts-inter": {
+            "architecture": "all",
+            "version": "4.1+ds-1"
+          },
+          "fonts-noto-core": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "fonts-noto-mono": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "libapt-pkg7.0": {
+            "architecture": "amd64",
+            "version": "3.0.4"
+          },
+          "libc-bin": {
+            "architecture": "amd64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libc6": {
+            "architecture": "amd64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libssl3t64": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "libzstd1": {
+            "architecture": "amd64",
+            "version": "1.5.7+dfsg-1+deb13u1"
+          },
+          "login.defs": {
+            "architecture": "all",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "openssl": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "openssl-provider-legacy": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "passwd": {
+            "architecture": "amd64",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "tzdata": {
+            "architecture": "all",
+            "version": "2026f-0+deb13u1"
+          },
+          "zlib1g": {
+            "architecture": "amd64",
+            "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+          }
+        },
+        "Inst": {
+          "apt": {
+            "architecture": "amd64",
+            "version": "3.0.4"
+          },
+          "base-files": {
+            "architecture": "amd64",
+            "version": "13.8+deb13u8"
+          },
+          "fonts-inter": {
+            "architecture": "all",
+            "version": "4.1+ds-1"
+          },
+          "fonts-noto-core": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "fonts-noto-mono": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "libapt-pkg7.0": {
+            "architecture": "amd64",
+            "version": "3.0.4"
+          },
+          "libc-bin": {
+            "architecture": "amd64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libc6": {
+            "architecture": "amd64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libssl3t64": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "libzstd1": {
+            "architecture": "amd64",
+            "version": "1.5.7+dfsg-1+deb13u1"
+          },
+          "login.defs": {
+            "architecture": "all",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "openssl": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "openssl-provider-legacy": {
+            "architecture": "amd64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "passwd": {
+            "architecture": "amd64",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "tzdata": {
+            "architecture": "all",
+            "version": "2026f-0+deb13u1"
+          },
+          "zlib1g": {
+            "architecture": "amd64",
+            "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+          }
+        }
+      },
+      "plan_sha256": "efb01733d5c7df27c568cde54bdde667e64f4e14d91127512b047836e90ff00d",
+      "removals": 0,
+      "status_sha256": "549d2ac7b781004351ab05654edabef851dfa81df458a3680bfd0db4b8e3ea09",
+      "status_unchanged": true
+    },
+    "arm64": {
+      "missing_dependency_exit": 100,
+      "missing_dependency_log_sha256": "ded2088c1d1ad067a96f0f043684864e861136e187d5174c1644b49beb664ff1",
+      "operations": {
+        "Conf": {
+          "apt": {
+            "architecture": "arm64",
+            "version": "3.0.4"
+          },
+          "base-files": {
+            "architecture": "arm64",
+            "version": "13.8+deb13u8"
+          },
+          "fonts-inter": {
+            "architecture": "all",
+            "version": "4.1+ds-1"
+          },
+          "fonts-noto-core": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "fonts-noto-mono": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "libapt-pkg7.0": {
+            "architecture": "arm64",
+            "version": "3.0.4"
+          },
+          "libc-bin": {
+            "architecture": "arm64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libc6": {
+            "architecture": "arm64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libssl3t64": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "libzstd1": {
+            "architecture": "arm64",
+            "version": "1.5.7+dfsg-1+deb13u1"
+          },
+          "login.defs": {
+            "architecture": "all",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "openssl": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "openssl-provider-legacy": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "passwd": {
+            "architecture": "arm64",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "tzdata": {
+            "architecture": "all",
+            "version": "2026f-0+deb13u1"
+          },
+          "zlib1g": {
+            "architecture": "arm64",
+            "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+          }
+        },
+        "Inst": {
+          "apt": {
+            "architecture": "arm64",
+            "version": "3.0.4"
+          },
+          "base-files": {
+            "architecture": "arm64",
+            "version": "13.8+deb13u8"
+          },
+          "fonts-inter": {
+            "architecture": "all",
+            "version": "4.1+ds-1"
+          },
+          "fonts-noto-core": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "fonts-noto-mono": {
+            "architecture": "all",
+            "version": "20201225-2"
+          },
+          "libapt-pkg7.0": {
+            "architecture": "arm64",
+            "version": "3.0.4"
+          },
+          "libc-bin": {
+            "architecture": "arm64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libc6": {
+            "architecture": "arm64",
+            "version": "2.41-12+deb13u5"
+          },
+          "libssl3t64": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "libzstd1": {
+            "architecture": "arm64",
+            "version": "1.5.7+dfsg-1+deb13u1"
+          },
+          "login.defs": {
+            "architecture": "all",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "openssl": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "openssl-provider-legacy": {
+            "architecture": "arm64",
+            "version": "3.5.9-1~deb13u1"
+          },
+          "passwd": {
+            "architecture": "arm64",
+            "version": "1:4.17.4-2+deb13u1"
+          },
+          "tzdata": {
+            "architecture": "all",
+            "version": "2026f-0+deb13u1"
+          },
+          "zlib1g": {
+            "architecture": "arm64",
+            "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+          }
+        }
+      },
+      "plan_sha256": "b5e2ce829238898159d5549246e91b979346055a09f1dc7531f1f407a9a2c615",
+      "removals": 0,
+      "status_sha256": "a00c02a00e5bffdb801948c60b3acb2eab447096af04cf1273ba8f8de9cfc623",
+      "status_unchanged": true
+    }
+  },
+  "status": "PASS_ISOLATED_APT_SIMULATION_ONLY"
+}

@@ -173,3 +173,41 @@ and complete immutable build inputs, freshness at use, native
 multiarch runtime and security assessment. Dockerfile and
 production remain unchanged. Earlier blocked integrated trials
 were not repeated. Narrow .29 approval remains separate.
+
+## Isolated APT transaction simulation
+
+2026-11-28. Exact #514 and narrow #472 CI 8/8 PASS.
+Host apt-get 3.0.4 simulated the exact local DEB inputs using
+separate temporary APT configuration, empty sources and package
+lists, and copies of the original base dpkg status for each
+target. Explicit target architecture, no-download, no-remove,
+no-install-recommends and simulation mode. No host package
+installation, sources modification or maintainer-script execution.
+
+Both targets independently resolved 13 upgrades and three new
+font packages, zero removals. Parsed all 16 Inst and 16 Conf
+records per target and matched package names, versions and
+architectures against the verified artifact manifest. Base
+status hashes remained unchanged. Negative simulation omitting
+fonts-noto-mono refused on both targets with exit 100.
+
+Transaction evidence SHA256:
+1e0249e8950fcf64abc4593c1a53e2fc678269a4b1469470a3af4b0470a3fa58
+Original isolated simulation directories and logs:
+ /var/tmp/svt-apt-plan-review.S9KTaV
+Retained positive and negative logs adjacent to this README.
+
+build-input-review.json combines the reviewed base layer,
+Debian artifact, Python wheel and evidence hashes. It is a
+review-only input index, not a complete release lock or a
+build authorization. No actual APT transaction, native ARM64
+execution, full build, runtime acceptance or vulnerability
+clearance is claimed. Host APT 3.0.4 differs from the base's
+initial 3.0.3; solver compatibility inside each actual image
+remains to be checked. Freshness must be rechecked at use.
+No Dockerfile or production change; earlier blocked integrated
+trials were not repeated.
+
+Next: design the full build input consumption and provenance
+review using the verified byte sets, recheck freshness, and
+qualify native execution and full build before signing.
