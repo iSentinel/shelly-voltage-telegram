@@ -1,3 +1,16 @@
+## 2026-11-28 — deterministic reviewed input staging
+
+- Exact #515 and narrow #472 CI 8/8 PASS.
+- New QA staging CLI checks pinned source/evidence and artifact
+  bytes, produces exclusive deterministic platform tar archives.
+- Eight focused tests, quality gate PASS; long wheel name fix.
+- Two identical archives per platform; 52 members and 51 verified
+  manifest file hashes each; absent artifact refused without output.
+- NEXT: review a separate offline QA build recipe consuming the
+  exact bundles and pinned base, freshness recheck at use.
+- Actual package installation, full multiarch build, integrated
+  runtime and signing remain open. No production mutation.
+
 ## 2026-11-28 — isolated APT simulation and reviewed build inputs
 
 - Exact #514 and narrow #472 CI 8/8 PASS.
