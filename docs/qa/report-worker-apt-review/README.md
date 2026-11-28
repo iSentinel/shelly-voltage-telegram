@@ -51,3 +51,73 @@ claimed. Next qualify complete base/package dependencies and
 define an explicit reviewed snapshot freshness policy; do not
 silently disable expiry checks. No release, signing, deployment
 or repetition of blocked integrated trials.
+
+## Base layer and declared font dependency closure
+
+2026-11-28. Exact #512 and narrow #472 CI 8/8 PASS.
+
+Downloaded all four compressed layers per platform from the
+pinned Docker Hub manifests. Verified compressed lengths and
+SHA256 and independently hashed the decompressed streams against
+all eight config DiffIDs. Inspected dpkg status without extracting
+or executing image contents. No relevant status whiteout was found.
+Each base contains 87 installed Debian packages, with libc6
+2.41-12+deb13u4 on both architectures. This confirms the base
+package metadata satisfies the selected wheels' manylinux glibc
+ceiling, not actual native imports or loader compatibility.
+
+Base inventory SHA256:
+07ec1919b3837db01452c6c56aa6ca0a69d16c6243782135d2d7ebf3ae47d555
+Protected downloaded layer evidence:
+ /var/tmp/svt-base-layer-review.1kaRJS
+
+The historical signed trixie main indexes identify three font
+packages: fonts-inter 4.1+ds-1, fonts-noto-core 20201225-2 and
+fonts-noto-mono 20201225-2. The only declared Depends edge is
+core -> mono. No Pre-Depends or Recommends in these records.
+An initial conservative assertion rejected the presence of Breaks
+fields; reviewed the actual five clauses per target against the
+combined base and font versions using Debian version comparison.
+No applicable conflict was found. All three exact DEBs match the
+signed indexes' size and SHA256. New mono artifact SHA256:
+7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006
+
+Expected amd64 package name/version/architecture set (87 + 3)
+exactly matches all 90 packages in the historical local image
+inventory. No extras or omissions. Expected arm64 count is also
+90, but no new arm64 runtime image has been built. This is the
+declared font closure on the exact base, not a full APT solver
+transaction, reverse dependency review, maintainer-script
+execution or security upgrade qualification.
+
+Font closure SHA256:
+abc197289d5fe087675ca4c08702fe6df324b8445612ef0fd36b510ab6affe06
+
+## Snapshot freshness decision boundary
+
+Independently retrieved snapshot 20261127T000000Z on 2026-11-28.
+Three InRelease signatures verified with the host Debian keyring.
+Stable trixie has no Valid-Until; updates and security are
+unexpired at observation, until 2026-12-03 20:15:07 UTC and
+21:03:36 UTC respectively. This newer snapshot is a candidate
+for further review, not an approved build input set.
+
+Freshness evidence SHA256:
+e353544439acde70de5875086cc2a78004b872195100b076e32aad85d67c3a32
+Raw metadata and gpgv logs:
+ /var/tmp/svt-apt-freshness-review.0jqKdx
+
+Proposed admission rules: select an explicit immutable timestamp
+and trusted archive keyring; verify signed codename, dates and
+architecture/index hashes; require unexpired updates/security
+metadata at build admission; for stable metadata without expiry,
+require separately reviewed recency and upstream release identity.
+Recheck freshness at use, reject missing or expired required
+metadata, and do not disable validity checks to obtain a PASS.
+Historical expired metadata can support archival artifact identity
+only, not new release freshness. New snapshot index/package
+resolution, comparison of base versions with security updates,
+dependency artifact provenance, native execution and full release
+build remain required. No vulnerability-clearance claim. No APT
+configuration, package installation, image build, deployment,
+or retry of blocked integrated qualification.
