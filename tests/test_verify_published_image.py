@@ -19,6 +19,15 @@ SPDX = "https://spdx.dev/Document"
 SLSA = "https://slsa.dev/provenance/v1"
 
 
+def fixture_config(arch):
+    """Describe the actual image platform and revision in the config."""
+    return {
+        "os": "linux",
+        "architecture": arch,
+        "config": {"Labels": {"org.opencontainers.image.revision": COMMIT}},
+    }
+
+
 def add_fixture_platform(index, objects, arch, letters):
     """Attach one image, its revision and two subject-bound attestations."""
 
@@ -38,9 +47,7 @@ def add_fixture_platform(index, objects, arch, letters):
         }
     )
     objects[img] = {"config": {"digest": cfg}}
-    objects[cfg] = {
-        "config": {"Labels": {"org.opencontainers.image.revision": COMMIT}}
-    }
+    objects[cfg] = fixture_config(arch)
     objects[att] = {
         "layers": [
             {"mediaType": "application/vnd.in-toto+json", "digest": layer}
@@ -161,6 +168,38 @@ class PublishedImageTests(unittest.TestCase):
 
         index, objects, _, _ = synthetic_registry()
         audit_without_network(index, objects)
+
+    def test_reject_shared_manifest_across_architectures(self) -> None:
+        """One manifest cannot stand in for two platform images."""
+        index, objects, amd, arm = synthetic_registry()
+        for item in index["manifests"]:
+            if item["digest"] == arm[0]:
+                item["digest"] = amd[0]
+        with self.assertRaisesRegex(ValueError, "share an image manifest"):
+            audit_without_network(index, objects)
+
+    def test_reject_config_architecture_mismatch(self) -> None:
+        """An arm64 descriptor cannot contain an amd64 config."""
+        index, objects, _, arm = synthetic_registry()
+        objects[arm[1]]["architecture"] = "amd64"
+        with self.assertRaisesRegex(ValueError, "config platform mismatch"):
+            audit_without_network(index, objects)
+
+    def test_reject_config_os_mismatch(self) -> None:
+        """The config operating system must match Linux index claims."""
+        index, objects, amd, _ = synthetic_registry()
+        objects[amd[1]]["os"] = "windows"
+        with self.assertRaisesRegex(ValueError, "config platform mismatch"):
+            audit_without_network(index, objects)
+
+    def test_reject_missing_config_platform(self) -> None:
+        """Absence of either platform field cannot count as proof."""
+        for field in ("os", "architecture"):
+            with self.subTest(field=field):
+                index, objects, _, arm = synthetic_registry()
+                del objects[arm[1]][field]
+                with self.assertRaisesRegex(ValueError, "platform mismatch"):
+                    audit_without_network(index, objects)
 
     def test_reject_signed_old_image_under_new_source_commit(self) -> None:
         """Source metadata prevents an old release from impersonating QA."""

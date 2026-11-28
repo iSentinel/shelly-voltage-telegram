@@ -95,3 +95,30 @@ commands were not repeated or bypassed.
 
 Narrow .29 archive SHA256 unchanged. No production changes,
 release version assignment, merge, signing or authorization.
+
+## Multiarchitecture OCI admission correction (2026-11-28)
+
+Exact #507 and narrow #472 CI 8/8 PASS. Review of the shared OCI
+release verifier found that the index platform descriptor was not
+cross-checked against the downloaded OCI image config's OS and
+architecture. Two architecture descriptors could also reference the
+same manifest. The verifier now requires distinct image manifests
+and matching Linux/architecture config fields before checking the
+revision and per-platform SPDX/SLSA attestations.
+
+Four new offline regression tests refuse shared manifest identity,
+wrong architecture, wrong OS, and missing platform fields. Existing
+valid dual-platform fixture now includes real config platform fields.
+49 focused tests across four suites PASS; Ruff and quality gate PASS.
+Initial quality run found a 42-line test fixture helper; split the
+fixture config into its own helper and reran all checks successfully.
+
+These are synthetic registry tests, not an actual multiarchitecture
+build or signature verification. Runtime bytes and historical START
+pins remain unchanged. The unsigned local candidate is amd64 only.
+The full Dockerfile has a digest-pinned base but ranged Python
+requirements and unpinned apt packages; a clean release build still
+needs dependency/provenance and per-platform runtime qualification.
+No integration trial, publication, signature, or production change.
+The narrow .29 candidate remains a separate review scope; the new
+OCI verifier correction has not been applied to its frozen bytes.
