@@ -73,6 +73,31 @@ class RuntimeProfileTests(unittest.TestCase):
             QA.review_plan(self.root, "paused")
         resolve.assert_not_called()
 
+    def test_corrected_candidate_not_historical_profile(self):
+        """Do not accept the corrected image under the historical pin."""
+        source = QA.source_plan(self.root, "paused")
+        source["services"]["shelly-voltage"]["image"] = (
+            "sha256:e37eeb2f2235acc17d5316c0a4789f4b629"
+            "fe34cf86805bfdfabe7720c3571d3"
+        )
+        with (
+            patch.object(
+                QA.OP,
+                "config",
+                return_value=b"SCHEDULED_REPORTS_MODE=paused\n",
+            ),
+            patch.object(QA, "check_probe"),
+            patch.object(
+                QA.START,
+                "read_bytes",
+                return_value=json.dumps(source).encode(),
+            ),
+            patch.object(QA.CP, "resolved_plan") as resolve,
+            self.assertRaisesRegex(ValueError, "Compose source"),
+        ):
+            QA.review_plan(self.root, "paused")
+        resolve.assert_not_called()
+
     def observed(self, history):
         """Review a synthetic post-start observation."""
         with (
