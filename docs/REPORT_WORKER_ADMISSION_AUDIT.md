@@ -196,3 +196,52 @@ build, launch, signing, tag or production change. Frozen narrow
 were not repeated. Next review exact build artifact acquisition
 and per-platform provenance requirements; distinguish historical
 metadata from new build evidence and keep deployment NO-GO.
+
+## Cross-platform Python wheel artifact review (2026-11-28)
+
+Exact #510 CI 9/9 and narrow #472 CI 8/8 PASS before this
+review. The previous installed amd64 metadata inventory supplies
+eight application distribution versions (pip is inherited from
+the base and excluded from this application wheel lock).
+
+Downloaded public PyPI wheel artifacts for CPython 3.13/Linux
+amd64 and arm64: 16 platform entries, ten distinct files.
+Selected non-yanked compatible wheels, verified actual size and
+SHA256 against exact-version PyPI metadata, checked ZIP METADATA
+name/version and WHEEL tags against the filename. Six packages
+share pure-Python wheels; Pillow and charset-normalizer use
+architecture-specific wheels. The native selected tags require
+manylinux glibc 2.28 or earlier. The selection used the observed
+amd64 glibc 2.41 ceiling; actual arm64 base compatibility remains
+to be verified independently.
+
+For each target, evaluated wheel Requires-Dist markers using
+CPython 3.13.18 and the corresponding Linux machine, no extras:
+four direct requirements, four active edges, 68 inactive
+markers, eight reachable packages. The development host pip
+25.1.1 independently downloaded both sets offline from the local
+wheelhouse with exact hashes, only binary wheels and explicit
+target tags. All eight resulting filenames and SHA256 values
+per target matched the manifest. Pip cross-target marker
+evaluation is not target execution; the independent metadata
+closure check addresses this scope only.
+
+Review-only files: docs/qa/report-worker-wheel-review/
+- wheel-review.json SHA256 6f0691d0a48f319b6cdd8e6936f4cd20c4fac9da5e455b6517e6e1ed33b485f1
+- closure-review.json SHA256 98f6ec94e4097221d594a52d73135f0d0ebcc1a259ba68cc36e4107716b98cbb
+- amd64.requirements.txt SHA256 456cabaf5dfbcd2d2fb7e917b23524fd0a0ec01a0b7345232eb0c01f7734dacd
+- arm64.requirements.txt SHA256 c16aea8d31ea135705ec3b5fbc8dc14327e3847b2c0d9a0d26f67a69433e1268
+
+Original wheel bytes, release JSON and resolver logs retained
+at /var/tmp/svt-wheel-review.dpEiTf (private host evidence).
+These locks are candidate inputs, not proof of historically
+installed wheel identities, package publisher signatures,
+vulnerability clearance or a complete release dependency lock.
+No installation, image build, container launch or production
+change. Dockerfile and runtime requirements.txt remain unchanged.
+
+Next: qualify base image platform identities and immutable
+APT package sources, then review complete build inputs and
+per-platform provenance. Full build, integrated acceptance,
+signing and owner approval remain open. Earlier blocked trials
+were not repeated. Frozen narrow .29 remains separate.

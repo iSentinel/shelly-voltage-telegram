@@ -1,3 +1,15 @@
+## 2026-11-28 — cross-platform Python wheel artifact review
+
+- Exact #510 CI 9/9 and narrow #472 CI 8/8 PASS.
+- Downloaded and hash-verified ten distinct PyPI wheel files
+  covering eight application dependencies on each architecture.
+- Independent wheel metadata closure 8/8 and offline exact-hash
+  pip download 8/8 on both targets PASS; review-only locks saved.
+- NEXT: qualify immutable base platform and APT package sources;
+  full release build, integrated runtime and signing remain open.
+- No package installation, Dockerfile change or production mutation;
+  no repeat of blocked integrated trial.
+
 ## 2026-11-28 — strict OCI attestation schema admission
 
 - Exact #509 CI 9/9 and narrow #472 CI 8/8 PASS.

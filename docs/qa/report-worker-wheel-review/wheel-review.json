@@ -1,0 +1,160 @@
+{
+  "apt_lock_verified": false,
+  "glibc_target_ceiling": "2.41",
+  "installed": false,
+  "inventory_sha256": "f8d5905bc8051b8a0c344516c7ca6db35ac8f81b9904b7eb61ba5d0796cb8df1",
+  "platforms": {
+    "amd64": [
+      {
+        "filename": "certifi-2026.10.23-py3-none-any.whl",
+        "metadata_sha256": "be1e083008f8ce0b59d02e21921dc84cbf1d879ab879aade6ed79b337134c43e",
+        "name": "certifi",
+        "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+        "size": 135082,
+        "url": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+        "version": "2026.10.23"
+      },
+      {
+        "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+        "metadata_sha256": "2a3a2a543f2a5c5ff29d141f824be931dc89daa2262dd41015c4ed80a51ad9c5",
+        "name": "charset-normalizer",
+        "sha256": "7218e8f32b0956cfcd048fd42d9d5779809745ca1d86113ca56f66e7ae1549c4",
+        "size": 254660,
+        "url": "https://files.pythonhosted.org/packages/4b/85/41d27f234b82e47c167a5f6c0f62501dc0c640585ff4aba79e08a390336a/charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+        "version": "3.5.2"
+      },
+      {
+        "filename": "idna-3.20-py3-none-any.whl",
+        "metadata_sha256": "e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041",
+        "name": "idna",
+        "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+        "size": 69583,
+        "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+        "version": "3.20"
+      },
+      {
+        "filename": "loguru-0.8.0-py3-none-any.whl",
+        "metadata_sha256": "a1bc6f5c6dd0d3c7385b89e8dc7f2fdb2eee75c73d219d708a887567b5fad93c",
+        "name": "loguru",
+        "sha256": "e0fba09d6f76ba2d2f4bd1757122942f5a670c702e988b5efaeab99dacba0069",
+        "size": 69409,
+        "url": "https://files.pythonhosted.org/packages/c8/00/9ee7c8da7342b1a5524bca9d036f89e7d1d1e5a6345c9623763eeeac941f/loguru-0.8.0-py3-none-any.whl",
+        "version": "0.8.0"
+      },
+      {
+        "filename": "pillow-11.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "metadata_sha256": "b3352119f61a526420e793b1f6af33826c7e212c3fcaff1c30ec7059c94ca4f3",
+        "name": "pillow",
+        "sha256": "13f87d581e71d9189ab21fe0efb5a23e9f28552d5be6979e84001d3b8505abe8",
+        "size": 6642574,
+        "url": "https://files.pythonhosted.org/packages/d5/1c/a2a29649c0b1983d3ef57ee87a66487fdeb45132df66ab30dd37f7dbe162/pillow-11.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "version": "11.3.0"
+      },
+      {
+        "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+        "metadata_sha256": "89701376846132aefd76202d07dad6e84febe4a426a12973004e13018af15c41",
+        "name": "python-dotenv",
+        "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+        "size": 23266,
+        "url": "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl",
+        "version": "1.2.4"
+      },
+      {
+        "filename": "requests-2.34.2-py3-none-any.whl",
+        "metadata_sha256": "8622e50ffd295ed759ec793f2a009172a4ed0204bbc5e948de23111bc3d2aeae",
+        "name": "requests",
+        "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+        "size": 73075,
+        "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+        "version": "2.34.2"
+      },
+      {
+        "filename": "urllib3-2.8.0-py3-none-any.whl",
+        "metadata_sha256": "5315e7401db3cacccd0c2ce5daf81f752a9cc3614b18c37f2b79930b7159ce2f",
+        "name": "urllib3",
+        "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+        "size": 135717,
+        "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+        "version": "2.8.0"
+      }
+    ],
+    "arm64": [
+      {
+        "filename": "certifi-2026.10.23-py3-none-any.whl",
+        "metadata_sha256": "be1e083008f8ce0b59d02e21921dc84cbf1d879ab879aade6ed79b337134c43e",
+        "name": "certifi",
+        "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+        "size": 135082,
+        "url": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+        "version": "2026.10.23"
+      },
+      {
+        "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+        "metadata_sha256": "2a3a2a543f2a5c5ff29d141f824be931dc89daa2262dd41015c4ed80a51ad9c5",
+        "name": "charset-normalizer",
+        "sha256": "849df64e889b2e17230d58410a03dba311a65b163508fd33679b2b737d4b7858",
+        "size": 244624,
+        "url": "https://files.pythonhosted.org/packages/e1/16/710ac3de2ee354e2bd1a9c94efe45a2d27b5c6ad39b2d6a905be2c094b6c/charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+        "version": "3.5.2"
+      },
+      {
+        "filename": "idna-3.20-py3-none-any.whl",
+        "metadata_sha256": "e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041",
+        "name": "idna",
+        "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+        "size": 69583,
+        "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+        "version": "3.20"
+      },
+      {
+        "filename": "loguru-0.8.0-py3-none-any.whl",
+        "metadata_sha256": "a1bc6f5c6dd0d3c7385b89e8dc7f2fdb2eee75c73d219d708a887567b5fad93c",
+        "name": "loguru",
+        "sha256": "e0fba09d6f76ba2d2f4bd1757122942f5a670c702e988b5efaeab99dacba0069",
+        "size": 69409,
+        "url": "https://files.pythonhosted.org/packages/c8/00/9ee7c8da7342b1a5524bca9d036f89e7d1d1e5a6345c9623763eeeac941f/loguru-0.8.0-py3-none-any.whl",
+        "version": "0.8.0"
+      },
+      {
+        "filename": "pillow-11.3.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+        "metadata_sha256": "b3352119f61a526420e793b1f6af33826c7e212c3fcaff1c30ec7059c94ca4f3",
+        "name": "pillow",
+        "sha256": "c37d8ba9411d6003bba9e518db0db0c58a680ab9fe5179f040b0463644bc9805",
+        "size": 5973503,
+        "url": "https://files.pythonhosted.org/packages/ba/c9/09e6746630fe6372c67c648ff9deae52a2bc20897d51fa293571977ceb5d/pillow-11.3.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+        "version": "11.3.0"
+      },
+      {
+        "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+        "metadata_sha256": "89701376846132aefd76202d07dad6e84febe4a426a12973004e13018af15c41",
+        "name": "python-dotenv",
+        "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+        "size": 23266,
+        "url": "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl",
+        "version": "1.2.4"
+      },
+      {
+        "filename": "requests-2.34.2-py3-none-any.whl",
+        "metadata_sha256": "8622e50ffd295ed759ec793f2a009172a4ed0204bbc5e948de23111bc3d2aeae",
+        "name": "requests",
+        "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+        "size": 73075,
+        "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+        "version": "2.34.2"
+      },
+      {
+        "filename": "urllib3-2.8.0-py3-none-any.whl",
+        "metadata_sha256": "5315e7401db3cacccd0c2ce5daf81f752a9cc3614b18c37f2b79930b7159ce2f",
+        "name": "urllib3",
+        "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+        "size": 135717,
+        "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+        "version": "2.8.0"
+      }
+    ]
+  },
+  "python": "3.13.18",
+  "release_authorized": false,
+  "source_image": "e37eeb2f2235acc17d5316c0a4789f4b629fe34cf86805bfdfabe7720c3571d3",
+  "status": "PASS_PYPI_WHEEL_ARTIFACT_REVIEW_ONLY"
+}
