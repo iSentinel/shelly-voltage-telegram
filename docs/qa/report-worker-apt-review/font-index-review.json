@@ -1,0 +1,50 @@
+{
+  "amd64": {
+    "index_sha256": "7778d3e3f303b7ddb8ce0fe7c8d57473a076c6bf2e8f241f75421d2396352498",
+    "index_size": 9678380,
+    "packages": {
+      "fonts-inter": {
+        "Architecture": "all",
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+        "Pre-Depends": null,
+        "SHA256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "Size": "4616468",
+        "Version": "4.1+ds-1"
+      },
+      "fonts-noto-core": {
+        "Architecture": "all",
+        "Depends": "fonts-noto-mono",
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "SHA256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "Size": "12188336",
+        "Version": "20201225-2"
+      }
+    }
+  },
+  "arm64": {
+    "index_sha256": "be16b37b2f740f066ea93d35d56f04f94d63693e5a3eb421b052bf86fae75bcd",
+    "index_size": 9614192,
+    "packages": {
+      "fonts-inter": {
+        "Architecture": "all",
+        "Depends": null,
+        "Filename": "pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+        "Pre-Depends": null,
+        "SHA256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "Size": "4616468",
+        "Version": "4.1+ds-1"
+      },
+      "fonts-noto-core": {
+        "Architecture": "all",
+        "Depends": "fonts-noto-mono",
+        "Filename": "pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+        "Pre-Depends": null,
+        "SHA256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "Size": "12188336",
+        "Version": "20201225-2"
+      }
+    }
+  }
+}

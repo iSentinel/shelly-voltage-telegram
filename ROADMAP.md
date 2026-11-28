@@ -1,3 +1,16 @@
+## 2026-11-28 — pinned base and Debian font artifact review
+
+- Verified actual pinned Docker Hub index, platform manifests
+  and configs; Python 3.13.18 on amd64 and arm64.
+- Debian snapshot 20261027T000000Z: three InRelease signatures
+  PASS with host Debian keyring; updates/security metadata expired.
+- Both signed main package indexes hash-verified; exact two
+  architecture-independent font DEBs downloaded and hash-verified.
+- NEXT: complete base/package dependency closure and explicit
+  snapshot freshness policy; full build, runtime and signing open.
+- No APT source changes, package installation, production change
+  or retry of blocked integrated qualification.
+
 ## 2026-11-28 — cross-platform Python wheel artifact review
 
 - Exact #510 CI 9/9 and narrow #472 CI 8/8 PASS.
