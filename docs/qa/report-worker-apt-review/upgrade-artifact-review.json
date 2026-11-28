@@ -1,0 +1,717 @@
+{
+  "apt_transaction_verified": false,
+  "artifacts": [
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "libssl3 (<< 3.3.1-5), libssl3t64 (<< 3.3.1-5)",
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.17), libssl3t64 (>= 3.0.3)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "libssl3 (<< 3.3.1-5), libssl3t64 (<< 3.3.1-5)"
+      },
+      "filename": "pool/main/o/openssl/openssl-provider-legacy_3.5.9-1~deb13u1_arm64.deb",
+      "name": "openssl-provider-legacy",
+      "sha256": "007165f42b5cecf71674a047480f96035e290c2f0c5102030cb186481bb8dc84",
+      "size": 319708,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/openssl-provider-legacy_3.5.9-1~deb13u1_arm64.deb",
+      "version": "3.5.9-1~deb13u1"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "base-files (<< 13.3~), chrony (<< 4.2-3~), dhcpcd (<< 1:10.1.0-7~), fakechroot (<< 2.19-3.5), firefox (<< 91~), firefox-esr (<< 91~), gnumach-image-1.8-486 (<< 2:1.8+git20210923~), gnumach-image-1.8-486-dbg (<< 2:1.8+git20210923~), gnumach-image-1.8-xen-486 (<< 2:1.8+git20210923~), gnumach-image-1.8-xen-486-dbg (<< 2:1.8+git20210923~), hurd (<< 1:0.9.git20220301-2), libamdhip64-5 (<< 5.7.1-5+b1), libhiprtc-builtins5 (<< 5.7.1-5+b1), librccl1 (<< 5.4.3-3+b1), libswupdate0.1 (<< 2024.12.1+dfsg-1+b3), locales (<< 2.41), locales-all (<< 2.41), lua-swupdate (<< 2024.12.1+dfsg-1+b3), nscd (<< 2.41), pd-scaf (<< 1:0.14.1+darcs20180201-6+b4), postgresql-15-pllua (<< 1:2.0.12-4), postgresql-17-pllua (<< 1:2.0.12-3+b2), python3-iptables (<< 1.0.0-2), python3-mrgingham (<< 1.25-1), python3-onnxruntime (<< 1.20.1+dfsg-2~), sysvinit (<< 3.09-2~), sysvinit-core (<< 3.09-2~), tinydns (<< 1:1.05-14), uwsgi-plugin-pypy3 (<< 0.0.2+b1), valgrind (<< 1:3.19.0-1~)",
+        "Conflicts": null,
+        "Depends": "libgcc-s1",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "libidn2-0 (>= 2.0.5~)",
+        "Replaces": null
+      },
+      "filename": "pool/main/g/glibc/libc6_2.41-12+deb13u5_arm64.deb",
+      "name": "libc6",
+      "sha256": "0966fc3da1a26cc57647c68b5736f791b6e7eb498173a7993f63b6c89b4ed4f5",
+      "size": 2488872,
+      "source": "glibc",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/g/glibc/libc6_2.41-12+deb13u5_arm64.deb",
+      "version": "2.41-12+deb13u5"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "libxml2 (<< 2.7.6.dfsg-2), texlive-binaries (<< 2023.20230311.66589-8)",
+        "Conflicts": "zlib1 (<= 1:1.0.4-7)",
+        "Depends": "libc6 (>= 2.17)",
+        "Pre-Depends": null,
+        "Provides": "libz1",
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb",
+      "name": "zlib1g",
+      "sha256": "0e41b3d7ad8ad7fcd36dd4d61ca91a70018478fc4af652e044f4be770784ddff",
+      "size": 85028,
+      "source": "zlib",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+deb13u1_arm64.deb",
+      "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "apt-transport-https (<< 1.5~alpha4~), apt-utils (<< 1.3~exp2~), aptitude (<< 0.8.10)",
+        "Conflicts": "apt-verify, libnettle8 (<< 3.9.1-2.2~)",
+        "Depends": "base-passwd (>= 3.6.1) | adduser, sqv (>= 1.3.0), libapt-pkg7.0 (>= 3.0.4), debian-archive-keyring, libc6 (>= 2.38), libgcc-s1 (>= 3.0), libseccomp2 (>= 2.4.2), libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1), libsystemd0",
+        "Pre-Depends": null,
+        "Provides": "apt-transport-https (= 3.0.4)",
+        "Recommends": "ca-certificates",
+        "Replaces": "apt-transport-https (<< 1.5~alpha4~), apt-utils (<< 1.3~exp2~)"
+      },
+      "filename": "pool/main/a/apt/apt_3.0.4_amd64.deb",
+      "name": "apt",
+      "sha256": "15c2030e0fb46580af4f1b4cc303f4bd26da781b004e99763bc9eff7cf8e19b8",
+      "size": 1453228,
+      "source": "apt",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/a/apt/apt_3.0.4_amd64.deb",
+      "version": "3.0.4"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "freeradius (<< 3.2.7+dfsg-1+deb13u1), libssl3 (<< 3.5.9-1~deb13u1), openssh-client (<< 1:9.4p1), openssh-server (<< 1:9.4p1), python3-m2crypto (<< 0.38.0-4)",
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.38), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4), openssl-provider-legacy",
+        "Pre-Depends": null,
+        "Provides": "libssl3 (= 3.5.9-1~deb13u1)",
+        "Recommends": null,
+        "Replaces": "libssl3"
+      },
+      "filename": "pool/main/o/openssl/libssl3t64_3.5.9-1~deb13u1_arm64.deb",
+      "name": "libssl3t64",
+      "sha256": "18edc2b123e8e81efcc14ea5502454b4505285aa9d3325c22315e9304acb25ca",
+      "size": 2775368,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/libssl3t64_3.5.9-1~deb13u1_arm64.deb",
+      "version": "3.5.9-1~deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.34)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/updates/main/libz/libzstd/libzstd1_1.5.7+dfsg-1+deb13u1_amd64.deb",
+      "name": "libzstd1",
+      "sha256": "23a6f8a774d5dceda5f759b4ecdcdd652dfbefbf8271912e6a7ab0ee3250dc75",
+      "size": 304140,
+      "source": "libzstd",
+      "suite": "trixie-security",
+      "url": "https://snapshot.debian.org/archive/debian-security/20261127T000000Z/pool/updates/main/libz/libzstd/libzstd1_1.5.7+dfsg-1+deb13u1_amd64.deb",
+      "version": "1.5.7+dfsg-1+deb13u1"
+    },
+    {
+      "architecture": "all",
+      "control": {
+        "Breaks": "tzdata-legacy (= 2023c-8), tzdata-legacy (= 2023c-9)",
+        "Conflicts": null,
+        "Depends": "debconf (>= 0.5) | debconf-2.0",
+        "Pre-Depends": null,
+        "Provides": "tzdata-trixie",
+        "Recommends": null,
+        "Replaces": "tzdata-legacy (= 2023c-8), tzdata-legacy (= 2023c-9)"
+      },
+      "filename": "pool/main/t/tzdata/tzdata_2026f-0+deb13u1_all.deb",
+      "name": "tzdata",
+      "sha256": "2c1c561091402883430d0d47c57a3c0aa00b44afc8a6239265065a87211a5c11",
+      "size": 267528,
+      "source": "tzdata",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/t/tzdata/tzdata_2026f-0+deb13u1_all.deb",
+      "version": "2026f-0+deb13u1"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "appstream (<< 0.9.0-3~), apt (<< 1.6~), aptitude (<< 0.8.9), dpkg (<< 1.20.8), libapt-inst1.5 (<< 0.9.9~)",
+        "Conflicts": "libnettle8 (<< 3.9.1-2.2~)",
+        "Depends": "libbz2-1.0, libc6 (>= 2.38), libgcc-s1 (>= 3.0), liblz4-1 (>= 0.0~r127), liblzma5 (>= 5.1.1alpha+20120614), libssl3t64 (>= 3.0.0), libstdc++6 (>= 14), libsystemd0 (>= 221), libudev1 (>= 183), libxxhash0 (>= 0.8), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.2.2.3)",
+        "Pre-Depends": null,
+        "Provides": "libapt-pkg (= 3.0.4)",
+        "Recommends": "apt (>= 3.0.4)",
+        "Replaces": null
+      },
+      "filename": "pool/main/a/apt/libapt-pkg7.0_3.0.4_arm64.deb",
+      "name": "libapt-pkg7.0",
+      "sha256": "39e4d074bc4f2081666a3625561a430fedb0c85b1a6a657c02760383232304bd",
+      "size": 978204,
+      "source": "apt",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/a/apt/libapt-pkg7.0_3.0.4_arm64.deb",
+      "version": "3.0.4"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "base-passwd (>= 3.6.4), libpam-modules, login.defs, libacl1 (>= 2.2.23), libattr1 (>= 1:2.4.44), libaudit1 (>= 1:2.2.1), libbsd0 (>= 0.11.0), libc6 (>= 2.38), libcrypt1 (>= 1:4.1.0), libpam0g (>= 0.99.7.1), libselinux1 (>= 3.1~), libsemanage2 (>= 2.0.32)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "sensible-utils",
+        "Replaces": "login (<< 1:4.16.0-2~)"
+      },
+      "filename": "pool/updates/main/s/shadow/passwd_4.17.4-2+deb13u1_arm64.deb",
+      "name": "passwd",
+      "sha256": "49acfe766c3dea4f760e330ff9f1142c052ba2198442a35ad7d22ecf65508f6f",
+      "size": 1206524,
+      "source": "shadow",
+      "suite": "trixie-security",
+      "url": "https://snapshot.debian.org/archive/debian-security/20261127T000000Z/pool/updates/main/s/shadow/passwd_4.17.4-2+deb13u1_arm64.deb",
+      "version": "1:4.17.4-2+deb13u1"
+    },
+    {
+      "architecture": "all",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": null,
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "login (<< 1:4.16.0-2~)"
+      },
+      "filename": "pool/updates/main/s/shadow/login.defs_4.17.4-2+deb13u1_all.deb",
+      "name": "login.defs",
+      "sha256": "5573474d7bdfab60b27abdb6cbd5c5d4bf898e86d17fd8956eed6a4ebf1a4246",
+      "size": 186196,
+      "source": "shadow",
+      "suite": "trixie-security",
+      "url": "https://snapshot.debian.org/archive/debian-security/20261127T000000Z/pool/updates/main/s/shadow/login.defs_4.17.4-2+deb13u1_all.deb",
+      "version": "1:4.17.4-2+deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "appstream (<< 0.9.0-3~), apt (<< 1.6~), aptitude (<< 0.8.9), dpkg (<< 1.20.8), libapt-inst1.5 (<< 0.9.9~)",
+        "Conflicts": "libnettle8 (<< 3.9.1-2.2~)",
+        "Depends": "libbz2-1.0, libc6 (>= 2.38), libgcc-s1 (>= 3.0), liblz4-1 (>= 0.0~r127), liblzma5 (>= 5.1.1alpha+20120614), libssl3t64 (>= 3.0.0), libstdc++6 (>= 14), libsystemd0 (>= 221), libudev1 (>= 183), libxxhash0 (>= 0.8), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.2.2.3)",
+        "Pre-Depends": null,
+        "Provides": "libapt-pkg (= 3.0.4)",
+        "Recommends": "apt (>= 3.0.4)",
+        "Replaces": null
+      },
+      "filename": "pool/main/a/apt/libapt-pkg7.0_3.0.4_amd64.deb",
+      "name": "libapt-pkg7.0",
+      "sha256": "577eb8f489de419290102364892dbd13ca256297b61f96d61b114fd4ac18be41",
+      "size": 1113872,
+      "source": "apt",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/a/apt/libapt-pkg7.0_3.0.4_amd64.deb",
+      "version": "3.0.4"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "libssl3 (<< 3.3.1-5), libssl3t64 (<< 3.3.1-5)",
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.14), libssl3t64 (>= 3.0.3)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "libssl3 (<< 3.3.1-5), libssl3t64 (<< 3.3.1-5)"
+      },
+      "filename": "pool/main/o/openssl/openssl-provider-legacy_3.5.9-1~deb13u1_amd64.deb",
+      "name": "openssl-provider-legacy",
+      "sha256": "67c70904c8d494b4631e136a6bdb692cbb44515757d63c55e7bd1d2016f9f09f",
+      "size": 322440,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/openssl-provider-legacy_3.5.9-1~deb13u1_amd64.deb",
+      "version": "3.5.9-1~deb13u1"
+    },
+    {
+      "architecture": "all",
+      "control": {
+        "Breaks": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)",
+        "Conflicts": null,
+        "Depends": null,
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto-core (<< 20201027-2~), fonts-noto-unhinted (<< 20201027-3~)"
+      },
+      "filename": "pool/main/f/fonts-noto/fonts-noto-mono_20201225-2_all.deb",
+      "name": "fonts-noto-mono",
+      "sha256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+      "size": 397580,
+      "source": "fonts-noto",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/f/fonts-noto/fonts-noto-mono_20201225-2_all.deb",
+      "version": "20201225-2"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "dh-lua (<< 27+nmu1~)",
+        "Conflicts": null,
+        "Depends": "libc6 (>> 2.41), libc6 (<< 2.42)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "manpages",
+        "Replaces": null
+      },
+      "filename": "pool/main/g/glibc/libc-bin_2.41-12+deb13u5_arm64.deb",
+      "name": "libc-bin",
+      "sha256": "889850625c686a6d0b26a8baee5fb96f33e9f3305882f3a6751bb4c9433063e1",
+      "size": 552664,
+      "source": "glibc",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/g/glibc/libc-bin_2.41-12+deb13u5_arm64.deb",
+      "version": "2.41-12+deb13u5"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "debian-security-support (<< 2019.04.25), initscripts (<< 2.88dsf-13.3), sendfile (<< 2.1b.20080616-5.2~)",
+        "Conflicts": null,
+        "Depends": null,
+        "Pre-Depends": "awk",
+        "Provides": "base, usr-is-merged",
+        "Recommends": null,
+        "Replaces": "base, dpkg (<= 1.15.0), miscutils"
+      },
+      "filename": "pool/main/b/base-files/base-files_13.8+deb13u8_arm64.deb",
+      "name": "base-files",
+      "sha256": "893616b7ce203a05a0528652f7d754cc5e3de7e8eff3b396f95383a5b8b1c668",
+      "size": 88320,
+      "source": "base-files",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/b/base-files/base-files_13.8+deb13u8_arm64.deb",
+      "version": "13.8+deb13u8"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "libxml2 (<< 2.7.6.dfsg-2), texlive-binaries (<< 2023.20230311.66589-8)",
+        "Conflicts": "zlib1 (<= 1:1.0.4-7)",
+        "Depends": "libc6 (>= 2.14)",
+        "Pre-Depends": null,
+        "Provides": "libz1",
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+deb13u1_amd64.deb",
+      "name": "zlib1g",
+      "sha256": "8c27c342230503b73dfde629642c3b352e87b554e06d60cf58772f236a305ceb",
+      "size": 88720,
+      "source": "zlib",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/z/zlib/zlib1g_1.3.dfsg+really1.3.1-1+deb13u1_amd64.deb",
+      "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+    },
+    {
+      "architecture": "all",
+      "control": {
+        "Breaks": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)",
+        "Conflicts": null,
+        "Depends": "fonts-noto-mono",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": "fonts-noto (<< 2015-05-11+cjk-1~), fonts-noto-hinted (<< 20181130-2~), fonts-noto-unhinted (<< 20201027-1~)"
+      },
+      "filename": "pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+      "name": "fonts-noto-core",
+      "sha256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+      "size": 12188336,
+      "source": "fonts-noto",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/f/fonts-noto/fonts-noto-core_20201225-2_all.deb",
+      "version": "20201225-2"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": "apt-transport-https (<< 1.5~alpha4~), apt-utils (<< 1.3~exp2~), aptitude (<< 0.8.10)",
+        "Conflicts": "apt-verify, libnettle8 (<< 3.9.1-2.2~)",
+        "Depends": "base-passwd (>= 3.6.1) | adduser, sqv (>= 1.3.0), libapt-pkg7.0 (>= 3.0.4), debian-archive-keyring, libc6 (>= 2.38), libgcc-s1 (>= 3.0), libseccomp2 (>= 2.4.2), libssl3t64 (>= 3.0.0), libstdc++6 (>= 13.1), libsystemd0",
+        "Pre-Depends": null,
+        "Provides": "apt-transport-https (= 3.0.4)",
+        "Recommends": "ca-certificates",
+        "Replaces": "apt-transport-https (<< 1.5~alpha4~), apt-utils (<< 1.3~exp2~)"
+      },
+      "filename": "pool/main/a/apt/apt_3.0.4_arm64.deb",
+      "name": "apt",
+      "sha256": "9a3ee57117d1d8e086e2d8917cd3e85e8f76da25dd18a898085759668dc5c71f",
+      "size": 1362704,
+      "source": "apt",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/a/apt/apt_3.0.4_arm64.deb",
+      "version": "3.0.4"
+    },
+    {
+      "architecture": "all",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": null,
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+      "name": "fonts-inter",
+      "sha256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+      "size": 4616468,
+      "source": "fonts-inter",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/f/fonts-inter/fonts-inter_4.1+ds-1_all.deb",
+      "version": "4.1+ds-1"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.34)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/updates/main/libz/libzstd/libzstd1_1.5.7+dfsg-1+deb13u1_arm64.deb",
+      "name": "libzstd1",
+      "sha256": "ab5ad90f986b315bfa12be50f438aa3453e32da3b29540844d2d847800d2ce08",
+      "size": 266336,
+      "source": "libzstd",
+      "suite": "trixie-security",
+      "url": "https://snapshot.debian.org/archive/debian-security/20261127T000000Z/pool/updates/main/libz/libzstd/libzstd1_1.5.7+dfsg-1+deb13u1_arm64.deb",
+      "version": "1.5.7+dfsg-1+deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "base-files (<< 13.3~), chrony (<< 4.2-3~), dhcpcd (<< 1:10.1.0-7~), fakechroot (<< 2.19-3.5), firefox (<< 91~), firefox-esr (<< 91~), gnumach-image-1.8-486 (<< 2:1.8+git20210923~), gnumach-image-1.8-486-dbg (<< 2:1.8+git20210923~), gnumach-image-1.8-xen-486 (<< 2:1.8+git20210923~), gnumach-image-1.8-xen-486-dbg (<< 2:1.8+git20210923~), hurd (<< 1:0.9.git20220301-2), libamdhip64-5 (<< 5.7.1-5+b1), libhiprtc-builtins5 (<< 5.7.1-5+b1), librccl1 (<< 5.4.3-3+b1), libswupdate0.1 (<< 2024.12.1+dfsg-1+b3), locales (<< 2.41), locales-all (<< 2.41), lua-swupdate (<< 2024.12.1+dfsg-1+b3), nscd (<< 2.41), pd-scaf (<< 1:0.14.1+darcs20180201-6+b4), postgresql-15-pllua (<< 1:2.0.12-4), postgresql-17-pllua (<< 1:2.0.12-3+b2), python3-iptables (<< 1.0.0-2), python3-mrgingham (<< 1.25-1), python3-onnxruntime (<< 1.20.1+dfsg-2~), sysvinit (<< 3.09-2~), sysvinit-core (<< 3.09-2~), tinydns (<< 1:1.05-14), uwsgi-plugin-pypy3 (<< 0.0.2+b1), valgrind (<< 1:3.19.0-1~)",
+        "Conflicts": null,
+        "Depends": "libgcc-s1",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "libidn2-0 (>= 2.0.5~)",
+        "Replaces": "libc6-amd64"
+      },
+      "filename": "pool/main/g/glibc/libc6_2.41-12+deb13u5_amd64.deb",
+      "name": "libc6",
+      "sha256": "b59b0625cd1a791375d40dab23a4d5d3d0641e3d0a773501becdc3725b7f99cf",
+      "size": 2850108,
+      "source": "glibc",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/g/glibc/libc6_2.41-12+deb13u5_amd64.deb",
+      "version": "2.41-12+deb13u5"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "base-passwd (>= 3.6.4), libpam-modules, login.defs, libacl1 (>= 2.2.23), libattr1 (>= 1:2.4.44), libaudit1 (>= 1:2.2.1), libbsd0 (>= 0.11.0), libc6 (>= 2.38), libcrypt1 (>= 1:4.1.0), libpam0g (>= 0.99.7.1), libselinux1 (>= 3.1~), libsemanage2 (>= 2.0.32)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "sensible-utils",
+        "Replaces": "login (<< 1:4.16.0-2~)"
+      },
+      "filename": "pool/updates/main/s/shadow/passwd_4.17.4-2+deb13u1_amd64.deb",
+      "name": "passwd",
+      "sha256": "e7f364ab275542ba9cfdf0c6bec9276fbac3ef6fe27d3a65674bd29ba3d32096",
+      "size": 1228272,
+      "source": "shadow",
+      "suite": "trixie-security",
+      "url": "https://snapshot.debian.org/archive/debian-security/20261127T000000Z/pool/updates/main/s/shadow/passwd_4.17.4-2+deb13u1_amd64.deb",
+      "version": "1:4.17.4-2+deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "dh-lua (<< 27+nmu1~)",
+        "Conflicts": null,
+        "Depends": "libc6 (>> 2.41), libc6 (<< 2.42)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": "manpages",
+        "Replaces": null
+      },
+      "filename": "pool/main/g/glibc/libc-bin_2.41-12+deb13u5_amd64.deb",
+      "name": "libc-bin",
+      "sha256": "f30ee7381a9c6a3936165259bcd58e65f4b288e351606d200c8435724c5876dd",
+      "size": 638876,
+      "source": "glibc",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/g/glibc/libc-bin_2.41-12+deb13u5_amd64.deb",
+      "version": "2.41-12+deb13u5"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "debian-security-support (<< 2019.04.25), initscripts (<< 2.88dsf-13.3), sendfile (<< 2.1b.20080616-5.2~)",
+        "Conflicts": null,
+        "Depends": null,
+        "Pre-Depends": "awk",
+        "Provides": "base, usr-is-merged",
+        "Recommends": null,
+        "Replaces": "base, dpkg (<= 1.15.0), miscutils"
+      },
+      "filename": "pool/main/b/base-files/base-files_13.8+deb13u8_amd64.deb",
+      "name": "base-files",
+      "sha256": "f5a0546098f38bad5843380521781fe7214e5a283d3bed63f79c505545f262af",
+      "size": 88324,
+      "source": "base-files",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/b/base-files/base-files_13.8+deb13u8_amd64.deb",
+      "version": "13.8+deb13u8"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.34), libssl3t64 (>= 3.5.0)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/main/o/openssl/openssl_3.5.9-1~deb13u1_amd64.deb",
+      "name": "openssl",
+      "sha256": "faf53a993766c81f94f35b6a31202f0dcd936e1529791790a393aa59f41c0993",
+      "size": 1518324,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/openssl_3.5.9-1~deb13u1_amd64.deb",
+      "version": "3.5.9-1~deb13u1"
+    },
+    {
+      "architecture": "arm64",
+      "control": {
+        "Breaks": null,
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.34), libssl3t64 (>= 3.5.0)",
+        "Pre-Depends": null,
+        "Provides": null,
+        "Recommends": null,
+        "Replaces": null
+      },
+      "filename": "pool/main/o/openssl/openssl_3.5.9-1~deb13u1_arm64.deb",
+      "name": "openssl",
+      "sha256": "fe9c979716871f260fa50a920298036896677dd0a74a34c5589c18635cdef4b5",
+      "size": 1484280,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/openssl_3.5.9-1~deb13u1_arm64.deb",
+      "version": "3.5.9-1~deb13u1"
+    },
+    {
+      "architecture": "amd64",
+      "control": {
+        "Breaks": "freeradius (<< 3.2.7+dfsg-1+deb13u1), libssl3 (<< 3.5.9-1~deb13u1), openssh-client (<< 1:9.4p1), openssh-server (<< 1:9.4p1), python3-m2crypto (<< 0.38.0-4)",
+        "Conflicts": null,
+        "Depends": "libc6 (>= 2.38), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4), openssl-provider-legacy",
+        "Pre-Depends": null,
+        "Provides": "libssl3 (= 3.5.9-1~deb13u1)",
+        "Recommends": null,
+        "Replaces": "libssl3"
+      },
+      "filename": "pool/main/o/openssl/libssl3t64_3.5.9-1~deb13u1_amd64.deb",
+      "name": "libssl3t64",
+      "sha256": "ffefb9af363e0e4592251b2533eb06453c8e470f7772e40263c4b2129251a6d5",
+      "size": 2464736,
+      "source": "openssl",
+      "suite": "trixie",
+      "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/o/openssl/libssl3t64_3.5.9-1~deb13u1_amd64.deb",
+      "version": "3.5.9-1~deb13u1"
+    }
+  ],
+  "build_authorized": false,
+  "installed": false,
+  "platforms": {
+    "amd64": [
+      {
+        "name": "apt",
+        "sha256": "15c2030e0fb46580af4f1b4cc303f4bd26da781b004e99763bc9eff7cf8e19b8",
+        "version": "3.0.4"
+      },
+      {
+        "name": "base-files",
+        "sha256": "f5a0546098f38bad5843380521781fe7214e5a283d3bed63f79c505545f262af",
+        "version": "13.8+deb13u8"
+      },
+      {
+        "name": "fonts-inter",
+        "sha256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "version": "4.1+ds-1"
+      },
+      {
+        "name": "fonts-noto-core",
+        "sha256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "version": "20201225-2"
+      },
+      {
+        "name": "fonts-noto-mono",
+        "sha256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+        "version": "20201225-2"
+      },
+      {
+        "name": "libapt-pkg7.0",
+        "sha256": "577eb8f489de419290102364892dbd13ca256297b61f96d61b114fd4ac18be41",
+        "version": "3.0.4"
+      },
+      {
+        "name": "libc-bin",
+        "sha256": "f30ee7381a9c6a3936165259bcd58e65f4b288e351606d200c8435724c5876dd",
+        "version": "2.41-12+deb13u5"
+      },
+      {
+        "name": "libc6",
+        "sha256": "b59b0625cd1a791375d40dab23a4d5d3d0641e3d0a773501becdc3725b7f99cf",
+        "version": "2.41-12+deb13u5"
+      },
+      {
+        "name": "libssl3t64",
+        "sha256": "ffefb9af363e0e4592251b2533eb06453c8e470f7772e40263c4b2129251a6d5",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "libzstd1",
+        "sha256": "23a6f8a774d5dceda5f759b4ecdcdd652dfbefbf8271912e6a7ab0ee3250dc75",
+        "version": "1.5.7+dfsg-1+deb13u1"
+      },
+      {
+        "name": "login.defs",
+        "sha256": "5573474d7bdfab60b27abdb6cbd5c5d4bf898e86d17fd8956eed6a4ebf1a4246",
+        "version": "1:4.17.4-2+deb13u1"
+      },
+      {
+        "name": "openssl",
+        "sha256": "faf53a993766c81f94f35b6a31202f0dcd936e1529791790a393aa59f41c0993",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "openssl-provider-legacy",
+        "sha256": "67c70904c8d494b4631e136a6bdb692cbb44515757d63c55e7bd1d2016f9f09f",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "passwd",
+        "sha256": "e7f364ab275542ba9cfdf0c6bec9276fbac3ef6fe27d3a65674bd29ba3d32096",
+        "version": "1:4.17.4-2+deb13u1"
+      },
+      {
+        "name": "tzdata",
+        "sha256": "2c1c561091402883430d0d47c57a3c0aa00b44afc8a6239265065a87211a5c11",
+        "version": "2026f-0+deb13u1"
+      },
+      {
+        "name": "zlib1g",
+        "sha256": "8c27c342230503b73dfde629642c3b352e87b554e06d60cf58772f236a305ceb",
+        "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+      }
+    ],
+    "arm64": [
+      {
+        "name": "apt",
+        "sha256": "9a3ee57117d1d8e086e2d8917cd3e85e8f76da25dd18a898085759668dc5c71f",
+        "version": "3.0.4"
+      },
+      {
+        "name": "base-files",
+        "sha256": "893616b7ce203a05a0528652f7d754cc5e3de7e8eff3b396f95383a5b8b1c668",
+        "version": "13.8+deb13u8"
+      },
+      {
+        "name": "fonts-inter",
+        "sha256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+        "version": "4.1+ds-1"
+      },
+      {
+        "name": "fonts-noto-core",
+        "sha256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+        "version": "20201225-2"
+      },
+      {
+        "name": "fonts-noto-mono",
+        "sha256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+        "version": "20201225-2"
+      },
+      {
+        "name": "libapt-pkg7.0",
+        "sha256": "39e4d074bc4f2081666a3625561a430fedb0c85b1a6a657c02760383232304bd",
+        "version": "3.0.4"
+      },
+      {
+        "name": "libc-bin",
+        "sha256": "889850625c686a6d0b26a8baee5fb96f33e9f3305882f3a6751bb4c9433063e1",
+        "version": "2.41-12+deb13u5"
+      },
+      {
+        "name": "libc6",
+        "sha256": "0966fc3da1a26cc57647c68b5736f791b6e7eb498173a7993f63b6c89b4ed4f5",
+        "version": "2.41-12+deb13u5"
+      },
+      {
+        "name": "libssl3t64",
+        "sha256": "18edc2b123e8e81efcc14ea5502454b4505285aa9d3325c22315e9304acb25ca",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "libzstd1",
+        "sha256": "ab5ad90f986b315bfa12be50f438aa3453e32da3b29540844d2d847800d2ce08",
+        "version": "1.5.7+dfsg-1+deb13u1"
+      },
+      {
+        "name": "login.defs",
+        "sha256": "5573474d7bdfab60b27abdb6cbd5c5d4bf898e86d17fd8956eed6a4ebf1a4246",
+        "version": "1:4.17.4-2+deb13u1"
+      },
+      {
+        "name": "openssl",
+        "sha256": "fe9c979716871f260fa50a920298036896677dd0a74a34c5589c18635cdef4b5",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "openssl-provider-legacy",
+        "sha256": "007165f42b5cecf71674a047480f96035e290c2f0c5102030cb186481bb8dc84",
+        "version": "3.5.9-1~deb13u1"
+      },
+      {
+        "name": "passwd",
+        "sha256": "49acfe766c3dea4f760e330ff9f1142c052ba2198442a35ad7d22ecf65508f6f",
+        "version": "1:4.17.4-2+deb13u1"
+      },
+      {
+        "name": "tzdata",
+        "sha256": "2c1c561091402883430d0d47c57a3c0aa00b44afc8a6239265065a87211a5c11",
+        "version": "2026f-0+deb13u1"
+      },
+      {
+        "name": "zlib1g",
+        "sha256": "0e41b3d7ad8ad7fcd36dd4d61ca91a70018478fc4af652e044f4be770784ddff",
+        "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+      }
+    ]
+  },
+  "security_clearance": false,
+  "snapshot": "20261127T000000Z",
+  "status": "PASS_UPGRADE_ARTIFACT_BYTES_ONLY",
+  "version_gap_sha256": "aca09e6d3ff6c6c6ae076041cab09c866f66bf0ad3fab6449ef2ddfb0ed381ad"
+}
