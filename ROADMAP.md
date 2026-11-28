@@ -1,3 +1,18 @@
+## 2026-11-28 — offline base OCI layout staging
+
+- Exact #517 and narrow #472 CI 8/8 PASS.
+- Read-only QA114 builder audit: legacy CLI default, no Buildx,
+  no standalone BuildKit, exact standalone base IDs absent.
+- Separate OCI staging CLI: original manifest/config and all
+  layer bytes retained; compressed digests and DiffIDs verified.
+- Four new tests plus 14 context/staging regressions PASS.
+- Two deterministic archives per architecture; 12/12 blobs and
+  8/8 DiffIDs independently verified.
+- NEXT: isolated compatible builder, sufficient storage and
+  explicit local OCI resolution, then actual QA build.
+- No load, install, runtime, release or production changes;
+  no repetition of blocked integrated trials.
+
 ## 2026-11-28 — offline QA recipe and exact contexts
 
 - Exact #516 and narrow #472 CI 8/8 PASS.
