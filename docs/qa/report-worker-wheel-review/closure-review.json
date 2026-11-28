@@ -1,0 +1,66 @@
+{
+  "amd64": {
+    "active_edges": [
+      {
+        "from": "requests",
+        "requirement": "charset_normalizer<4,>=2",
+        "version": "3.5.2"
+      },
+      {
+        "from": "requests",
+        "requirement": "idna<4,>=2.5",
+        "version": "3.20"
+      },
+      {
+        "from": "requests",
+        "requirement": "urllib3<3,>=1.26",
+        "version": "2.8.0"
+      },
+      {
+        "from": "requests",
+        "requirement": "certifi>=2023.5.7",
+        "version": "2026.10.23"
+      }
+    ],
+    "closed_packages": 8,
+    "direct_requirements": [
+      "loguru<1,>=0.7.2",
+      "python-dotenv<2,>=1.0.1",
+      "requests<3,>=2.32.3",
+      "Pillow<11.4,>=11.3.0"
+    ],
+    "inactive_markers": 68
+  },
+  "arm64": {
+    "active_edges": [
+      {
+        "from": "requests",
+        "requirement": "charset_normalizer<4,>=2",
+        "version": "3.5.2"
+      },
+      {
+        "from": "requests",
+        "requirement": "idna<4,>=2.5",
+        "version": "3.20"
+      },
+      {
+        "from": "requests",
+        "requirement": "urllib3<3,>=1.26",
+        "version": "2.8.0"
+      },
+      {
+        "from": "requests",
+        "requirement": "certifi>=2023.5.7",
+        "version": "2026.10.23"
+      }
+    ],
+    "closed_packages": 8,
+    "direct_requirements": [
+      "loguru<1,>=0.7.2",
+      "python-dotenv<2,>=1.0.1",
+      "requests<3,>=2.32.3",
+      "Pillow<11.4,>=11.3.0"
+    ],
+    "inactive_markers": 68
+  }
+}
