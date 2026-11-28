@@ -1,3 +1,15 @@
+## 2026-11-28 — isolated APT simulation and reviewed build inputs
+
+- Exact #514 and narrow #472 CI 8/8 PASS.
+- Isolated apt-get 3.0.4 simulations on exact base status copies:
+  both targets 13 upgrades, three new packages, zero removals.
+- Exact Inst/Conf identities 16/16 per target; missing mono refused
+  exit 100; status unchanged. Logs and input evidence index saved.
+- NEXT: full build input consumption and provenance review;
+  freshness at use, actual transactions and native runtime open.
+- No actual installation, Dockerfile or production changes;
+  no retry of blocked integrated qualification.
+
 ## 2026-11-28 — fresh snapshot version gaps and upgrade artifacts
 
 - Exact #513 and narrow #472 CI 8/8 PASS.

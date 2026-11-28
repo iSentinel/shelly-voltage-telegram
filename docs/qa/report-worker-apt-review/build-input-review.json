@@ -1,0 +1,389 @@
+{
+  "actual_build_verified": false,
+  "base_index": "sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb",
+  "evidence_sha256": {
+    "docs/qa/report-worker-apt-review/base-inventory.json": "07ec1919b3837db01452c6c56aa6ca0a69d16c6243782135d2d7ebf3ae47d555",
+    "docs/qa/report-worker-apt-review/freshness-review.json": "e353544439acde70de5875086cc2a78004b872195100b076e32aad85d67c3a32",
+    "docs/qa/report-worker-apt-review/static-relationship-review.json": "02f5ff815e4efccf890de4fd33bf8c2e86f260ef4b8b37dde9dc807f9a6c502b",
+    "docs/qa/report-worker-apt-review/transaction-review.json": "1e0249e8950fcf64abc4593c1a53e2fc678269a4b1469470a3af4b0470a3fa58",
+    "docs/qa/report-worker-apt-review/upgrade-artifact-review.json": "bc9ac82ce083b7eb559be0e3f11bd8323b5a57471d2032d8f189defa4a21fb83",
+    "docs/qa/report-worker-apt-review/version-gap-review.json": "aca09e6d3ff6c6c6ae076041cab09c866f66bf0ad3fab6449ef2ddfb0ed381ad",
+    "docs/qa/report-worker-wheel-review/amd64.requirements.txt": "456cabaf5dfbcd2d2fb7e917b23524fd0a0ec01a0b7345232eb0c01f7734dacd",
+    "docs/qa/report-worker-wheel-review/arm64.requirements.txt": "c16aea8d31ea135705ec3b5fbc8dc14327e3847b2c0d9a0d26f67a69433e1268",
+    "docs/qa/report-worker-wheel-review/closure-review.json": "98f6ec94e4097221d594a52d73135f0d0ebcc1a259ba68cc36e4107716b98cbb",
+    "docs/qa/report-worker-wheel-review/wheel-review.json": "6f0691d0a48f319b6cdd8e6936f4cd20c4fac9da5e455b6517e6e1ed33b485f1"
+  },
+  "freshness_recheck_required": true,
+  "native_runtime_verified": false,
+  "platforms": {
+    "amd64": {
+      "base_layers": [
+        {
+          "diff_id": "sha256:a5d6d345f6afa08d7c31272055746d60a838b290bfcc82c0a23e8e984d61a933",
+          "digest": "sha256:6fc242d221a673263eabd14a9ad9584d3177c96e5cb504c891497338e2f912f5",
+          "size": 29855236
+        },
+        {
+          "diff_id": "sha256:b9baa14e993c683240d519adebb39657df4d2b973dc2f3fee23cd51367806e2b",
+          "digest": "sha256:789960dca7c613e9d8872d4790f2ec423b8fe17f52989c6225982f28696e7315",
+          "size": 1289759
+        },
+        {
+          "diff_id": "sha256:1217eb836a36d0c4be6a310113a777ecb9d7e9c24197a407665c8884cc5369a4",
+          "digest": "sha256:7d824d9f832184c4084576664b622717cb0eb579b504f2079d3b4ac36454761f",
+          "size": 11923889
+        },
+        {
+          "diff_id": "sha256:3929d22d8aa43d69f436bbc47ef472db875440b850dbc4e80dd272a3adf673d2",
+          "digest": "sha256:6f058ad03f0cab30c01926ad20e38348fe53783080f5309e4bfc4d2709c5fbaf",
+          "size": 251
+        }
+      ],
+      "deb_artifacts": [
+        {
+          "name": "apt",
+          "sha256": "15c2030e0fb46580af4f1b4cc303f4bd26da781b004e99763bc9eff7cf8e19b8",
+          "version": "3.0.4"
+        },
+        {
+          "name": "base-files",
+          "sha256": "f5a0546098f38bad5843380521781fe7214e5a283d3bed63f79c505545f262af",
+          "version": "13.8+deb13u8"
+        },
+        {
+          "name": "fonts-inter",
+          "sha256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+          "version": "4.1+ds-1"
+        },
+        {
+          "name": "fonts-noto-core",
+          "sha256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+          "version": "20201225-2"
+        },
+        {
+          "name": "fonts-noto-mono",
+          "sha256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+          "version": "20201225-2"
+        },
+        {
+          "name": "libapt-pkg7.0",
+          "sha256": "577eb8f489de419290102364892dbd13ca256297b61f96d61b114fd4ac18be41",
+          "version": "3.0.4"
+        },
+        {
+          "name": "libc-bin",
+          "sha256": "f30ee7381a9c6a3936165259bcd58e65f4b288e351606d200c8435724c5876dd",
+          "version": "2.41-12+deb13u5"
+        },
+        {
+          "name": "libc6",
+          "sha256": "b59b0625cd1a791375d40dab23a4d5d3d0641e3d0a773501becdc3725b7f99cf",
+          "version": "2.41-12+deb13u5"
+        },
+        {
+          "name": "libssl3t64",
+          "sha256": "ffefb9af363e0e4592251b2533eb06453c8e470f7772e40263c4b2129251a6d5",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "libzstd1",
+          "sha256": "23a6f8a774d5dceda5f759b4ecdcdd652dfbefbf8271912e6a7ab0ee3250dc75",
+          "version": "1.5.7+dfsg-1+deb13u1"
+        },
+        {
+          "name": "login.defs",
+          "sha256": "5573474d7bdfab60b27abdb6cbd5c5d4bf898e86d17fd8956eed6a4ebf1a4246",
+          "version": "1:4.17.4-2+deb13u1"
+        },
+        {
+          "name": "openssl",
+          "sha256": "faf53a993766c81f94f35b6a31202f0dcd936e1529791790a393aa59f41c0993",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "openssl-provider-legacy",
+          "sha256": "67c70904c8d494b4631e136a6bdb692cbb44515757d63c55e7bd1d2016f9f09f",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "passwd",
+          "sha256": "e7f364ab275542ba9cfdf0c6bec9276fbac3ef6fe27d3a65674bd29ba3d32096",
+          "version": "1:4.17.4-2+deb13u1"
+        },
+        {
+          "name": "tzdata",
+          "sha256": "2c1c561091402883430d0d47c57a3c0aa00b44afc8a6239265065a87211a5c11",
+          "version": "2026f-0+deb13u1"
+        },
+        {
+          "name": "zlib1g",
+          "sha256": "8c27c342230503b73dfde629642c3b352e87b554e06d60cf58772f236a305ceb",
+          "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+        }
+      ],
+      "expected_application_python_count": 8,
+      "expected_dpkg_count": 90,
+      "python_wheels": [
+        {
+          "filename": "certifi-2026.10.23-py3-none-any.whl",
+          "metadata_sha256": "be1e083008f8ce0b59d02e21921dc84cbf1d879ab879aade6ed79b337134c43e",
+          "name": "certifi",
+          "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+          "size": 135082,
+          "url": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+          "version": "2026.10.23"
+        },
+        {
+          "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "metadata_sha256": "2a3a2a543f2a5c5ff29d141f824be931dc89daa2262dd41015c4ed80a51ad9c5",
+          "name": "charset-normalizer",
+          "sha256": "7218e8f32b0956cfcd048fd42d9d5779809745ca1d86113ca56f66e7ae1549c4",
+          "size": 254660,
+          "url": "https://files.pythonhosted.org/packages/4b/85/41d27f234b82e47c167a5f6c0f62501dc0c640585ff4aba79e08a390336a/charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+          "version": "3.5.2"
+        },
+        {
+          "filename": "idna-3.20-py3-none-any.whl",
+          "metadata_sha256": "e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041",
+          "name": "idna",
+          "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+          "size": 69583,
+          "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+          "version": "3.20"
+        },
+        {
+          "filename": "loguru-0.8.0-py3-none-any.whl",
+          "metadata_sha256": "a1bc6f5c6dd0d3c7385b89e8dc7f2fdb2eee75c73d219d708a887567b5fad93c",
+          "name": "loguru",
+          "sha256": "e0fba09d6f76ba2d2f4bd1757122942f5a670c702e988b5efaeab99dacba0069",
+          "size": 69409,
+          "url": "https://files.pythonhosted.org/packages/c8/00/9ee7c8da7342b1a5524bca9d036f89e7d1d1e5a6345c9623763eeeac941f/loguru-0.8.0-py3-none-any.whl",
+          "version": "0.8.0"
+        },
+        {
+          "filename": "pillow-11.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "metadata_sha256": "b3352119f61a526420e793b1f6af33826c7e212c3fcaff1c30ec7059c94ca4f3",
+          "name": "pillow",
+          "sha256": "13f87d581e71d9189ab21fe0efb5a23e9f28552d5be6979e84001d3b8505abe8",
+          "size": 6642574,
+          "url": "https://files.pythonhosted.org/packages/d5/1c/a2a29649c0b1983d3ef57ee87a66487fdeb45132df66ab30dd37f7dbe162/pillow-11.3.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "version": "11.3.0"
+        },
+        {
+          "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+          "metadata_sha256": "89701376846132aefd76202d07dad6e84febe4a426a12973004e13018af15c41",
+          "name": "python-dotenv",
+          "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+          "size": 23266,
+          "url": "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl",
+          "version": "1.2.4"
+        },
+        {
+          "filename": "requests-2.34.2-py3-none-any.whl",
+          "metadata_sha256": "8622e50ffd295ed759ec793f2a009172a4ed0204bbc5e948de23111bc3d2aeae",
+          "name": "requests",
+          "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+          "size": 73075,
+          "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+          "version": "2.34.2"
+        },
+        {
+          "filename": "urllib3-2.8.0-py3-none-any.whl",
+          "metadata_sha256": "5315e7401db3cacccd0c2ce5daf81f752a9cc3614b18c37f2b79930b7159ce2f",
+          "name": "urllib3",
+          "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+          "size": 135717,
+          "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+          "version": "2.8.0"
+        }
+      ]
+    },
+    "arm64": {
+      "base_layers": [
+        {
+          "diff_id": "sha256:685889762157cefb6370119253b3c709f70bb2622402052065c92243e3d9105f",
+          "digest": "sha256:2b70e040f7d132c8d366ee0223462552686510fb372ea5a83822973c30f19e36",
+          "size": 30213496
+        },
+        {
+          "diff_id": "sha256:ff0168d8c96ef0dfa946895bfaf814152095996c042df0952509a9411da3963b",
+          "digest": "sha256:b09e3727000c35ae6c3abe484cb954c8df08f895eff51f09df26b891a0468d24",
+          "size": 1270186
+        },
+        {
+          "diff_id": "sha256:da0f622bdc5d88b9d5d41b56391a60c6f83904342cbd4d3ce6b4cee12d05d95e",
+          "digest": "sha256:3ebe763086bb4dfda359318669d08c4fc8f072eaae49af4ad7a125595b29feb3",
+          "size": 11856881
+        },
+        {
+          "diff_id": "sha256:e02d6be4fd33214ddcfd685fead3fa28a46658c86858adb77cd2206264c89602",
+          "digest": "sha256:3a038b6d1fa12b6c9a602e667271f13cf48adce187d2ad813c33dfe1004f7e37",
+          "size": 251
+        }
+      ],
+      "deb_artifacts": [
+        {
+          "name": "apt",
+          "sha256": "9a3ee57117d1d8e086e2d8917cd3e85e8f76da25dd18a898085759668dc5c71f",
+          "version": "3.0.4"
+        },
+        {
+          "name": "base-files",
+          "sha256": "893616b7ce203a05a0528652f7d754cc5e3de7e8eff3b396f95383a5b8b1c668",
+          "version": "13.8+deb13u8"
+        },
+        {
+          "name": "fonts-inter",
+          "sha256": "a4dbb3dc2f8b012a881cd2be5b39e14b779a69dc9c1688eb15a8ea13f33fcb96",
+          "version": "4.1+ds-1"
+        },
+        {
+          "name": "fonts-noto-core",
+          "sha256": "97978d09b68445fcf85342b106cd2e812d7813e3d5626f9884a5f344c3a55973",
+          "version": "20201225-2"
+        },
+        {
+          "name": "fonts-noto-mono",
+          "sha256": "7636f002caeb4a4082f69e2d9b8eb89da6c50b9c67f55db84e68638049b06006",
+          "version": "20201225-2"
+        },
+        {
+          "name": "libapt-pkg7.0",
+          "sha256": "39e4d074bc4f2081666a3625561a430fedb0c85b1a6a657c02760383232304bd",
+          "version": "3.0.4"
+        },
+        {
+          "name": "libc-bin",
+          "sha256": "889850625c686a6d0b26a8baee5fb96f33e9f3305882f3a6751bb4c9433063e1",
+          "version": "2.41-12+deb13u5"
+        },
+        {
+          "name": "libc6",
+          "sha256": "0966fc3da1a26cc57647c68b5736f791b6e7eb498173a7993f63b6c89b4ed4f5",
+          "version": "2.41-12+deb13u5"
+        },
+        {
+          "name": "libssl3t64",
+          "sha256": "18edc2b123e8e81efcc14ea5502454b4505285aa9d3325c22315e9304acb25ca",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "libzstd1",
+          "sha256": "ab5ad90f986b315bfa12be50f438aa3453e32da3b29540844d2d847800d2ce08",
+          "version": "1.5.7+dfsg-1+deb13u1"
+        },
+        {
+          "name": "login.defs",
+          "sha256": "5573474d7bdfab60b27abdb6cbd5c5d4bf898e86d17fd8956eed6a4ebf1a4246",
+          "version": "1:4.17.4-2+deb13u1"
+        },
+        {
+          "name": "openssl",
+          "sha256": "fe9c979716871f260fa50a920298036896677dd0a74a34c5589c18635cdef4b5",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "openssl-provider-legacy",
+          "sha256": "007165f42b5cecf71674a047480f96035e290c2f0c5102030cb186481bb8dc84",
+          "version": "3.5.9-1~deb13u1"
+        },
+        {
+          "name": "passwd",
+          "sha256": "49acfe766c3dea4f760e330ff9f1142c052ba2198442a35ad7d22ecf65508f6f",
+          "version": "1:4.17.4-2+deb13u1"
+        },
+        {
+          "name": "tzdata",
+          "sha256": "2c1c561091402883430d0d47c57a3c0aa00b44afc8a6239265065a87211a5c11",
+          "version": "2026f-0+deb13u1"
+        },
+        {
+          "name": "zlib1g",
+          "sha256": "0e41b3d7ad8ad7fcd36dd4d61ca91a70018478fc4af652e044f4be770784ddff",
+          "version": "1:1.3.dfsg+really1.3.1-1+deb13u1"
+        }
+      ],
+      "expected_application_python_count": 8,
+      "expected_dpkg_count": 90,
+      "python_wheels": [
+        {
+          "filename": "certifi-2026.10.23-py3-none-any.whl",
+          "metadata_sha256": "be1e083008f8ce0b59d02e21921dc84cbf1d879ab879aade6ed79b337134c43e",
+          "name": "certifi",
+          "sha256": "e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1",
+          "size": 135082,
+          "url": "https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl",
+          "version": "2026.10.23"
+        },
+        {
+          "filename": "charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "metadata_sha256": "2a3a2a543f2a5c5ff29d141f824be931dc89daa2262dd41015c4ed80a51ad9c5",
+          "name": "charset-normalizer",
+          "sha256": "849df64e889b2e17230d58410a03dba311a65b163508fd33679b2b737d4b7858",
+          "size": 244624,
+          "url": "https://files.pythonhosted.org/packages/e1/16/710ac3de2ee354e2bd1a9c94efe45a2d27b5c6ad39b2d6a905be2c094b6c/charset_normalizer-3.5.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl",
+          "version": "3.5.2"
+        },
+        {
+          "filename": "idna-3.20-py3-none-any.whl",
+          "metadata_sha256": "e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041",
+          "name": "idna",
+          "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+          "size": 69583,
+          "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+          "version": "3.20"
+        },
+        {
+          "filename": "loguru-0.8.0-py3-none-any.whl",
+          "metadata_sha256": "a1bc6f5c6dd0d3c7385b89e8dc7f2fdb2eee75c73d219d708a887567b5fad93c",
+          "name": "loguru",
+          "sha256": "e0fba09d6f76ba2d2f4bd1757122942f5a670c702e988b5efaeab99dacba0069",
+          "size": 69409,
+          "url": "https://files.pythonhosted.org/packages/c8/00/9ee7c8da7342b1a5524bca9d036f89e7d1d1e5a6345c9623763eeeac941f/loguru-0.8.0-py3-none-any.whl",
+          "version": "0.8.0"
+        },
+        {
+          "filename": "pillow-11.3.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "metadata_sha256": "b3352119f61a526420e793b1f6af33826c7e212c3fcaff1c30ec7059c94ca4f3",
+          "name": "pillow",
+          "sha256": "c37d8ba9411d6003bba9e518db0db0c58a680ab9fe5179f040b0463644bc9805",
+          "size": 5973503,
+          "url": "https://files.pythonhosted.org/packages/ba/c9/09e6746630fe6372c67c648ff9deae52a2bc20897d51fa293571977ceb5d/pillow-11.3.0-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "version": "11.3.0"
+        },
+        {
+          "filename": "python_dotenv-1.2.4-py3-none-any.whl",
+          "metadata_sha256": "89701376846132aefd76202d07dad6e84febe4a426a12973004e13018af15c41",
+          "name": "python-dotenv",
+          "sha256": "42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc",
+          "size": 23266,
+          "url": "https://files.pythonhosted.org/packages/60/d1/38f3a3405989a89ac18390803e70c6ad7c7760da4f9b83cbeca0c44a0c72/python_dotenv-1.2.4-py3-none-any.whl",
+          "version": "1.2.4"
+        },
+        {
+          "filename": "requests-2.34.2-py3-none-any.whl",
+          "metadata_sha256": "8622e50ffd295ed759ec793f2a009172a4ed0204bbc5e948de23111bc3d2aeae",
+          "name": "requests",
+          "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+          "size": 73075,
+          "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+          "version": "2.34.2"
+        },
+        {
+          "filename": "urllib3-2.8.0-py3-none-any.whl",
+          "metadata_sha256": "5315e7401db3cacccd0c2ce5daf81f752a9cc3614b18c37f2b79930b7159ce2f",
+          "name": "urllib3",
+          "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+          "size": 135717,
+          "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+          "version": "2.8.0"
+        }
+      ]
+    }
+  },
+  "release_authorized": false,
+  "security_clearance": false,
+  "snapshot": "20261127T000000Z",
+  "source_review_commit": "35babcfc673ddfe2b1302c0cb760d69d68687a01",
+  "status": "REVIEWED_INPUT_SET_NOT_RELEASE_LOCK"
+}

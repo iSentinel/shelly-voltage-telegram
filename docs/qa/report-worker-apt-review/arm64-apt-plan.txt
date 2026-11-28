@@ -1,0 +1,41 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following NEW packages will be installed:
+  fonts-inter fonts-noto-core fonts-noto-mono
+The following packages will be upgraded:
+  apt base-files libapt-pkg7.0 libc-bin libc6 libssl3t64 libzstd1 login.defs
+  openssl openssl-provider-legacy passwd tzdata zlib1g
+13 upgraded, 3 newly installed, 0 to remove and 0 not upgraded.
+Inst libc6 [2.41-12+deb13u4] (2.41-12+deb13u5 local-deb [arm64])
+Conf libc6 (2.41-12+deb13u5 local-deb [arm64])
+Inst base-files [13.8+deb13u7] (13.8+deb13u8 local-deb [arm64])
+Conf base-files (13.8+deb13u8 local-deb [arm64])
+Inst openssl-provider-legacy [3.5.7-1~deb13u3] (3.5.9-1~deb13u1 local-deb [arm64])
+Conf openssl-provider-legacy (3.5.9-1~deb13u1 local-deb [arm64])
+Inst libzstd1 [1.5.7+dfsg-1] (1.5.7+dfsg-1+deb13u1 local-deb [arm64])
+Conf libzstd1 (1.5.7+dfsg-1+deb13u1 local-deb [arm64])
+Inst zlib1g [1:1.3.dfsg+really1.3.1-1+b1] (1:1.3.dfsg+really1.3.1-1+deb13u1 local-deb [arm64])
+Conf zlib1g (1:1.3.dfsg+really1.3.1-1+deb13u1 local-deb [arm64])
+Inst libssl3t64 [3.5.7-1~deb13u3] (3.5.9-1~deb13u1 local-deb [arm64])
+Conf libssl3t64 (3.5.9-1~deb13u1 local-deb [arm64])
+Inst libapt-pkg7.0 [3.0.3] (3.0.4 local-deb [arm64])
+Conf libapt-pkg7.0 (3.0.4 local-deb [arm64])
+Inst apt [3.0.3] (3.0.4 local-deb [arm64])
+Conf apt (3.0.4 local-deb [arm64])
+Inst libc-bin [2.41-12+deb13u4] (2.41-12+deb13u5 local-deb [arm64])
+Conf libc-bin (2.41-12+deb13u5 local-deb [arm64])
+Inst login.defs [1:4.17.4-2] (1:4.17.4-2+deb13u1 local-deb [all])
+Conf login.defs (1:4.17.4-2+deb13u1 local-deb [all])
+Inst passwd [1:4.17.4-2] (1:4.17.4-2+deb13u1 local-deb [arm64])
+Conf passwd (1:4.17.4-2+deb13u1 local-deb [arm64])
+Inst tzdata [2026e-0+deb13u1] (2026f-0+deb13u1 local-deb [all])
+Inst fonts-inter (4.1+ds-1 local-deb [all])
+Inst fonts-noto-mono (20201225-2 local-deb [all])
+Inst fonts-noto-core (20201225-2 local-deb [all])
+Inst openssl [3.5.7-1~deb13u3] (3.5.9-1~deb13u1 local-deb [arm64])
+Conf tzdata (2026f-0+deb13u1 local-deb [all])
+Conf fonts-inter (4.1+ds-1 local-deb [all])
+Conf fonts-noto-mono (20201225-2 local-deb [all])
+Conf fonts-noto-core (20201225-2 local-deb [all])
+Conf openssl (3.5.9-1~deb13u1 local-deb [arm64])
