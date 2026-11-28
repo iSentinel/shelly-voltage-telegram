@@ -1,0 +1,62 @@
+{
+  "build_executed": false,
+  "deployment_authorized": false,
+  "platforms": {
+    "amd64": {
+      "base_manifest_sha256": "aaf08c5490d52cd92bc27142a5215b1e47355a5eaf9adfad2a0fbc022d0b5490",
+      "bytes": 37713920,
+      "context_sha256": "9d9ff61a6ae5db01e0ee13068f596c5cbf9402f282bfe9ff59addede2dc52001",
+      "debian_expected": 90,
+      "expected_state_sha256": "e5610161c67173e8583485190661c16859ccef1c950aa09ccbe0cdc3015eb865",
+      "members": 55,
+      "payload_hashes_verified": 51,
+      "python_expected_including_pip": 9,
+      "recipe_sha256": "fb2ad9c13f549e5d9f8d5895aeda77de6fde2632552ca26277ac8df3e7ca958e",
+      "reproducible_archive": true,
+      "verifier_sha256": "3da2b8a3654b03d0f7f67407c7ea5ee9b0bd878455a6290ed8d605a3e3ef32df"
+    },
+    "arm64": {
+      "base_manifest_sha256": "7b58e4266b99c869d2225c050345f7c7fec255d9e3baeca19ea7de9411411c91",
+      "bytes": 36567040,
+      "context_sha256": "3b8157c4fa4693e915b6aaaa110d8774fc782268eeaa2dfe827504e87c18d2de",
+      "debian_expected": 90,
+      "expected_state_sha256": "23a353df737c5512a4149a70dc0a49063e0091291e332d144fe57e796471ec24",
+      "members": 55,
+      "payload_hashes_verified": 51,
+      "python_expected_including_pip": 9,
+      "recipe_sha256": "05358cede89f4c2a5149d3d12560cafdf6ea6bfb0c7e755893d77d26b193d41d",
+      "reproducible_archive": true,
+      "verifier_sha256": "3da2b8a3654b03d0f7f67407c7ea5ee9b0bd878455a6290ed8d605a3e3ef32df"
+    }
+  },
+  "release_authorized": false,
+  "snapshot_observation": {
+    "checked_at": "2026-11-28T10:19:58.266845+00:00",
+    "snapshot": "20261127T000000Z",
+    "stable_recency_policy_approved": false,
+    "suites": {
+      "trixie": {
+        "date": "2026-11-21T09:15:44+00:00",
+        "sha256": "bfacad4ca61899ce20d4a0d439f29339f66541561b67506364efb88e27dee870",
+        "signature_verified": true,
+        "unexpired_at_observation": false,
+        "valid_until": null
+      },
+      "trixie-security": {
+        "date": "2026-11-26T21:03:36+00:00",
+        "sha256": "8b49f514a882e9f9afa8288853ca09e3639c08a0a3834f3d4a304324cd92d7b9",
+        "signature_verified": true,
+        "unexpired_at_observation": true,
+        "valid_until": "2026-12-03T21:03:36+00:00"
+      },
+      "trixie-updates": {
+        "date": "2026-11-26T20:15:07+00:00",
+        "sha256": "d64cceacd11032ad41e6178a28381aca67e9594b9d8610d6e29a20337760431b",
+        "signature_verified": true,
+        "unexpired_at_observation": true,
+        "valid_until": "2026-12-03T20:15:07+00:00"
+      }
+    }
+  },
+  "status": "QA_RECIPE_CONTEXT_REVIEW_ONLY"
+}
