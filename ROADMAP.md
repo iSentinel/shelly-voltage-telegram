@@ -1,3 +1,17 @@
+## 2026-11-28 — strict OCI attestation schema admission
+
+- Exact #509 CI 9/9 and narrow #472 CI 8/8 PASS.
+- Strict digest-bound JSON object parsing, duplicate-key and
+  nonfinite-constant rejection; explicit SLSA v0.2/v1 buildType.
+- Six new tests; 58 focused tests and quality gate PASS.
+- Actual historical .28 GHCR immutable index metadata checks
+  PASS on amd64/arm64, not new candidate or signature proof.
+- NEXT: review exact dependency artifact acquisition and
+  per-platform build/provenance requirements. Integrated runtime,
+  full multiarch build, signing and owner approval remain open.
+- No production changes or repeat of blocked integration;
+  frozen narrow .29 archive unchanged.
+
 ## 2026-11-28 — installed dependency and certificate binding audit
 
 - Exact #508 CI 9/9 and narrow #472 CI 8/8 PASS; no new tags.
