@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
 import runpy
 import unittest
 from pathlib import Path
@@ -278,6 +280,85 @@ class PublishedImageTests(unittest.TestCase):
         objects[arm[4]]["subject"][0]["digest"]["sha256"] = "f" * 64
         with self.assertRaisesRegex(ValueError, "subject is not"):
             audit_without_network(index, objects)
+
+    def test_accept_slsa_v02(self) -> None:
+        """Legacy BuildKit v0.2 uses a top-level build type."""
+        index, objects, amd, arm = synthetic_registry()
+        for platform in (amd, arm):
+            statement = objects[platform[4]]
+            statement["predicateType"] = SCRIPT["SLSA_V02"]
+            statement["predicate"] = {"buildType": "synthetic"}
+        audit_without_network(index, objects)
+
+    def test_reject_unknown_slsa_version(self) -> None:
+        """An arbitrary URI sharing the prefix cannot qualify."""
+        index, objects, amd, _ = synthetic_registry()
+        objects[amd[4]]["predicateType"] = SLSA + "-unknown"
+        with self.assertRaisesRegex(ValueError, "Unsupported SLSA"):
+            audit_without_network(index, objects)
+
+    def test_reject_wrong_schema_location(self) -> None:
+        """v1 and v0.2 cannot borrow the other schema's build type."""
+        for version, predicate in (
+            (SLSA, {"buildType": "synthetic"}),
+            (
+                SCRIPT["SLSA_V02"],
+                {"buildDefinition": {"buildType": "synthetic"}},
+            ),
+        ):
+            with self.subTest(version=version):
+                index, objects, amd, _ = synthetic_registry()
+                objects[amd[4]].update(
+                    predicateType=version, predicate=predicate
+                )
+                with self.assertRaisesRegex(
+                    ValueError, "SLSA build information"
+                ):
+                    audit_without_network(index, objects)
+
+    def test_reject_invalid_build_type(self) -> None:
+        """The v1 build type must be a nonblank string."""
+        for value in ("", " ", True, 42, {}, None):
+            with self.subTest(value=value):
+                index, objects, amd, _ = synthetic_registry()
+                objects[amd[4]]["predicate"]["buildDefinition"][
+                    "buildType"
+                ] = value
+                with self.assertRaisesRegex(
+                    ValueError, "SLSA build information"
+                ):
+                    audit_without_network(index, objects)
+
+    def test_reject_ambiguous_oci_json_even_with_exact_digest(self) -> None:
+        """Digest agreement does not make ambiguous JSON safe."""
+        fn = SCRIPT["fetch_object"]
+        samples = (
+            b'{"revision":"old","revision":"new"}',
+            b'{"config":{"architecture":"amd64","architecture":"arm64"}}',
+            b'{"value":NaN}',
+            b'{"value":Infinity}',
+            b"[]",
+        )
+        for raw in samples:
+            with self.subTest(raw=raw):
+                digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+                with (
+                    patch(
+                        "urllib.request.urlopen", return_value=io.BytesIO(raw)
+                    ),
+                    self.assertRaises(ValueError),
+                ):
+                    fn("synthetic", digest, "blobs")
+
+    def test_accept_strict_oci_json_with_exact_digest(self) -> None:
+        """A valid digest-bound object remains accepted."""
+        raw = b'{"config":{"architecture":"amd64"}}'
+        digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        with patch("urllib.request.urlopen", return_value=io.BytesIO(raw)):
+            self.assertEqual(
+                SCRIPT["fetch_object"]("synthetic", digest, "blobs"),
+                {"config": {"architecture": "amd64"}},
+            )
 
     @staticmethod
     def sample_index() -> dict:

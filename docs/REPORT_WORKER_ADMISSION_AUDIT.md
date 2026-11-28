@@ -171,3 +171,28 @@ acceptance. Do not treat the installed amd64 inventory as a
 release lock. No build, publication, signing, merge or production
 mutation; earlier blocked integration was not repeated. Narrow
 .29 approval packet remains frozen and separate.
+
+## Strict OCI attestation schema admission (2026-11-28)
+
+Exact #509 CI 9/9 and narrow #472 CI 8/8 PASS. Replaced
+prefix-only SLSA acceptance with an explicit v0.2/v1 allowlist
+and version-specific nonblank string buildType validation.
+Reject duplicate JSON keys recursively, nonstandard numeric
+constants and non-object JSON after registry digest verification.
+Six new tests cover compatible v0.2, unsupported versions,
+incorrect schema location, invalid buildType, exact-digest
+ambiguous JSON rejection and valid strict JSON acceptance.
+58 focused tests across five suites and quality gate PASS.
+
+Read-only live GHCR check of the historical .28 immutable index
+sha256:03e83600d633301c59bbe2fa247d7982d95133ad4ca96907828688711c3de249
+and commit 59588e38b9a7ae59f14ac056451fe3c20f8a69d2 passed
+revision, SPDX, SLSA and subject checks for both architectures.
+This confirms historical metadata compatibility, not a new
+signature check, full SLSA schema or material verification,
+dependency artifact lock or runtime qualification. No new image
+build, launch, signing, tag or production change. Frozen narrow
+.29 archive SHA256 unchanged. Earlier blocked integrated trials
+were not repeated. Next review exact build artifact acquisition
+and per-platform provenance requirements; distinguish historical
+metadata from new build evidence and keep deployment NO-GO.

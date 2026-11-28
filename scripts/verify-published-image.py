@@ -13,6 +13,9 @@ from typing import Any
 
 REPOSITORY = "isentinel/shelly-voltage-telegram"
 ARCHITECTURES = ("amd64", "arm64")
+SLSA_V02 = "https://slsa.dev/provenance/v0.2"
+SLSA_V1 = "https://slsa.dev/provenance/v1"
+SLSA_TYPES = {SLSA_V02, SLSA_V1}
 INDEX_TYPES = (
     "application/vnd.oci.image.index.v1+json",
     "application/vnd.docker.distribution.manifest.list.v2+json",
@@ -53,6 +56,36 @@ def token_for_public_image() -> str:
     return str(token)
 
 
+def unique_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate JSON keys at every nesting level."""
+
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate OCI JSON field")
+        result[key] = value
+    return result
+
+
+def reject_constant(_value: str) -> None:
+    """Reject nonstandard JSON numeric constants."""
+
+    raise ValueError("Invalid OCI JSON constant")
+
+
+def decode_object(content: bytes) -> dict[str, Any]:
+    """Require an unambiguous JSON object after byte verification."""
+
+    data = json.loads(
+        content,
+        object_pairs_hook=unique_fields,
+        parse_constant=reject_constant,
+    )
+    if not isinstance(data, dict):
+        raise ValueError("OCI JSON must be an object")
+    return data
+
+
 def fetch_object(token: str, digest: str, kind: str) -> dict[str, Any]:
     """Download a registry JSON object and verify its digest."""
 
@@ -74,7 +107,7 @@ def fetch_object(token: str, digest: str, kind: str) -> dict[str, Any]:
         content = response.read()
     if hashlib.sha256(content).hexdigest() != digest.partition(":")[2]:
         raise ValueError(f"OCI {kind} SHA-256 does not match {digest}")
-    return json.loads(content)
+    return decode_object(content)
 
 
 def platform_manifests(index: dict[str, Any]) -> dict[str, dict]:
@@ -121,6 +154,21 @@ def image_revision(config: dict) -> str | None:
     return labels.get("org.opencontainers.image.revision")
 
 
+def validate_slsa(kind: str, predicate: dict) -> None:
+    """Require the build type at its version-specific schema location."""
+
+    if not isinstance(predicate, dict):
+        raise ValueError("SLSA build information is missing")
+    definition = (
+        predicate if kind == SLSA_V02 else predicate.get("buildDefinition")
+    )
+    build_type = (
+        definition.get("buildType") if isinstance(definition, dict) else None
+    )
+    if not isinstance(build_type, str) or not build_type.strip():
+        raise ValueError("SLSA build information is missing")
+
+
 def statement_types(token: str, manifest: dict, image_digest: str) -> set[str]:
     """Verify attestation statements and return their predicate types."""
 
@@ -142,10 +190,10 @@ def statement_types(token: str, manifest: dict, image_digest: str) -> set[str]:
                 raise ValueError("SPDX 2.3 metadata is missing")
             if not predicate.get("packages"):
                 raise ValueError("SPDX has no packages")
-        if kind.startswith("https://slsa.dev/provenance/") and not (
-            predicate.get("buildType") or predicate.get("buildDefinition")
-        ):
-            raise ValueError("SLSA build information is missing")
+        if kind in SLSA_TYPES:
+            validate_slsa(kind, predicate)
+        elif kind.startswith("https://slsa.dev/provenance/"):
+            raise ValueError("Unsupported SLSA provenance type")
         kinds.add(kind)
     return kinds
 
@@ -167,9 +215,7 @@ def verify_image(token: str, index: dict, commit: str) -> None:
         types = statement_types(token, manifest, digest)
         if "https://spdx.dev/Document" not in types:
             raise ValueError(f"SPDX SBOM missing on linux/{arch}")
-        if not any(
-            x.startswith("https://slsa.dev/provenance/") for x in types
-        ):
+        if not SLSA_TYPES.intersection(types):
             raise ValueError(f"SLSA provenance missing on linux/{arch}")
         print(f"PASS linux/{arch}: revision, SPDX, SLSA, subject digest")
 
