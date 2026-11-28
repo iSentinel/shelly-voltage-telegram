@@ -297,3 +297,52 @@ identity or reuse its accepted evidence. Review a separate exact
 candidate profile before any permitted integrated qualification.
 Previously blocked integration commands not repeated or bypassed.
 No new version, signing, merge, deployment or production changes.
+
+## Corrected ACK image static profile review (2026-11-28)
+
+Decision: PASS_STATIC_IMAGE_PROFILE_REVIEW_ONLY, runtime NO-GO.
+Exact #506 and separate #472 CI 8/8 PASS. Reviewed the same
+untagged local candidate in LXC114 without creating a container.
+Source scope manifest SHA256 a3d979232200f7dad24bb7643eb8b97667d6ff83cc2e0418ed171ddd813549c4
+and image evidence SHA256 54742bbfd76f260a6f42acf4a978d741742b3f0e606c47f4c493c16d3c4e1880
+rechecked; source commit 35babcfc673ddfe2b1302c0cb760d69d68687a01
+and all 26 runtime input hashes match. The two retained probe
+files also match the historical exact SHA256 pins.
+
+Candidate image:
+sha256:e37eeb2f2235acc17d5316c0a4789f4b629fe34cf86805bfdfabe7720c3571d3.
+Base image:
+sha256:fb88ffb1ee3deb33fa8c95b54d231d80ea0a7a9f0319513552f7ee2a555c74ac.
+Saved image archive SHA256:
+1ad90972aae0c5328032dc9281577906a77400afaf8010262b01f70198eb8c8f.
+In addition to the earlier layer-prefix comparison, independently
+hashed the actual bytes of all eleven uncompressed layer members
+in the saved archive: 11/11 match the config DiffIDs. The archive
+contains one untagged manifest with unique member names, and its
+config hashes to the candidate image ID. This does not establish
+registry signature validity or a reproducible full release build.
+
+Saved inspect records: Linux/amd64; user 10001:10001; workdir /app;
+entrypoint null; default CMD python /app/app.py run. Eight config
+fields (User, WorkingDir, Cmd, Entrypoint, Env, ExposedPorts,
+Volumes, OnBuild) equal the base; no image-declared volume or
+OnBuild instruction, no repository tag or digest. No environment
+values emitted during comparison.
+
+Static target-policy review (not an executable START profile):
+retain isolation, no network, pull never, no restart, read-only
+root filesystem, dropped capabilities, no-new-privileges,
+private IPC, exact synthetic probe bytes, disposable data/fence
+binds and read-only probe bind. These are requirements, not an
+observed resolved Compose or Docker runtime configuration.
+The existing START pin intentionally remains the historical
+6b3f263c image. A negative regression verifies that replacing it
+with the corrected candidate is rejected before Compose resolution.
+No historical acceptance or launch receipt is transferable.
+
+Remaining release admission: separately reviewed exact candidate
+runtime qualification, fresh integrated acceptance with immutable
+history and delivery evidence, full multiarch build with dependency
+and provenance review, signed feature-capable source/OCI pair and
+owner approval. Earlier blocked integration was not retried.
+Production and historical QA fixtures were not changed.

@@ -1,3 +1,17 @@
+## 2026-11-28 — corrected ACK static image profile review
+
+- Exact #506 and narrow #472 CI 8/8 PASS; no new tags.
+- Recheck pinned source/image evidence and 26/26 runtime hashes;
+  both retained probe hashes and eight config fields match.
+- Independently hash actual saved bytes of all 11 image layers;
+  archive and config SHA256 match. Static review only.
+- Historical START pin remains unchanged; reject corrected image
+  substitution before Compose resolution.
+- NEXT: review remaining candidate runtime and release admission
+  gates; integrated acceptance, full multiarch build, signed pair
+  and owner approval remain open. No runtime launch or production
+  mutation, no repeat of blocked integration.
+
 ## 2026-11-27 — corrected ACK local unsigned image qualification
 
 - Exact #505 and narrow #472 CI 8/8 PASS; no new tags.
