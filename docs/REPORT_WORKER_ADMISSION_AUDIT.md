@@ -122,3 +122,52 @@ needs dependency/provenance and per-platform runtime qualification.
 No integration trial, publication, signature, or production change.
 The narrow .29 candidate remains a separate review scope; the new
 OCI verifier correction has not been applied to its frozen bytes.
+
+## Installed dependencies and independent signature binding (2026-11-28)
+
+Exact #508 CI 9/9 and narrow #472 CI 8/8 PASS. The additional
+independent verifier CI job concerns the historical configured
+published release, not the new Report Worker candidate.
+
+Read-only inspection of the saved, SHA256-verified amd64 image
+(e37eeb2f2235acc17d5316c0a4789f4b629fe34cf86805bfdfabe7720c3571d3)
+found 90 installed Debian packages and nine Python distributions.
+CPython 3.13.18: loguru 0.8.0, python-dotenv 1.2.4, requests
+2.34.2, Pillow 11.3.0; charset-normalizer 3.5.2, idna 3.20,
+urllib3 2.8.0, certifi 2026.10.23; pip 26.2.2. Evaluated
+PEP 508 markers for CPython/Linux x86_64 without extras: all four
+direct requirements and four active transitive edges satisfy their
+version specifiers; 68 conditional requirements are inactive.
+
+Protected host evidence /var/tmp/svt-ack-dependency-review.bZRDvA:
+- inventory.json SHA256 f8d5905bc8051b8a0c344516c7ca6db35ac8f81b9904b7eb61ba5d0796cb8df1
+- review.json SHA256 d7a5bb4214dd45112bb7ea5f729ea49c6fcf4274610b849c6600bdc2744c9ec1
+- dpkg status SHA256 f1eb7ad98c7c7d968c3a74670b8b52ee7c0c51ad0a35ef830a6528bc79fd3ee8
+
+PASS_AMD64_INSTALLED_DEPENDENCY_METADATA_ONLY. This is not an
+import test, pip check, vulnerability scan, package artifact lock
+or arm64 qualification. Installed METADATA/RECORD hashes are not
+original wheel hashes. APT uses mutable Debian trixie, updates and
+security repositories; snapshot URLs are commented out. The
+COPY-only local overlay inherits the base .28 revision and version
+labels; it is not an exact release-provenance image for the new
+source. No labels or runtime bytes were changed.
+
+The independent published-image workflow previously supplied
+Cosign identity and issuer but omitted explicit workflow SHA,
+ref and repository constraints. It now requires all three,
+consistent with the main signed-pair verifier. Three offline shell
+regressions check exact CLI arguments, refusal on certificate
+failure, and rejection of malformed commit before invocation.
+52 focused tests across five suites and quality gate PASS.
+An overlong test line was corrected before the successful rerun.
+
+Next build admission requires verified per-platform dependency
+artifact hashes, immutable APT snapshot or equivalent package
+source with reviewed versions and checksums, actual full builds
+for amd64/arm64, correct source revision labels, per-platform
+inventory and provenance checks, and fresh integrated runtime
+acceptance. Do not treat the installed amd64 inventory as a
+release lock. No build, publication, signing, merge or production
+mutation; earlier blocked integration was not repeated. Narrow
+.29 approval packet remains frozen and separate.

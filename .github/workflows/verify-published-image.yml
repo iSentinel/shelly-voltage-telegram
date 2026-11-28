@@ -52,6 +52,9 @@ jobs:
           cosign verify \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-sha "$RELEASE_COMMIT" \
+            --certificate-github-workflow-ref "refs/tags/${RELEASE_VERSION}" \
+            --certificate-github-workflow-repository "iSentinel/shelly-voltage-telegram" \
             "$image" > "$RUNNER_TEMP/cosign-verify.json"
           python3 -c '
           import json
