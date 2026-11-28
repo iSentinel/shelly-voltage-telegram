@@ -1,0 +1,40 @@
+{
+  "application_build_executed": false,
+  "backend_review_sha256": "bb1550e376dd0bfd0ec21c39b01d3b1323cb7c11c73ffc737b7a7378cec0821d",
+  "base_archive_sha256": "d72e07356e597f7f0511a7e6dc6d2edf5af0c240e4fbd514ca6704c176e1d9b7",
+  "base_manifest_digest": "sha256:aaf08c5490d52cd92bc27142a5215b1e47355a5eaf9adfad2a0fbc022d0b5490",
+  "binary_sha256": "b336dab261394bbb1f8a63f6c46085234892fe1fc299e2e203ea91a102d441bf",
+  "buildx_version": "0.13.1+ds1",
+  "deployment_authorized": false,
+  "docker_version": "26.1.5+dfsg1",
+  "driver": "docker",
+  "native_arm64_verified": false,
+  "package": {
+    "architecture": "amd64",
+    "deb_sha256": "fcf8c48204d1603c8f209451d7827eb91bf30759578baf7704e9e1a87e5f1d7f",
+    "index_sha256": "be3d7d96a040eda0505c1808cccc67f183bbc05dff0842c50f88e6c396557412",
+    "package": "docker-buildx",
+    "signature_verified": true,
+    "size": 13239200,
+    "snapshot": "20261127T000000Z",
+    "system_installed": false,
+    "url": "https://snapshot.debian.org/archive/debian/20261127T000000Z/pool/main/d/docker-buildx/docker-buildx_0.13.1+ds1-3_amd64.deb",
+    "version": "0.13.1+ds1-3"
+  },
+  "platforms": [
+    "linux/amd64",
+    "linux/amd64/v2",
+    "linux/amd64/v3",
+    "linux/386"
+  ],
+  "probe_copy_output_present": false,
+  "probe_exit": 1,
+  "probe_log_sha256": "d7fd6ffccdbd9c8ecbcc9984f33e9730c20064ba9c39a05463aaf95161459405",
+  "qa_directory": "/var/tmp/svt-buildx-cli-review.FASTLm",
+  "release_authorized": false,
+  "reported_buildkit_version": "v0.0.0+unknown",
+  "run_instructions": false,
+  "standalone_builder_qualified": false,
+  "status": "BLOCKED_EMBEDDED_BUILDKIT_OCI_RESOLUTION",
+  "system_package_installed": false
+}

@@ -1,0 +1,18 @@
+Name:          default
+Driver:        docker
+Last Activity: 2026-11-28 14:14:39 +0000 UTC
+
+Nodes:
+Name:             default
+Endpoint:         default
+Status:           running
+BuildKit version: v0.0.0+unknown
+Platforms:        linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/386
+Labels:
+ org.mobyproject.buildkit.worker.moby.host-gateway-ip: <nil>
+      --bootstrap                 Boot builder after creation
+      --driver string             Driver to use (available:
+      --driver-opt stringArray    Options for the driver
+d7fd6ffccdbd9c8ecbcc9984f33e9730c20064ba9c39a05463aaf95161459405  /var/tmp/svt-buildx-cli-review.FASTLm/probe.log
+d72e07356e597f7f0511a7e6dc6d2edf5af0c240e4fbd514ca6704c176e1d9b7  /var/tmp/svt-buildx-cli-review.FASTLm/base-amd64.tar
+b336dab261394bbb1f8a63f6c46085234892fe1fc299e2e203ea91a102d441bf  /var/tmp/svt-buildx-cli-review.FASTLm/cli-plugins/docker-buildx
