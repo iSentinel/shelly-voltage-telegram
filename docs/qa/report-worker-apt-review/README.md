@@ -121,3 +121,55 @@ dependency artifact provenance, native execution and full release
 build remain required. No vulnerability-clearance claim. No APT
 configuration, package installation, image build, deployment,
 or retry of blocked integrated qualification.
+
+## Fresh snapshot version gaps and candidate upgrade artifacts
+
+2026-11-28. Exact #513 and narrow #472 CI 8/8 PASS.
+Reverified all three InRelease signatures and expiry and downloaded
+six main package indexes for amd64/arm64 from snapshot
+20261127T000000Z; all sizes and SHA256 match the signed indexes.
+
+Compared the 87 exact base packages and three fonts per target
+with the snapshot using Debian version ordering. Both targets:
+77 current versions, 13 upgrades available, six packages with
+newer versions in trixie-security, zero missing package names,
+83 exact old versions still present. These are version gaps,
+not CVE counts or proof of vulnerability clearance.
+
+The six security-suite gaps are apt, libapt-pkg7.0, libzstd1,
+login.defs, passwd and zlib1g. Seven additional upgrades are
+base-files, libc-bin, libc6, libssl3t64, openssl,
+openssl-provider-legacy and tzdata.
+
+Downloaded the newest selected versions of all 13 packages
+and the three font packages on each architecture: 32 platform
+entries and 27 distinct DEB files. Verified actual sizes and
+SHA256 against the signed index records, and Package, Version,
+Architecture from dpkg-deb control metadata. No package scripts
+executed and no installation.
+
+Read the exact dpkg status from the previously verified base
+layers, rechecked its hash, and overlaid the selected DEB
+control metadata in memory. Using apt_pkg Debian relationship
+parsing and version comparisons (including virtual Provides
+and alternative dependencies), reviewed the proposed 90-package
+final set on each architecture. All declared Depends and
+Pre-Depends groups are satisfied, no applicable Breaks or
+Conflicts found. AMD64: 144 Depends, 69 Pre-Depends, 131 Breaks,
+23 Conflicts. ARM64: 144, 69, 134, 23 respectively. This is a
+static final-set relationship review, not an APT solver plan,
+package installation order, maintainer-script or runtime test.
+
+Evidence:
+- version-gap-review.json SHA256 aca09e6d3ff6c6c6ae076041cab09c866f66bf0ad3fab6449ef2ddfb0ed381ad
+- upgrade-artifact-review.json SHA256 bc9ac82ce083b7eb559be0e3f11bd8323b5a57471d2032d8f189defa4a21fb83
+- static-relationship-review.json SHA256 02f5ff815e4efccf890de4fd33bf8c2e86f260ef4b8b37dde9dc807f9a6c502b
+
+Protected raw artifacts: /var/tmp/svt-apt-upgrade-artifacts.93liz9
+The previous base is not current against this snapshot. The
+reviewed newer set is a proposed build input, not an approved
+release lock. Next review an isolated APT transaction plan
+and complete immutable build inputs, freshness at use, native
+multiarch runtime and security assessment. Dockerfile and
+production remain unchanged. Earlier blocked integrated trials
+were not repeated. Narrow .29 approval remains separate.

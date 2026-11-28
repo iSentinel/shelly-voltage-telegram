@@ -1,3 +1,17 @@
+## 2026-11-28 — fresh snapshot version gaps and upgrade artifacts
+
+- Exact #513 and narrow #472 CI 8/8 PASS.
+- Six signed snapshot indexes verified; 90 packages per target:
+  77 current, 13 upgrades, six newer security-suite versions.
+- 27 exact DEBs covering 32 platform entries downloaded and
+  hash/control verified. Static final-set relationships PASS
+  for both 90-package targets; zero unmet or conflicting groups.
+- NEXT: isolated APT transaction plan and complete immutable
+  build inputs; freshness, actual installation, native runtime,
+  security assessment and signing remain open.
+- No Dockerfile change, package installation or production
+  mutation; no repeat of blocked integrated qualification.
+
 ## 2026-11-28 — base layer integrity and declared font closure
 
 - Exact #512 and narrow #472 CI 8/8 PASS.
