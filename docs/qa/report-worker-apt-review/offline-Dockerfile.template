@@ -1,0 +1,36 @@
+# QA only. Render for one verified platform; do not publish as a release.
+FROM python@BASE_MANIFEST
+
+LABEL io.svt.qa-only="true" \
+      io.svt.runtime-source-commit="35babcfc673ddfe2b1302c0cb760d69d68687a01"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TELEGRAM_GRAPHIC_STYLE=v5
+
+WORKDIR /app
+# The reviewed artifacts are temporary read-only BuildKit inputs.
+RUN --network=none --mount=type=bind,source=.,target=/qa,readonly \
+    python /qa/verify-build-state.py before \
+    && mkdir -p /tmp/qa-apt/empty-sources /tmp/qa-apt/empty-lists/partial \
+    && DEBIAN_FRONTEND=noninteractive apt-get -y --no-download --no-remove \
+       --no-install-recommends \
+       -o Dir::Etc::sourcelist=/dev/null \
+       -o Dir::Etc::sourceparts=/tmp/qa-apt/empty-sources \
+       -o Dir::State::lists=/tmp/qa-apt/empty-lists \
+       install /qa/debs/*.deb \
+    && python -m pip --isolated --disable-pip-version-check install \
+       --no-index --find-links=/qa/wheels --require-hashes \
+       --only-binary=:all: --no-cache-dir -r /qa/requirements.lock \
+    && python -m pip check \
+    && python /qa/verify-build-state.py after \
+    && cp /qa/runtime/* /app/ \
+    && rm -rf /tmp/qa-apt /var/lib/apt/lists/*
+
+RUN --network=none useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin app
+USER 10001:10001
+ENV DATABASE_PATH=/data/voltage.sqlite3 \
+    HEALTH_HOST=0.0.0.0
+
+EXPOSE 8080
+CMD ["python", "/app/app.py", "run"]

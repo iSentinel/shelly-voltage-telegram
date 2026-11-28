@@ -1,3 +1,19 @@
+## 2026-11-28 — offline QA recipe and exact contexts
+
+- Exact #516 and narrow #472 CI 8/8 PASS.
+- Separate QA recipe and preparation CLI; before/after exact
+  package metadata verifier, read-only mounted artifact inputs.
+- Six new tests plus eight staging tests, quality gate PASS.
+- Both 55-member contexts generated twice, identical bytes;
+  all 51 payload hashes matched. Wrong platform refused.
+- Snapshot signature/expiry rechecked; stable policy open.
+- QA114 Docker amd64, Buildx absent, exact base IDs not loaded;
+  embedded BuildKit availability not verified, 1.1 GiB free.
+- NEXT: qualify isolated builder and exact base resolution,
+  actual installation/build and native/runtime acceptance.
+- No production Dockerfile changes, build execution, release
+  signing or repetition of blocked integration.
+
 ## 2026-11-28 — deterministic reviewed input staging
 
 - Exact #515 and narrow #472 CI 8/8 PASS.
