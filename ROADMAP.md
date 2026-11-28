@@ -1,3 +1,17 @@
+## 2026-11-28 — installed dependency and certificate binding audit
+
+- Exact #508 CI 9/9 and narrow #472 CI 8/8 PASS; no new tags.
+- Read-only installed amd64 metadata inventory: 90 Debian packages,
+  nine Python distributions, 4/4 direct and 4/4 active edges PASS.
+- Mutable APT sources and inherited .28 OCI labels identified;
+  installed metadata is not a cross-platform artifact lock.
+- Independent Cosign workflow requires exact SHA, ref, repository;
+  three new offline tests, 52 focused tests, quality gate PASS.
+- NEXT: assess build artifact lock and provenance admission gaps,
+  retain distinct evidence scopes. Actual full multiarch build,
+  integrated runtime and owner approval remain open.
+- No repeat of blocked integration; no production changes.
+
 ## 2026-11-28 — multiarchitecture OCI platform binding
 
 - Exact #507 and narrow #472 CI 8/8 PASS; no new tags.
